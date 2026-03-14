@@ -14,7 +14,8 @@ import 'add_supplier_screen.dart';
 /// Record Purchase form — supplier, items, totals, payment status.
 class RecordPurchaseScreen extends ConsumerStatefulWidget {
   final String? preselectedSupplierId;
-  const RecordPurchaseScreen({super.key, this.preselectedSupplierId});
+  final dynamic purchaseToEdit;
+  const RecordPurchaseScreen({super.key, this.preselectedSupplierId, this.purchaseToEdit});
 
   @override
   ConsumerState<RecordPurchaseScreen> createState() =>
@@ -30,10 +31,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   DateTime? _dueDate;
   final _paidAmountCtrl = TextEditingController();
 
-  final List<_PurchaseItem> _items = [
-    _PurchaseItem(name: 'Premium Flour (50kg)', category: 'Inventory', qty: 2, unitPrice: 800),
-    _PurchaseItem(name: 'Yeast Packets', category: 'Supplies', qty: 10, unitPrice: 45),
-  ];
+  final List<_PurchaseItem> _items = [];
 
   double get _subtotal =>
       _items.fold<double>(0, (s, item) => s + item.total);
@@ -65,8 +63,8 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final suppliers = ref.watch(suppliersProvider);
-    final inventory = ref.watch(inventoryProvider);
+    final suppliers = ref.watch(suppliersProvider).value ?? [];
+    final inventory = ref.watch(inventoryProvider).value ?? [];
     final fmt = NumberFormat('#,##0.00', 'en');
 
     return Scaffold(

@@ -1,40 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/navigation/app_router.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../../core/providers/business_profile_provider.dart';
 import 'widgets/setup_shell.dart';
-import '../../shared/widgets/main_shell.dart';
 
-class BusinessSetupStep3 extends StatefulWidget {
+class BusinessSetupStep3 extends ConsumerStatefulWidget {
   const BusinessSetupStep3({super.key});
 
   @override
-  State<BusinessSetupStep3> createState() => _BusinessSetupStep3State();
+  ConsumerState<BusinessSetupStep3> createState() => _BusinessSetupStep3State();
 }
 
-class _BusinessSetupStep3State extends State<BusinessSetupStep3> {
-  // Only Launch Mode is selectable for now
+class _BusinessSetupStep3State extends ConsumerState<BusinessSetupStep3> {
+  // 0 = Launch, 1 = Growth
   int _selectedIndex = 0;
 
   void _onLetsGo() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainShell()),
-      (route) => false, // removes all previous routes (no back to setup)
-    );
+    // Set the tier based on selection
+    final tier = switch (_selectedIndex) {
+      1 => SubscriptionTier.growth,
+      _ => SubscriptionTier.launch,
+    };
+    ref.read(appSettingsProvider.notifier).setTier(tier);
+
+    // Persist business name (entered in step 1) from local prefs → Firestore
+    final settings = ref.read(appSettingsProvider);
+    final bizName = settings.businessName;
+    if (bizName.isNotEmpty) {
+      ref.read(businessProfileProvider.notifier).update(
+        businessName: bizName,
+        businessType: settings.industry,
+        address: '',
+        taxId: '',
+      );
+    }
+    context.go(AppRoutes.home);
   }
 
   @override
   Widget build(BuildContext context) {
     return SetupShell(
       currentStep: 3,
-      title: 'How comfortable are you with finance?',
+      title: 'Choose your plan',
       subtitle:
-          "We'll tailor the Masari AI experience and terminology based on your expertise level.",
+          "Select the plan that fits your business. You can change this anytime.",
       buttonText: "Let's Go!",
       buttonIcon: Icons.auto_awesome_rounded,
-      onBack: () => Navigator.of(context).pop(),
+      onBack: () => context.go(AppRoutes.setupStep2),
       onContinue: _onLetsGo,
       belowButton: Text(
-        'You can change this setting anytime in your profile.',
+        'You can change your plan anytime in settings.',
         style: AppTypography.caption.copyWith(
           color: AppColors.textTertiary,
           fontSize: 12,
@@ -43,14 +62,14 @@ class _BusinessSetupStep3State extends State<BusinessSetupStep3> {
       ),
       child: Column(
         children: [
-          // ─── Launch Mode (Active / Selectable) ───
+          // ─── Launch Mode ───
           _TierCard(
             emoji: '🌱',
             title: 'Launch Mode',
             subtitle:
-                'I need guidance. Explain things simply and handle the complex math for me.',
-            badge: 'Recommended',
-            badgeColor: AppColors.accentOrange,
+                'Free forever. Track income, expenses, inventory & suppliers with simple reports.',
+            badge: 'Free',
+            badgeColor: AppColors.success,
             isSelected: _selectedIndex == 0,
             isEnabled: true,
             onTap: () => setState(() => _selectedIndex = 0),
@@ -58,17 +77,17 @@ class _BusinessSetupStep3State extends State<BusinessSetupStep3> {
 
           const SizedBox(height: 14),
 
-          // ─── Growth Mode (Coming Soon) ───
+          // ─── Growth Mode ───
           _TierCard(
             emoji: '🚀',
             title: 'Growth Mode',
             subtitle:
-                'I know the basics. Give me the raw data but highlight the anomalies.',
-            badge: 'Coming Soon',
-            badgeColor: AppColors.textTertiary,
-            isSelected: false,
-            isEnabled: false,
-            onTap: null,
+                'Advanced sales, P&L, balance sheet, AI insights, Shopify integration & more.',
+            badge: 'Popular',
+            badgeColor: AppColors.accentOrange,
+            isSelected: _selectedIndex == 1,
+            isEnabled: true,
+            onTap: () => setState(() => _selectedIndex = 1),
           ),
 
           const SizedBox(height: 14),
@@ -78,7 +97,7 @@ class _BusinessSetupStep3State extends State<BusinessSetupStep3> {
             emoji: '👑',
             title: 'Pro Mode',
             subtitle:
-                "I'm an expert. I want full manual control over ledgers and forecasting.",
+                "Full control: multi-store, investor reports, advanced modeling & unlimited users.",
             badge: 'Coming Soon',
             badgeColor: AppColors.textTertiary,
             isSelected: false,
@@ -123,7 +142,7 @@ class _TierCard extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.accentOrange.withOpacity(0.05)
+              ? AppColors.accentOrange.withValues(alpha: 0.05)
               : AppColors.surfaceLight,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
@@ -133,7 +152,7 @@ class _TierCard extends StatelessWidget {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: AppColors.accentOrange.withOpacity(0.1),
+                    color: AppColors.accentOrange.withValues(alpha: 0.1),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -156,13 +175,13 @@ class _TierCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                   border: isSelected
                       ? Border.all(
-                          color: AppColors.accentOrange.withOpacity(0.2),
+                          color: AppColors.accentOrange.withValues(alpha: 0.2),
                         )
                       : Border.all(color: AppColors.borderLight),
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 4,
                             offset: const Offset(0, 1),
                           ),
@@ -203,7 +222,7 @@ class _TierCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? badgeColor
-                                : badgeColor.withOpacity(0.15),
+                                : badgeColor.withValues(alpha: 0.15),
                             borderRadius: AppRadius.pillRadius,
                           ),
                           child: Text(

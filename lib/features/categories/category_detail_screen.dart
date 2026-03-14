@@ -11,21 +11,22 @@ import 'edit_category_screen.dart';
 
 class CategoryDetailScreen extends ConsumerWidget {
   final CategoryData category;
+  final DateTime? month;
 
-  const CategoryDetailScreen({super.key, required this.category});
+  const CategoryDetailScreen({super.key, required this.category, this.month});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allTransactions = ref.watch(transactionsProvider);
+    final allTransactions = ref.watch(transactionsProvider).value ?? [];
     final categoryTx = allTransactions
-        .where((t) => t.category.name == category.name)
+        .where((t) => t.categoryId == category.id)
         .toList()
       ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
     final totalSpend = categoryTx.fold(0.0, (sum, t) => sum + t.amount.abs());
-    final budget = 6000.0; // placeholder budget
-    final usedPercent = (totalSpend / budget * 100).clamp(0.0, 100.0).toInt();
-    final remaining = (budget - totalSpend).clamp(0.0, double.infinity);
+    final budget = category.budgetLimit ?? 0.0;
+    final usedPercent = budget > 0 ? (totalSpend / budget * 100).clamp(0.0, 100.0).toInt() : 0;
+    final remaining = budget > 0 ? (budget - totalSpend).clamp(0.0, double.infinity) : 0.0;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -155,9 +156,9 @@ class _SpendCard extends StatelessWidget {
                 height: 42,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: category.color.withValues(alpha: 0.12),
+                  color: category.displayColor.withValues(alpha: 0.12),
                 ),
-                child: Icon(category.icon, size: 22, color: category.color),
+                child: Icon(category.iconData, size: 22, color: category.displayColor),
               ),
               const SizedBox(width: 12),
               Column(
@@ -514,12 +515,12 @@ class _TransactionTile extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: transaction.category.color.withValues(alpha: 0.08),
+              color: CategoryData.findById(transaction.categoryId).displayColor.withValues(alpha: 0.08),
             ),
             child: Icon(
-              transaction.category.icon,
+              CategoryData.findById(transaction.categoryId).iconData,
               size: 20,
-              color: transaction.category.color,
+              color: CategoryData.findById(transaction.categoryId).displayColor,
             ),
           ),
           const SizedBox(width: 12),

@@ -10,8 +10,9 @@ import '../transaction_detail_screen.dart';
 /// Provides real-time filtering with a clean search UI.
 class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
   final List<Transaction> transactions;
+  final String currency;
 
-  TransactionSearchDelegate({required this.transactions})
+  TransactionSearchDelegate({required this.transactions, this.currency = 'SAR'})
       : super(
           searchFieldLabel: 'Search transactions...',
           searchFieldStyle: AppTypography.bodyMedium.copyWith(
@@ -74,8 +75,9 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
   Widget _buildSearchResults() {
     final results = transactions.where((tx) {
       final q = query.toLowerCase();
+      final cat = CategoryData.findById(tx.categoryId);
       return tx.title.toLowerCase().contains(q) ||
-          tx.category.name.toLowerCase().contains(q);
+          cat.name.toLowerCase().contains(q);
     }).toList();
 
     if (results.isEmpty) {
@@ -90,21 +92,14 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
         itemCount: results.length,
         itemBuilder: (context, index) {
           final tx = results[index];
+          final cat = CategoryData.findById(tx.categoryId);
           return _SearchResultTile(
             transaction: tx,
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => TransactionDetailScreen(
-                    transaction: TransactionItem(
-                      title: tx.title,
-                      subtitle: tx.formattedTime,
-                      amount: tx.amount,
-                      icon: tx.category.icon,
-                      iconBgColor: tx.category.bgColor,
-                      iconColor: tx.category.color,
-                      category: tx.category.name,
-                    ),
+                    transaction: tx,
                   ),
                 ),
               );
@@ -254,11 +249,11 @@ class _SearchResultTile extends StatelessWidget {
                   height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: transaction.category.bgColor,
+                    color: CategoryData.findById(transaction.categoryId).displayBgColor,
                   ),
                   child: Icon(
-                    transaction.category.icon,
-                    color: transaction.category.color,
+                    CategoryData.findById(transaction.categoryId).iconData,
+                    color: CategoryData.findById(transaction.categoryId).displayColor,
                     size: 20,
                   ),
                 ),
@@ -276,7 +271,7 @@ class _SearchResultTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        transaction.category.name,
+                        CategoryData.findById(transaction.categoryId).name,
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textTertiary,
                         ),

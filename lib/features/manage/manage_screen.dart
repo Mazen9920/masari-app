@@ -4,288 +4,388 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/navigation/app_router.dart';
 import '../../core/providers/app_providers.dart';
-import '../inventory/inventory_list_screen.dart';
-import '../inventory/add_product_screen.dart';
-import '../categories/categories_list_screen.dart';
+import '../../core/providers/hub_settings_provider.dart';
 import '../categories/add_category_sheet.dart';
-import '../suppliers/suppliers_overview_screen.dart';
-import 'hub_settings_screen.dart';
+import '../shopify/widgets/shopify_sync_status_widget.dart';
 
 /// Management Hub — provides access to Inventory, Suppliers, and Categories.
-class ManageScreen extends ConsumerWidget {
+class ManageScreen extends ConsumerStatefulWidget {
   const ManageScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ManageScreen> createState() => _ManageScreenState();
+}
+
+class _ManageScreenState extends ConsumerState<ManageScreen> {
+  @override
+  Widget build(BuildContext context) {
     // Live stats
-    final products = ref.watch(inventoryProvider);
-    final categories = ref.watch(categoriesProvider);
-    final suppliers = ref.watch(suppliersProvider);
+    final products = ref.watch(inventoryProvider).value ?? [];
+    final categories = ref.watch(categoriesProvider).value ?? [];
+    final suppliers = ref.watch(suppliersProvider).value ?? [];
     final lowStockCount =
         products.where((p) => p.status.name == 'lowStock').length;
+    final dueCount = suppliers.where((s) => s.hasDue).length;
+
+    // Hub settings
+    final settings = ref.watch(hubSettingsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: SafeArea(
         bottom: false,
-        child: Column(
-          children: [
-            _Header(),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        child: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          // ── Header ──
+          SliverToBoxAdapter(
+            child: _CleanHeader(),
+          ),
+
+          // ── Main Sections ──
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+            sliver: SliverToBoxAdapter(
+              child: _buildSectionsContent(
+                settings: settings,
+                productCount: products.length,
+                lowStockCount: lowStockCount,
+                categoryCount: categories.length,
+                supplierCount: suppliers.length,
+                dueCount: dueCount,
+              ),
+            ),
+          ),
+
+          // ── Shopify Sync Status (shown when connected) ──
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            sliver: const SliverToBoxAdapter(
+              child: ShopifySyncStatusWidget(),
+            ),
+          ),
+
+          // ── Quick Actions ──
+          if (settings.showQuickActions)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+              sliver: SliverToBoxAdapter(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Management Cards ──
-                    _ManagementCard(
-                      icon: Icons.inventory_2_rounded,
-                      iconBgColor: const Color(0xFFEFF6FF),
-                      iconColor: AppColors.primaryNavy,
-                      title: 'Inventory',
-                      subtitle: 'Track stock, products & reorders',
-                      badge: lowStockCount > 0
-                          ? _Badge(
-                              icon: Icons.warning_rounded,
-                              label: '$lowStockCount low stock items',
-                              bgColor: const Color(0xFFFEF2F2),
-                              textColor: const Color(0xFFDC2626),
-                            )
-                          : null,
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                              builder: (_) => const InventoryListScreen()),
-                        );
-                      },
-                    ).animate().fadeIn(duration: 250.ms).slideY(begin: 0.05),
-
-                    const SizedBox(height: 12),
-
-                    _ManagementCard(
-                      icon: Icons.local_shipping_rounded,
-                      iconBgColor: const Color(0xFFECFDF5),
-                      iconColor: const Color(0xFF059669),
-                      title: 'Suppliers',
-                      subtitle: 'Manage vendors & payables',
-                      badge: _Badge(
-                        icon: Icons.payments_rounded,
-                        label: '${suppliers.where((s) => s.hasDue).length} with dues',
-                        bgColor: const Color(0xFFFFFBEB),
-                        textColor: const Color(0xFFB45309),
-                      ),
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const SuppliersOverviewScreen(),
-                          ),
-                        );
-                      },
-                    )
-                        .animate()
-                        .fadeIn(duration: 250.ms, delay: 50.ms)
-                        .slideY(begin: 0.05),
-
-                    const SizedBox(height: 12),
-
-                    _ManagementCard(
-                      icon: Icons.category_rounded,
-                      iconBgColor: const Color(0xFFF5F3FF),
-                      iconColor: const Color(0xFF7C3AED),
-                      title: 'Categories',
-                      subtitle: 'Organize expenses & income',
-                      badge: _Badge(
-                        icon: Icons.sell_rounded,
-                        label: '${categories.length} active categories',
-                        bgColor: const Color(0xFFF1F5F9),
-                        textColor: const Color(0xFF475569),
-                      ),
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                              builder: (_) => const CategoriesListScreen()),
-                        );
-                      },
-                    )
-                        .animate()
-                        .fadeIn(duration: 250.ms, delay: 100.ms)
-                        .slideY(begin: 0.05),
-
-                    const SizedBox(height: 28),
-
-                    // ── Quick Actions ──
                     Text(
                       'QUICK ACTIONS',
                       style: AppTypography.captionSmall.copyWith(
                         color: AppColors.textTertiary,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
+                        letterSpacing: 1.2,
                         fontSize: 11,
                       ),
-                    )
-                        .animate()
-                        .fadeIn(duration: 250.ms, delay: 140.ms),
-
-                    const SizedBox(height: 12),
-
-                    GridView.count(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      childAspectRatio: 2.8,
+                    ).animate().fadeIn(duration: 200.ms, delay: 140.ms),
+                    const SizedBox(height: 14),
+                    Row(
                       children: [
-                        _QuickAction(
-                          icon: Icons.add_rounded,
-                          iconBg: AppColors.primaryNavy.withValues(alpha: 0.08),
-                          iconColor: AppColors.primaryNavy,
-                          label: 'Add Product',
+                        _QuickActionPill(
+                          icon: Icons.add_box_rounded,
+                          label: 'Product',
+                          color: AppColors.primaryNavy,
                           onTap: () {
                             HapticFeedback.lightImpact();
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                  builder: (_) => const AddProductScreen()),
-                            );
+                            context.pushNamed("AddProductScreen");
                           },
                         ),
-                        _QuickAction(
-                          icon: Icons.add_rounded,
-                          iconBg:
-                              const Color(0xFF059669).withValues(alpha: 0.08),
-                          iconColor: const Color(0xFF059669),
-                          label: 'New Supplier',
+                        const SizedBox(width: 10),
+                        _QuickActionPill(
+                          icon: Icons.person_add_rounded,
+                          label: 'Supplier',
+                          color: const Color(0xFF059669),
                           onTap: () {
                             HapticFeedback.lightImpact();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content:
-                                    const Text('Suppliers — coming soon'),
-                                backgroundColor: AppColors.primaryNavy,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                              ),
-                            );
+                            context.pushNamed('AddSupplierScreen');
                           },
                         ),
-                        _QuickAction(
-                          icon: Icons.add_rounded,
-                          iconBg:
-                              const Color(0xFF7C3AED).withValues(alpha: 0.08),
-                          iconColor: const Color(0xFF7C3AED),
-                          label: 'New Category',
+                        const SizedBox(width: 10),
+                        _QuickActionPill(
+                          icon: Icons.new_label_rounded,
+                          label: 'Category',
+                          color: const Color(0xFF7C3AED),
                           onTap: () {
                             HapticFeedback.lightImpact();
                             showAddCategorySheet(context);
                           },
                         ),
-                        _QuickAction(
-                          icon: Icons.settings_rounded,
-                          iconBg: const Color(0xFFF1F5F9),
-                          iconColor: AppColors.textTertiary,
-                          label: 'Hub Settings',
+                        const SizedBox(width: 10),
+                        _QuickActionPill(
+                          icon: Icons.tune_rounded,
+                          label: 'Settings',
+                          color: AppColors.textSecondary,
                           onTap: () {
                             HapticFeedback.lightImpact();
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const HubSettingsScreen(),
-                              ),
-                            );
+                            context.pushNamed('HubSettingsScreen');
                           },
                         ),
                       ],
                     )
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 160.ms),
-
-                    const SizedBox(height: 24),
-
-                    // ── Insights banner ──
-                    _InsightsBanner()
-                        .animate()
-                        .fadeIn(duration: 300.ms, delay: 200.ms),
                   ],
                 ),
               ),
             ),
-          ],
-        ),
+
+          // ── Insights Banner ──
+          if (settings.showInsightsBanner)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+              sliver: SliverToBoxAdapter(
+                child: _InsightsBanner()
+                    .animate()
+                    .fadeIn(duration: 300.ms, delay: 200.ms),
+              ),
+            ),
+
+          // ── Bottom padding ──
+          const SliverToBoxAdapter(child: SizedBox(height: 120)),
+        ],
       ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  SECTIONS CONTENT — handles list/grid layout and section filtering
+  // ─────────────────────────────────────────────────────────────────────────
+  Widget _buildSectionsContent({
+    required HubSettingsState settings,
+    required int productCount,
+    required int lowStockCount,
+    required int categoryCount,
+    required int supplierCount,
+    required int dueCount,
+  }) {
+    // Build shared chips
+    final inventoryChip = (settings.showStatBadges &&
+            settings.lowStockAlerts &&
+            lowStockCount > 0)
+        ? _StatChip(label: '$lowStockCount low', color: AppColors.danger)
+        : _StatChip(label: '$productCount items', color: AppColors.primaryNavy);
+
+    final suppliersChip = (settings.showStatBadges &&
+            settings.paymentDueReminders &&
+            dueCount > 0)
+        ? _StatChip(label: '$dueCount dues', color: AppColors.warning)
+        : _StatChip(
+            label: '$supplierCount vendors', color: const Color(0xFF059669));
+
+    final categoriesChip = settings.showStatBadges
+        ? _StatChip(
+            label: '$categoryCount active', color: const Color(0xFF7C3AED))
+        : null;
+
+    const sectionLabel = Text(
+      'YOUR WORKSPACE',
+      style: TextStyle(
+        color: AppColors.textTertiary,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+        fontSize: 11,
+      ),
+    );
+
+    // ── Grid layout ──
+    if (settings.layoutIndex == 0) {
+      final gridItems = <_GridSectionData>[
+        _GridSectionData(
+            icon: Icons.inventory_2_rounded,
+            gradient: const [Color(0xFF1B4F72), Color(0xFF2E86C1)],
+            title: 'Inventory',
+            badge: inventoryChip,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push(AppRoutes.inventory);
+            },
+          ),
+        _GridSectionData(
+            icon: Icons.local_shipping_rounded,
+            gradient: const [Color(0xFF059669), Color(0xFF34D399)],
+            title: 'Suppliers',
+            badge: suppliersChip,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push(AppRoutes.suppliers);
+            },
+          ),
+        _GridSectionData(
+            icon: Icons.category_rounded,
+            gradient: const [Color(0xFF7C3AED), Color(0xFFA78BFA)],
+            title: 'Categories',
+            badge: categoriesChip,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push(AppRoutes.categories);
+            },
+          ),
+      ];
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          sectionLabel.animate().fadeIn(duration: 200.ms),
+          const SizedBox(height: 14),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1.1,
+            ),
+            itemCount: gridItems.length,
+            itemBuilder: (context, i) {
+              final item = gridItems[i];
+              return _SectionGridCard(
+                icon: item.icon,
+                iconGradient: item.gradient,
+                title: item.title,
+                badge: item.badge,
+                onTap: item.onTap,
+              ).animate().fadeIn(duration: 250.ms, delay: (i * 30).ms);
+            },
+          ),
+        ],
+      );
+    }
+
+    // ── List layout (default) ──
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        sectionLabel.animate().fadeIn(duration: 200.ms),
+        const SizedBox(height: 14),
+        _SectionTile(
+            icon: Icons.inventory_2_rounded,
+            iconGradient: const [Color(0xFF1B4F72), Color(0xFF2E86C1)],
+            title: 'Inventory',
+            subtitle: 'Products, stock & reorders',
+            trailing: inventoryChip,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push(AppRoutes.inventory);
+            },
+          ).animate().fadeIn(duration: 250.ms).slideX(begin: -0.03),
+        const SizedBox(height: 10),
+        _SectionTile(
+            icon: Icons.local_shipping_rounded,
+            iconGradient: const [Color(0xFF059669), Color(0xFF34D399)],
+            title: 'Suppliers',
+            subtitle: 'Vendors, purchases & payables',
+            trailing: suppliersChip,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push(AppRoutes.suppliers);
+            },
+          )
+              .animate()
+              .fadeIn(duration: 250.ms, delay: 50.ms)
+              .slideX(begin: -0.03),
+        const SizedBox(height: 10),
+        _SectionTile(
+            icon: Icons.category_rounded,
+            iconGradient: const [Color(0xFF7C3AED), Color(0xFFA78BFA)],
+            title: 'Categories',
+            subtitle: 'Organize expenses & income',
+            trailing: categoriesChip,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push(AppRoutes.categories);
+            },
+          )
+              .animate()
+              .fadeIn(duration: 250.ms, delay: 100.ms)
+              .slideX(begin: -0.03),
+        const SizedBox(height: 10),
+      ],
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════════
-//  HEADER
+//  HEADER — clean style matching the dashboard
 // ═══════════════════════════════════════════════════════════
-class _Header extends StatelessWidget {
+class _CleanHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
       child: Column(
         children: [
-          // Title + bell
+          // Title row
           Row(
             children: [
               Text(
                 'Management Hub',
-                style: AppTypography.h2.copyWith(
-                  color: AppColors.primaryNavy,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 24,
-                  letterSpacing: -0.3,
+                style: AppTypography.h1.copyWith(
+                  color: AppColors.textPrimary,
                 ),
               ),
               const Spacer(),
-              IconButton(
-                onPressed: () => HapticFeedback.lightImpact(),
-                icon: const Icon(Icons.notifications_none_rounded, size: 24),
-                color: AppColors.textTertiary,
+              // Notification bell — same style as dashboard
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  context.push(AppRoutes.notifications);
+                },
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: const Icon(
+                    Icons.notifications_outlined,
+                    color: AppColors.textSecondary,
+                    size: 22,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          // Search
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F9FA),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: AppColors.borderLight.withValues(alpha: 0.5)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.search_rounded,
-                    size: 20, color: AppColors.textTertiary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
+          const SizedBox(height: 14),
+          // Search bar
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push(AppRoutes.inventory);
+            },
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: AppColors.borderLight.withValues(alpha: 0.6)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.search_rounded,
+                      size: 20, color: AppColors.textTertiary),
+                  const SizedBox(width: 10),
+                  Text(
                     'Search inventory, suppliers…',
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textTertiary,
                       fontSize: 13,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -295,24 +395,22 @@ class _Header extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  MANAGEMENT CARD
+//  SECTION TILE — modern card for each hub section
 // ═══════════════════════════════════════════════════════════
-class _ManagementCard extends StatelessWidget {
+class _SectionTile extends StatelessWidget {
   final IconData icon;
-  final Color iconBgColor;
-  final Color iconColor;
+  final List<Color> iconGradient;
   final String title;
   final String subtitle;
-  final _Badge? badge;
+  final Widget? trailing;
   final VoidCallback onTap;
 
-  const _ManagementCard({
+  const _SectionTile({
     required this.icon,
-    required this.iconBgColor,
-    required this.iconColor,
+    required this.iconGradient,
     required this.title,
     required this.subtitle,
-    this.badge,
+    this.trailing,
     required this.onTap,
   });
 
@@ -320,36 +418,46 @@ class _ManagementCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-                color: AppColors.borderLight.withValues(alpha: 0.4)),
+            borderRadius: BorderRadius.circular(16),
+            border:
+                Border.all(color: AppColors.borderLight.withValues(alpha: 0.3)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 8,
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
             ],
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon circle
+              // Gradient icon circle
               Container(
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: iconBgColor,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: iconGradient,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: iconGradient.first.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                child: Icon(icon, size: 26, color: iconColor),
+                child: Icon(icon, size: 22, color: Colors.white),
               ),
               const SizedBox(width: 14),
               // Text
@@ -357,39 +465,33 @@ class _ManagementCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: AppTypography.labelLarge.copyWith(
-                              color: AppColors.primaryNavy,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 17,
-                            ),
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded,
-                            size: 20, color: AppColors.textTertiary),
-                      ],
+                    Text(
+                      title,
+                      style: AppTypography.labelLarge.copyWith(
+                        color: AppColors.primaryNavy,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       subtitle,
                       style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textTertiary,
-                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        fontSize: 12.5,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    if (badge != null) ...[
-                      const SizedBox(height: 10),
-                      badge!,
-                    ],
                   ],
                 ),
               ),
+              // Stat chip + chevron
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing!,
+              ],
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 20, color: AppColors.textTertiary),
             ],
           ),
         ),
@@ -399,106 +501,89 @@ class _ManagementCard extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  BADGE
+//  STAT CHIP — compact badge next to section tiles
 // ═══════════════════════════════════════════════════════════
-class _Badge extends StatelessWidget {
-  final IconData icon;
+class _StatChip extends StatelessWidget {
   final String label;
-  final Color bgColor;
-  final Color textColor;
+  final Color color;
 
-  const _Badge({
-    required this.icon,
-    required this.label,
-    required this.bgColor,
-    required this.textColor,
-  });
+  const _StatChip({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(50),
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: textColor),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: textColor,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
       ),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════════
-//  QUICK ACTION
+//  QUICK ACTION PILL — compact action button
 // ═══════════════════════════════════════════════════════════
-class _QuickAction extends StatelessWidget {
+class _QuickActionPill extends StatelessWidget {
   final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
   final String label;
+  final Color color;
   final VoidCallback onTap;
 
-  const _QuickAction({
+  const _QuickActionPill({
     required this.icon,
-    required this.iconBg,
-    required this.iconColor,
     required this.label,
+    required this.color,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-                color: AppColors.borderLight.withValues(alpha: 0.4)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: iconBg,
-                ),
-                child: Icon(icon, size: 16, color: iconColor),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label,
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.primaryNavy,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+    return Expanded(
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: AppColors.borderLight.withValues(alpha: 0.4)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: color.withValues(alpha: 0.1),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  child: Icon(icon, size: 18, color: color),
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryNavy,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -509,9 +594,44 @@ class _QuickAction extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════
 //  INSIGHTS BANNER
 // ═══════════════════════════════════════════════════════════
-class _InsightsBanner extends StatelessWidget {
+class _InsightsBanner extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Compute a real insight from live data
+    final products = ref.watch(inventoryProvider).value ?? [];
+    final suppliers = ref.watch(suppliersProvider).value ?? [];
+    final lowStockCount = products.where((p) => p.status.name == 'lowStock').length;
+    final outOfStockCount = products.where((p) => p.status.name == 'outOfStock').length;
+    final dueCount = suppliers.where((s) => s.hasDue).length;
+    final totalProducts = products.length;
+
+    String title;
+    String subtitle;
+    IconData icon;
+
+    if (outOfStockCount > 0) {
+      title = '$outOfStockCount Product${outOfStockCount > 1 ? 's' : ''} Out of Stock';
+      subtitle = 'Reorder soon to avoid missed sales.';
+      icon = Icons.error_outline_rounded;
+    } else if (lowStockCount > 0) {
+      title = '$lowStockCount Product${lowStockCount > 1 ? 's' : ''} Running Low';
+      subtitle = 'Review stock levels and reorder before they run out.';
+      icon = Icons.warning_amber_rounded;
+    } else if (dueCount > 0) {
+      title = '$dueCount Supplier Payment${dueCount > 1 ? 's' : ''} Due';
+      subtitle = 'Check outstanding balances to stay on top of payables.';
+      icon = Icons.payment_rounded;
+    } else if (totalProducts > 0) {
+      final avgValue = products.fold<double>(0, (s, p) => s + p.totalCostValue) / totalProducts;
+      title = 'Inventory Healthy';
+      subtitle = '$totalProducts products tracked, avg value ${avgValue.toStringAsFixed(0)} per item.';
+      icon = Icons.check_circle_outline_rounded;
+    } else {
+      title = 'Get Started';
+      subtitle = 'Add your first product to start tracking inventory.';
+      icon = Icons.add_business_rounded;
+    }
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -523,7 +643,7 @@ class _InsightsBanner extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryNavy.withValues(alpha: 0.3),
+            color: AppColors.primaryNavy.withValues(alpha: 0.25),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -567,12 +687,11 @@ class _InsightsBanner extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: Colors.white.withValues(alpha: 0.15),
                 ),
-                child:
-                    const Icon(Icons.insights_rounded, size: 18, color: Colors.white),
+                child: Icon(icon, size: 18, color: Colors.white),
               ),
               const SizedBox(height: 12),
               Text(
-                'Weekly Insights Ready',
+                title,
                 style: AppTypography.labelLarge.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -581,7 +700,7 @@ class _InsightsBanner extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Review your inventory turnover rate for this week.',
+                subtitle,
                 style: AppTypography.bodySmall.copyWith(
                   color: Colors.white.withValues(alpha: 0.75),
                   fontSize: 13,
@@ -590,6 +709,110 @@ class _InsightsBanner extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GRID SECTION DATA — simple data holder for grid cards
+// ═══════════════════════════════════════════════════════════
+class _GridSectionData {
+  final IconData icon;
+  final List<Color> gradient;
+  final String title;
+  final Widget? badge;
+  final VoidCallback onTap;
+
+  const _GridSectionData({
+    required this.icon,
+    required this.gradient,
+    required this.title,
+    required this.badge,
+    required this.onTap,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SECTION GRID CARD — compact card for 2×2 grid layout
+// ═══════════════════════════════════════════════════════════
+class _SectionGridCard extends StatelessWidget {
+  final IconData icon;
+  final List<Color> iconGradient;
+  final String title;
+  final Widget? badge;
+  final VoidCallback onTap;
+
+  const _SectionGridCard({
+    required this.icon,
+    required this.iconGradient,
+    required this.title,
+    required this.badge,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: AppColors.borderLight.withValues(alpha: 0.3)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: iconGradient,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: iconGradient.first.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Icon(icon, size: 20, color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: AppColors.primaryNavy,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              if (badge != null) ...[
+                const SizedBox(height: 6),
+                badge!,
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

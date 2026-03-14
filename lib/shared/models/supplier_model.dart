@@ -1,8 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 /// Represents a supplier entity.
 class Supplier {
   final String id;
+  final String? userId;
   final String name;
   final String category;
   final String phone;
@@ -17,9 +19,11 @@ class Supplier {
   final DateTime? dueDate;
   final Color avatarBg;
   final Color avatarTextColor;
+  final String? imageUrl;
 
   const Supplier({
     required this.id,
+    this.userId,
     required this.name,
     required this.category,
     this.phone = '',
@@ -34,6 +38,7 @@ class Supplier {
     this.dueDate,
     this.avatarBg = const Color(0xFFE0E7FF),
     this.avatarTextColor = const Color(0xFF1B5074),
+    this.imageUrl,
   });
 
   /// Initials for avatar
@@ -98,6 +103,46 @@ class Supplier {
       avatarTextColor: avatarTextColor ?? this.avatarTextColor,
     );
   }
+
+  factory Supplier.fromJson(Map<String, dynamic> json) {
+    return Supplier(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
+      email: json['email'] as String? ?? '',
+      whatsappAvailable: json['whatsapp_available'] as bool? ?? false,
+      paymentTerms: json['payment_terms'] as String? ?? 'On Receipt',
+      balance: (json['balance'] as num?)?.toDouble() ?? 0,
+      address: json['address'] as String? ?? '',
+      notes: json['notes'] as String? ?? '',
+      supplierId: json['supplier_id'] as String? ?? '',
+      lastTransaction: _parseSupplierDate(json['last_transaction']),
+      dueDate: json['due_date'] != null ? _parseSupplierDate(json['due_date']) : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'category': category,
+    'phone': phone,
+    'email': email,
+    'whatsapp_available': whatsappAvailable,
+    'payment_terms': paymentTerms,
+    'balance': balance,
+    'address': address,
+    'notes': notes,
+    'supplier_id': supplierId,
+    'last_transaction': lastTransaction.toIso8601String(),
+    if (dueDate != null) 'due_date': dueDate!.toIso8601String(),
+  };
+}
+
+DateTime _parseSupplierDate(dynamic value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is String) return DateTime.parse(value);
+  return DateTime.now();
 }
 
 /// Sample suppliers for development

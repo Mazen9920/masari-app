@@ -13,7 +13,8 @@ import '../../shared/models/supplier_model.dart';
 /// payment terms, sticky action bar.
 class PurchaseDetailScreen extends StatelessWidget {
   final Supplier? supplier;
-  const PurchaseDetailScreen({super.key, this.supplier});
+  final dynamic purchase;
+  const PurchaseDetailScreen({super.key, this.supplier, this.purchase});
 
   @override
   Widget build(BuildContext context) {

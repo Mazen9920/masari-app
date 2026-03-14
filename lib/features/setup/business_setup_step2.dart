@@ -1,46 +1,53 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/app_settings_provider.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/navigation/app_router.dart';
 import 'widgets/setup_shell.dart';
-import 'business_setup_step3.dart';
+import '../../l10n/app_localizations.dart';
 
-class BusinessSetupStep2 extends StatefulWidget {
+class BusinessSetupStep2 extends ConsumerStatefulWidget {
   const BusinessSetupStep2({super.key});
 
   @override
-  State<BusinessSetupStep2> createState() => _BusinessSetupStep2State();
+  ConsumerState<BusinessSetupStep2> createState() => _BusinessSetupStep2State();
 }
 
-class _BusinessSetupStep2State extends State<BusinessSetupStep2> {
+class _BusinessSetupStep2State extends ConsumerState<BusinessSetupStep2> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   int _selectedGoalIndex = 0; // Default: first one selected
 
-  final List<_GoalOption> _goals = [
+  List<_GoalOption> get _goals => [
     _GoalOption(
       icon: Icons.trending_up_rounded,
-      title: 'Track Profitability',
+      title: l10n.trackProfitability,
       subtitle: 'Monitor margins and net profit in real-time.',
     ),
     _GoalOption(
       icon: Icons.account_balance_wallet_outlined,
-      title: 'Control Cash Flow',
+      title: l10n.controlCashFlow,
       subtitle: 'Manage incoming and outgoing payments.',
     ),
     _GoalOption(
       icon: Icons.rocket_launch_rounded,
-      title: 'Grow My Business',
+      title: l10n.growMyBusiness,
       subtitle: 'Secure funding and plan for expansion.',
     ),
     _GoalOption(
       icon: Icons.description_outlined,
-      title: 'Create Financial Reports',
+      title: l10n.createFinancialReports,
       subtitle: 'Automate P&L and balance sheet generation.',
     ),
   ];
 
   void _onContinue() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const BusinessSetupStep3()),
+    // Save selected goal, then navigate to step 3
+    ref.read(appSettingsProvider.notifier).setMainGoal(
+      _goals[_selectedGoalIndex].title,
     );
+    context.go(AppRoutes.setupStep3);
   }
 
   @override
@@ -51,7 +58,7 @@ class _BusinessSetupStep2State extends State<BusinessSetupStep2> {
       subtitle:
           "Select the one that matters most right now. We'll customize your dashboard based on this.",
       buttonText: 'Continue',
-      onBack: () => Navigator.of(context).pop(),
+      onBack: () => context.go(AppRoutes.setupStep1),
       onContinue: _onContinue,
       child: Column(
         children: List.generate(_goals.length, (index) {
@@ -96,6 +103,7 @@ class _GoalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -104,7 +112,7 @@ class _GoalCard extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.accentOrange.withOpacity(0.06)
+              ? AppColors.accentOrange.withValues(alpha: 0.06)
               : AppColors.surfaceLight,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
@@ -116,14 +124,14 @@ class _GoalCard extends StatelessWidget {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: AppColors.accentOrange.withOpacity(0.08),
+                    color: AppColors.accentOrange.withValues(alpha: 0.08),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
                 ]
               : [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -143,7 +151,7 @@ class _GoalCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: isSelected
                     ? Border.all(
-                        color: AppColors.accentOrange.withOpacity(0.2),
+                        color: AppColors.accentOrange.withValues(alpha: 0.2),
                       )
                     : null,
               ),

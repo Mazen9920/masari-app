@@ -416,7 +416,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                             : null,
                       ),
                       child: Icon(
-                        cat.icon,
+                        cat.iconData,
                         size: 20,
                         color: isChecked
                             ? AppColors.textPrimary

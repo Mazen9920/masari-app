@@ -14,78 +14,7 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  final List<_NotificationItem> _notifications = [
-    _NotificationItem(
-      icon: Icons.trending_down_rounded,
-      iconColor: const Color(0xFFEF4444),
-      iconBg: const Color(0xFFFEF2F2),
-      title: 'Revenue decreased by 8%',
-      subtitle: 'Your February revenue is trending lower than January. Tap to view details.',
-      time: '2 min ago',
-      isUnread: true,
-      type: 'alert',
-    ),
-    _NotificationItem(
-      icon: Icons.inventory_2_outlined,
-      iconColor: const Color(0xFFF59E0B),
-      iconBg: const Color(0xFFFFFBEB),
-      title: '3 items low in stock',
-      subtitle: 'Cotton T-Shirt, Denim Jacket, and Leather Belt need restocking.',
-      time: '15 min ago',
-      isUnread: true,
-      type: 'alert',
-    ),
-    _NotificationItem(
-      icon: Icons.payments_outlined,
-      iconColor: const Color(0xFF3B82F6),
-      iconBg: const Color(0xFFEFF6FF),
-      title: 'Payment due tomorrow',
-      subtitle: 'EGP 5,200 due to Cairo Textiles supplier.',
-      time: '1 hour ago',
-      isUnread: true,
-      type: 'alert',
-    ),
-    _NotificationItem(
-      icon: Icons.auto_awesome_rounded,
-      iconColor: const Color(0xFF8B5CF6),
-      iconBg: const Color(0xFFF5F3FF),
-      title: 'AI Insight available',
-      subtitle: 'Your cash flow pattern suggests optimizing payment timing. View analysis.',
-      time: '3 hours ago',
-      isUnread: false,
-      type: 'update',
-    ),
-    _NotificationItem(
-      icon: Icons.receipt_long_rounded,
-      iconColor: const Color(0xFF22C55E),
-      iconBg: const Color(0xFFF0FDF4),
-      title: 'Monthly report ready',
-      subtitle: 'Your January 2026 financial report has been generated.',
-      time: 'Yesterday',
-      isUnread: false,
-      type: 'update',
-    ),
-    _NotificationItem(
-      icon: Icons.system_update_outlined,
-      iconColor: const Color(0xFF0EA5E9),
-      iconBg: const Color(0xFFF0F9FF),
-      title: 'App updated to v1.0.1',
-      subtitle: 'New features: Export to Excel, improved AI forecasting.',
-      time: '2 days ago',
-      isUnread: false,
-      type: 'update',
-    ),
-    _NotificationItem(
-      icon: Icons.celebration_outlined,
-      iconColor: AppColors.accentOrange,
-      iconBg: const Color(0xFFFFF7ED),
-      title: 'Welcome to Masari!',
-      subtitle: 'Start tracking your finances with our smart tools.',
-      time: '1 week ago',
-      isUnread: false,
-      type: 'update',
-    ),
-  ];
+  final List<_NotificationItem> _notifications = [];
 
   @override
   void initState() {

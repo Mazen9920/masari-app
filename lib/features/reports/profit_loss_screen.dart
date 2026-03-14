@@ -4,156 +4,308 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
-import '../../features/ai/ai_chat_screen.dart';
+import '../../core/services/share_service.dart';
 import '../../shared/models/transaction_model.dart';
-import '../transactions/transactions_list_screen.dart';
-import 'export_share_screen.dart';
-class ProfitLossScreen extends StatefulWidget {
+import '../../shared/utils/money_utils.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/navigation/app_router.dart';
+import '../../shared/models/category_data.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../../core/providers/export_providers.dart';
+import '../../l10n/app_localizations.dart';
+import '../dashboard/providers/dashboard_state_provider.dart';
+import '../dashboard/widgets/custom_date_range_picker.dart';
+import 'widgets/report_card.dart';
+import 'widgets/chart_toggle.dart';
+
+class ProfitLossScreen extends ConsumerStatefulWidget {
   const ProfitLossScreen({super.key});
 
   @override
-  State<ProfitLossScreen> createState() => _ProfitLossScreenState();
+  ConsumerState<ProfitLossScreen> createState() => _ProfitLossScreenState();
 }
 
-class _ProfitLossScreenState extends State<ProfitLossScreen> {
-  // Mock Data
+class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
   // State
-  DateTime _selectedDate = DateTime.now();
-  bool _isMonthly = true;
+  DashboardPeriod _selectedPeriod = DashboardPeriod.monthToDate;
+  DateTimeRange? _customRange;
+  bool _showTrend = false;
 
-  // Mock Data
-  final double _revenue = 45200;
-  final double _expenses = 31800;
-  double get _netProfit => _revenue - _expenses;
+  @override
+  void initState() {
+    super.initState();
+    // Reports need the full dataset, not just the first page.
+    Future.microtask(() {
+      ref.read(transactionsProvider.notifier).loadAll();
+    });
+  }
 
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: now,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: AppColors.primaryNavy,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: AppColors.textPrimary,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
+  /// Returns the date range for the selected period.
+  DateTimeRange _getDateRange() {
+    if (_customRange != null && _selectedPeriod == DashboardPeriod.custom) {
+      return _customRange!;
     }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    switch (_selectedPeriod) {
+      case DashboardPeriod.today:
+        return DateTimeRange(start: DateTime(now.year, now.month, now.day), end: today);
+      case DashboardPeriod.yesterday:
+        final y = now.subtract(const Duration(days: 1));
+        return DateTimeRange(start: DateTime(y.year, y.month, y.day), end: DateTime(y.year, y.month, y.day, 23, 59, 59));
+      case DashboardPeriod.last7Days:
+        return DateTimeRange(start: now.subtract(const Duration(days: 7)), end: today);
+      case DashboardPeriod.last30Days:
+        return DateTimeRange(start: now.subtract(const Duration(days: 30)), end: today);
+      case DashboardPeriod.last90Days:
+        return DateTimeRange(start: now.subtract(const Duration(days: 90)), end: today);
+      case DashboardPeriod.last365Days:
+        return DateTimeRange(start: now.subtract(const Duration(days: 365)), end: today);
+      case DashboardPeriod.lastMonth:
+        final lastMonth = DateTime(now.year, now.month - 1);
+        return DateTimeRange(start: lastMonth, end: DateTime(now.year, now.month, 0, 23, 59, 59));
+      case DashboardPeriod.last12Months:
+        return DateTimeRange(start: DateTime(now.year - 1, now.month, now.day), end: today);
+      case DashboardPeriod.lastYear:
+        return DateTimeRange(start: DateTime(now.year - 1, 1, 1), end: DateTime(now.year - 1, 12, 31, 23, 59, 59));
+      case DashboardPeriod.weekToDate:
+        final weekday = now.weekday;
+        return DateTimeRange(start: now.subtract(Duration(days: weekday - 1)), end: today);
+      case DashboardPeriod.monthToDate:
+        return DateTimeRange(start: DateTime(now.year, now.month, 1), end: today);
+      case DashboardPeriod.quarterToDate:
+        final qStart = DateTime(now.year, ((now.month - 1) ~/ 3) * 3 + 1, 1);
+        return DateTimeRange(start: qStart, end: today);
+      case DashboardPeriod.yearToDate:
+        return DateTimeRange(start: DateTime(now.year, 1, 1), end: today);
+      case DashboardPeriod.custom:
+        return DateTimeRange(start: DateTime(now.year, now.month, 1), end: today);
+    }
+  }
+
+  Future<void> _openDatePicker() async {
+    final result = await showDateRangeSheet(
+      context,
+      currentPeriod: _selectedPeriod,
+    );
+    if (result == null) return;
+    setState(() {
+      if (result.period != null) {
+        _selectedPeriod = result.period!;
+        _customRange = null;
+      } else if (result.customRange != null) {
+        _selectedPeriod = DashboardPeriod.custom;
+        _customRange = result.customRange;
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0', 'en');
+    final l10n = AppLocalizations.of(context)!;
+    final currency = ref.watch(appSettingsProvider).currency;
+
+    // Fetch live data — distinguish loading / error / empty
+    final txnState = ref.watch(transactionsProvider);
+    final isLoadingTxns = txnState.isLoading && !txnState.hasValue;
+    final txnError = txnState.hasError && !txnState.hasValue ? txnState.error : null;
+    final transactions = txnState.value ?? [];
+
+    // Get date range for the selected period
+    final dateRange = _getDateRange();
+
+    // Filter transactions (exclude P&L-excluded items like supplier payments)
+    final filteredTransactions = transactions.where((tx) {
+      if (tx.excludeFromPL) return false;
+      return !tx.dateTime.isBefore(dateRange.start) && !tx.dateTime.isAfter(dateRange.end);
+    }).toList();
+
+    // Previous period comparison
+    final periodDuration = dateRange.end.difference(dateRange.start);
+    final prevEnd = dateRange.start.subtract(const Duration(seconds: 1));
+    final prevStart = prevEnd.subtract(periodDuration);
+    double prevRevenue = 0;
+    double prevExpenses = 0;
+    for (final tx in transactions) {
+      if (tx.excludeFromPL) continue;
+      if (tx.dateTime.isBefore(prevStart) || tx.dateTime.isAfter(prevEnd)) continue;
+      if (tx.isIncome) {
+        prevRevenue += tx.amount.abs();
+      } else {
+        prevExpenses += tx.amount.abs();
+      }
+    }
+    final double prevNetProfit = roundMoney(prevRevenue - prevExpenses);
+
+    // ── Income Statement Grouping ──
+    double salesRevenue = 0;
+    double cogs = 0;
+    double otherIncome = 0;
+    double operatingExpenses = 0;
+
+    final Map<String, double> revenueByCategory = {};
+    final Map<String, double> cogsByCategory = {};
+    final Map<String, double> opexByCategory = {};
+
+    for (final tx in filteredTransactions) {
+      final amt = tx.amount.abs();
+      if (tx.categoryId == 'cat_sales_revenue') {
+        // Use signed amount: refunds are negative and should reduce revenue
+        salesRevenue += tx.amount;
+        revenueByCategory[tx.categoryId] = (revenueByCategory[tx.categoryId] ?? 0) + tx.amount;
+      } else if (tx.categoryId == 'cat_cogs') {
+        cogs += tx.amount;
+        cogsByCategory[tx.categoryId] = (cogsByCategory[tx.categoryId] ?? 0) + tx.amount;
+      } else if (tx.isIncome) {
+        otherIncome += amt;
+        revenueByCategory[tx.categoryId] = (revenueByCategory[tx.categoryId] ?? 0) + amt;
+      } else {
+        operatingExpenses += amt;
+        opexByCategory[tx.categoryId] = (opexByCategory[tx.categoryId] ?? 0) + amt;
+      }
+    }
+
+    final double totalRevenue = roundMoney(salesRevenue + otherIncome);
+    final double grossProfit = roundMoney(salesRevenue - cogs);
+    final double calculatedNetProfit = roundMoney(grossProfit + otherIncome - operatingExpenses);
+
+    List<_BreakdownItem> buildBreakdownItems(
+        Map<String, double> map, double total, List<Color> palette) {
+      if (total == 0) return [];
+      var entries = map.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      final topEntries = entries.take(5).toList();
+      int i = 0;
+      final items = topEntries.map((e) {
+        final color = palette[i++ % palette.length];
+        String catName = CategoryData.findById(e.key).name;
+        
+        return _BreakdownItem(
+          label: catName,
+          amount: e.value,
+          color: color,
+          percentage: total > 0 ? e.value / total : 0,
+        );
+      }).toList();
+      // Add "Other" bucket if there are more than 5 categories
+      if (entries.length > 5) {
+        final otherTotal = entries.skip(5).fold(0.0, (sum, e) => sum + e.value);
+        items.add(_BreakdownItem(
+          label: 'Other',
+          amount: otherTotal,
+          color: const Color(0xFF6B7280),
+          percentage: total > 0 ? otherTotal / total : 0,
+        ));
+      }
+      return items;
+    }
+
+    // Distinct color palettes per P&L section
+    const revenueColors = [Color(0xFF10B981), Color(0xFF34D399), Color(0xFF6EE7B7), Color(0xFF059669), Color(0xFF047857)];
+    const cogsColors    = [Color(0xFFEF4444), Color(0xFFF87171), Color(0xFFFCA5A5), Color(0xFFDC2626), Color(0xFFB91C1C)];
+    const opexColors    = [Color(0xFF3B82F6), Color(0xFF60A5FA), Color(0xFF93C5FD), Color(0xFF2563EB), Color(0xFF8B5CF6)];
+
+    final revenueItems = buildBreakdownItems(revenueByCategory, totalRevenue, revenueColors);
+    final cogsItems = buildBreakdownItems(cogsByCategory, cogs, cogsColors);
+    final opexItems = buildBreakdownItems(opexByCategory, operatingExpenses, opexColors);
+
+    final isGrowth = ref.watch(isGrowthProvider);
+    final hasData = filteredTransactions.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
-      body: Stack(
-        children: [
-          // Scrollable Content
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
-            physics: const BouncingScrollPhysics(),
-            child: Column(
+      body: RefreshIndicator(
+            onRefresh: () => ref.read(transactionsProvider.notifier).refreshAll(),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(24, 24, 24, 100 + MediaQuery.of(context).padding.bottom),
+              physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics()),
+              child: Column(
               children: [
-                // Controls (Month/Yearly)
-                _buildControls(),
-                const SizedBox(height: 16),
+                // Period Selector
+                _buildPeriodSelector(),
+                const SizedBox(height: 20),
 
-                // AI Insight Banner
-                _buildInsightBanner()
-                    .animate()
-                    .fadeIn(duration: 400.ms)
-                    .slideY(begin: 0.1, end: 0,curve: Curves.easeOut),
-                const SizedBox(height: 24),
+                // Loading state
+                if (isLoadingTxns)
+                  _buildLoadingState()
+                // Error state
+                else if (txnError != null)
+                  _buildErrorState(txnError)
+                // Empty state
+                else if (!hasData)
+                  _buildEmptyState()
+                else ...[
+                  // Dynamic Insight Banner
+                  _buildInsightBanner(totalRevenue, cogs + operatingExpenses, calculatedNetProfit, currency, fmt, prevNetProfit: prevNetProfit)
+                      .animate()
+                      .fadeIn(duration: 400.ms)
+                      .slideY(begin: 0.1, end: 0, curve: Curves.easeOut),
+                  const SizedBox(height: 20),
 
-                // KPI Row
-                _buildKPIRow(fmt),
-                const SizedBox(height: 24),
+                  // KPI Row
+                  _buildKPIRow(fmt, currency, totalRevenue, salesRevenue, grossProfit, calculatedNetProfit),
+                  const SizedBox(height: 20),
 
-                // Funnel Chart
-                _buildFunnelChart(fmt)
-                    .animate()
-                    .fadeIn(duration: 400.ms, delay: 100.ms)
-                    .slideY(begin: 0.1, end: 0, curve: Curves.easeOut),
-                const SizedBox(height: 24),
-
-                // Income Breakdown
-                _buildBreakdownSection(
-                  title: 'Where Your Money Comes From',
-                  items: [
-                    _BreakdownItem(
-                      label: 'Services',
-                      amount: 31640,
-                      color: const Color(0xFF10B981), // Green-500
-                      percentage: 0.7,
-                    ),
-                    _BreakdownItem(
-                      label: 'Products',
-                      amount: 13560,
-                      color: const Color(0xFF86EFAC), // Green-300
-                      percentage: 0.3,
-                    ),
+                  // Funnel Chart (Growth only)
+                  if (isGrowth) ...[
+                    _buildFunnelChart(fmt, currency, totalRevenue, cogs, grossProfit, operatingExpenses, calculatedNetProfit, transactions)
+                        .animate()
+                        .fadeIn(duration: 400.ms, delay: 100.ms)
+                        .slideY(begin: 0.05, end: 0, curve: Curves.easeOut),
+                    const SizedBox(height: 20),
                   ],
-                  fmt: fmt,
-                ).animate().fadeIn(duration: 400.ms, delay: 200.ms),
-                const SizedBox(height: 24),
 
-                // Expenses Breakdown
-                _buildBreakdownSection(
-                  title: 'Where Your Money Goes',
-                  items: [
-                    _BreakdownItem(
-                      label: 'Payroll',
-                      amount: 15000,
-                      color: const Color(0xFFF87171), // Red-400
-                      percentage: 0.47,
-                    ),
-                    _BreakdownItem(
-                      label: 'Software Subscriptions',
-                      amount: 10200,
-                      color: const Color(0xFFFCA5A5), // Red-300
-                      percentage: 0.32,
-                    ),
-                    _BreakdownItem(
-                      label: 'Office Rent',
-                      amount: 6600,
-                      color: const Color(0xFFFECACA), // Red-200
-                      percentage: 0.21,
-                    ),
+                  // Revenue Breakdown
+                  if (revenueItems.isNotEmpty) ...[
+                    _buildBreakdownSection(
+                      title: l10n.revenueSources,
+                      items: revenueItems,
+                      fmt: fmt,
+                      currency: currency,
+                    ).animate().fadeIn(duration: 400.ms, delay: 200.ms),
+                    const SizedBox(height: 16),
                   ],
-                  fmt: fmt,
-                ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
-                const SizedBox(height: 24),
 
-                // Net Profit Summary (Now scrollable)
-                _buildNetProfitCard(fmt)
-                    .animate()
-                    .fadeIn(duration: 400.ms, delay: 400.ms)
-                    .slideY(begin: 0.1, end: 0, curve: Curves.easeOut),
+                  // COGS Breakdown
+                  if (cogsItems.isNotEmpty) ...[
+                    _buildBreakdownSection(
+                      title: l10n.costOfGoodsSold,
+                      items: cogsItems,
+                      fmt: fmt,
+                      currency: currency,
+                    ).animate().fadeIn(duration: 400.ms, delay: 250.ms),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Operating Expenses Breakdown
+                  if (opexItems.isNotEmpty) ...[
+                    _buildBreakdownSection(
+                      title: l10n.operatingExpenses,
+                      items: opexItems,
+                      fmt: fmt,
+                      currency: currency,
+                    ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Net Profit Summary
+                  _buildNetProfitCard(fmt, currency, calculatedNetProfit)
+                      .animate()
+                      .fadeIn(duration: 400.ms, delay: 400.ms)
+                      .slideY(begin: 0.05, end: 0, curve: Curves.easeOut),
+
+                  if (isGrowth) ...[
+                    const SizedBox(height: 20),
+                    _buildSharePill(),
+                  ],
+                ],
               ],
             ),
           ),
-
-          // Sticky Bottom Actions
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _buildStickyBottomActions(),
           ),
-        ],
-      ),
     );
   }
 
@@ -161,345 +313,531 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
   //  WIDGETS
   // ═══════════════════════════════════════════════════════
 
-  Widget _buildControls() {
-    final dateStr = _isMonthly
-        ? DateFormat('MMM yyyy').format(_selectedDate)
-        : DateFormat('yyyy').format(_selectedDate);
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // Date Selector
-        GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            _pickDate();
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.borderLight),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.02),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_today_rounded,
-                    size: 14, color: AppColors.textSecondary),
-                const SizedBox(width: 8),
-                Text(
-                  dateStr,
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.expand_more_rounded,
-                    size: 16, color: AppColors.textTertiary),
-              ],
-            ),
-          ),
-        ),
-        // Toggle (Monthly/Yearly)
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              _buildToggleOption('Monthly', true),
-              _buildToggleOption('Yearly', false),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildToggleOption(String text, bool isOptionMonthly) {
-    final isSelected = _isMonthly == isOptionMonthly;
+  Widget _buildPeriodSelector() {
     return GestureDetector(
       onTap: () {
-        if (!isSelected) {
-          HapticFeedback.lightImpact();
-          setState(() => _isMonthly = isOptionMonthly);
-        }
+        HapticFeedback.lightImpact();
+        _openDatePicker();
       },
-      child: AnimatedContainer(
-        duration: 200.ms,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ]
-              : [],
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppRadius.base),
+          border: Border.all(color: AppColors.borderLight),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: isSelected ? AppColors.textPrimary : AppColors.textTertiary,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            fontSize: 11,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.calendar_today_rounded,
+                size: 15, color: AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Text(
+              _selectedPeriod == DashboardPeriod.custom && _customRange != null
+                  ? '${DateFormat('MMM d').format(_customRange!.start)} – ${DateFormat('MMM d').format(_customRange!.end)}'
+                  : _selectedPeriod.shortLabel,
+              style: AppTypography.labelMedium.copyWith(color: AppColors.textPrimary),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.expand_more_rounded,
+                size: 18, color: AppColors.textTertiary),
+          ],
         ),
       ),
     );
   }
 
-
-
-  Widget _buildInsightBanner() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEBF5FB),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFBFDBFE)), // Blue-100
+  Widget _buildLoadingState() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 80),
+      child: Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2.5,
+          color: AppColors.chartBlue,
+        ),
       ),
-      child: Stack(
-        clipBehavior: Clip.none,
+    );
+  }
+
+  Widget _buildErrorState(Object error) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      child: Column(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: const Icon(Icons.auto_awesome_rounded,
-                    color: Color(0xFF3B82F6), size: 20),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Great news!',
-                      style: TextStyle(
-                        color: const Color(0xFF1E3A8A), // Blue-900
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Your profit margin improved by 3% compared to last month. Keep an eye on marketing spend.',
-                      style: TextStyle(
-                        color: const Color(0xFF1E40AF), // Blue-800
-                        fontSize: 12,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Container(
+            width: 64, height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.danger.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.error_outline_rounded, size: 28, color: AppColors.danger),
           ),
-          // Decorative circle
-          Positioned(
-            right: -24,
-            top: -24,
-            child: Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                color: const Color(0xFFBFDBFE).withValues(alpha: 0.5),
-                shape: BoxShape.circle,
-              ),
-            ).animate().scale(duration: 1.seconds, curve: Curves.elasticOut),
+          const SizedBox(height: 16),
+          Text(
+            'Failed to load transactions',
+            style: AppTypography.labelLarge.copyWith(color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Pull down to retry.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary, height: 1.5),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildKPIRow(NumberFormat fmt) {
-    return Row(
+  Widget _buildEmptyState() {
+    final currency = ref.watch(appSettingsProvider).currency;
+    final l10n = AppLocalizations.of(context)!;
+
+    return Column(
       children: [
-        Expanded(
-          child: _buildKPICard(
-            label: 'Money In',
-            amount: '45.2k',
-            color: const Color(0xFF10B981), // Green
-            barColor: const Color(0xFF10B981),
-            pctChange: 12, // +12%
-            isPositiveChange: true,
+        // Zeroed KPI cards — shows report structure
+        Row(
+          children: [
+            Expanded(
+              child: _buildKPICard(
+                label: l10n.revenue,
+                amount: '0',
+                currency: currency,
+                accentColor: AppColors.chartGreen.withValues(alpha: 0.35),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildKPICard(
+                label: l10n.grossProfit,
+                amount: '0',
+                currency: currency,
+                accentColor: AppColors.chartBlue.withValues(alpha: 0.35),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildKPICard(
+                label: l10n.netProfit,
+                amount: '0',
+                currency: currency,
+                accentColor: AppColors.accentOrange.withValues(alpha: 0.35),
+                isPrimary: true,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Skeleton income statement
+        ReportCard(
+          child: Column(
+            children: [
+              _buildEmptyFunnelRow(l10n.revenue, AppColors.chartGreen, 1.0),
+              const SizedBox(height: 12),
+              _buildEmptyFunnelRow(l10n.costOfGoodsSold, AppColors.danger, 0.0),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Divider(height: 1),
+              ),
+              _buildEmptyFunnelRow(l10n.grossProfit, AppColors.chartBlue, 0.0),
+              const SizedBox(height: 12),
+              _buildEmptyFunnelRow(l10n.operatingExpenses, AppColors.accentOrange, 0.0),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Divider(height: 1),
+              ),
+              _buildEmptyFunnelRow(l10n.netProfit, const Color(0xFF7C3AED), 0.0),
+            ],
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildKPICard(
-            label: 'Money Out',
-            amount: '31.8k',
+        const SizedBox(height: 24),
+
+        // Empty illustration + CTA
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            color: AppColors.accentOrange.withValues(alpha: 0.08),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.trending_up_rounded,
+            size: 28,
+            color: AppColors.accentOrange.withValues(alpha: 0.5),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'No activity for this period',
+          style: AppTypography.labelLarge.copyWith(
             color: AppColors.textPrimary,
-            barColor: const Color(0xFFEF4444), // Red
-            pctChange: 5, // +5% (more expenses is bad usually, but here just showing direction)
-            isPositiveChange: false, // Red indicator for expenses increasing
+            fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildKPICard(
-            label: "What's Left",
-            amount: '13.4k',
-            color: AppColors.primaryNavy, // Brand primary
-            barColor: AppColors.accentOrange,
-            isPrimary: true,
-            pctChange: 8,
-            isPositiveChange: true,
+        const SizedBox(height: 6),
+        Text(
+          'Record a sale or expense to see your\nprofit & loss report come to life.',
+          textAlign: TextAlign.center,
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textTertiary,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed: () => context.push(AppRoutes.addTransaction),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: const Text('Add Transaction'),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF7C3AED),
+            foregroundColor: Colors.white,
+            minimumSize: const Size(200, 46),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         ),
       ],
+    ).animate().fadeIn(duration: 400.ms);
+  }
+
+  Widget _buildEmptyFunnelRow(String label, Color color, double widthFactor) {
+    return Row(
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.4),
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textTertiary,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        Text(
+          '—',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textTertiary,
+          ),
+        ),
+      ],
+    );
+  }
+
+
+
+  Widget _buildInsightBanner(double revenue, double expenses, double netProfit, String currency, NumberFormat fmt, {double? prevNetProfit}) {
+    final isProfit = netProfit >= 0;
+
+    String headline;
+    String body;
+
+    if (isProfit && netProfit > 0) {
+      final margin = revenue > 0 ? (netProfit / revenue * 100).toStringAsFixed(0) : '0';
+      headline = 'You earned $currency ${fmt.format(netProfit)}!';
+      body = 'Your profit margin is $margin%. ${expenses > 0 ? 'Keep tracking expenses to maintain momentum.' : ''}';
+    } else if (netProfit == 0) {
+      headline = 'Breaking even';
+      body = 'Your income exactly covers your expenses. Look for ways to increase revenue or reduce costs.';
+    } else {
+      headline = 'You lost $currency ${fmt.format(netProfit.abs())}';
+      body = 'Your expenses exceeded your income this period. Review your spending to find areas to cut back.';
+    }
+
+    // Period-over-period comparison
+    String? comparison;
+    if (prevNetProfit != null && prevNetProfit != 0) {
+      final change = netProfit - prevNetProfit;
+      final pct = (change / prevNetProfit.abs() * 100).toStringAsFixed(0);
+      if (change > 0) {
+        comparison = '↑ $pct% vs previous period';
+      } else if (change < 0) {
+        comparison = '↓ ${pct.replaceFirst('-', '')}% vs previous period';
+      }
+    } else if (prevNetProfit != null && prevNetProfit == 0 && netProfit != 0) {
+      comparison = 'No activity in previous period';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isProfit ? AppColors.chartGreenLight : AppColors.chartRedLight,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: isProfit ? AppColors.badgeBgPositive : AppColors.badgeBgNegative,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2))],
+            ),
+            child: Icon(
+              isProfit ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+              color: isProfit ? AppColors.chartGreen : AppColors.chartRed,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  headline,
+                  style: AppTypography.labelMedium.copyWith(
+                    color: isProfit ? AppColors.badgeTextPositive : AppColors.badgeTextNegative,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  body,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: (isProfit ? AppColors.badgeTextPositive : AppColors.badgeTextNegative).withValues(alpha: 0.8),
+                    height: 1.4,
+                  ),
+                ),
+                if (comparison != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    comparison,
+                    style: AppTypography.badge.copyWith(
+                      fontSize: 11,
+                      color: (isProfit ? AppColors.badgeTextPositive : AppColors.badgeTextNegative).withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKPIRow(NumberFormat fmt, String currency, double revenue, double salesRevenue, double grossProfit, double netProfit) {
+    final l10n = AppLocalizations.of(context)!;
+    final grossMargin = salesRevenue > 0 ? (grossProfit / salesRevenue * 100) : 0.0;
+    final netMargin = revenue > 0 ? (netProfit / revenue * 100) : 0.0;
+
+    return Column(
+      children: [
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _buildKPICard(
+                  label: l10n.revenue,
+                  amount: fmt.format(revenue),
+                  currency: currency,
+                  accentColor: AppColors.chartGreen,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildKPICard(
+                  label: l10n.grossProfit,
+                  amount: fmt.format(grossProfit),
+                  currency: currency,
+                  accentColor: AppColors.chartBlue,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildKPICard(
+                  label: l10n.netProfit,
+                  amount: fmt.format(netProfit),
+                  currency: currency,
+                  accentColor: AppColors.accentOrange,
+                  isPrimary: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _buildRatioCard(
+                  label: 'Gross Margin',
+                  value: grossMargin,
+                  accentColor: AppColors.chartBlue,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildRatioCard(
+                  label: 'Net Margin',
+                  value: netMargin,
+                  accentColor: AppColors.accentOrange,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRatioCard({
+    required String label,
+    required double value,
+    required Color accentColor,
+  }) {
+    final isNegative = value < 0;
+    final displayColor = isNegative ? AppColors.danger : accentColor;
+    return ReportCard(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: AppTypography.badge.copyWith(
+                    color: AppColors.textTertiary,
+                    fontSize: 10,
+                  ),
+                  maxLines: 1,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${value.toStringAsFixed(1)}%',
+                  style: AppTypography.metricSmall.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: displayColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CircularProgressIndicator(
+                  value: (value.abs() / 100).clamp(0.0, 1.0),
+                  strokeWidth: 4,
+                  backgroundColor: displayColor.withValues(alpha: 0.12),
+                  valueColor: AlwaysStoppedAnimation(displayColor),
+                ),
+                Icon(
+                  isNegative ? Icons.trending_down_rounded : Icons.trending_up_rounded,
+                  size: 16,
+                  color: displayColor,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildKPICard({
     required String label,
     required String amount,
-    required Color color,
-    required Color barColor,
+    required String currency,
+    required Color accentColor,
     bool isPrimary = false,
-    int? pctChange,
-    bool isPositiveChange = true,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label.toUpperCase(),
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: isPrimary ? AppColors.accentOrange : AppColors.textTertiary,
-                letterSpacing: 0.5,
-              ),
+    return ReportCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: AppTypography.badge.copyWith(
+              color: isPrimary ? AppColors.accentOrange : AppColors.textTertiary,
+              fontSize: 10,
             ),
-            if (pctChange != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  color: isPositiveChange
-                      ? const Color(0xFFDCFCE7) // Green-100
-                      : const Color(0xFFFEE2E2), // Red-100
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      isPositiveChange
-                          ? Icons.arrow_upward_rounded
-                          : Icons.arrow_downward_rounded,
-                      size: 10,
-                      color: isPositiveChange
-                          ? const Color(0xFF16A34A)
-                          : const Color(0xFFDC2626),
-                    ),
-                    Text(
-                      '$pctChange%',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: isPositiveChange
-                            ? const Color(0xFF16A34A)
-                            : const Color(0xFFDC2626),
-                      ),
-                    ),
-                  ],
-                ),
+            maxLines: 1,
+            overflow: TextOverflow.visible,
+          ),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '$currency $amount',
+              style: AppTypography.metricSmall.copyWith(
+                fontSize: 14,
+                color: isPrimary ? AppColors.accentOrange : AppColors.textPrimary,
               ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'EGP $amount',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: isPrimary ? AppColors.accentOrange : AppColors.textPrimary,
+              maxLines: 1,
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          height: 4,
-          width: 32,
-          decoration: BoxDecoration(
-            color: barColor,
-            borderRadius: BorderRadius.circular(2),
+          const SizedBox(height: 8),
+          Container(
+            height: 3,
+            width: 28,
+            decoration: BoxDecoration(
+              color: accentColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  bool _showTrend = false;
-
-  Widget _buildFunnelChart(NumberFormat fmt) {
-    return _ReportCard(
+  Widget _buildFunnelChart(NumberFormat fmt, String currency, double rev, double cogsAmt, double grossProfitAmt, double opexAmt, double net, List<Transaction> allTx) {
+    return ReportCard(
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                _showTrend ? '6-Month Trend' : 'This Month in One View',
-                style: AppTypography.h3.copyWith(fontSize: 16),
+                _showTrend ? '6-Month Trend' : 'Income Statement',
+                style: AppTypography.sectionTitle,
               ),
-              // View Toggle
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    _buildChartToggle(Icons.filter_list_rounded, !_showTrend, () {
-                      setState(() => _showTrend = false);
-                    }),
-                    _buildChartToggle(Icons.show_chart_rounded, _showTrend, () {
-                      setState(() => _showTrend = true);
-                    }),
-                  ],
-                ),
+              ChartToggle(
+                showChart: _showTrend,
+                onToggle: () => setState(() => _showTrend = !_showTrend),
+                firstIcon: Icons.filter_list_rounded,
+                secondIcon: Icons.show_chart_rounded,
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           AnimatedCrossFade(
-            firstChild: _buildFunnelBody(fmt),
-            secondChild: _buildTrendChart(fmt),
+            firstChild: _buildFunnelBody(fmt, currency, rev, cogsAmt, grossProfitAmt, opexAmt, net),
+            secondChild: _buildTrendChart(fmt, allTx),
             crossFadeState: _showTrend
                 ? CrossFadeState.showSecond
                 : CrossFadeState.showFirst,
@@ -510,173 +848,164 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     );
   }
 
-  Widget _buildChartToggle(IconData icon, bool isSelected, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: () {
-        if (!isSelected) {
-          HapticFeedback.lightImpact();
-          onTap();
-        }
-      },
-      child: AnimatedContainer(
-        duration: 200.ms,
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 4,
-                  ),
-                ]
-              : [],
-        ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: isSelected ? AppColors.textPrimary : AppColors.textTertiary,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFunnelBody(NumberFormat fmt) {
-    return Stack(
+  Widget _buildFunnelBody(NumberFormat fmt, String currency, double rev, double cogsAmt, double grossProfitAmt, double opexAmt, double net) {
+    final l10n = AppLocalizations.of(context)!;
+    final maxVal = rev > 0 ? rev : 1.0;
+    return Column(
       children: [
-        // Connector Line
-        Positioned(
-          left: 24,
-          top: 24,
-          bottom: 24,
-          child: Container(
-            width: 2,
-            decoration: const BoxDecoration(
-              color: AppColors.backgroundLight,
-              border: Border(
-                left: BorderSide(
-                  color: Color(0xFFE2E8F0),
-                  width: 2,
-                  style: BorderStyle.solid,
-                ),
-              ),
-            ),
-          ),
+        _buildFunnelItem(
+          icon: Icons.arrow_downward_rounded,
+          iconColor: AppColors.chartGreen,
+          iconBg: AppColors.chartGreenLight,
+          label: l10n.revenue,
+          amount: rev,
+          barColor: AppColors.chartGreen,
+          barWidthFactor: 1.0,
+          fmt: fmt, currency: currency,
         ),
-        Column(
-          children: [
-            _buildFunnelItem(
-              icon: Icons.arrow_downward_rounded,
-              iconColor: const Color(0xFF16A34A),
-              iconBg: const Color(0xFFF0FDF4),
-              label: 'Revenue',
-              amount: _revenue,
-              barColor: const Color(0xFF22C55E),
-              barWidthFactor: 1.0,
-              fmt: fmt,
-            ),
-            const SizedBox(height: 16),
-            _buildFunnelItem(
-              icon: Icons.arrow_upward_rounded,
-              iconColor: const Color(0xFFEF4444),
-              iconBg: const Color(0xFFFEF2F2),
-              label: 'Expenses',
-              amount: -_expenses,
-              barColor: const Color(0xFFF87171),
-              barWidthFactor: 0.7,
-              fmt: fmt,
-            ),
-            const SizedBox(height: 16),
-            _buildFunnelItem(
-              icon: Icons.savings_rounded,
-              iconColor: AppColors.accentOrange,
-              iconBg: AppColors.accentOrange.withValues(alpha: 0.1),
-              label: 'Net Profit',
-              amount: _netProfit,
-              barColor: AppColors.accentOrange,
-              barWidthFactor: 0.3,
-              fmt: fmt,
-              isProfit: true,
-            ),
-          ],
+        const SizedBox(height: 10),
+        _buildFunnelItem(
+          icon: Icons.inventory_2_rounded,
+          iconColor: AppColors.chartOrange,
+          iconBg: AppColors.chartOrangeLight,
+          label: l10n.costOfSales,
+          amount: -cogsAmt,
+          barColor: AppColors.chartOrange,
+          barWidthFactor: (cogsAmt / maxVal).clamp(0.0, 1.0),
+          fmt: fmt, currency: currency,
+        ),
+        const SizedBox(height: 10),
+        _buildFunnelItem(
+          icon: Icons.trending_up_rounded,
+          iconColor: AppColors.chartBlue,
+          iconBg: AppColors.chartBlueLight,
+          label: l10n.grossProfit,
+          amount: grossProfitAmt,
+          barColor: AppColors.chartBlue,
+          barWidthFactor: (grossProfitAmt.abs() / maxVal).clamp(0.0, 1.0),
+          fmt: fmt, currency: currency,
+        ),
+        const SizedBox(height: 10),
+        _buildFunnelItem(
+          icon: Icons.arrow_upward_rounded,
+          iconColor: AppColors.chartRed,
+          iconBg: AppColors.chartRedLight,
+          label: l10n.operatingExp,
+          amount: -opexAmt,
+          barColor: AppColors.chartRed,
+          barWidthFactor: (opexAmt / maxVal).clamp(0.0, 1.0),
+          fmt: fmt, currency: currency,
+        ),
+        const SizedBox(height: 10),
+        _buildFunnelItem(
+          icon: Icons.savings_rounded,
+          iconColor: AppColors.accentOrange,
+          iconBg: AppColors.accentOrange.withValues(alpha: 0.1),
+          label: l10n.netProfit,
+          amount: net,
+          barColor: AppColors.accentOrange,
+          barWidthFactor: (net.abs() / maxVal).clamp(0.0, 1.0),
+          fmt: fmt, currency: currency,
+          isProfit: true,
         ),
       ],
     );
   }
 
-  Widget _buildTrendChart(NumberFormat fmt) {
-    // Mock Data for last 6 months
-    final data = [
-      {'month': 'Sep', 'amount': 8500.0},
-      {'month': 'Oct', 'amount': 11200.0},
-      {'month': 'Nov', 'amount': 9800.0},
-      {'month': 'Dec', 'amount': 15400.0},
-      {'month': 'Jan', 'amount': 12100.0},
-      {'month': 'Feb', 'amount': 13400.0}, // Current
-    ];
+  Widget _buildTrendChart(NumberFormat fmt, List<Transaction> allTx) {
+    // Calculate last 6 months net profit
+    final now = DateTime.now();
+    final data = <Map<String, dynamic>>[];
+    
+    for (int i = 5; i >= 0; i--) {
+      final month = DateTime(now.year, now.month - i, 1);
+      final nextMonth = DateTime(now.year, now.month - i + 1, 1);
+      double revenue = 0;
+      double expense = 0;
+      for (final tx in allTx) {
+        if (tx.excludeFromPL) continue;
+        if (!tx.dateTime.isBefore(month) && tx.dateTime.isBefore(nextMonth)) {
+          if (tx.isIncome) {
+            revenue += tx.amount.abs();
+          } else {
+            expense += tx.amount.abs();
+          }
+        }
+      }
+      data.add({
+        'month': DateFormat('MMM').format(month),
+        'amount': revenue - expense,
+      });
+    }
 
-    final maxAmount = 16000.0;
+    double maxAmount = 1.0;
+    for (final d in data) {
+      if ((d['amount'] as double).abs() > maxAmount) maxAmount = (d['amount'] as double).abs();
+    }
 
-    return Container(
+    return SizedBox(
       height: 180,
-      padding: const EdgeInsets.only(top: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: data.map((d) {
           final amount = d['amount'] as double;
-          final heightFactor = amount / maxAmount;
+          final heightFactor = (amount.abs() / maxAmount).clamp(0.0, 1.0);
           final isCurrent = d == data.last;
 
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // Tooltip-ish label
-              if (isCurrent)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryNavy,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    d['month'] as String,
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
-                )
-                    .animate(onPlay: (c) => c.repeat(reverse: true))
-                    .moveY(begin: 0, end: -4, duration: 1.seconds, curve: Curves.easeInOut),
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (isCurrent)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryNavy,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        d['month'] as String,
+                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    )
+                        .animate(onPlay: (c) => c.repeat(reverse: true))
+                        .moveY(begin: 0, end: -3, duration: 1.seconds, curve: Curves.easeInOut),
 
-              // Bar
-              TweenAnimationBuilder<double>(
-                duration: 600.ms,
-                curve: Curves.easeOutBack,
-                tween: Tween(begin: 0, end: heightFactor),
-                builder: (context, val, _) {
-                  return Container(
-                    width: 32,
-                    height: 140 * val, // Max bar height
-                    decoration: BoxDecoration(
-                      color: isCurrent ? AppColors.accentOrange : const Color(0xFFE2E8F0),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              // Label
-              if (!isCurrent)
-                Text(
-                  d['month'] as String,
-                  style: TextStyle(
-                    color: AppColors.textTertiary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                  TweenAnimationBuilder<double>(
+                    duration: 600.ms,
+                    curve: Curves.easeOutBack,
+                    tween: Tween(begin: 0, end: heightFactor),
+                    builder: (context, val, _) {
+                      return Container(
+                        width: 28,
+                        height: 120 * val,
+                        decoration: BoxDecoration(
+                          color: amount < 0
+                              ? AppColors.chartRed.withValues(alpha: 0.8)
+                              : (isCurrent ? AppColors.accentOrange : const Color(0xFFE2E8F0)),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      );
+                    },
                   ),
-                ),
-            ],
+                  const SizedBox(height: 6),
+                  if (!isCurrent)
+                    Text(
+                      d['month'] as String,
+                      style: AppTypography.captionSmall.copyWith(
+                        color: AppColors.textTertiary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 10,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                ],
+              ),
+            ),
           );
         }).toList(),
       ),
@@ -692,22 +1021,22 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     required Color barColor,
     required double barWidthFactor,
     required NumberFormat fmt,
+    required String currency,
     bool isProfit = false,
   }) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 48,
-          height: 48,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: iconBg,
             shape: BoxShape.circle,
-            border: Border.all(color: iconColor.withValues(alpha: 0.2)),
           ),
-          child: Icon(icon, color: iconColor, size: 20),
+          child: Icon(icon, color: iconColor, size: 18),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -716,45 +1045,39 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(label,
-                      style: TextStyle(
-                        color: isProfit
-                            ? AppColors.accentOrange
-                            : AppColors.textSecondary,
-                        fontWeight:
-                            isProfit ? FontWeight.w700 : FontWeight.w500,
-                        fontSize: 12,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: isProfit ? AppColors.accentOrange : AppColors.textSecondary,
+                        fontWeight: isProfit ? FontWeight.w700 : FontWeight.w500,
                       )),
                   Text(
-                    '${amount < 0 ? "-" : ""}EGP ${fmt.format(amount.abs())}',
-                    style: TextStyle(
-                      color:
-                          isProfit ? AppColors.accentOrange : AppColors.textPrimary,
+                    '${amount < 0 ? "-" : ""}$currency ${fmt.format(amount.abs())}',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: isProfit ? AppColors.accentOrange : AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
-                      fontSize: 12,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               LayoutBuilder(builder: (context, constraints) {
                 return Stack(
                   children: [
                     Container(
-                      height: 32,
+                      height: 24,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: barColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        color: barColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                     ),
                     AnimatedContainer(
                       duration: 800.ms,
                       curve: Curves.easeOutQuart,
-                      height: 32,
+                      height: 24,
                       width: constraints.maxWidth * barWidthFactor,
                       decoration: BoxDecoration(
-                        color: barColor,
-                        borderRadius: BorderRadius.circular(8),
+                        color: barColor.withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                     ),
                   ],
@@ -771,18 +1094,16 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     required String title,
     required List<_BreakdownItem> items,
     required NumberFormat fmt,
+    required String currency,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            title,
-            style: AppTypography.h3.copyWith(fontSize: 14),
-          ),
+          child: Text(title, style: AppTypography.sectionTitle.copyWith(fontSize: 14)),
         ),
-        _ReportCard(
+        ReportCard(
           child: Column(
             children: items.map((item) {
               return Material(
@@ -794,57 +1115,39 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                     child: Column(
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: item.color,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  item.label,
-                                  style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(color: item.color, shape: BoxShape.circle),
                             ),
-                            Row(
-                              children: [
-                                Text(
-                                  'EGP ${fmt.format(item.amount)}',
-                                  style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(Icons.chevron_right_rounded,
-                                    size: 14, color: AppColors.textTertiary),
-                              ],
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item.label,
+                                style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+                              ),
                             ),
+                            Text(
+                              '$currency ${fmt.format(item.amount)}',
+                              style: AppTypography.labelSmall.copyWith(color: AppColors.textPrimary),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.chevron_right_rounded, size: 14, color: AppColors.textTertiary),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(3),
                           child: LinearProgressIndicator(
                             value: item.percentage,
                             backgroundColor: AppColors.backgroundLight,
                             valueColor: AlwaysStoppedAnimation(item.color),
-                            minHeight: 6,
+                            minHeight: 5,
                           ),
                         ),
                       ],
@@ -867,144 +1170,113 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
         selectedCategories: {category},
     );
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => TransactionsListScreen(
-          pageTitle: '$category Transactions',
-          showBackButton: true,
-          initialFilter: filter,
-        ),
-      ),
+    context.pushNamed(
+      'TransactionsListScreen',
+      extra: {
+        'pageTitle': '$category Transactions',
+        'showBackButton': true,
+        'initialFilter': filter,
+      },
     );
   }
 
-  Widget _buildNetProfitCard(NumberFormat fmt) {
+  Widget _buildNetProfitCard(NumberFormat fmt, String currency, double netProfit) {
+    final isPositive = netProfit >= 0;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4).withValues(alpha: 0.9), // Green-50
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFDCFCE7)), // Green-100
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04), // Reduced shadow
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: isPositive ? AppColors.chartGreenLight : AppColors.chartRedLight,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(
+          color: isPositive ? AppColors.badgeBgPositive : AppColors.badgeBgNegative,
+        ),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your Net Profit',
-                style: TextStyle(
-                  color: const Color(0xFF15803D), // Green-700
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Net Profit',
+                  style: AppTypography.badge.copyWith(
+                    fontSize: 11,
+                    color: isPositive ? AppColors.badgeTextPositive : AppColors.badgeTextNegative,
+                  ),
                 ),
-              ),
-              Text(
-                'EGP ${fmt.format(_netProfit)}',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
+                const SizedBox(height: 2),
+                Text(
+                  '$currency ${fmt.format(netProfit)}',
+                  style: AppTypography.metric,
                 ),
               ],
             ),
-            child: const Icon(Icons.trending_up_rounded,
-                color: Color(0xFF16A34A)),
+          ),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+            child: Icon(
+              isPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+              size: 18,
+              color: isPositive ? AppColors.chartGreen : AppColors.chartRed,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStickyBottomActions() {
-    return Container(
-      padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.of(context).padding.bottom),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [
-            Colors.white.withValues(alpha: 0.95),
-            Colors.white.withValues(alpha: 0.8),
-            Colors.white.withValues(alpha: 0.0),
-          ],
-          stops: const [0.0, 0.6, 1.0],
+  Widget _buildSharePill() {
+    return Center(
+      child: ElevatedButton.icon(
+        onPressed: () async {
+          HapticFeedback.lightImpact();
+          final origin = ShareService.originFrom(context);
+          final reportSvc = ref.read(reportServiceProvider);
+          final shareSvc = ref.read(shareServiceProvider);
+          final settings = ref.read(appSettingsProvider);
+          final txs = await ref.read(transactionsProvider.future);
+          final range = _getDateRange();
+          try {
+            final bytes = await reportSvc.generatePnlPdf(
+              transactions: txs,
+              currency: settings.currency,
+              periodStart: range.start,
+              isMonthly: _selectedPeriod == DashboardPeriod.monthToDate ||
+                  _selectedPeriod == DashboardPeriod.lastMonth,
+            );
+            final label = '${range.start.day}_${range.start.month}_${range.start.year}'
+                '_to_${range.end.day}_${range.end.month}_${range.end.year}';
+            await shareSvc.sharePdf(bytes, 'PnL_$label.pdf',
+                subject: 'Profit & Loss Statement', origin: origin);
+          } catch (e) {
+            debugPrint('P&L share error: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Something went wrong. Please try again.'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
+        icon: const Icon(Icons.ios_share_rounded, size: 16),
+        label: const Text('Share Report', style: TextStyle(fontSize: 13)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primaryNavy,
+          foregroundColor: Colors.white,
+          elevation: 2,
+          shadowColor: AppColors.primaryNavy.withValues(alpha: 0.3),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          minimumSize: const Size(double.infinity, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.xl),
+          ),
         ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ElevatedButton.icon(
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const ExportShareScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.ios_share_rounded, size: 16),
-            label: const Text('Share', style: TextStyle(fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: AppColors.textPrimary,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              minimumSize: const Size(0, 36), // Compact height
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(color: AppColors.borderLight),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: () {
-              HapticFeedback.mediumImpact();
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const AiChatScreen(contextType: 'ProfitLoss'),
-                ),
-              );
-            },
-            icon: const Icon(Icons.auto_awesome_rounded, size: 16),
-            label: const Text('Ask AI', style: TextStyle(fontSize: 12)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accentOrange,
-              foregroundColor: Colors.white,
-              elevation: 2, // Reduced elevation
-              shadowColor: AppColors.accentOrange.withValues(alpha: 0.4),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              minimumSize: const Size(0, 36), // Compact height
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1013,31 +1285,6 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
 // ═══════════════════════════════════════════════════════
 //  HELPERS
 // ═══════════════════════════════════════════════════════
-
-class _ReportCard extends StatelessWidget {
-  final Widget child;
-  const _ReportCard({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-}
 
 class _BreakdownItem {
   final String label;

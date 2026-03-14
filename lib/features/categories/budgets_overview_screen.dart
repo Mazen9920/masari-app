@@ -12,30 +12,11 @@ import 'category_detail_screen.dart';
 class BudgetsOverviewScreen extends ConsumerWidget {
   const BudgetsOverviewScreen({super.key});
 
-  // Simulated budgets per category (in a real app these would be persisted)
-  static const _budgets = <String, double>{
-    'Groceries': 5000,
-    'Transport': 2000,
-    'Entertainment': 1500,
-    'Health': 3000,
-    'Food & Dining': 4000,
-    'Shopping': 3500,
-    'Bills': 5000,
-    'Coffee': 800,
-    'Utilities': 3000,
-    'Rent': 8000,
-    'Education': 2500,
-    'Marketing': 6000,
-    'Office Supplies': 1000,
-    'Travel': 4000,
-    'Salaries': 25000,
-    'Software': 2000,
-  };
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categories = ref.watch(categoriesProvider);
-    final transactions = ref.watch(transactionsProvider);
+    final categoriesAsync = ref.watch(categoriesProvider);
+    final categories = categoriesAsync.value ?? [];
+    final transactions = ref.watch(transactionsProvider).value ?? [];
 
     // Compute per-category spending this month
     final now = DateTime.now();
@@ -45,14 +26,15 @@ class BudgetsOverviewScreen extends ConsumerWidget {
 
     final spendingMap = <String, double>{};
     for (final tx in expenses) {
-      spendingMap[tx.category.name] = (spendingMap[tx.category.name] ?? 0) + tx.amount.abs();
+      final cat = CategoryData.findById(tx.categoryId);
+      spendingMap[cat.name] = (spendingMap[cat.name] ?? 0) + tx.amount.abs();
     }
 
     // Build budget items only for categories that have budgets
     final items = <_BudgetItem>[];
     for (final cat in categories) {
-      final budget = _budgets[cat.name];
-      if (budget == null) continue;
+      final budget = cat.budgetLimit;
+      if (budget == null || budget <= 0) continue;
       final spent = spendingMap[cat.name] ?? 0;
       items.add(_BudgetItem(category: cat, budget: budget, spent: spent));
     }
@@ -466,10 +448,10 @@ class _BudgetCard extends StatelessWidget {
                     height: 40,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: item.category.bgColor,
+                      color: item.category.displayBgColor,
                     ),
-                    child: Icon(item.category.icon,
-                        size: 20, color: item.category.color),
+                    child: Icon(item.category.iconData,
+                        size: 20, color: item.category.displayColor),
                   ),
                   const SizedBox(width: 12),
                   // Name + amounts

@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/navigation/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/category_data.dart';
 
 class EditCategoryScreen extends ConsumerStatefulWidget {
@@ -27,43 +30,44 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
 
   // ── icons & colours identical to the add-sheet ──────────
   static const _icons = [
-    Icons.shopping_cart_rounded,
+    Icons.star_rounded,
+    Icons.shopping_bag_rounded,
     Icons.restaurant_rounded,
-    Icons.directions_car_rounded,
+    Icons.commute_rounded,
+    Icons.grid_view_rounded,
+    Icons.work_rounded,
     Icons.campaign_rounded,
     Icons.flight_rounded,
     Icons.home_rounded,
-    Icons.pets_rounded,
-    Icons.medical_services_rounded,
-    Icons.school_rounded,
     Icons.fitness_center_rounded,
-    Icons.movie_rounded,
-    Icons.more_horiz_rounded,
   ];
 
   static const _colors = [
-    Color(0xFF1B4F72), // navy
-    Color(0xFFE67E22), // orange
-    Color(0xFF27AE60), // green
-    Color(0xFF9B59B6), // purple
-    Color(0xFFC0392B), // red
-    Color(0xFFF1C40F), // yellow
-    Color(0xFF34495E), // dark grey
+    Color(0xFFEF4444), // red
+    Color(0xFFF97316), // orange
+    Color(0xFFFBBF24), // amber
+    Color(0xFF22C55E), // green
+    Color(0xFF14B8A6), // teal
+    Color(0xFF3B82F6), // blue
+    Color(0xFF6366F1), // indigo
+    Color(0xFF8B5CF6), // purple
+    Color(0xFFEC4899), // pink
+    Color(0xFF64748B), // slate
   ];
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.category.name);
-    _isExpense = true; // default
-    _budgetController = TextEditingController(text: '6,000');
+    _isExpense = widget.category.isExpense;
+    _hasBudget = widget.category.budgetLimit != null;
+    _budgetController = TextEditingController(text: widget.category.budgetLimit?.toStringAsFixed(0) ?? '6000');
 
     // match current icon/color to available palette
-    _selectedIconIndex = _icons.indexWhere((ic) => ic == widget.category.icon);
+    _selectedIconIndex = _icons.indexWhere((i) => i == widget.category.iconData);
     if (_selectedIconIndex < 0) _selectedIconIndex = 3; // fallback
 
-    _selectedColorIndex =
-        _colors.indexWhere((c) => c.value == widget.category.color.value);
+    _selectedColorIndex = _colors.indexWhere((c) => c.toARGB32() == widget.category.displayColor.toARGB32());
     if (_selectedColorIndex < 0) _selectedColorIndex = 0;
   }
 
@@ -83,18 +87,25 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
     }
 
     final color = _colors[_selectedColorIndex];
+    final selectedIcon = _icons[_selectedIconIndex];
     final updated = CategoryData(
+      id: widget.category.id,
+      userId: widget.category.userId,
       name: name,
-      icon: _icons[_selectedIconIndex],
-      color: color,
-      bgColor: color.withValues(alpha: 0.1),
+      iconName: CategoryDataUIExt.iconNameFromData(selectedIcon),
+      colorValue: color.toARGB32(),
+      bgColorValue: color.withValues(alpha: 0.1).toARGB32(),
+      isExpense: _isExpense,
+      budgetLimit: _hasBudget ? double.tryParse(_budgetController.text.replaceAll(',', '')) : null,
+      createdAt: widget.category.createdAt,
+      updatedAt: DateTime.now(),
     );
 
     ref
         .read(categoriesProvider.notifier)
         .updateCategory(widget.category.name, updated);
     HapticFeedback.mediumImpact();
-    Navigator.of(context).pop(updated);
+    context.pop(updated);
   }
 
   // ── Delete ──────────────────────────────────────────
@@ -128,8 +139,10 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                   .removeCategory(widget.category.name);
               HapticFeedback.mediumImpact();
               Navigator.pop(ctx); // dialog
-              Navigator.pop(context); // edit screen
-              Navigator.pop(context); // detail screen back to list
+              // Navigate safely back to categories list
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) context.go(AppRoutes.categories);
+              });
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.danger,
@@ -166,8 +179,6 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                     _buildHeroPreview(),
                     const SizedBox(height: 28),
                     _buildConfigCard(),
-                    const SizedBox(height: 20),
-                    _buildBudgetCard(),
                     const SizedBox(height: 28),
                     _buildDeleteButton(),
                     const SizedBox(height: 24),
@@ -197,7 +208,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
       child: Row(
         children: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => context.pop(),
             child: Text(
               'Cancel',
               style: AppTypography.labelMedium.copyWith(
@@ -345,6 +356,89 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
             showBorder: true,
           ),
 
+          // ── Monthly Limit ──
+          _field(
+            label: 'MONTHLY LIMIT',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Enable Monthly Budget',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryNavy,
+                      ),
+                    ),
+                    Switch.adaptive(
+                      value: _hasBudget,
+                      onChanged: (v) {
+                        HapticFeedback.lightImpact();
+                        setState(() => _hasBudget = v);
+                      },
+                      activeTrackColor: AppColors.primaryNavy,
+                    ),
+                  ],
+                ),
+                AnimatedCrossFade(
+                  duration: const Duration(milliseconds: 250),
+                  crossFadeState: _hasBudget ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                  firstChild: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _budgetController,
+                        keyboardType: TextInputType.number,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryNavy,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: '${ref.watch(appSettingsProvider).currency} 0,000',
+                          hintStyle: TextStyle(
+                            color: AppColors.textTertiary, 
+                            fontWeight: FontWeight.w400,
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF3F4F6),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded, size: 12, color: AppColors.textTertiary),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'We will alert you when you reach 80% of this budget.',
+                              style: AppTypography.captionSmall.copyWith(
+                                color: AppColors.textTertiary,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  secondChild: const SizedBox.shrink(),
+                ),
+              ],
+            ),
+            showBorder: true,
+          ),
+
           // ── Icon picker ──
           _field(
             label: 'ICON',
@@ -432,174 +526,6 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
         ],
       ),
     ).animate().fadeIn(duration: 300.ms, delay: 50.ms);
-  }
-
-  // ═══════════════════════════════════════════════════
-  //  BUDGET CARD
-  // ═══════════════════════════════════════════════════
-  Widget _buildBudgetCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // toggle row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFEFF6FF),
-                  ),
-                  child: const Icon(Icons.account_balance_wallet_rounded,
-                      size: 18, color: Color(0xFF2563EB)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Enable Monthly Budget',
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    setState(() => _hasBudget = !_hasBudget);
-                  },
-                  child: AnimatedContainer(
-                    duration: 200.ms,
-                    width: 48,
-                    height: 26,
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(50),
-                      color: _hasBudget
-                          ? AppColors.primaryNavy
-                          : const Color(0xFFCCCCCC),
-                    ),
-                    child: AnimatedAlign(
-                      duration: 200.ms,
-                      alignment: _hasBudget
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        width: 22,
-                        height: 22,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // budget input
-          AnimatedCrossFade(
-            duration: 250.ms,
-            crossFadeState:
-                _hasBudget ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-            firstChild: Container(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFAFAFB),
-                borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(16)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'LIMIT AMOUNT',
-                    style: AppTypography.captionSmall.copyWith(
-                      color: AppColors.textTertiary,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                      fontSize: 10,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _budgetController,
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                    decoration: InputDecoration(
-                      prefixIcon: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          'EGP',
-                          style: AppTypography.labelMedium.copyWith(
-                            color: AppColors.textTertiary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      prefixIconConstraints:
-                          const BoxConstraints(minWidth: 0, minHeight: 0),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            BorderSide(color: AppColors.borderLight),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            BorderSide(color: AppColors.borderLight),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                            color: AppColors.primaryNavy, width: 1.5),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 14),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'Reset every month',
-                      style: AppTypography.captionSmall.copyWith(
-                        color: AppColors.textTertiary,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            secondChild: const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    ).animate().fadeIn(duration: 300.ms, delay: 100.ms);
   }
 
   // ═══════════════════════════════════════════════════

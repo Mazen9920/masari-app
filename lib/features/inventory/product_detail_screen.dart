@@ -1,12 +1,20 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../../core/providers/repository_providers.dart';
 import '../../shared/models/product_model.dart';
-import 'edit_product_screen.dart';
+import '../../shared/models/conversion_order_model.dart';
+import '../shopify/providers/shopify_connection_provider.dart';
+import '../shopify/widgets/shopify_badges.dart';
+import '../../shared/utils/safe_pop.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final String productId;
@@ -22,6 +30,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   int _adjustQuantity = 0;
   String _adjustReason = 'Correction';
   bool _showAdjustment = false;
+  String? _adjustVariantId;
+  final _adjustQtyCtrl = TextEditingController(text: '0');
+
+  @override
+  void dispose() {
+    _adjustQtyCtrl.dispose();
+    super.dispose();
+  }
 
   static const _reasons = [
     'Correction',
@@ -33,11 +49,35 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final products = ref.watch(inventoryProvider);
-    final product = products.firstWhere(
-      (p) => p.id == widget.productId,
-      orElse: () => products.first,
+    final products = ref.watch(inventoryProvider).value ?? [];
+    if (products.isEmpty) {
+      return const Scaffold(
+        backgroundColor: AppColors.backgroundLight,
+        body: Center(child: Text('Product not found')),
+      );
+    }
+    final product = products.cast<Product?>().firstWhere(
+      (p) => p!.id == widget.productId,
+      orElse: () => null,
     );
+    if (product == null) {
+      return Scaffold(
+        backgroundColor: AppColors.backgroundLight,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Product not found'),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => context.safePop(),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -57,14 +97,39 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     const SizedBox(height: 16),
                     _StockOverviewCard(product: product),
                     const SizedBox(height: 14),
-                    _buildActionButtons(),
+                    _buildActionButtons(product),
                     const SizedBox(height: 14),
                     if (_showAdjustment)
                       _buildAdjustmentSection(product),
                     if (_showAdjustment) const SizedBox(height: 14),
+                    if (product.shopifyProductId != null &&
+                        product.shopifyProductId!.isNotEmpty) ...[                      Builder(builder: (context) {
+                        final conn = ref.watch(shopifyConnectionProvider).value;
+                        return ShopifyProductBadge(
+                          shopifyProductId: product.shopifyProductId,
+                          lastInventorySyncAt: conn?.lastInventorySyncAt,
+                          shopDomain: conn?.shopDomain,
+                        );
+                      }),
+                      const SizedBox(height: 14),
+                    ],
                     _PricingCard(product: product),
                     const SizedBox(height: 14),
-                    _MovementHistory(movements: product.movements),
+                    _CostOverviewCard(product: product),
+                    const SizedBox(height: 14),
+                    _SupplierCostCard(product: product),
+                    const SizedBox(height: 14),
+                    if (product.variants.length > 1 || product.hasVariants)
+                      _VariantsSection(product: product),
+                    if (product.variants.length > 1 || product.hasVariants)
+                      const SizedBox(height: 14),
+                    if (ref.watch(isGrowthProvider))
+                      _MovementHistory(movements: product.movements),
+                    if (product.hasBreakdown &&
+                        ref.watch(appSettingsProvider).breakdownEnabled) ...[
+                      const SizedBox(height: 14),
+                      _ConversionHistorySection(productId: product.id),
+                    ],
                   ],
                 ),
               ),
@@ -88,7 +153,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => context.safePop(),
             icon: const Icon(Icons.chevron_left_rounded, size: 28),
             color: AppColors.primaryNavy,
           ),
@@ -105,11 +170,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           TextButton(
             onPressed: () {
               HapticFeedback.lightImpact();
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => EditProductScreen(productId: widget.productId),
-                ),
-              );
+              context.pushNamed('EditProductScreen', extra: {'productId': widget.productId});
             },
             child: Text(
               'Edit',
@@ -124,55 +185,101 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     );
   }
 
-  Widget _buildActionButtons() {
-    return Row(
+  Widget _buildActionButtons(Product product) {
+    return Column(
       children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              HapticFeedback.mediumImpact();
-              _showAddStockDialog();
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.accentOrange, width: 2),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add_rounded,
-                      size: 20, color: AppColors.accentOrange),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Add Stock',
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.accentOrange,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  _showAddStockDialog();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.accentOrange, width: 2),
                   ),
-                ],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_rounded,
+                          size: 20, color: AppColors.accentOrange),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Add Stock',
+                        style: AppTypography.labelMedium.copyWith(
+                          color: AppColors.accentOrange,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  setState(() => _showAdjustment = !_showAdjustment);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentOrange,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.accentOrange.withValues(alpha: 0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.tune_rounded,
+                          size: 20, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Adjust Stock',
+                        style: AppTypography.labelMedium.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: GestureDetector(
+        if (product.hasBreakdown &&
+            ref.watch(appSettingsProvider).breakdownEnabled) ...[
+          const SizedBox(height: 10),
+          GestureDetector(
             onTap: () {
               HapticFeedback.mediumImpact();
-              setState(() => _showAdjustment = !_showAdjustment);
+              context.pushNamed('BreakdownScreen',
+                  extra: {'productId': product.id});
             },
             child: Container(
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: AppColors.accentOrange,
+                color: AppColors.primaryNavy,
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.accentOrange.withValues(alpha: 0.3),
+                    color: AppColors.primaryNavy.withValues(alpha: 0.2),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -181,11 +288,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.tune_rounded,
+                  const Icon(Icons.call_split_rounded,
                       size: 20, color: Colors.white),
                   const SizedBox(width: 6),
                   Text(
-                    'Adjust Stock',
+                    'Break Down',
                     style: AppTypography.labelMedium.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -196,7 +303,51 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               ),
             ),
           ),
-        ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () async {
+              HapticFeedback.lightImpact();
+              final error = await ref
+                  .read(inventoryProvider.notifier)
+                  .recalculateBreakdownCosts(productId: product.id);
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(error ?? 'Output costs recalculated'),
+                  backgroundColor:
+                      error != null ? AppColors.danger : AppColors.success,
+                ),
+              );
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.primaryNavy.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.refresh_rounded,
+                      size: 18, color: AppColors.primaryNavy),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Recalculate Output Costs',
+                    style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.primaryNavy,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ],
     ).animate().fadeIn(duration: 300.ms, delay: 150.ms);
   }
@@ -256,6 +407,40 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             ],
           ),
           const SizedBox(height: 16),
+          // Variant picker (only for multi-variant products)
+          if (product.variants.length > 1) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppColors.backgroundLight,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _adjustVariantId ?? product.defaultVariant.id,
+                  icon: const Icon(Icons.expand_more_rounded,
+                      color: AppColors.textTertiary, size: 20),
+                  isExpanded: true,
+                  items: product.variants
+                      .map((v) => DropdownMenuItem(
+                            value: v.id,
+                            child: Text(
+                              '${v.displayName}  (${v.currentStock})',
+                              style: AppTypography.labelMedium.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                  onChanged: (v) => setState(() => _adjustVariantId = v),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               // Stepper
@@ -272,26 +457,43 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     children: [
                       _stepperButton(Icons.remove_rounded, () {
                         HapticFeedback.lightImpact();
-                        setState(() => _adjustQuantity--);
+                        setState(() {
+                          _adjustQuantity--;
+                          _adjustQtyCtrl.text = '$_adjustQuantity';
+                        });
                       }),
                       Expanded(
-                        child: Center(
-                          child: Text(
-                            '$_adjustQuantity',
-                            style: AppTypography.h3.copyWith(
-                              color: _adjustQuantity < 0
-                                  ? AppColors.danger
-                                  : _adjustQuantity > 0
-                                      ? AppColors.success
-                                      : AppColors.textPrimary,
-                              fontWeight: FontWeight.w800,
-                            ),
+                        child: TextField(
+                          controller: _adjustQtyCtrl,
+                          textAlign: TextAlign.center,
+                          keyboardType: const TextInputType.numberWithOptions(signed: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'[-\d]')),
+                          ],
+                          style: AppTypography.h3.copyWith(
+                            color: _adjustQuantity < 0
+                                ? AppColors.danger
+                                : _adjustQuantity > 0
+                                    ? AppColors.success
+                                    : AppColors.textPrimary,
+                            fontWeight: FontWeight.w800,
                           ),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          onChanged: (val) {
+                            final parsed = int.tryParse(val);
+                            setState(() => _adjustQuantity = parsed ?? 0);
+                          },
                         ),
                       ),
                       _stepperButton(Icons.add_rounded, () {
                         HapticFeedback.lightImpact();
-                        setState(() => _adjustQuantity++);
+                        setState(() {
+                          _adjustQuantity++;
+                          _adjustQtyCtrl.text = '$_adjustQuantity';
+                        });
                       }),
                     ],
                   ),
@@ -345,12 +547,15 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   ? () {
                       ref.read(inventoryProvider.notifier).adjustStock(
                             widget.productId,
+                            _adjustVariantId ?? product.defaultVariant.id,
                             _adjustQuantity,
                             _adjustReason,
+                            valuationMethod: ref.read(appSettingsProvider).valuationMethod,
                           );
                       HapticFeedback.mediumImpact();
                       setState(() {
                         _adjustQuantity = 0;
+                        _adjustQtyCtrl.text = '0';
                         _showAdjustment = false;
                       });
                     }
@@ -406,7 +611,19 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   void _showAddStockDialog() {
+    final products = ref.read(inventoryProvider).value ?? [];
+    final product = products.cast<Product?>().firstWhere(
+      (p) => p!.id == widget.productId,
+      orElse: () => null,
+    );
+    if (product == null) return;
+
     int quantity = 0;
+    String? selectedVariantId = product.defaultVariant.id;
+    final quantityCtrl = TextEditingController(text: '0');
+    final notifier = ref.read(inventoryProvider.notifier);
+    final valMethod = ref.read(appSettingsProvider).valuationMethod;
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -439,6 +656,38 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Variant picker for multi-variant products
+              if (product.variants.length > 1) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundLight,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: selectedVariantId,
+                      icon: const Icon(Icons.expand_more_rounded,
+                          color: AppColors.textTertiary, size: 20),
+                      isExpanded: true,
+                      items: product.variants
+                          .map((v) => DropdownMenuItem(
+                                value: v.id,
+                                child: Text(
+                                  '${v.displayName}  (${v.currentStock})',
+                                  style: AppTypography.bodySmall.copyWith(
+                                      color: AppColors.textPrimary),
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDialogState(() => selectedVariantId = v),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
               Text(
                 'How many units to restock?',
                 style: AppTypography.bodySmall
@@ -458,7 +707,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     GestureDetector(
                       onTap: () {
                         if (quantity > 0) {
-                          setDialogState(() => quantity--);
+                          setDialogState(() {
+                            quantity--;
+                            quantityCtrl.text = '$quantity';
+                          });
                           HapticFeedback.lightImpact();
                         }
                       },
@@ -480,19 +732,37 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                             size: 22, color: AppColors.textSecondary),
                       ),
                     ),
-                    Text(
-                      '$quantity',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        color: quantity > 0
-                            ? AppColors.success
-                            : AppColors.textPrimary,
+                    Expanded(
+                      child: TextField(
+                        controller: quantityCtrl,
+                        textAlign: TextAlign.center,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'\d')),
+                        ],
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: quantity > 0
+                              ? AppColors.success
+                              : AppColors.textPrimary,
+                        ),
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        onChanged: (val) {
+                          final parsed = int.tryParse(val);
+                          setDialogState(() => quantity = (parsed ?? 0).abs());
+                        },
                       ),
                     ),
                     GestureDetector(
                       onTap: () {
-                        setDialogState(() => quantity++);
+                        setDialogState(() {
+                          quantity++;
+                          quantityCtrl.text = '$quantity';
+                        });
                         HapticFeedback.lightImpact();
                       },
                       child: Container(
@@ -530,10 +800,12 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             ElevatedButton(
               onPressed: quantity > 0
                   ? () {
-                      ref.read(inventoryProvider.notifier).adjustStock(
+                      notifier.adjustStock(
                             widget.productId,
+                            selectedVariantId ?? product.defaultVariant.id,
                             quantity,
                             'Restock',
+                            valuationMethod: valMethod,
                           );
                       HapticFeedback.mediumImpact();
                       Navigator.pop(ctx);
@@ -562,7 +834,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           ],
         ),
       ),
-    );
+    ).then((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => quantityCtrl.dispose());
+    });
   }
 }
 
@@ -590,7 +864,7 @@ class _ProductHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Product icon
+        // Product icon / image
         Container(
           width: 80,
           height: 80,
@@ -600,7 +874,19 @@ class _ProductHeader extends StatelessWidget {
             border: Border.all(
                 color: AppColors.borderLight.withValues(alpha: 0.5)),
           ),
-          child: Icon(product.icon, size: 36, color: product.color),
+          child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: CachedNetworkImage(
+                    imageUrl: product.imageUrl!,
+                    fit: BoxFit.cover,
+                    width: 80,
+                    height: 80,
+                    placeholder: (_, __) => Icon(product.icon, size: 36, color: product.color),
+                    errorWidget: (_, __, ___) => Icon(product.icon, size: 36, color: product.color),
+                  ),
+                )
+              : Icon(product.icon, size: 36, color: product.color),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -654,13 +940,13 @@ class _ProductHeader extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════
 //  STOCK OVERVIEW CARD
 // ═══════════════════════════════════════════════════════════
-class _StockOverviewCard extends StatelessWidget {
+class _StockOverviewCard extends ConsumerWidget {
   final Product product;
 
   const _StockOverviewCard({required this.product});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -713,7 +999,7 @@ class _StockOverviewCard extends StatelessWidget {
                         IntTween(begin: 0, end: product.currentStock),
                     duration: const Duration(milliseconds: 800),
                     curve: Curves.easeOutCubic,
-                    builder: (_, value, __) => Text(
+                    builder: (_, value, _) => Text(
                       '$value',
                       style: TextStyle(
                         fontSize: 44,
@@ -758,7 +1044,7 @@ class _StockOverviewCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'EGP ${product.totalValue.toStringAsFixed(0)}',
+                            '${ref.watch(appSettingsProvider).currency} ${product.totalValue.toStringAsFixed(0)}',
                             style: AppTypography.labelMedium.copyWith(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w700,
@@ -811,13 +1097,13 @@ class _StockOverviewCard extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════
 //  PRICING CARD (additional enhancement)
 // ═══════════════════════════════════════════════════════════
-class _PricingCard extends StatelessWidget {
+class _PricingCard extends ConsumerWidget {
   final Product product;
 
   const _PricingCard({required this.product});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -841,13 +1127,13 @@ class _PricingCard extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              _priceItem('Cost', 'EGP ${product.costPrice.toStringAsFixed(0)}'),
+              _priceItem('Cost', '${ref.watch(appSettingsProvider).currency} ${product.costPrice.toStringAsFixed(0)}'),
               _priceItem(
-                  'Selling', 'EGP ${product.sellingPrice.toStringAsFixed(0)}'),
+                  'Selling', '${ref.watch(appSettingsProvider).currency} ${product.sellingPrice.toStringAsFixed(0)}'),
               _priceItem(
                 'Margin',
                 '${product.profitMargin.toStringAsFixed(1)}%',
-                color: AppColors.success,
+                color: product.profitMargin >= 0 ? AppColors.success : AppColors.danger,
               ),
             ],
           ),
@@ -875,6 +1161,357 @@ class _PricingCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
               fontSize: 14,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  COST OVERVIEW
+// ═══════════════════════════════════════════════════════════
+class _CostOverviewCard extends ConsumerWidget {
+  final Product product;
+  const _CostOverviewCard({required this.product});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(appSettingsProvider).currency;
+    final valMethod = ref.watch(appSettingsProvider).valuationMethod;
+    final valLabel = {
+      'fifo': 'FIFO',
+      'lifo': 'LIFO',
+      'average': 'Average',
+    }[valMethod] ?? 'FIFO';
+
+    // Collect restock movements with unitCost across all variants
+    final restocks = <StockMovement>[];
+    for (final v in product.variants) {
+      for (final m in v.movements) {
+        if (m.type == 'Restock' && m.unitCost != null) {
+          restocks.add(m);
+        }
+      }
+    }
+    restocks.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+    if (restocks.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final lastCost = restocks.first.unitCost!;
+    final lowestCost = restocks
+        .map((m) => m.unitCost!)
+        .reduce((a, b) => a < b ? a : b);
+    final avgCost = product.costPrice;
+
+    final fmt = NumberFormat('#,##0.00');
+    final dateFmt = DateFormat('MMM d');
+
+    final costUp = lastCost > avgCost;
+    final costDown = lastCost < avgCost;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'COST OVERVIEW',
+                style: AppTypography.captionSmall.copyWith(
+                  color: AppColors.textTertiary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                  fontSize: 11,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryNavy.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  valLabel,
+                  style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.primaryNavy,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _costItem('Avg Cost', '$currency ${fmt.format(avgCost)}'),
+              _costItem(
+                'Last Cost',
+                '$currency ${fmt.format(lastCost)}',
+                trailing: costUp
+                    ? const Icon(Icons.arrow_upward_rounded,
+                        size: 12, color: Color(0xFFEF4444))
+                    : costDown
+                        ? const Icon(Icons.arrow_downward_rounded,
+                            size: 12, color: Color(0xFF10B981))
+                        : null,
+              ),
+              _costItem('Lowest', '$currency ${fmt.format(lowestCost)}'),
+            ],
+          ),
+          if (restocks.length > 1) ...[
+            const SizedBox(height: 14),
+            Divider(height: 1, color: AppColors.borderLight.withValues(alpha: 0.5)),
+            const SizedBox(height: 10),
+            Text(
+              'RECENT COST HISTORY',
+              style: AppTypography.captionSmall.copyWith(
+                color: AppColors.textTertiary,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.0,
+                fontSize: 10,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...restocks.take(5).map((m) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 56,
+                        child: Text(
+                          dateFmt.format(m.dateTime),
+                          style: AppTypography.captionSmall.copyWith(
+                            color: AppColors.textTertiary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '$currency ${fmt.format(m.unitCost)}',
+                        style: AppTypography.labelMedium.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${m.quantity} units',
+                        style: AppTypography.captionSmall.copyWith(
+                          color: AppColors.textTertiary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+        ],
+      ),
+    ).animate().fadeIn(duration: 300.ms, delay: 250.ms);
+  }
+
+  Widget _costItem(String label, String value, {Widget? trailing}) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: AppTypography.captionSmall.copyWith(
+              color: AppColors.textTertiary,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                value,
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+              if (trailing != null) ...[const SizedBox(width: 2), trailing],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  VARIANTS SECTION
+// ═══════════════════════════════════════════════════════════
+class _VariantsSection extends ConsumerWidget {
+  final Product product;
+
+  const _VariantsSection({required this.product});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(currencyProvider);
+    final fmt = NumberFormat('#,##0.00', 'en');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.style_rounded, size: 18, color: AppColors.primaryNavy),
+              const SizedBox(width: 8),
+              Text(
+                'Variants',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryNavy.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${product.variantCount}',
+                  style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.primaryNavy,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...product.variants.map((v) {
+            final statusColor = v.status == StockStatus.inStock
+                ? AppColors.success
+                : v.status == StockStatus.lowStock
+                    ? AppColors.accentOrange
+                    : AppColors.danger;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.backgroundLight,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          v.displayName,
+                          style: AppTypography.labelMedium.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: statusColor,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${v.currentStock} units',
+                        style: AppTypography.captionSmall.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (v.sku.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'SKU: ${v.sku}',
+                      style: AppTypography.captionSmall.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _priceChip('Cost', '$currency ${fmt.format(v.costPrice)}'),
+                      const SizedBox(width: 8),
+                      _priceChip(
+                          'Price', '$currency ${fmt.format(v.sellingPrice)}'),
+                      const SizedBox(width: 8),
+                      _priceChip('Value',
+                          '$currency ${fmt.format(v.totalValue)}'),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    ).animate().fadeIn(duration: 300.ms, delay: 200.ms);
+  }
+
+  Widget _priceChip(String label, String value) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AppTypography.captionSmall.copyWith(
+              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w600,
+              fontSize: 9,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: AppTypography.captionSmall.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -1050,5 +1687,432 @@ class _MovementTile extends StatelessWidget {
             duration: 250.ms,
             delay: Duration(milliseconds: 40 * index))
         .slideX(begin: 0.02, end: 0);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  SUPPLIER COST COMPARISON
+// ═══════════════════════════════════════════════════
+class _SupplierCostCard extends ConsumerWidget {
+  final Product product;
+  const _SupplierCostCard({required this.product});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(currencyProvider);
+    final fmt = NumberFormat('#,##0.##');
+
+    // Gather all restock movements that have a supplier name
+    final restockMovements = product.movements
+        .where((m) => m.type == 'Restock' && m.supplierName != null && m.unitCost != null)
+        .toList();
+
+    if (restockMovements.isEmpty) return const SizedBox.shrink();
+
+    // Group by supplier name
+    final Map<String, List<StockMovement>> bySupplier = {};
+    for (final m in restockMovements) {
+      bySupplier.putIfAbsent(m.supplierName!, () => []).add(m);
+    }
+
+    // Need at least one supplier with data to show the card
+    if (bySupplier.isEmpty) return const SizedBox.shrink();
+
+    // Sort suppliers by most recent restock date
+    final entries = bySupplier.entries.toList()
+      ..sort((a, b) {
+        final aLast = a.value.map((m) => m.dateTime).reduce((x, y) => x.isAfter(y) ? x : y);
+        final bLast = b.value.map((m) => m.dateTime).reduce((x, y) => x.isAfter(y) ? x : y);
+        return bLast.compareTo(aLast);
+      });
+
+    // Find supplier with lowest average cost (highlighted as BEST)
+    final bestEntry = entries.reduce((a, b) {
+      final aAvg = a.value.map((m) => m.unitCost!).reduce((x, y) => x + y) / a.value.length;
+      final bAvg = b.value.map((m) => m.unitCost!).reduce((x, y) => x + y) / b.value.length;
+      return aAvg <= bAvg ? a : b;
+    });
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.store_rounded, size: 16, color: AppColors.primaryNavy),
+              const SizedBox(width: 6),
+              Text(
+                'Cost by Supplier',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Header row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Text('SUPPLIER', style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.textTertiary, fontWeight: FontWeight.w600,
+                    letterSpacing: 0.6, fontSize: 9,
+                  )),
+                ),
+                Expanded(
+                  child: Text('AVG', style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.textTertiary, fontWeight: FontWeight.w600,
+                    letterSpacing: 0.6, fontSize: 9,
+                  ), textAlign: TextAlign.center),
+                ),
+                Expanded(
+                  child: Text('LAST', style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.textTertiary, fontWeight: FontWeight.w600,
+                    letterSpacing: 0.6, fontSize: 9,
+                  ), textAlign: TextAlign.center),
+                ),
+                Expanded(
+                  child: Text('ORDERS', style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.textTertiary, fontWeight: FontWeight.w600,
+                    letterSpacing: 0.6, fontSize: 9,
+                  ), textAlign: TextAlign.end),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 12),
+          ...entries.map((entry) {
+            final movs = entry.value;
+            final avgCost = movs.map((m) => m.unitCost!).reduce((a, b) => a + b) / movs.length;
+            final lastCost = movs
+                .reduce((a, b) => a.dateTime.isAfter(b.dateTime) ? a : b)
+                .unitCost!;
+            final isBest = entry.key == bestEntry.key && entries.length > 1;
+            final lastDate = movs
+                .map((m) => m.dateTime)
+                .reduce((a, b) => a.isAfter(b) ? a : b);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isBest
+                      ? AppColors.success.withValues(alpha: 0.06)
+                      : AppColors.backgroundLight,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isBest
+                        ? AppColors.success.withValues(alpha: 0.25)
+                        : AppColors.borderLight,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  entry.key,
+                                  style: AppTypography.labelSmall.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (isBest) ...[
+                                const SizedBox(width: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.success,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'BEST',
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          Text(
+                            'Last: ${DateFormat('MMM d').format(lastDate)}',
+                            style: AppTypography.captionSmall.copyWith(
+                              color: AppColors.textTertiary,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        fmt.format(avgCost),
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text(
+                            fmt.format(lastCost),
+                            style: AppTypography.labelSmall.copyWith(
+                              color: lastCost > avgCost
+                                  ? AppColors.danger
+                                  : lastCost < avgCost
+                                      ? AppColors.success
+                                      : AppColors.textPrimary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (lastCost != avgCost)
+                            Text(
+                              lastCost > avgCost ? '↑' : '↓',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: lastCost > avgCost
+                                    ? AppColors.danger
+                                    : AppColors.success,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '${movs.length}',
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.end,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              'Avg & Last cost in $currency',
+              style: AppTypography.captionSmall.copyWith(
+                color: AppColors.textTertiary,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 300.ms);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  CONVERSION HISTORY
+// ═══════════════════════════════════════════════════
+class _ConversionHistorySection extends ConsumerWidget {
+  final String productId;
+  const _ConversionHistorySection({required this.productId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(conversionOrdersForProductProvider(productId));
+    final currency = ref.watch(currencyProvider);
+    final fmt = NumberFormat('#,##0.##');
+
+    return async.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (orders) {
+        if (orders.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: AppColors.borderLight.withValues(alpha: 0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.call_split_rounded,
+                      size: 16, color: AppColors.primaryNavy),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Breakdown History',
+                    style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryNavy.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${orders.length}',
+                      style: AppTypography.captionSmall.copyWith(
+                        color: AppColors.primaryNavy,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...orders.take(5).map((order) =>
+                  _ConversionOrderTile(
+                      order: order, currency: currency, fmt: fmt)),
+              if (orders.length > 5)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    '+${orders.length - 5} more',
+                    style: AppTypography.captionSmall
+                        .copyWith(color: AppColors.textTertiary),
+                  ),
+                ),
+            ],
+          ),
+        ).animate().fadeIn(duration: 300.ms);
+      },
+    );
+  }
+}
+
+class _ConversionOrderTile extends StatelessWidget {
+  final ConversionOrder order;
+  final String currency;
+  final NumberFormat fmt;
+
+  const _ConversionOrderTile({
+    required this.order,
+    required this.currency,
+    required this.fmt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dateStr = DateFormat('MMM d, yyyy').format(order.date);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLight,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                dateStr,
+                style: AppTypography.captionSmall.copyWith(
+                  color: AppColors.textTertiary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${order.sourceQuantity.toInt()} units → ${order.outputs.length} output${order.outputs.length == 1 ? '' : 's'}',
+                style: AppTypography.captionSmall.copyWith(
+                  color: AppColors.primaryNavy,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                'Source cost: $currency ${fmt.format(order.sourceTotalCost)}',
+                style: AppTypography.captionSmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: order.outputs.map((line) {
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                      color: AppColors.borderLight),
+                ),
+                child: Text(
+                  '${line.variantName}: ${line.quantity.toInt()} × $currency ${fmt.format(line.unitCost)}',
+                  style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 10,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
   }
 }

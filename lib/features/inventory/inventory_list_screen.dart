@@ -1,15 +1,25 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:csv/csv.dart' as csv_lib;
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/share_service.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../../core/providers/export_providers.dart';
 import '../../shared/models/product_model.dart';
 import 'inventory_filter_sheet.dart';
-import 'add_product_screen.dart';
-import 'product_detail_screen.dart';
-import 'inventory_settings_screen.dart';
+import '../../shared/widgets/async_value_widget.dart';
+import '../shopify/providers/shopify_connection_provider.dart';
+import '../shopify/providers/shopify_sync_provider.dart';
+import '../../core/navigation/app_router.dart';
+import '../../shared/utils/safe_pop.dart';
 
 class InventoryListScreen extends ConsumerStatefulWidget {
   const InventoryListScreen({super.key});
@@ -19,26 +29,75 @@ class InventoryListScreen extends ConsumerStatefulWidget {
       _InventoryListScreenState();
 }
 
-class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
+class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
+    with WidgetsBindingObserver {
   int _selectedFilter = 0; // 0=All, 1=LowStock, 2=OutOfStock
   bool _isMaterialsView = false; // Toggle state
   bool _isSearchVisible = false;
+  bool _isAutoSyncing = false; // For "always on" Shopify sync spinner
   String _searchQuery = '';
+  InventoryFilterResult _filterResult = const InventoryFilterResult();
   final _searchController = TextEditingController();
   final _searchFocus = FocusNode();
+  final _scrollController = ScrollController();
+
+  /// Cached notifier reference — safe to use in dispose().
+  ShopifySyncNotifier? _syncNotifier;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addObserver(this);
+    // Start always-on timer after the first frame (providers are ready)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncNotifier = ref.read(shopifySyncProvider.notifier);
+      _startAlwaysSyncIfNeeded();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _startAlwaysSyncIfNeeded();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _syncNotifier?.stopAlwaysSyncTimer();
+    }
+  }
+
+  void _startAlwaysSyncIfNeeded() {
+    if (_isAlwaysOnSync) {
+      _syncNotifier?.startAlwaysSyncTimer();
+    }
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      ref.read(inventoryProvider.notifier).loadMore();
+    }
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _syncNotifier?.stopAlwaysSyncTimer();
     _searchController.dispose();
     _searchFocus.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
   List<Product> get _filteredProducts {
-    final products = ref.read(inventoryProvider);
+    final products = ref.read(inventoryProvider).value ?? [];
+    final hideOos = ref.read(appSettingsProvider).hideOutOfStock;
     var list = products.where((p) {
       // 1. Filter by Type (Product vs Material)
       if (p.isMaterial != _isMaterialsView) return false;
+
+      // 1b. Hide out-of-stock if setting is on
+      if (hideOos && p.status == StockStatus.outOfStock) return false;
 
       // 2. Filter by Search
       if (_searchQuery.isNotEmpty) {
@@ -50,41 +109,121 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
         }
       }
 
-      // 3. Filter by Stock Status
+      // 3. Filter by Stock Status (chip tabs)
       switch (_selectedFilter) {
         case 1:
-          return p.status == StockStatus.lowStock;
+          if (p.status != StockStatus.lowStock) { return false; }
         case 2:
-          return p.status == StockStatus.outOfStock;
+          if (p.status != StockStatus.outOfStock) { return false; }
         default:
-          return true;
+          break;
       }
+
+      // 4. Advanced filter sheet — status
+      if (_filterResult.statusFilters.isNotEmpty) {
+        final statusLabel = switch (p.status) {
+          StockStatus.inStock    => 'In Stock',
+          StockStatus.lowStock   => 'Low Stock',
+          StockStatus.outOfStock => 'Out of Stock',
+        };
+        if (!_filterResult.statusFilters.contains(statusLabel)) return false;
+      }
+
+      // 5. Advanced filter sheet — category
+      if (_filterResult.categories.isNotEmpty &&
+          !_filterResult.categories.contains(p.category)) { return false; }
+
+      // 6. Advanced filter sheet — supplier
+      if (_filterResult.suppliers.isNotEmpty &&
+          !_filterResult.suppliers.contains(p.supplier)) { return false; }
+
+      // 7. Advanced filter sheet — price range (sellingPrice)
+      if (_filterResult.minPrice != null && p.sellingPrice < _filterResult.minPrice!) return false;
+      if (_filterResult.maxPrice != null && p.sellingPrice > _filterResult.maxPrice!) return false;
+
+      return true;
     }).toList();
+
+    // 8. Sort from the filter sheet
+    switch (_filterResult.sortIndex) {
+      case 0: // Stock: Low → High
+        list.sort((a, b) => a.currentStock.compareTo(b.currentStock));
+      case 1: // Stock: High → Low
+        list.sort((a, b) => b.currentStock.compareTo(a.currentStock));
+      case 2: // Name: A-Z
+        list.sort((a, b) => a.name.compareTo(b.name));
+      case 3: // Value: High → Low
+        list.sort((a, b) => b.totalValue.compareTo(a.totalValue));
+    }
+
     return list;
   }
 
+  bool get _hasActiveFilters =>
+      _filterResult.sortIndex != 0 ||
+      _filterResult.statusFilters.isNotEmpty ||
+      _filterResult.categories.isNotEmpty ||
+      _filterResult.suppliers.isNotEmpty ||
+      _filterResult.minPrice != null ||
+      _filterResult.maxPrice != null;
+
   int _countByStatus(StockStatus status) {
-    final products = ref.read(inventoryProvider);
+    final products = ref.read(inventoryProvider).value ?? [];
     return products
         .where((p) => p.status == status && p.isMaterial == _isMaterialsView)
         .length;
   }
 
-  double _calculateTotalValue() {
-    final products = ref.read(inventoryProvider);
+  double _calculateCostValue() {
+    final products = ref.read(inventoryProvider).value ?? [];
+    return products
+        .where((p) => p.isMaterial == _isMaterialsView)
+        .fold(0.0, (sum, p) => sum + p.totalCostValue);
+  }
+
+  double _calculateSellingValue() {
+    final products = ref.read(inventoryProvider).value ?? [];
     return products
         .where((p) => p.isMaterial == _isMaterialsView)
         .fold(0.0, (sum, p) => sum + p.totalValue);
   }
 
+  /// Whether "always on" Shopify sync mode is active.
+  bool get _isAlwaysOnSync {
+    final hasAccess = ref.read(hasShopifyAccessProvider);
+    if (!hasAccess) return false;
+    final conn = ref.read(shopifyConnectionProvider).value;
+    return conn != null && conn.isActive && conn.inventorySyncMode == 'always';
+  }
+
+  /// Refresh inventory + auto-sync with Shopify if in "always on" mode.
+  Future<void> _refreshWithAutoSync() async {
+    if (!mounted) return;
+
+    // Capture refs before any async gap
+    final inventoryNotifier = ref.read(inventoryProvider.notifier);
+    final isAlwaysOn = _isAlwaysOnSync;
+
+    if (isAlwaysOn) {
+      setState(() => _isAutoSyncing = true);
+      // Push/pull Shopify data first, then refresh the full product list once
+      await (_syncNotifier?.performAutoSync() ?? Future.value());
+      if (!mounted) return;
+    }
+    await inventoryNotifier.refresh();
+    if (mounted && isAlwaysOn) setState(() => _isAutoSyncing = false);
+  }
+
+  /// Trigger Shopify auto-sync from the refresh button tap.
+  Future<void> _onShopifyRefreshTap() async {
+    if (_isAutoSyncing) return;
+    HapticFeedback.mediumImpact();
+    await _refreshWithAutoSync();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final products = ref.watch(inventoryProvider);
-    final filtered = _filteredProducts;
-    final inStock = _countByStatus(StockStatus.inStock);
-    final lowStock = _countByStatus(StockStatus.lowStock);
-    final outOfStock = _countByStatus(StockStatus.outOfStock);
-    final totalValue = _calculateTotalValue();
+    final productsAsync = ref.watch(inventoryProvider);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -93,29 +232,68 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
         child: Column(
           children: [
             _buildHeader(),
-            _buildTypeToggle(),
+            if (ref.watch(isGrowthProvider)) _buildTypeToggle(),
+            _buildShopifySyncBar(),
             if (_isSearchVisible) _buildSearchBar(),
             Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _StockStatusCard(
-                      inStock: inStock,
-                      lowStock: lowStock,
-                      outOfStock: outOfStock,
+              child: AsyncValueWidget<List<Product>>(
+                value: productsAsync,
+                onRetry: () => ref.read(inventoryProvider.notifier).refresh(),
+                data: (products) {
+                  final filtered = _filteredProducts;
+                  final inStock = _countByStatus(StockStatus.inStock);
+                  final lowStock = _countByStatus(StockStatus.lowStock);
+                  final outOfStock = _countByStatus(StockStatus.outOfStock);
+                  final costValue = _calculateCostValue();
+                  final sellingValue = _calculateSellingValue();
+                  final isPageLoading = ref.watch(inventoryProvider.notifier).hasMore;
+
+                  return RefreshIndicator(
+                    onRefresh: _refreshWithAutoSync,
+                    color: _isAlwaysOnSync
+                        ? const Color(0xFF7C3AED)
+                        : AppColors.primaryNavy,
+                    child: SingleChildScrollView(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
                     ),
-                    const SizedBox(height: 12),
-                    _StockValueCard(totalValue: totalValue),
-                    const SizedBox(height: 16),
-                    _buildQuickActions(),
-                    const SizedBox(height: 16),
-                    _buildFilterChips(products.length, lowStock, outOfStock),
-                    const SizedBox(height: 16),
-                    _buildProductList(filtered),
-                  ],
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _StockStatusCard(
+                          inStock: inStock,
+                          lowStock: lowStock,
+                          outOfStock: outOfStock,
+                        ),
+                        const SizedBox(height: 12),
+                        _StockValueCard(costValue: costValue, sellingValue: sellingValue),
+                        _buildMissingCostBanner(products),
+                        const SizedBox(height: 16),
+                        _buildQuickActions(),
+                        const SizedBox(height: 16),
+                        _buildFilterChips(products.length, lowStock, outOfStock),
+                        const SizedBox(height: 16),
+                        _buildProductList(filtered),
+                        if (isPageLoading)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  );
+                },
+                loading: () => const Center(
+                  child: CircularProgressIndicator(),
                 ),
               ),
             ),
@@ -134,7 +312,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => context.safePop(),
             icon: const Icon(Icons.arrow_back_rounded),
             color: AppColors.primaryNavy,
           ),
@@ -159,10 +337,45 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
               }
             });
           }),
-          _headerButton(Icons.filter_list_rounded, () {
-            HapticFeedback.lightImpact();
-            showInventoryFilterSheet(context);
-          }),
+          Stack(
+            children: [
+              _headerButton(Icons.filter_list_rounded, () async {
+                HapticFeedback.lightImpact();
+                final result = await showInventoryFilterSheet(context, initial: _filterResult);
+                if (result != null) setState(() => _filterResult = result);
+              }),
+              if (_hasActiveFilters)
+                Positioned(
+                  right: 6, top: 6,
+                  child: Container(
+                    width: 18, height: 18,
+                    decoration: BoxDecoration(
+                      color: AppColors.accentOrange,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.backgroundLight, width: 2),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.check, size: 10, color: Colors.white),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          // Shopify sync refresh button — only in "always on" mode
+          if (_isAlwaysOnSync)
+            _isAutoSyncing
+                ? const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF7C3AED),
+                      ),
+                    ),
+                  )
+                : _headerButton(Icons.sync_rounded, _onShopifyRefreshTap),
           _headerButton(Icons.more_horiz_rounded, () {
             HapticFeedback.lightImpact();
             _showOverflowMenu();
@@ -183,6 +396,57 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
           child: Icon(icon, size: 24, color: AppColors.textSecondary),
         ),
       ),
+    );
+  }
+
+  /// Shows a Shopify inventory sync bar only when the user has an active
+  /// Shopify connection AND sync mode is set to "on_demand".
+  Widget _buildShopifySyncBar() {
+    final hasAccess = ref.watch(hasShopifyAccessProvider);
+    if (!hasAccess) return const SizedBox.shrink();
+
+    final asyncConn = ref.watch(shopifyConnectionProvider);
+    return asyncConn.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (conn) {
+        if (conn == null || !conn.isActive) return const SizedBox.shrink();
+        // Only show persistent sync bar in on-demand mode
+        if (conn.inventorySyncMode != 'on_demand') return const SizedBox.shrink();
+        return GestureDetector(
+          onTap: () => context.push(AppRoutes.shopifyInventorySync),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(20, 4, 20, 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                  const Color(0xFF7C3AED).withValues(alpha: 0.03),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.sync_rounded, color: Color(0xFF7C3AED), size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Sync inventory with Shopify',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: const Color(0xFF7C3AED),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: Color(0xFF7C3AED), size: 20),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -236,6 +500,69 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
   }
 
   // ═══════════════════════════════════════════════════
+  //  MISSING COST BANNER
+  // ═══════════════════════════════════════════════════
+  Widget _buildMissingCostBanner(List<Product> products) {
+    final missingCount = products.where((p) =>
+        p.variants.any((v) => v.costPrice <= 0)).length;
+    if (missingCount == 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: GestureDetector(
+        onTap: () => context.pushNamed('MissingCostScreen'),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.warning.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.warning.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.warning_amber_rounded,
+                    size: 20, color: AppColors.warning),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$missingCount product${missingCount == 1 ? '' : 's'} missing cost',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      'Tap to record cost prices',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: AppColors.textSecondary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
   //  QUICK ACTIONS
   // ═══════════════════════════════════════════════════
   Widget _buildQuickActions() {
@@ -251,9 +578,11 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
             color: _isMaterialsView ? const Color(0xFF795548) : null,
             onTap: () {
               HapticFeedback.mediumImpact();
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AddProductScreen()),
-              );
+              if (_isMaterialsView) {
+                context.pushNamed("AddMaterialScreen");
+              } else {
+                context.pushNamed("AddProductScreen");
+              }
             },
           ),
           const SizedBox(width: 10),
@@ -262,7 +591,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
             label: 'Add Stock',
             onTap: () {
               HapticFeedback.lightImpact();
-              _showStockActionSheet(context, ref, 'Add Stock', 'Restock');
+              _showStockActionSheet(context, ref, 'Add Stock', 'Restock', _isMaterialsView);
             },
           ),
           const SizedBox(width: 10),
@@ -271,7 +600,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
             label: 'Adjust Stock',
             onTap: () {
               HapticFeedback.lightImpact();
-              _showStockActionSheet(context, ref, 'Adjust Stock', 'Correction');
+              _showStockActionSheet(context, ref, 'Adjust Stock', 'Correction', _isMaterialsView);
             },
           ),
         ],
@@ -413,14 +742,10 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
       children: [
         for (int i = 0; i < products.length; i++) ...[
           GestureDetector(
+            key: ValueKey(products[i].id),
             onTap: () {
               HapticFeedback.lightImpact();
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      ProductDetailScreen(productId: products[i].id),
-                ),
-              );
+              context.pushNamed('ProductDetailScreen', extra: {'productId': products[i].id});
             },
             child: _ProductCard(product: products[i], index: i),
           ),
@@ -458,12 +783,144 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
   }
 
   // ═══════════════════════════════════════════════════
+  //  CSV IMPORT
+  // ═══════════════════════════════════════════════════
+  Future<void> _importFromCsv() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final bytes = result.files.first.bytes;
+      if (bytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not read file'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      final csvString = String.fromCharCodes(bytes);
+      final rows = const csv_lib.CsvToListConverter(eol: '\n').convert(csvString);
+      if (rows.length < 2) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('CSV file is empty or has no data rows'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      // Parse header — match columns by name (case-insensitive)
+      final header = rows.first.map((e) => e.toString().toLowerCase().trim()).toList();
+      int col(String name) => header.indexWhere((h) => h.contains(name));
+      final iSku = col('sku');
+      final iName = col('name');
+      final iVariant = col('variant');
+      final iCategory = col('category');
+      final iSupplier = col('supplier');
+      final iCost = col('cost');
+      final iSelling = col('selling');
+      final iStock = col('stock');
+      final iUnit = col('unit');
+
+      if (iName < 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('CSV must have a "Name" column'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final defaultUnit = ref.read(appSettingsProvider).defaultUnit;
+      final notifier = ref.read(inventoryProvider.notifier);
+
+      // Group rows by product name to merge variants
+      final productGroups = <String, List<List<dynamic>>>{};
+      for (var i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.length <= iName) continue;
+        final name = row[iName].toString().trim();
+        if (name.isEmpty) continue;
+        productGroups.putIfAbsent(name, () => []).add(row);
+      }
+
+      var imported = 0;
+      for (final entry in productGroups.entries) {
+        final name = entry.key;
+        final groupRows = entry.value;
+        final first = groupRows.first;
+
+        String cellStr(List<dynamic> r, int idx) =>
+            idx >= 0 && idx < r.length ? r[idx].toString().trim() : '';
+        double cellDbl(List<dynamic> r, int idx) =>
+            idx >= 0 && idx < r.length ? (double.tryParse(r[idx].toString().trim()) ?? 0) : 0;
+        int cellInt(List<dynamic> r, int idx) =>
+            idx >= 0 && idx < r.length ? (int.tryParse(r[idx].toString().trim()) ?? 0) : 0;
+
+        final prodId = 'csv_${DateTime.now().millisecondsSinceEpoch}_$imported';
+
+        final variants = <ProductVariant>[];
+        for (var vi = 0; vi < groupRows.length; vi++) {
+          final r = groupRows[vi];
+          final variantName = cellStr(r, iVariant);
+          variants.add(ProductVariant(
+            id: '${prodId}_v$vi',
+            optionValues: variantName.isNotEmpty ? {'Variant': variantName} : const {},
+            sku: cellStr(r, iSku),
+            costPrice: cellDbl(r, iCost),
+            sellingPrice: cellDbl(r, iSelling),
+            currentStock: cellInt(r, iStock),
+            reorderPoint: 10,
+          ));
+        }
+
+        final product = Product(
+          id: prodId,
+          userId: uid,
+          name: name,
+          category: cellStr(first, iCategory).isNotEmpty ? cellStr(first, iCategory) : 'Imported',
+          supplier: cellStr(first, iSupplier),
+          unitOfMeasure: cellStr(first, iUnit).isNotEmpty ? cellStr(first, iUnit) : defaultUnit,
+          variants: variants,
+        );
+
+        await notifier.addProduct(product);
+        imported++;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Imported $imported product(s) from CSV'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('CSV import error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to import CSV. Check file format.'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════
   //  ADD STOCK / ADJUST STOCK SHEET
   // ═══════════════════════════════════════════════════
   //  OVERFLOW MENU
   // ═══════════════════════════════════════════════════
   void _showOverflowMenu() {
     showModalBottomSheet(
+  useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -510,21 +967,63 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
                     _overflowItem(
                       ctx,
                       icon: Icons.upload_file_rounded,
-                      label: 'Import from Excel/CSV',
+                      label: 'Import from CSV',
                       onTap: () {
                         Navigator.pop(ctx);
                         HapticFeedback.lightImpact();
+                        _importFromCsv();
                       },
                     ),
                     _overflowItem(
                       ctx,
                       icon: Icons.download_rounded,
                       label: 'Export Inventory',
-                      onTap: () {
+                      onTap: () async {
                         Navigator.pop(ctx);
                         HapticFeedback.lightImpact();
+                        try {
+                          final origin = ShareService.originFrom(context);
+                          final reportSvc = ref.read(reportServiceProvider);
+                          final shareSvc = ref.read(shareServiceProvider);
+                          final currency = ref.read(currencyProvider);
+                          final products = await ref.read(inventoryProvider.future);
+                          final csvString = reportSvc.exportInventoryCsv(products, currency);
+                          await shareSvc.shareCsv(csvString, 'Inventory_export.csv', subject: 'Inventory Export', origin: origin);
+                        } catch (e) {
+                          debugPrint('Inventory export error: $e');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
+                          }
+                        }
                       },
                     ),
+                    // Show "Import from Shopify" when connected
+                    if (ref.read(hasShopifyAccessProvider) &&
+                        (ref.read(shopifyConnectionProvider).value?.isActive ?? false))
+                      _overflowItem(
+                        ctx,
+                        icon: Icons.storefront_rounded,
+                        label: 'Import from Shopify',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          HapticFeedback.lightImpact();
+                          context.push(AppRoutes.shopifyProductMappings);
+                        },
+                      ),
+                    // Show "Sync Inventory" when connected and mode is on-demand
+                    if (ref.read(hasShopifyAccessProvider) &&
+                        (ref.read(shopifyConnectionProvider).value?.isActive ?? false) &&
+                        (ref.read(shopifyConnectionProvider).value?.inventorySyncMode ?? 'on_demand') == 'on_demand')
+                      _overflowItem(
+                        ctx,
+                        icon: Icons.sync_rounded,
+                        label: 'Sync Inventory',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          HapticFeedback.lightImpact();
+                          context.push(AppRoutes.shopifyInventorySync);
+                        },
+                      ),
                     _overflowItem(
                       ctx,
                       icon: Icons.settings_rounded,
@@ -532,20 +1031,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
                       onTap: () {
                         Navigator.pop(ctx);
                         HapticFeedback.lightImpact();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const InventorySettingsScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    _overflowItem(
-                      ctx,
-                      icon: Icons.print_rounded,
-                      label: 'Print Labels',
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        HapticFeedback.lightImpact();
+                        context.pushNamed('InventorySettingsScreen');
                       },
                     ),
                   ],
@@ -609,9 +1095,15 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
     WidgetRef ref,
     String title,
     String defaultReason,
+    bool materialsOnly,
   ) {
-    final products = ref.read(inventoryProvider);
+    // Filter list based on which tab is active
+    final all = ref.read(inventoryProvider).value ?? [];
+    final materials = materialsOnly
+        ? all.where((p) => p.isMaterial).toList()
+        : all.where((p) => !p.isMaterial).toList();
     String? selectedProductId;
+    String? selectedVariantId;
     int quantity = 0;
     String reason = defaultReason;
     final bool isAddStock = title == 'Add Stock';
@@ -620,24 +1112,29 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
         ? ['Restock', 'Return', 'Correction']
         : ['Correction', 'Damage', 'Loss', 'Return', 'Sale'];
 
+    final quantityCtrl = TextEditingController(text: '0');
+    final notifier = ref.read(inventoryProvider.notifier);
+    final valMethod = ref.read(appSettingsProvider).valuationMethod;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Container(
+        builder: (ctx, setSheetState) => Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Drag handle
                 Center(
@@ -711,28 +1208,95 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
                     child: DropdownButton<String>(
                       value: selectedProductId,
                       hint: Text(
-                        'Choose a product...',
+                        'Choose a raw material...',
                         style: AppTypography.bodySmall
                             .copyWith(color: AppColors.textTertiary),
                       ),
                       icon: const Icon(Icons.expand_more_rounded,
                           color: AppColors.textTertiary),
                       isExpanded: true,
-                      items: products
+                      items: materials
                           .map((p) => DropdownMenuItem(
                                 value: p.id,
                                 child: Text(
-                                  '${p.name}  (${p.currentStock})',
+                                  '${p.name}  (${p.currentStock} ${p.unitOfMeasure})',
                                   style: AppTypography.bodySmall.copyWith(
                                       color: AppColors.textPrimary),
                                 ),
                               ))
                           .toList(),
-                      onChanged: (v) =>
-                          setSheetState(() => selectedProductId = v),
+                      onChanged: (v) {
+                          setSheetState(() {
+                            selectedProductId = v;
+                            // Auto-select variant
+                            if (v != null) {
+                              final prod = materials.firstWhere((p) => p.id == v);
+                              if (prod.variants.length > 1) {
+                                selectedVariantId = null; // force user to pick
+                              } else {
+                                selectedVariantId = prod.defaultVariant.id;
+                              }
+                            } else {
+                              selectedVariantId = null;
+                            }
+                          });
+                      },
                     ),
                   ),
                 ),
+
+                // Variant picker (only for multi-variant products)
+                if (selectedProductId != null &&
+                    materials.firstWhere((p) => p.id == selectedProductId).variants.length > 1) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'SELECT VARIANT',
+                    style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.textTertiary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8,
+                      fontSize: 10,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8F9FA),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: AppColors.borderLight
+                              .withValues(alpha: 0.5)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedVariantId,
+                        hint: Text(
+                          'Choose a variant...',
+                          style: AppTypography.bodySmall
+                              .copyWith(color: AppColors.textTertiary),
+                        ),
+                        icon: const Icon(Icons.expand_more_rounded,
+                            color: AppColors.textTertiary),
+                        isExpanded: true,
+                        items: materials
+                            .firstWhere((p) => p.id == selectedProductId)
+                            .variants
+                            .map((v) => DropdownMenuItem(
+                                  value: v.id,
+                                  child: Text(
+                                    '${v.displayName}  (${v.currentStock})',
+                                    style: AppTypography.bodySmall.copyWith(
+                                        color: AppColors.textPrimary),
+                                  ),
+                                ))
+                            .toList(),
+                        onChanged: (v) =>
+                            setSheetState(() => selectedVariantId = v),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 18),
 
                 // Quantity stepper
@@ -758,9 +1322,15 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
                       GestureDetector(
                         onTap: () {
                           if (isAddStock && quantity > 0) {
-                            setSheetState(() => quantity--);
+                            setSheetState(() {
+                              quantity--;
+                              quantityCtrl.text = '$quantity';
+                            });
                           } else if (!isAddStock) {
-                            setSheetState(() => quantity--);
+                            setSheetState(() {
+                              quantity--;
+                              quantityCtrl.text = '$quantity';
+                            });
                           }
                           HapticFeedback.lightImpact();
                         },
@@ -783,24 +1353,42 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
                         ),
                       ),
                       Expanded(
-                        child: Center(
-                          child: Text(
-                            '${isAddStock ? '+' : ''}$quantity',
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: quantity > 0
-                                  ? AppColors.success
-                                  : quantity < 0
-                                      ? AppColors.danger
-                                      : AppColors.textPrimary,
-                            ),
+                        child: TextField(
+                          controller: quantityCtrl,
+                          textAlign: TextAlign.center,
+                          keyboardType: TextInputType.numberWithOptions(signed: !isAddStock),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(isAddStock ? r'\d' : r'[-\d]')),
+                          ],
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: quantity > 0
+                                ? AppColors.success
+                                : quantity < 0
+                                    ? AppColors.danger
+                                    : AppColors.textPrimary,
                           ),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          onChanged: (val) {
+                            final parsed = int.tryParse(val);
+                            if (parsed != null) {
+                              setSheetState(() => quantity = isAddStock ? parsed.abs() : parsed);
+                            } else {
+                              setSheetState(() => quantity = 0);
+                            }
+                          },
                         ),
                       ),
                       GestureDetector(
                         onTap: () {
-                          setSheetState(() => quantity++);
+                          setSheetState(() {
+                            quantity++;
+                            quantityCtrl.text = '$quantity';
+                          });
                           HapticFeedback.lightImpact();
                         },
                         child: Container(
@@ -874,14 +1462,14 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed:
-                        selectedProductId != null && quantity != 0
+                        selectedProductId != null && selectedVariantId != null && quantity != 0
                             ? () {
-                                ref
-                                    .read(inventoryProvider.notifier)
-                                    .adjustStock(
+                                notifier.adjustStock(
                                       selectedProductId!,
+                                      selectedVariantId!,
                                       quantity,
                                       reason,
+                                      valuationMethod: valMethod,
                                     );
                                 HapticFeedback.mediumImpact();
                                 Navigator.pop(ctx);
@@ -914,9 +1502,12 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen> {
               ],
             ),
           ),
+          ),
         ),
       ),
-    );
+    ).then((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => quantityCtrl.dispose());
+    });
   }
 }
 
@@ -1066,13 +1657,14 @@ class _StatusColumn extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════
 //  STOCK VALUE CARD
 // ═══════════════════════════════════════════════════════════
-class _StockValueCard extends StatelessWidget {
-  final double totalValue;
+class _StockValueCard extends ConsumerWidget {
+  final double costValue;
+  final double sellingValue;
 
-  const _StockValueCard({required this.totalValue});
+  const _StockValueCard({required this.costValue, required this.sellingValue});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1119,25 +1711,45 @@ class _StockValueCard extends StatelessWidget {
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Estimated Value',
+                    'Inventory Cost Value',
                     style: AppTypography.bodySmall.copyWith(
-                      color: Colors.white.withValues(alpha: 0.8),
+                      color: Colors.white.withValues(alpha: 0.75),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'EGP ${_formatNumber(totalValue)}',
+                    '${ref.watch(appSettingsProvider).currency} ${_formatNumber(costValue)}',
                     style: AppTypography.h2.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5,
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.sell_rounded,
+                        size: 12,
+                        color: AppColors.accentOrange.withValues(alpha: 0.85),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Retail: ${ref.watch(appSettingsProvider).currency} ${_formatNumber(sellingValue)}',
+                        style: AppTypography.captionSmall.copyWith(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1242,14 +1854,14 @@ class _QuickActionButton extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════
 //  PRODUCT CARD
 // ═══════════════════════════════════════════════════════════
-class _ProductCard extends StatelessWidget {
+class _ProductCard extends ConsumerWidget {
   final Product product;
   final int index;
 
   const _ProductCard({required this.product, required this.index});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isOutOfStock = product.status == StockStatus.outOfStock;
 
     return Container(
@@ -1271,7 +1883,7 @@ class _ProductCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Product icon
+            // Product icon / image
             Container(
               width: 56,
               height: 56,
@@ -1279,13 +1891,37 @@ class _ProductCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 color: product.color.withValues(alpha: isOutOfStock ? 0.05 : 0.1),
               ),
-              child: Icon(
-                product.icon,
-                size: 26,
-                color: isOutOfStock
-                    ? AppColors.textTertiary
-                    : product.color,
-              ),
+              child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: CachedNetworkImage(
+                        imageUrl: product.imageUrl!,
+                        fit: BoxFit.cover,
+                        width: 56,
+                        height: 56,
+                        placeholder: (_, __) => Icon(
+                          product.icon,
+                          size: 26,
+                          color: isOutOfStock
+                              ? AppColors.textTertiary
+                              : product.color,
+                        ),
+                        errorWidget: (_, __, ___) => Icon(
+                          product.icon,
+                          size: 26,
+                          color: isOutOfStock
+                              ? AppColors.textTertiary
+                              : product.color,
+                        ),
+                      ),
+                    )
+                  : Icon(
+                      product.icon,
+                      size: 26,
+                      color: isOutOfStock
+                          ? AppColors.textTertiary
+                          : product.color,
+                    ),
             ),
             const SizedBox(width: 12),
             // Product info
@@ -1313,19 +1949,42 @@ class _ProductCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'SKU: ${product.sku} • ${product.category}',
+                              'SKU: ${product.sku}${product.category.isNotEmpty && product.category.toLowerCase() != 'shopify import' ? ' • ${product.category}' : ''}',
                               style: AppTypography.captionSmall.copyWith(
                                 color: AppColors.textTertiary,
                                 fontSize: 11,
                               ),
                             ),
-                            const SizedBox(height: 1),
-                            Text(
-                              'Supplier: ${product.supplier}',
-                              style: AppTypography.captionSmall.copyWith(
-                                color: AppColors.textTertiary.withValues(alpha: 0.7),
-                                fontSize: 10,
-                              ),
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                if (product.supplier.isNotEmpty && product.supplier.toLowerCase() != 'shopify')
+                                  Text(
+                                    'Supplier: ${product.supplier}',
+                                    style: AppTypography.captionSmall.copyWith(
+                                      color: AppColors.textTertiary.withValues(alpha: 0.7),
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                if (product.shopifyProductId != null && product.shopifyProductId!.isNotEmpty) ...[
+                                  if (product.supplier.isNotEmpty && product.supplier.toLowerCase() != 'shopify') const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF96BF48).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'Shopify',
+                                      style: AppTypography.captionSmall.copyWith(
+                                        color: const Color(0xFF5E8E3E),
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                         ),
@@ -1347,8 +2006,8 @@ class _ProductCard extends StatelessWidget {
                       _StatusBadge(status: product.status),
                       Text(
                         product.isMaterial
-                            ? 'Cost: EGP ${product.costPrice.toStringAsFixed(2)}'
-                            : 'EGP ${product.sellingPrice.toStringAsFixed(2)}',
+                            ? 'Cost: ${ref.watch(appSettingsProvider).currency} ${product.costPrice.toStringAsFixed(2)}'
+                            : '${ref.watch(appSettingsProvider).currency} ${product.sellingPrice.toStringAsFixed(2)}',
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textTertiary,
                           fontSize: 11,

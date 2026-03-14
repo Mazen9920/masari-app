@@ -1,0 +1,68 @@
+{
+  "flutter": {
+    "platforms": {
+      "ios": {
+        "default": {
+          "projectId": "massari-574ff",
+          "appId": "1:686452990628:ios:041d29008a8ec139a9bc31",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "massari-574ff",
+          "appId": "1:686452990628:ios:041d29008a8ec139a9bc31",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "massari-574ff",
+          "configurations": {
+            "android": "1:686452990628:android:1bfb4a9309f31b24a9bc31",
+            "ios": "1:686452990628:ios:041d29008a8ec139a9bc31",
+            "macos": "1:686452990628:ios:041d29008a8ec139a9bc31",
+            "web": "1:686452990628:web:cea6b1946600e490a9bc31",
+            "windows": "1:686452990628:web:0e8031fa0856061ca9bc31"
+          }
+        }
+      },
+      "android": {
+        "default": {
+          "projectId": "massari-574ff",
+          "appId": "1:686452990628:android:1bfb4a9309f31b24a9bc31",
+          "fileOutput": "android/app/google-services.json"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "me-central1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ]
+}

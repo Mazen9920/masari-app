@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../shared/models/category_data.dart';
+import '../../../shared/models/transaction_model.dart';
 import '../../transactions/transaction_detail_screen.dart';
 import '../../transactions/transactions_list_screen.dart';
 
@@ -10,40 +12,9 @@ import '../../transactions/transactions_list_screen.dart';
 class RecentTransactions extends ConsumerWidget {
   const RecentTransactions({super.key});
 
-  // Sample data — replace with real data from backend
-  static final List<TransactionItem> _transactions = [
-    TransactionItem(
-      title: 'AWS Web Services',
-      subtitle: 'Today, 9:41 AM',
-      amount: -1200.00,
-      icon: Icons.dns_rounded,
-      iconBgColor: AppColors.backgroundLight,
-      iconColor: AppColors.textSecondary,
-      category: 'Software/Infrastructure',
-    ),
-    TransactionItem(
-      title: 'Client Payment',
-      subtitle: 'Yesterday, 4:20 PM',
-      amount: 4500.00,
-      icon: Icons.account_balance_rounded,
-      iconBgColor: const Color(0xFFF0FDF4), // green-50
-      iconColor: AppColors.success,
-      category: 'Income',
-    ),
-    TransactionItem(
-      title: 'Office Rent',
-      subtitle: 'Oct 24, 10:00 AM',
-      amount: -3000.00,
-      icon: Icons.domain_rounded,
-      iconBgColor: AppColors.accentOrange.withOpacity(0.08),
-      iconColor: AppColors.accentOrange,
-      category: 'Rent',
-    ),
-  ];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allTransactions = ref.watch(transactionsProvider);
+    final allTransactions = ref.watch(transactionsProvider).value ?? [];
     final recentTransactions = allTransactions.take(5).toList();
     return Column(
       children: [
@@ -84,20 +55,21 @@ class RecentTransactions extends ConsumerWidget {
           recentTransactions.length > 5 ? 5 : recentTransactions.length,
           (index) {
             final tx = recentTransactions[index];
+            final cat = CategoryData.findById(tx.categoryId);
             final item = TransactionItem(
               title: tx.title,
               subtitle: tx.formattedTime,
               amount: tx.amount,
-              icon: tx.category.icon,
-              iconBgColor: tx.category.bgColor,
-              iconColor: tx.category.color,
-              category: tx.category.name,
+              icon: cat.iconData,
+              iconBgColor: cat.displayBgColor,
+              iconColor: cat.displayColor,
+              category: cat.name,
             );
             return Padding(
               padding: EdgeInsets.only(
                 bottom: index < recentTransactions.length - 1 ? 10 : 0,
               ),
-              child: _TransactionCard(item: item),
+              child: _TransactionCard(item: item, transaction: tx),
             );
           },
         ),
@@ -108,7 +80,8 @@ class RecentTransactions extends ConsumerWidget {
 
 class _TransactionCard extends StatelessWidget {
   final TransactionItem item;
-  const _TransactionCard({required this.item});
+  final Transaction transaction;
+  const _TransactionCard({required this.item, required this.transaction});
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +93,7 @@ class _TransactionCard extends StatelessWidget {
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => TransactionDetailScreen(transaction: item),
+            builder: (_) => TransactionDetailScreen(transaction: transaction),
           ),
         );
       },

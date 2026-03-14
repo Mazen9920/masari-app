@@ -12,7 +12,8 @@ import 'add_supplier_screen.dart';
 /// Record Payment form — supplier info, amount, method, invoice allocation, notes.
 class RecordPaymentScreen extends ConsumerStatefulWidget {
   final String? preselectedSupplierId;
-  const RecordPaymentScreen({super.key, this.preselectedSupplierId});
+  final String? preselectedPurchaseId;
+  const RecordPaymentScreen({super.key, this.preselectedSupplierId, this.preselectedPurchaseId});
 
   @override
   ConsumerState<RecordPaymentScreen> createState() =>
@@ -153,7 +154,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final suppliers = ref.watch(suppliersProvider);
+    final suppliers = ref.watch(suppliersProvider).value ?? [];
     final supplier = _selectedSupplierId != null
         ? suppliers.cast<Supplier?>().firstWhere(
               (s) => s!.id == _selectedSupplierId,

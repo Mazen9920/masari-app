@@ -1,0 +1,176 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Users: can only read/write their own profile ─────────────────
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ─── Helper: owner check for data collections ─────────────────────
+    // All data docs have a 'user_id' field that must match the caller's UID.
+    // On update, user_id must not change (immutable).
+
+    // Transactions
+    match /transactions/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Categories
+    match /categories/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Products
+    match /products/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Suppliers
+    match /suppliers/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Purchases
+    match /purchases/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Payments
+    match /payments/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Recurring Transactions
+    match /recurring_transactions/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Goods Receipts
+    match /goods_receipts/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Sales
+    match /sales/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Balance Sheet (user-scoped document)
+    match /balance_sheet/{userId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    // ─── Shopify Integration Collections ──────────────────────
+
+    // Shopify Connections (OAuth tokens, sync settings)
+    // access_token and webhook_ids are managed exclusively by Cloud Functions.
+    // Client may read/update sync settings but MUST NOT modify token fields.
+    match /shopify_connections/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id
+        // Prevent client from modifying CF-managed secrets
+        && (!('access_token' in request.resource.data)
+            || request.resource.data.access_token
+               == resource.data.access_token)
+        && (!('webhook_ids' in request.resource.data)
+            || request.resource.data.webhook_ids
+               == resource.data.webhook_ids);
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid
+        // Client-created docs must NOT include an access_token
+        && !('access_token' in request.resource.data);
+    }
+
+    // Shopify Product Mappings (Masari ↔ Shopify variant links)
+    match /shopify_product_mappings/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // Shopify Sync Log (audit trail for debugging)
+    match /shopify_sync_log/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      // App can create log entries; Cloud Functions also write via Admin SDK
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+    }
+
+    // Shopify Webhook Queue (Cloud Functions write, app reads)
+    // Writes come from Admin SDK (bypasses rules), so only read rules needed.
+    match /shopify_webhook_queue/{docId} {
+      allow read: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      // No client-side write — only Cloud Functions (Admin SDK) write here
+    }
+
+    // Deny everything else by default (Firestore's implicit behavior)
+  }
+}

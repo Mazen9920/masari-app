@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/navigation/app_router.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/auth_provider.dart';
 import 'widgets/form_components.dart';
-import 'login_screen.dart';
-import '../setup/business_setup_step1.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -22,6 +23,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _agreedToTerms = false;
+  bool _isLoading = false;
   String _selectedCountryCode = '+20';
 
   final List<Map<String, String>> _countryCodes = [
@@ -46,41 +48,96 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     super.dispose();
   }
 
-  void _onSignUp() {
-    if (_formKey.currentState?.validate() ?? false) {
-      if (!_agreedToTerms) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Please agree to the Terms of Service',
-              style: AppTypography.bodySmall.copyWith(color: Colors.white),
-            ),
-            backgroundColor: AppColors.danger,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.cardRadius,
-            ),
+  void _onSignUp() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (!_agreedToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please agree to the Terms of Service',
+            style: AppTypography.bodySmall.copyWith(color: Colors.white),
           ),
-        );
-        return;
-      }
-      
-      // Save user data to provider
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: AppRadius.cardRadius,
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final success = await ref.read(authProvider.notifier).signUp(
+      name: _nameController.text.trim(),
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+      phone: '$_selectedCountryCode${_phoneController.text.trim()}',
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (success) {
+      // Save user data to legacy provider for setup screens
       ref.read(userProvider.notifier).setUser(
         _nameController.text.trim(),
         _emailController.text.trim(),
       );
-      
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const BusinessSetupStep1()),
-      );
+      context.go(AppRoutes.setupStep1);
+    } else {
+      final error = ref.read(authProvider).error ?? 'Sign up failed';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    }
+  }
+
+  void _onGoogleSignUp() async {
+    setState(() => _isLoading = true);
+    final success = await ref.read(authProvider.notifier).signInWithGoogle();
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (success) {
+      context.go(AppRoutes.home);
+    } else {
+      final error = ref.read(authProvider).error ?? 'Google sign-in failed';
+      if (error.contains('cancelled')) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    }
+  }
+
+  void _onAppleSignUp() async {
+    setState(() => _isLoading = true);
+    final success = await ref.read(authProvider.notifier).signInWithApple();
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (success) {
+      context.go(AppRoutes.home);
+    } else {
+      final error = ref.read(authProvider).error ?? 'Apple sign-in failed';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
     }
   }
 
   void _navigateToLogin() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
+    context.go(AppRoutes.login);
   }
 
   @override
@@ -102,14 +159,14 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               _buildTermsCheckbox(),
               const SizedBox(height: 24),
               MasariPrimaryButton(
-                text: 'Sign Up',
+                text: _isLoading ? 'Creating account…' : 'Sign Up',
                 icon: Icons.arrow_forward_rounded,
-                onPressed: _onSignUp,
+                onPressed: _isLoading ? null : _onSignUp,
               ),
               const SizedBox(height: 28),
               SocialLoginButtons(
-                onGoogleTap: () {},
-                onAppleTap: () {},
+                onGoogleTap: _isLoading ? null : _onGoogleSignUp,
+                onAppleTap: _isLoading ? null : _onAppleSignUp,
               ),
               const SizedBox(height: 32),
               _buildFooterLink(),

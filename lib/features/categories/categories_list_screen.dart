@@ -1,3 +1,4 @@
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -5,14 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/category_data.dart';
 import 'add_category_sheet.dart';
-import 'category_detail_screen.dart';
 import 'categories_filter_sheet.dart';
-import 'budgets_overview_screen.dart';
-import 'manage_categories_screen.dart';
-import '../ai/ai_chat_screen.dart';
+import '../../shared/widgets/async_value_widget.dart';
+import 'categorize_transactions_sheet.dart';
+import '../../shared/utils/safe_pop.dart';
 
 class CategoriesListScreen extends ConsumerStatefulWidget {
   const CategoriesListScreen({super.key});
@@ -24,15 +25,21 @@ class CategoriesListScreen extends ConsumerStatefulWidget {
 class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
   bool _isExpense = true;
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  CategoryFilterResult _categoryFilter = const CategoryFilterResult();
 
   // ─── Computed Data ───
-  List<Transaction> get _transactions => ref.watch(transactionsProvider);
+  List<Transaction> get _transactions => ref.watch(transactionsProvider).value ?? [];
 
   List<Transaction> get _filteredByType {
+    final timeFiltered = _transactions.where((t) => 
+      !t.excludeFromPL &&
+      t.dateTime.year == _selectedMonth.year && 
+      t.dateTime.month == _selectedMonth.month
+    );
     if (_isExpense) {
-      return _transactions.where((t) => !t.isIncome).toList();
+      return timeFiltered.where((t) => !t.isIncome).toList();
     } else {
-      return _transactions.where((t) => t.isIncome).toList();
+      return timeFiltered.where((t) => t.isIncome).toList();
     }
   }
 
@@ -43,17 +50,17 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
     final map = <String, _CategoryBreakdown>{};
 
     for (final tx in _filteredByType) {
-      final name = tx.category.name;
+      final name = CategoryData.findById(tx.categoryId).name;
       final existing = map[name];
       if (existing != null) {
         map[name] = _CategoryBreakdown(
-          category: tx.category,
+          category: CategoryData.findById(tx.categoryId),
           totalAmount: existing.totalAmount + tx.amount.abs(),
           transactionCount: existing.transactionCount + 1,
         );
       } else {
         map[name] = _CategoryBreakdown(
-          category: tx.category,
+          category: CategoryData.findById(tx.categoryId),
           totalAmount: tx.amount.abs(),
           transactionCount: 1,
         );
@@ -61,7 +68,24 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
     }
 
     final list = map.values.toList();
-    list.sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
+
+    // Sort according to the filter sheet setting
+    switch (_categoryFilter.sortBy) {
+      case CategorySortBy.highestAmount:
+        list.sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
+      case CategorySortBy.lowestAmount:
+        list.sort((a, b) => a.totalAmount.compareTo(b.totalAmount));
+      case CategorySortBy.mostTransactions:
+        list.sort((a, b) => b.transactionCount.compareTo(a.transactionCount));
+      case CategorySortBy.nameAZ:
+        list.sort((a, b) => a.category.name.compareTo(b.category.name));
+    }
+
+    // Hide categories with zero spending when requested
+    if (_categoryFilter.hideEmpty) {
+      return list.where((b) => b.totalAmount > 0).toList();
+    }
+
     return list;
   }
 
@@ -95,9 +119,19 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
     });
   }
 
+  // Inside _CategoriesListScreenState
+  void _recalculateData(List<Transaction> transactions) {
+    // This method would typically update state variables based on the new transactions list.
+    // For now, we'll just ensure the getters (_filteredByType, _totalAmount, _breakdowns)
+    // are implicitly re-evaluated when `transactionsAsync` changes.
+    // If there were local state variables derived from transactions, they would be updated here.
+  }
+
   // ─── Build ───
   @override
   Widget build(BuildContext context) {
+    final transactionsAsync = ref.watch(transactionsProvider);
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: SafeArea(
@@ -108,20 +142,37 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
               children: [
                 _buildHeader(),
                 Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 4),
-                        _buildMonthSelector(),
-                        const SizedBox(height: 16),
-                        _buildToggle(),
-                        const SizedBox(height: 20),
-                        _buildSummaryCard(),
-                        const SizedBox(height: 20),
-                        _buildCategoryList(),
-                        const SizedBox(height: 140),
-                      ],
+                  child: AsyncValueWidget<List<Transaction>>(
+                    value: transactionsAsync,
+                    data: (transactions) {
+                      // Re-calculate derived data since we don't have heavy providers for these yet
+                      _recalculateData(transactions);
+                      
+                      final uncategorizedCount = transactions.where((t) => CategoryData.findById(t.categoryId).name == 'Uncategorized').length;
+
+                      return RefreshIndicator(
+                        onRefresh: () => ref.read(transactionsProvider.notifier).refresh(),
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics()),
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 4),
+                              _buildMonthSelector(),
+                              const SizedBox(height: 16),
+                              _buildToggle(),
+                              const SizedBox(height: 20),
+                              _buildSummaryCard(uncategorizedCount),
+                              const SizedBox(height: 20),
+                              _buildCategoryList(),
+                              const SizedBox(height: 140),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(),
                     ),
                   ),
                 ),
@@ -151,7 +202,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
         children: [
           if (canPop)
             IconButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => context.safePop(),
               icon: const Icon(Icons.arrow_back_rounded),
               color: AppColors.primaryNavy,
               padding: const EdgeInsets.all(8),
@@ -174,11 +225,21 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
             child: InkWell(
               onTap: () {
                 HapticFeedback.lightImpact();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const BudgetsOverviewScreen(),
-                  ),
-                );
+                ref.read(transactionsProvider.notifier).refresh();
+              },
+              borderRadius: BorderRadius.circular(50),
+              child: const Padding(
+                padding: EdgeInsets.all(10),
+                child: Icon(Icons.refresh_rounded, color: AppColors.textSecondary, size: 24),
+              ),
+            ),
+          ),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                context.pushNamed('BudgetsOverviewScreen');
               },
               borderRadius: BorderRadius.circular(50),
               child: const Padding(
@@ -192,11 +253,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
             child: InkWell(
               onTap: () {
                 HapticFeedback.lightImpact();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const ManageCategoriesScreen(),
-                  ),
-                );
+                context.pushNamed('ManageCategoriesScreen');
               },
               borderRadius: BorderRadius.circular(50),
               child: const Padding(
@@ -208,9 +265,28 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () {
+              onTap: () async {
                 HapticFeedback.lightImpact();
-                showCategoriesFilterSheet(context);
+                final result = await showCategoriesFilterSheet(
+                  context,
+                  current: _categoryFilter,
+                );
+                if (result != null) {
+                  setState(() {
+                    _categoryFilter = result;
+                    // Sync dateRange selection to the month navigator
+                    final now = DateTime.now();
+                    if (result.dateRange == 'This Month') {
+                      _selectedMonth = DateTime(now.year, now.month);
+                    } else if (result.dateRange == 'Last Month') {
+                      _selectedMonth = DateTime(now.year, now.month - 1);
+                    } else if (result.dateRange == 'Quarter to Date') {
+                      // Show start of current quarter's month
+                      final quarterStartMonth = ((now.month - 1) ~/ 3) * 3 + 1;
+                      _selectedMonth = DateTime(now.year, quarterStartMonth);
+                    }
+                  });
+                }
               },
               borderRadius: BorderRadius.circular(50),
               child: const Padding(
@@ -339,7 +415,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
   // ═══════════════════════════════════════════════════
   //  SUMMARY CARD
   // ═══════════════════════════════════════════════════
-  Widget _buildSummaryCard() {
+  Widget _buildSummaryCard(int uncategorizedCount) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
@@ -395,7 +471,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
 
             // Total amount
             Text(
-              '\$${_totalAmount.toStringAsFixed(0)}',
+              '${ref.watch(appSettingsProvider).currency} ${_totalAmount.toStringAsFixed(0)}',
               style: AppTypography.h1.copyWith(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w800,
@@ -444,81 +520,109 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
             const SizedBox(height: 16),
 
             // Uncategorized alert
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.accentOrange.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: AppColors.accentOrange.withValues(alpha: 0.15),
+            if (uncategorizedCount > 0)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.accentOrange.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppColors.accentOrange.withValues(alpha: 0.15),
+                  ),
                 ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.accentOrange.withValues(alpha: 0.15),
-                    ),
-                    child: const Icon(
-                      Icons.priority_high_rounded,
-                      size: 18,
-                      color: AppColors.accentOrange,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '2 Uncategorized',
-                          style: AppTypography.labelMedium.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Please review these transactions',
-                          style: AppTypography.captionSmall.copyWith(
-                            color: AppColors.textTertiary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(50),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                      border: Border.all(
-                        color: AppColors.accentOrange.withValues(alpha: 0.2),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.accentOrange.withValues(alpha: 0.15),
                       ),
-                    ),
-                    child: Text(
-                      'Review',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                      child: const Icon(
+                        Icons.priority_high_rounded,
+                        size: 18,
                         color: AppColors.accentOrange,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$uncategorizedCount Uncategorized',
+                            style: AppTypography.labelMedium.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Please review these transactions',
+                            style: AppTypography.captionSmall.copyWith(
+                              color: AppColors.textTertiary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () async {
+                        final uncategorized = _transactions
+                            .where((t) =>
+                                CategoryData.findById(t.categoryId).name ==
+                                'Uncategorized')
+                            .toList();
+                        if (uncategorized.isEmpty || !context.mounted) return;
+                        final saved = await showCategorizeTransactionsSheet(
+                          context,
+                          uncategorized,
+                        );
+                        if (saved > 0 && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '$saved ${saved == 1 ? 'transaction' : 'transactions'} categorized',
+                              ),
+                              backgroundColor: AppColors.success,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(50),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                          border: Border.all(
+                            color: AppColors.accentOrange.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Text(
+                          'Review',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.accentOrange,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -542,13 +646,12 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
           for (int i = 0; i < items.length; i++) ...[
             GestureDetector(
               onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CategoryDetailScreen(
-                      category: items[i].category,
-                    ),
-                  ),
+                context.pushNamed(
+                  'CategoryDetailScreen', 
+                  extra: {
+                    'category': items[i].category,
+                    'month': _selectedMonth,
+                  },
                 );
               },
               child: _CategoryCard(
@@ -566,7 +669,59 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
     );
   }
 
+  /// Computes a dynamic insight by comparing the current month's top category
+  /// with the previous month. Returns null if there's nothing meaningful.
+  String? _computeCategoryInsight() {
+    final breakdowns = _breakdowns;
+    if (breakdowns.isEmpty) return null;
+
+    final top = breakdowns.first;
+    final pct = _totalAmount > 0
+        ? (top.totalAmount / _totalAmount * 100).round()
+        : 0;
+
+    // Get previous month's data for the same category
+    final prevMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+    final prevTransactions = _transactions.where((t) =>
+        !t.excludeFromPL &&
+        t.dateTime.year == prevMonth.year &&
+        t.dateTime.month == prevMonth.month &&
+        (_isExpense ? !t.isIncome : t.isIncome));
+
+    double prevCatTotal = 0;
+    for (final t in prevTransactions) {
+      if (CategoryData.findById(t.categoryId).name == top.category.name) {
+        prevCatTotal += t.amount.abs();
+      }
+    }
+
+    final catName = top.category.name;
+
+    // No previous data — show share insight
+    if (prevCatTotal == 0 && top.totalAmount > 0) {
+      return '$catName is your top ${_isExpense ? "expense" : "income"} category this month, representing $pct% of total.';
+    }
+
+    // Compare with previous month
+    if (prevCatTotal > 0) {
+      final change = ((top.totalAmount - prevCatTotal) / prevCatTotal * 100).round();
+      if (change > 0) {
+        return '$catName is $change% higher than last month. It accounts for $pct% of total ${_isExpense ? "expenses" : "income"}.';
+      } else if (change < 0) {
+        return '$catName is ${change.abs()}% lower than last month. It accounts for $pct% of total ${_isExpense ? "expenses" : "income"}.';
+      } else {
+        return '$catName is unchanged from last month at $pct% of total.';
+      }
+    }
+
+    return '$catName accounts for $pct% of your total ${_isExpense ? "expenses" : "income"} this month.';
+  }
+
   Widget _buildAIInsightCard() {
+    // Compute dynamic insight from actual data
+    final insight = _computeCategoryInsight();
+    if (insight == null) return const SizedBox.shrink();
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Container(
@@ -620,38 +775,33 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                         height: 1.5,
                       ),
                       children: [
-                        TextSpan(
+                        const TextSpan(
                           text: 'Insight: ',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: AppColors.primaryNavy,
                           ),
                         ),
-                        const TextSpan(
-                          text: 'Marketing is higher than last month (+18%). Consider reviewing ad spend efficiency.',
-                        ),
+                        TextSpan(text: insight),
                       ],
                     ),
                   ),
                   const SizedBox(height: 8),
                   GestureDetector(
                     onTap: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const AiChatScreen(contextType: 'Categories'),
-                        ),
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('AI Insights — coming soon!')),
                       );
                     },
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Ask AI',
+                          'Ask AI (Coming Soon)',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.primaryNavy,
+                            color: Colors.grey,
                           ),
                         ),
                         const SizedBox(width: 2),
@@ -726,6 +876,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
         ],
       ),
       child: FloatingActionButton.extended(
+        heroTag: 'categories_add_fab',
         onPressed: () {
           HapticFeedback.mediumImpact();
           showAddCategorySheet(context);
@@ -750,7 +901,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
 // ═══════════════════════════════════════════════════════════
 //  CATEGORY CARD WIDGET
 // ═══════════════════════════════════════════════════════════
-class _CategoryCard extends StatelessWidget {
+class _CategoryCard extends ConsumerWidget {
   final _CategoryBreakdown breakdown;
   final double total;
   final int index;
@@ -761,11 +912,20 @@ class _CategoryCard extends StatelessWidget {
     required this.index,
   });
 
-  double get _percentage => total > 0 ? (breakdown.totalAmount / total) : 0;
+  bool get _hasBudget => breakdown.category.budgetLimit != null && breakdown.category.budgetLimit! > 0;
+  double get _budget => breakdown.category.budgetLimit ?? 0;
+
+  double get _percentage {
+    if (_hasBudget) {
+      return (breakdown.totalAmount / _budget).clamp(0.0, 1.0);
+    }
+    return total > 0 ? (breakdown.totalAmount / total).clamp(0.0, 1.0) : 0.0;
+  }
+  
   int get _percentInt => (_percentage * 100).round();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -791,7 +951,7 @@ class _CategoryCard extends StatelessWidget {
                 height: 10,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: breakdown.category.color,
+                  color: breakdown.category.displayColor,
                 ),
               ),
               const SizedBox(width: 12),
@@ -825,16 +985,30 @@ class _CategoryCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    '\$${breakdown.totalAmount.toStringAsFixed(0)}',
-                    style: AppTypography.labelMedium.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w800,
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '${ref.watch(appSettingsProvider).currency} ${breakdown.totalAmount.toStringAsFixed(0)}',
+                          style: AppTypography.labelMedium.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (_hasBudget)
+                          TextSpan(
+                            text: ' / ${_budget.toStringAsFixed(0)}',
+                            style: AppTypography.captionSmall.copyWith(
+                              color: AppColors.textTertiary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '$_percentInt%',
+                    _hasBudget ? '$_percentInt% used' : '$_percentInt% of total',
                     style: AppTypography.captionSmall.copyWith(
                       color: AppColors.textTertiary,
                       fontSize: 11,
@@ -860,7 +1034,7 @@ class _CategoryCard extends StatelessWidget {
                   return LinearProgressIndicator(
                     value: value,
                     backgroundColor: const Color(0xFFF0F1F3),
-                    valueColor: AlwaysStoppedAnimation(breakdown.category.color),
+                    valueColor: AlwaysStoppedAnimation(breakdown.category.displayColor),
                   );
                 },
               ),

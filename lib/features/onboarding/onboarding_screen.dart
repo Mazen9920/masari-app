@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/navigation/app_router.dart';
 import 'widgets/onboarding_page.dart';
 import 'widgets/onboarding_illustrations.dart';
-import '../auth/signup_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -88,9 +89,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _navigateToAuth() {
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const SignUpScreen()));
+    context.go(AppRoutes.signup);
   }
 
   @override

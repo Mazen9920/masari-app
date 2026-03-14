@@ -1,39 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../../shared/utils/safe_pop.dart';
 
-class CurrencyLanguageScreen extends StatefulWidget {
+class CurrencyLanguageScreen extends ConsumerWidget {
   const CurrencyLanguageScreen({super.key});
 
-  @override
-  State<CurrencyLanguageScreen> createState() => _CurrencyLanguageScreenState();
-}
-
-class _CurrencyLanguageScreenState extends State<CurrencyLanguageScreen> {
-  String _selectedCurrency = 'EGP';
-  String _selectedLanguage = 'English';
-
-  final _currencies = [
+  static const _currencies = [
     {'code': 'EGP', 'name': 'Egyptian Pound', 'symbol': 'E£'},
-    {'code': 'USD', 'name': 'US Dollar', 'symbol': '\$'},
-    {'code': 'EUR', 'name': 'Euro', 'symbol': '€'},
-    {'code': 'SAR', 'name': 'Saudi Riyal', 'symbol': '﷼'},
-    {'code': 'AED', 'name': 'UAE Dirham', 'symbol': 'د.إ'},
-    {'code': 'GBP', 'name': 'British Pound', 'symbol': '£'},
+    {'code': 'USD', 'name': 'US Dollar',       'symbol': '\$'},
+    {'code': 'EUR', 'name': 'Euro',             'symbol': '€'},
+    {'code': 'SAR', 'name': 'Saudi Riyal',      'symbol': '﷼'},
+    {'code': 'AED', 'name': 'UAE Dirham',       'symbol': 'د.إ'},
+    {'code': 'GBP', 'name': 'British Pound',    'symbol': '£'},
   ];
 
-  final _languages = ['English', 'العربية', 'Français'];
+  static const _languages = ['English', 'العربية', 'Français'];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsProvider);
+    final notifier = ref.read(appSettingsProvider.notifier);
+    final selectedCurrency = settings.currency;
+    final selectedLanguage = settings.language;
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
         title: Text('Currency & Language', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
@@ -60,7 +59,38 @@ class _CurrencyLanguageScreenState extends State<CurrencyLanguageScreen> {
               child: Column(
                 children: [
                   for (int i = 0; i < _currencies.length; i++) ...[
-                    _buildCurrencyTile(_currencies[i]),
+                    _buildCurrencyTile(
+                      _currencies[i],
+                      isSelected: selectedCurrency == _currencies[i]['code'],
+                      onTap: () async {
+                        final code = _currencies[i]['code']!;
+                        if (selectedCurrency == code) return;
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Change Currency?'),
+                            content: Text(
+                              'Switching to $code will update all displayed '
+                              'amounts. Existing data will not be converted.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                child: const Text('Change'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true) {
+                          HapticFeedback.lightImpact();
+                          notifier.setCurrency(code);
+                        }
+                      },
+                    ),
                     if (i < _currencies.length - 1)
                       Divider(height: 1, color: AppColors.borderLight.withValues(alpha: 0.5), indent: 56),
                   ],
@@ -83,7 +113,14 @@ class _CurrencyLanguageScreenState extends State<CurrencyLanguageScreen> {
               child: Column(
                 children: [
                   for (int i = 0; i < _languages.length; i++) ...[
-                    _buildLanguageTile(_languages[i]),
+                    _buildLanguageTile(
+                      _languages[i],
+                      isSelected: selectedLanguage == _languages[i],
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        notifier.setLanguage(_languages[i]);
+                      },
+                    ),
                     if (i < _languages.length - 1)
                       Divider(height: 1, color: AppColors.borderLight.withValues(alpha: 0.5), indent: 56),
                   ],
@@ -111,15 +148,15 @@ class _CurrencyLanguageScreenState extends State<CurrencyLanguageScreen> {
     );
   }
 
-  Widget _buildCurrencyTile(Map<String, String> currency) {
-    final isSelected = _selectedCurrency == currency['code'];
+  Widget _buildCurrencyTile(
+    Map<String, String> currency, {
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          setState(() => _selectedCurrency = currency['code']!);
-        },
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
@@ -178,15 +215,15 @@ class _CurrencyLanguageScreenState extends State<CurrencyLanguageScreen> {
     );
   }
 
-  Widget _buildLanguageTile(String language) {
-    final isSelected = _selectedLanguage == language;
+  Widget _buildLanguageTile(
+    String language, {
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          setState(() => _selectedLanguage = language);
-        },
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(

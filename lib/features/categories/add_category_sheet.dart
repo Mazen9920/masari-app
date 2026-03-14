@@ -74,10 +74,14 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
 
     final color = _colors[_selectedColorIndex];
     final category = CategoryData(
+      id: 'cat_${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
+      userId: '',
       name: name,
-      icon: _icons[_selectedIconIndex],
-      color: color,
-      bgColor: color.withValues(alpha: 0.1),
+      iconName: CategoryDataUIExt.iconNameFromData(_icons[_selectedIconIndex]),
+      colorValue: color.value,
+      bgColorValue: color.withValues(alpha: 0.1).value,
+      isExpense: _isExpense,
+      budgetLimit: _hasLimit ? double.tryParse(_limitController.text.trim()) : null,
     );
 
     ref.read(categoriesProvider.notifier).addCategory(category);

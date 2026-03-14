@@ -24,13 +24,15 @@ class _ManageCategoriesScreenState
 
   @override
   Widget build(BuildContext context) {
-    final categories = ref.watch(categoriesProvider);
-    final transactions = ref.watch(transactionsProvider);
+    final categoriesAsync = ref.watch(categoriesProvider);
+    final categories = categoriesAsync.value ?? [];
+    final transactions = ref.watch(transactionsProvider).value ?? [];
 
     // Count transactions per category
     final txCountMap = <String, int>{};
     for (final tx in transactions) {
-      txCountMap[tx.category.name] = (txCountMap[tx.category.name] ?? 0) + 1;
+      final cat = CategoryData.findById(tx.categoryId);
+      txCountMap[cat.name] = (txCountMap[cat.name] ?? 0) + 1;
     }
 
     return Scaffold(
@@ -139,11 +141,11 @@ class _ManageCategoriesScreenState
         HapticFeedback.lightImpact();
         if (newIndex > oldIndex) newIndex--;
         final cats = ref.read(categoriesProvider.notifier);
-        final list = List<CategoryData>.from(ref.read(categoriesProvider));
+        final list = List<CategoryData>.from(ref.read(categoriesProvider).value ?? []);
         final item = list.removeAt(oldIndex);
         list.insert(newIndex, item);
         // Update state
-        cats.state = list;
+        cats.state = AsyncValue.data(list);
       },
       itemBuilder: (context, index) {
         final cat = categories[index];
@@ -470,13 +472,13 @@ class _CategoryTileState extends State<_CategoryTile>
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: widget.category.bgColor,
+                            color: widget.category.displayBgColor,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
-                            widget.category.icon,
+                            widget.category.iconData,
                             size: 20,
-                            color: widget.category.color,
+                            color: widget.category.displayColor,
                           ),
                         ),
                         const SizedBox(width: 12),

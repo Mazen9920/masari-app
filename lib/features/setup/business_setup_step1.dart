@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/navigation/app_router.dart';
 import '../auth/widgets/form_components.dart';
 import 'widgets/setup_shell.dart';
-import 'business_setup_step2.dart';
 
 class BusinessSetupStep1 extends StatefulWidget {
   const BusinessSetupStep1({super.key});
@@ -59,9 +60,7 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
       );
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const BusinessSetupStep2()),
-    );
+    context.push(AppRoutes.setupStep2);
   }
 
   @override
@@ -72,7 +71,7 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
       subtitle:
           'Help Masari tailor your financial experience to your specific needs.',
       buttonText: 'Continue',
-      onBack: () => Navigator.of(context).pop(),
+      onBack: () => context.pop(),
       onContinue: _onContinue,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -140,4 +140,31 @@ class AppTypography {
         height: 1.3,
         letterSpacing: 1.0,
       );
+
+  // ─── Metric / Report ───────────────────────────────────
+  static TextStyle get metric => _baseFont.copyWith(
+        fontSize: 32,
+        fontWeight: FontWeight.w800,
+        height: 1.1,
+        letterSpacing: -1,
+      );
+
+  static TextStyle get metricSmall => _baseFont.copyWith(
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
+        height: 1.2,
+      );
+
+  static TextStyle get sectionTitle => _baseFont.copyWith(
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+        height: 1.3,
+      );
+
+  static TextStyle get badge => _baseFont.copyWith(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        height: 1.2,
+        letterSpacing: 0.5,
+      );
 }

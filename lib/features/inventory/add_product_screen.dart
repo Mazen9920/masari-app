@@ -84,19 +84,27 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       return;
     }
 
+    final sku = _skuController.text.trim().isEmpty
+        ? 'SKU-${DateTime.now().millisecondsSinceEpoch % 100000}'
+        : _skuController.text.trim();
+
     final product = Product(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
+      userId: '', // set by provider/repository
       name: _nameController.text.trim(),
-      sku: _skuController.text.trim().isEmpty
-          ? 'SKU-${DateTime.now().millisecondsSinceEpoch % 100000}'
-          : _skuController.text.trim(),
       category: _selectedCategory.isEmpty ? 'Uncategorized' : _selectedCategory,
       supplier: '',
-      costPrice: double.tryParse(_costController.text) ?? 0,
-      sellingPrice: double.tryParse(_priceController.text) ?? 0,
-      currentStock: int.tryParse(_stockController.text) ?? 0,
-      reorderPoint: int.tryParse(_reorderController.text) ?? 10,
       unitOfMeasure: _selectedUom,
+      variants: [
+        ProductVariant(
+          id: '${DateTime.now().millisecondsSinceEpoch}_v0',
+          sku: sku,
+          costPrice: double.tryParse(_costController.text) ?? 0,
+          sellingPrice: double.tryParse(_priceController.text) ?? 0,
+          currentStock: int.tryParse(_stockController.text) ?? 0,
+          reorderPoint: int.tryParse(_reorderController.text) ?? 10,
+        ),
+      ],
     );
 
     ref.read(inventoryProvider.notifier).addProduct(product);

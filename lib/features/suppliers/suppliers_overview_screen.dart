@@ -44,7 +44,7 @@ class _SuppliersOverviewScreenState
 
   @override
   Widget build(BuildContext context) {
-    final suppliers = ref.watch(suppliersProvider);
+    final suppliers = ref.watch(suppliersProvider).value ?? [];
 
     // Filtered list
     final filtered = _applyFilter(suppliers);
@@ -727,7 +727,7 @@ class _SuppliersOverviewScreenState
           IconButton(
             onPressed: () {
               HapticFeedback.lightImpact();
-              _showFilterSheet(ref.read(suppliersProvider));
+              _showFilterSheet(ref.read(suppliersProvider).value ?? []);
             },
             icon: const Icon(Icons.tune_rounded),
             color: AppColors.primaryNavy,

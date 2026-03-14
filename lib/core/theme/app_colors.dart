@@ -37,6 +37,25 @@ class AppColors {
   static const Color borderDark = Color(0xFF30363D);
   static const Color dividerDark = Color(0xFF21262D);
 
+  // ─── Chart Colors ────────────────────────────────────────
+  static const Color chartGreen = Color(0xFF10B981);
+  static const Color chartGreenLight = Color(0xFFF0FDF4);
+  static const Color chartRed = Color(0xFFEF4444);
+  static const Color chartRedLight = Color(0xFFFEF2F2);
+  static const Color chartBlue = Color(0xFF3B82F6);
+  static const Color chartBlueLight = Color(0xFFEFF6FF);
+  static const Color chartOrange = Color(0xFFF59E0B);
+  static const Color chartOrangeLight = Color(0xFFFFFBEB);
+  static const Color chartPurple = Color(0xFF8B5CF6);
+  static const Color chartPurpleLight = Color(0xFFF5F3FF);
+  static const Color chartIndigo = Color(0xFF6366F1);
+
+  // ─── Badge Colors ──────────────────────────────────────
+  static const Color badgeBgPositive = Color(0xFFDCFCE7);
+  static const Color badgeBgNegative = Color(0xFFFEE2E2);
+  static const Color badgeTextPositive = Color(0xFF15803D);
+  static const Color badgeTextNegative = Color(0xFFDC2626);
+
   // ─── Gradients ──────────────────────────────────────────
   static const LinearGradient splashGradient = LinearGradient(
     begin: Alignment.topCenter,
@@ -59,7 +78,7 @@ class AppColors {
   // ─── Shadows ────────────────────────────────────────────
   static List<BoxShadow> get cardShadow => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.06),
+          color: Colors.black.withValues(alpha: 0.06),
           blurRadius: 12,
           offset: const Offset(0, 4),
         ),
@@ -67,7 +86,7 @@ class AppColors {
 
   static List<BoxShadow> get accentShadow => [
         BoxShadow(
-          color: accentOrange.withOpacity(0.3),
+          color: accentOrange.withValues(alpha: 0.3),
           blurRadius: 16,
           offset: const Offset(0, 6),
         ),
@@ -75,7 +94,7 @@ class AppColors {
 
   static List<BoxShadow> get navyShadow => [
         BoxShadow(
-          color: primaryNavy.withOpacity(0.3),
+          color: primaryNavy.withValues(alpha: 0.3),
           blurRadius: 20,
           offset: const Offset(0, 8),
         ),

@@ -11,7 +11,9 @@ import '../../shared/models/supplier_model.dart';
 /// Edit Payment — pre-filled form for modifying an existing payment.
 class EditPaymentScreen extends ConsumerStatefulWidget {
   final String? supplierId;
-  const EditPaymentScreen({super.key, this.supplierId});
+  final dynamic payment;
+  final dynamic supplier;
+  const EditPaymentScreen({super.key, this.supplierId, this.payment, this.supplier});
 
   @override
   ConsumerState<EditPaymentScreen> createState() => _EditPaymentScreenState();
@@ -98,7 +100,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final suppliers = ref.watch(suppliersProvider);
+    final suppliers = ref.watch(suppliersProvider).value ?? [];
     final supplier = suppliers.isNotEmpty
         ? suppliers.firstWhere(
             (s) => s.id == widget.supplierId,

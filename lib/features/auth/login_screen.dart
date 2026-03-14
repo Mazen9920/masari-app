@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/navigation/app_router.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/providers/repository_providers.dart';
 import 'widgets/form_components.dart';
-import 'signup_screen.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -24,17 +29,72 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _onLogin() {
-    if (_formKey.currentState?.validate() ?? false) {
-      // TODO: Implement actual login logic with Firebase/Supabase
-      debugPrint('Login with: ${_emailController.text}');
+  void _onLogin() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _isLoading = true);
+
+    final success = await ref.read(authProvider.notifier).signIn(
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (success) {
+      context.go(AppRoutes.home);
+    } else {
+      final error = ref.read(authProvider).error ?? 'Login failed';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    }
+  }
+
+  void _onGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    final success = await ref.read(authProvider.notifier).signInWithGoogle();
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (success) {
+      context.go(AppRoutes.home);
+    } else {
+      final error = ref.read(authProvider).error ?? 'Google sign-in failed';
+      if (error.contains('cancelled')) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    }
+  }
+
+  void _onAppleSignIn() async {
+    setState(() => _isLoading = true);
+    final success = await ref.read(authProvider.notifier).signInWithApple();
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (success) {
+      context.go(AppRoutes.home);
+    } else {
+      final error = ref.read(authProvider).error ?? 'Apple sign-in failed';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
     }
   }
 
   void _navigateToSignUp() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const SignUpScreen()),
-    );
+    context.go(AppRoutes.signup);
   }
 
   @override
@@ -58,14 +118,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 _buildForgotPassword(),
                 const SizedBox(height: 28),
                 MasariPrimaryButton(
-                  text: 'Log In',
+                  text: _isLoading ? 'Logging in…' : 'Log In',
                   icon: Icons.arrow_forward_rounded,
-                  onPressed: _onLogin,
+                  onPressed: _isLoading ? null : _onLogin,
                 ),
                 const SizedBox(height: 32),
                 SocialLoginButtons(
-                  onGoogleTap: () {},
-                  onAppleTap: () {},
+                  onGoogleTap: _isLoading ? null : _onGoogleSignIn,
+                  onAppleTap: _isLoading ? null : _onAppleSignIn,
                 ),
                 const SizedBox(height: 40),
                 _buildFooterLink(),
@@ -156,8 +216,42 @@ class _LoginScreenState extends State<LoginScreen> {
     return Align(
       alignment: Alignment.centerRight,
       child: GestureDetector(
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password reset link sent to your email')));
+        onTap: () async {
+          final email = _emailController.text.trim();
+          if (email.isEmpty || !email.contains('@')) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Please enter your email address first'),
+            ));
+            return;
+          }
+          final repo = ref.read(authProvider.notifier);
+          // Access the repo through the notifier's mechanism
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Sending password reset link…'),
+          ));
+          // We'll call signIn's repo via the provider pattern
+          // For now, use the auth repository directly through the provider
+          try {
+            final authRepo = ref.read(authRepositoryProvider);
+            final result = await authRepo.resetPassword(email: email);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(result.isSuccess
+                  ? 'Password reset link sent to $email'
+                  : result.error ?? 'Failed to send reset link'),
+              backgroundColor: result.isSuccess ? AppColors.primaryNavy : AppColors.danger,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ));
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Failed to send reset link: $e'),
+              backgroundColor: AppColors.danger,
+            ));
+          }
         },
         child: Text(
           'Forgot Password?',

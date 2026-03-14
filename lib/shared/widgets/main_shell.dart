@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/navigation/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/reports/reports_screen.dart';
-import '../../features/transactions/add_transaction_screen.dart';
 import '../../features/transactions/transactions_list_screen.dart';
 import '../../features/manage/manage_screen.dart';
 
@@ -21,9 +22,9 @@ class _MainShellState extends State<MainShell> {
 
   final List<Widget> _screens = [
     const DashboardScreen(),
-    const ReportsScreen(),
-    const SizedBox(), // FAB placeholder (index 2)
     const TransactionsListScreen(),
+    const SizedBox(), // FAB placeholder (index 2)
+    const ReportsScreen(),
     const ManageScreen(),
   ];
 
@@ -38,24 +39,7 @@ class _MainShellState extends State<MainShell> {
 
   void _openAddTransaction() {
     HapticFeedback.mediumImpact();
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (_, animation, secondaryAnimation) => const AddTransactionScreen(),
-        transitionsBuilder: (_, animation, secondaryAnimation, child) {
-          return SlideTransition(
-            position: Tween(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            )),
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 350),
-      ),
-    );
+    context.push(AppRoutes.addTransaction);
   }
 
   @override
@@ -92,10 +76,10 @@ class _MainShellState extends State<MainShell> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _navItem(0, Icons.dashboard_rounded, 'Home'),
-              _navItem(1, Icons.bar_chart_rounded, 'Reports'),
+              _navItem(1, Icons.receipt_long_rounded, 'Transactions'),
               _buildFAB(),
-              _navItem(3, Icons.receipt_long_rounded, 'Cashflow'), // Changed from index 1 to 3
-              _navItem(4, Icons.grid_view_rounded, 'Manage'), // Changed from index 3 to 4
+              _navItem(3, Icons.bar_chart_rounded, 'Reports'),
+              _navItem(4, Icons.grid_view_rounded, 'Manage'),
             ],
           ),
         ),
@@ -105,57 +89,66 @@ class _MainShellState extends State<MainShell> {
 
   Widget _navItem(int index, IconData icon, String label) {
     final isActive = _currentIndex == index;
-    return GestureDetector(
-      onTap: () => _onTabTap(index),
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 56,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 24,
-              color: isActive ? AppColors.accentOrange : AppColors.textTertiary,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive
-                    ? AppColors.accentOrange
-                    : AppColors.textTertiary,
+    return Semantics(
+      label: '$label tab',
+      button: true,
+      selected: isActive,
+      child: GestureDetector(
+        onTap: () => _onTabTap(index),
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: 56,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 24,
+                color: isActive ? AppColors.accentOrange : AppColors.textTertiary,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.visible,
-            ),
-          ],
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActive
+                      ? AppColors.accentOrange
+                      : AppColors.textTertiary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.visible,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildFAB() {
-    return GestureDetector(
-      onTap: _openAddTransaction,
-      child: Container(
-        width: 52,
-        height: 52,
-        margin: const EdgeInsets.only(bottom: 4),
-        decoration: BoxDecoration(
-          color: AppColors.accentOrange,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.accentOrange.withValues(alpha: 0.4),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
+    return Semantics(
+      label: 'Add transaction',
+      button: true,
+      child: GestureDetector(
+        onTap: _openAddTransaction,
+        child: Container(
+          width: 52,
+          height: 52,
+          margin: const EdgeInsets.only(bottom: 4),
+          decoration: BoxDecoration(
+            color: AppColors.accentOrange,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accentOrange.withValues(alpha: 0.4),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
         ),
-        child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
       ),
     );
   }

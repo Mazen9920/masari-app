@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/category_data.dart';
+import '../../shared/models/payment_model.dart';
 import '../auth/widgets/form_components.dart';
+import '../../shared/utils/safe_pop.dart';
 
 class EditTransactionScreen extends ConsumerStatefulWidget {
   final Transaction transaction;
@@ -19,22 +23,10 @@ class EditTransactionScreen extends ConsumerStatefulWidget {
 class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   bool _isExpense = true;
   String _amount = '0';
-  int _selectedCategoryIndex = 0;
+  String? _selectedCategoryId;
   int _selectedPaymentIndex = 0;
-  bool _isRecurring = false;
   final _noteController = TextEditingController();
-
-  // ─── Category Data ───
-  final List<_Category> _expenseCategories = [
-    _Category('Food', Icons.restaurant_rounded, AppColors.accentOrange),
-    _Category('Transport', Icons.directions_bus_rounded, const Color(0xFF2E86C1)),
-    _Category('Shopping', Icons.shopping_bag_rounded, const Color(0xFF8E44AD)),
-    _Category('Rent', Icons.home_rounded, const Color(0xFF27AE60)),
-    _Category('Entertainment', Icons.movie_rounded, const Color(0xFFE74C3C)),
-    _Category('Health', Icons.medical_services_rounded, const Color(0xFF1ABC9C)),
-    _Category('Education', Icons.school_rounded, const Color(0xFF3498DB)),
-    _Category('More', Icons.grid_view_rounded, AppColors.textTertiary),
-  ];
+  late DateTime _selectedDate;
 
   final List<_PaymentMethod> _paymentMethods = [
     _PaymentMethod('Cash', Icons.payments_rounded),
@@ -43,12 +35,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     _PaymentMethod('Wallet', Icons.account_balance_wallet_rounded),
   ];
 
-  final List<_QuickTag> _quickTags = [
-    _QuickTag('Marketing', 'Meta Ads'),
-    _QuickTag('Transport', 'Uber'),
-    _QuickTag('Food', 'Talabat'),
-    _QuickTag('Office', 'Electricity'),
-  ];
+  bool _isCategoryExpanded = false;
+  String? _selectedSupplierId;
+  final _payeeController = TextEditingController();
 
   @override
   void initState() {
@@ -58,20 +47,35 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     _amount = t.amount.abs().toString();
     _isExpense = t.amount < 0;
     
-    // Find category index
-    final catIndex = _expenseCategories.indexWhere((c) => c.name == t.category.name);
-    if (catIndex != -1) _selectedCategoryIndex = catIndex;
+    _selectedCategoryId = t.categoryId;
 
     // Find payment method index
     final payIndex = _paymentMethods.indexWhere((p) => p.name == t.paymentMethod);
     if (payIndex != -1) _selectedPaymentIndex = payIndex;
 
     _noteController.text = t.note ?? '';
+    _selectedDate = t.dateTime;
+
+    _selectedSupplierId = t.supplierId;
+    
+    // Check if title is custom payee
+    final category = CategoryData.findById(t.categoryId);
+    if (t.supplierId == null && t.title != category.name && t.title != 'Uncategorized') {
+      _payeeController.text = t.title;
+    }
+  }
+
+  List<CategoryData> get _displayCategories {
+    final categories = ref.watch(categoriesProvider).value ?? [];
+    if (categories.isEmpty) return [];
+    
+    return categories.where((c) => c.isExpense == _isExpense).toList();
   }
 
   @override
   void dispose() {
     _noteController.dispose();
+    _payeeController.dispose();
     super.dispose();
   }
 
@@ -120,9 +124,21 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       return;
     }
     
-    // Get the selected category
-    final selectedCategoryData = _expenseCategories[_selectedCategoryIndex];
-    final category = CategoryData.findByName(selectedCategoryData.name);
+    // Get payee name if selected or custom
+    final suppliers = ref.read(suppliersProvider).value ?? [];
+    final supplierName = suppliers.where((s) => s.id == _selectedSupplierId).firstOrNull?.name;
+    final customPayee = _payeeController.text.trim();
+    
+    String finalCategoryId = _selectedCategoryId ?? '';
+    final category = CategoryData.findById(finalCategoryId);
+    
+    // Title order of precedence: Custom Payee > Selected Supplier > Category Name
+    String finalTitle = category.name;
+    if (customPayee.isNotEmpty) {
+      finalTitle = customPayee;
+    } else if (supplierName != null) {
+      finalTitle = supplierName;
+    }
     
     // Get payment method name
     final paymentMethodName = _paymentMethods[_selectedPaymentIndex].name;
@@ -130,22 +146,125 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     // Get note text
     final noteText = _noteController.text.trim();
     
-    final updatedTransaction = widget.transaction.copyWith(
-      title: category.name,
+    // Re-create transaction object directly keeping ID & Dates
+    final updatedTransaction = Transaction(
+      id: widget.transaction.id,
+      userId: widget.transaction.userId,
+      title: finalTitle,
       amount: _isExpense ? -amount : amount,
-      category: category,
+      categoryId: category.id,
+      dateTime: _selectedDate,
       note: noteText.isNotEmpty ? noteText : null,
       paymentMethod: paymentMethodName,
+      supplierId: _selectedSupplierId, 
+      createdAt: widget.transaction.createdAt,
+      updatedAt: DateTime.now(), // Update timestamp
     );
     
-    ref.read(transactionsProvider.notifier).updateTransaction(updatedTransaction);
+    final transNotifier = ref.read(transactionsProvider.notifier);
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Optimistic update — state changes immediately before Firestore write
+    transNotifier.updateTransaction(updatedTransaction);
+
+    // ── Sync supplier payment if this is a supplier-payment transaction ──
+    if (widget.transaction.categoryId == 'cat_supplier_payment' &&
+        widget.transaction.supplierId != null) {
+      _syncSupplierPayment(
+        ref,
+        originalTransaction: widget.transaction,
+        updatedTransaction: updatedTransaction,
+      );
+    }
+
+    context.safePop();
     
     // Show success feedback
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       const SnackBar(content: Text('Transaction updated')),
     );
-    
-    Navigator.of(context).pop();
+  }
+
+  /// When a supplier-payment transaction is edited, sync the amount and date
+  /// changes back to the corresponding [Payment] and the supplier balance.
+  void _syncSupplierPayment(
+    WidgetRef ref, {
+    required Transaction originalTransaction,
+    required Transaction updatedTransaction,
+  }) {
+    final oldAmount = originalTransaction.amount.abs();
+    final newAmount = updatedTransaction.amount.abs();
+    final amountDiff = newAmount - oldAmount;
+
+    // Find the linked Payment by matching supplier + original amount + date
+    final payments = ref.read(paymentsProvider);
+    final linkedPayment = payments.cast<Payment?>().firstWhere(
+      (p) =>
+          p!.supplierId == originalTransaction.supplierId &&
+          p.amount == oldAmount &&
+          p.date.year == originalTransaction.dateTime.year &&
+          p.date.month == originalTransaction.dateTime.month &&
+          p.date.day == originalTransaction.dateTime.day,
+      orElse: () => null,
+    );
+
+    if (linkedPayment != null) {
+      // Update the Payment record
+      ref.read(paymentsProvider.notifier).updatePayment(
+        linkedPayment.copyWith(
+          amount: newAmount,
+          date: updatedTransaction.dateTime,
+          method: updatedTransaction.paymentMethod,
+          notes: updatedTransaction.note ?? linkedPayment.notes,
+        ),
+      );
+    }
+
+    // Adjust supplier balance for the difference
+    if (amountDiff != 0 && originalTransaction.supplierId != null) {
+      ref
+          .read(suppliersProvider.notifier)
+          .recordPayment(originalTransaction.supplierId!, amountDiff);
+
+      // Recalculate purchase payment statuses based on updated payment amounts
+      _recalcPurchaseStatuses(ref, originalTransaction.supplierId!);
+    }
+  }
+
+  /// Recalculate purchase payment statuses for a supplier based on all
+  /// Payment records that reference those purchases.
+  void _recalcPurchaseStatuses(WidgetRef ref, String supplierId) {
+    final allPayments = ref.read(paymentsProvider);
+    final allPurchases = ref.read(purchasesProvider);
+    final supplierPurchases =
+        allPurchases.where((p) => p.supplierId == supplierId).toList();
+
+    for (final purchase in supplierPurchases) {
+      final totalPaidFromPayments = allPayments
+          .where((pay) => pay.appliedToPurchaseIds.contains(purchase.id))
+          .fold<double>(0, (s, pay) => s + pay.amount);
+
+      int newStatus;
+      double newAmountPaid;
+      if (totalPaidFromPayments >= purchase.total) {
+        newStatus = 2; // Fully Paid
+        newAmountPaid = purchase.total;
+      } else if (totalPaidFromPayments > 0) {
+        newStatus = 1; // Partial
+        newAmountPaid = totalPaidFromPayments;
+      } else {
+        newStatus = 0; // Unpaid
+        newAmountPaid = 0;
+      }
+
+      if (purchase.paymentStatus != newStatus ||
+          purchase.amountPaid != newAmountPaid) {
+        ref.read(purchasesProvider.notifier).updatePurchase(
+              purchase.copyWith(
+                  paymentStatus: newStatus, amountPaid: newAmountPaid),
+            );
+      }
+    }
   }
 
   @override
@@ -202,7 +321,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => context.safePop(),
             icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
           ),
           Text(
@@ -250,7 +369,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                     boxShadow: [
                       BoxShadow(
                         color: (_isExpense ? AppColors.danger : AppColors.success)
-                            .withOpacity(0.25),
+                            .withValues(alpha: 0.25),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -266,7 +385,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                   child: GestureDetector(
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      setState(() => _isExpense = true);
+                      setState(() {
+                        _isExpense = true;
+                        final cats = _displayCategories;
+                        _selectedCategoryId = cats.isNotEmpty ? cats.first.id : null;
+                      });
                     },
                     child: Center(
                       child: Text(
@@ -283,7 +406,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                   child: GestureDetector(
                     onTap: () {
                       HapticFeedback.lightImpact();
-                      setState(() => _isExpense = false);
+                      setState(() {
+                        _isExpense = false;
+                        final cats = _displayCategories;
+                        _selectedCategoryId = cats.isNotEmpty ? cats.first.id : null;
+                      });
                     },
                     child: Center(
                       child: Text(
@@ -327,7 +454,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                'EGP ',
+                '${ref.watch(appSettingsProvider).currency} ',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
@@ -419,82 +546,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   }
 
   // ═══════════════════════════════════════════════════
-  //  QUICK TAGS
   // ═══════════════════════════════════════════════════
-  Widget _buildQuickTags() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Text(
-                  'MOST USED',
-                  style: AppTypography.captionSmall.copyWith(
-                    color: AppColors.accentOrange,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  'RECENT',
-                  style: AppTypography.captionSmall.copyWith(
-                    color: AppColors.textTertiary,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 36,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: _quickTags.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (_, index) {
-                final tag = _quickTags[index];
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.backgroundLight,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.borderLight),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        tag.category,
-                        style: AppTypography.captionSmall.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        ' · ${tag.detail}',
-                        style: AppTypography.captionSmall.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // ═══════════════════════════════════════════════════
   //  DETAILS SECTION (categories, payment, date, note, recurring)
@@ -507,7 +559,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         color: AppColors.backgroundLight,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         border: Border(
-          top: BorderSide(color: AppColors.borderLight.withOpacity(0.5)),
+          top: BorderSide(color: AppColors.borderLight.withValues(alpha: 0.5)),
         ),
       ),
       child: Column(
@@ -579,6 +631,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   }
 
   Widget _buildCategoryGrid() {
+    final cats = _displayCategories;
+    final displayLimit = _isCategoryExpanded ? cats.length : 7;
+    
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -588,22 +643,67 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         crossAxisSpacing: 10,
         childAspectRatio: 0.85,
       ),
-      itemCount: _expenseCategories.length,
+      itemCount: cats.length > displayLimit ? displayLimit + 1 : cats.length,
       itemBuilder: (context, index) {
-        final cat = _expenseCategories[index];
-        final isSelected = _selectedCategoryIndex == index;
+        // "More" button
+        if (index == displayLimit && cats.length > displayLimit) {
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              setState(() => _isCategoryExpanded = true);
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                   Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.backgroundLight,
+                    ),
+                    child: const Icon(
+                      Icons.more_horiz_rounded,
+                      size: 20,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'More',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final cat = cats[index];
+        final isSelected = _selectedCategoryId == cat.id;
+
         return GestureDetector(
-          onTap: () => setState(() => _selectedCategoryIndex = index),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            setState(() => _selectedCategoryId = cat.id);
+          },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? cat.color.withOpacity(0.08)
-                  : Colors.white,
+              color: isSelected ? cat.displayColor.withValues(alpha: 0.08) : Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: isSelected
-                  ? Border.all(color: cat.color.withOpacity(0.3))
-                  : null,
+              border: isSelected ? Border.all(color: cat.displayColor.withValues(alpha: 0.3)) : Border.all(color: Colors.transparent),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -613,22 +713,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                   height: 40,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isSelected
-                        ? cat.color
-                        : AppColors.backgroundLight,
+                    color: isSelected ? cat.displayColor : cat.displayBgColor,
                     boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: cat.color.withOpacity(0.3),
-                              blurRadius: 8,
-                            ),
-                          ]
+                        ? [BoxShadow(color: cat.displayColor.withValues(alpha: 0.3), blurRadius: 8)]
                         : null,
                   ),
                   child: Icon(
-                    cat.icon,
+                    cat.iconData,
                     size: 20,
-                    color: isSelected ? Colors.white : AppColors.textTertiary,
+                    color: isSelected ? Colors.white : cat.displayColor,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -637,7 +730,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected ? cat.color : AppColors.textSecondary,
+                    color: isSelected ? cat.displayColor : AppColors.textSecondary,
                   ),
                   textAlign: TextAlign.center,
                   maxLines: 1,
@@ -652,8 +745,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   }
 
   Widget _buildPayeeRow() {
+    final suppliers = ref.watch(suppliersProvider).value ?? [];
+    final selectedSupplier = suppliers.where((s) => s.id == _selectedSupplierId).firstOrNull;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -664,37 +760,115 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           Container(
             width: 36,
             height: 36,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFFEBF5FB), // blue-50
+              color: Color(0xFFEBF5FB), // blue-50
             ),
             child: const Icon(Icons.storefront_rounded,
                 size: 18, color: AppColors.secondaryBlue),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Payee',
-                  style: AppTypography.captionSmall.copyWith(
-                    color: AppColors.textTertiary,
-                  ),
+            child: TextField(
+              controller: _payeeController,
+              decoration: InputDecoration(
+                hintText: selectedSupplier?.name ?? 'Payee Name (Optional)',
+                hintStyle: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textTertiary,
                 ),
-                Text(
-                  'Select Supplier',
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ],
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.textPrimary,
+              ),
+              onChanged: (val) {
+                // If they start typing, clear the selected supplier ID so it uses custom text
+                if (_selectedSupplierId != null) {
+                  setState(() => _selectedSupplierId = null);
+                }
+              },
             ),
           ),
-          const Icon(Icons.chevron_right_rounded,
-              size: 20, color: AppColors.textTertiary),
+          if (selectedSupplier != null || _payeeController.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textTertiary),
+              onPressed: () {
+                setState(() {
+                  _selectedSupplierId = null;
+                  _payeeController.clear();
+                });
+              },
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.list_alt_rounded, size: 20, color: AppColors.textTertiary),
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  useRootNavigator: true,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (ctx) => _buildSupplierSelector(suppliers),
+                );
+              },
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSupplierSelector(List<dynamic> suppliers) {
+    return Container(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Select Payee', style: AppTypography.h3),
+              IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => context.safePop(),
+              )
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: suppliers.length,
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (ctx, i) {
+                final s = suppliers[i];
+                return ListTile(
+                  leading: const Icon(Icons.storefront_rounded, color: AppColors.textSecondary),
+                  title: Text(s.name, style: const TextStyle(fontWeight: FontWeight.w500)),
+                  trailing: const Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.borderLight),
+                  onTap: () {
+                    setState(() {
+                      _selectedSupplierId = s.id;
+                      _payeeController.clear(); // Clear custom text since a supplier is selected
+                    });
+                    Navigator.pop(ctx);
+                  }
+                );
+              }
+            )
+          )
+        ]
+      )
     );
   }
 
@@ -752,24 +926,44 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   }
 
   Widget _buildDateField() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.calendar_today_rounded,
-              size: 20, color: AppColors.textTertiary),
-          const SizedBox(width: 12),
-          Text(
-            'Today, Feb 16',
-            style: AppTypography.labelMedium.copyWith(
-              color: AppColors.textPrimary,
+    final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
+    final label = isToday
+        ? 'Today, ${DateFormat('MMM d').format(_selectedDate)}'
+        : DateFormat('EEE, MMM d, y').format(_selectedDate);
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: _selectedDate,
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+        );
+        if (picked != null) {
+          setState(() => _selectedDate = picked);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_today_rounded,
+                size: 20, color: AppColors.textTertiary),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.textPrimary,
+              ),
             ),
-          ),
-        ],
+            const Spacer(),
+            const Icon(Icons.arrow_drop_down_rounded,
+                size: 20, color: AppColors.textTertiary),
+          ],
+        ),
       ),
     );
   }
@@ -797,71 +991,32 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     );
   }
 
-  Widget _buildRecurringToggle() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFF3E8FF), // purple-50
-            ),
-            child: const Icon(Icons.loop_rounded,
-                size: 20, color: Color(0xFF8B5CF6)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Recurring',
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                if (_isRecurring)
-                  Text(
-                    'Monthly',
-                    style: AppTypography.captionSmall.copyWith(
-                      color: const Color(0xFF8B5CF6),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Switch(
-            value: _isRecurring,
-            onChanged: (v) => setState(() => _isRecurring = v),
-            activeColor: const Color(0xFF8B5CF6),
-          ),
-        ],
-      ),
-    );
-  }
+  // Removed _buildRecurringToggle as it is unused
 
   // ═══════════════════════════════════════════════════
   //  BOTTOM BAR: summary + save button
   // ═══════════════════════════════════════════════════
   Widget _buildBottomBar() {
-    final cat = _expenseCategories[_selectedCategoryIndex];
+    final cats = _displayCategories;
+    CategoryData? cat;
+    if (cats.isNotEmpty) {
+      cat = cats.firstWhere(
+        (c) => c.id == _selectedCategoryId, 
+        orElse: () => CategoryData.findById(_selectedCategoryId ?? ''),
+      );
+    } else {
+      cat = CategoryData.findById(_selectedCategoryId ?? '');
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
-          top: BorderSide(color: AppColors.borderLight.withOpacity(0.5)),
+          top: BorderSide(color: AppColors.borderLight.withValues(alpha: 0.5)),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -896,7 +1051,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         ),
                       ),
                       Text(
-                        ' · EGP $_formattedAmount',
+                        ' · ${ref.watch(appSettingsProvider).currency} $_formattedAmount',
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w800,
@@ -930,12 +1085,6 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 }
 
 // ─── Data Models ───
-class _Category {
-  final String name;
-  final IconData icon;
-  final Color color;
-  const _Category(this.name, this.icon, this.color);
-}
 
 class _PaymentMethod {
   final String name;
@@ -943,8 +1092,4 @@ class _PaymentMethod {
   const _PaymentMethod(this.name, this.icon);
 }
 
-class _QuickTag {
-  final String category;
-  final String detail;
-  const _QuickTag(this.category, this.detail);
-}
+

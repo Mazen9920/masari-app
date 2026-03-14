@@ -71,7 +71,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       if (mounted) {
         setState(() {
           _messages.add(_ChatMessage(
-            text: "This is a simulated AI response to \"$text\". In the future, this will connect to a real AI model backend to provide deep financial insights based on your Masari data.",
+            text: "I'm currently in preview mode. When connected to a real AI backend, I'll be able to analyze your Masari financial data and provide deep insights. Stay tuned!",
             isUser: false,
           ));
         });
@@ -110,6 +110,22 @@ class _AiChatScreenState extends State<AiChatScreen> {
             const Icon(Icons.auto_awesome, color: Color(0xFFE67E22), size: 20),
             const SizedBox(width: 8),
             Text('Masari AI', style: AppTypography.h3),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE67E22).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'Preview',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFE67E22),
+                ),
+              ),
+            ),
           ],
         ),
         centerTitle: true,

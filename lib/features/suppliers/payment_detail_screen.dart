@@ -9,7 +9,9 @@ import 'edit_payment_screen.dart';
 /// Payment Detail — read-only confirmation / receipt view.
 class PaymentDetailScreen extends StatelessWidget {
   final String? paymentId;
-  const PaymentDetailScreen({super.key, this.paymentId});
+  final dynamic payment;
+  final dynamic supplier;
+  const PaymentDetailScreen({super.key, this.paymentId, this.payment, this.supplier});
 
   @override
   Widget build(BuildContext context) {

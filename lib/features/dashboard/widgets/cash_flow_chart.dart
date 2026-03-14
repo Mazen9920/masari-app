@@ -5,7 +5,9 @@ import '../../../core/theme/app_styles.dart';
 /// Cash flow bar chart showing last 6 months.
 /// Current month gets orange highlight + glow effect.
 class CashFlowChart extends StatefulWidget {
-  const CashFlowChart({super.key});
+  final List<CashFlowBarData> data;
+
+  const CashFlowChart({super.key, this.data = const []});
 
   @override
   State<CashFlowChart> createState() => _CashFlowChartState();
@@ -15,17 +17,7 @@ class _CashFlowChartState extends State<CashFlowChart>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _barAnimation;
-  String _selectedPeriod = 'Last 6 Months';
-
-  // Sample data — replace with real data from backend
-  final List<_BarData> _data = [
-    _BarData('May', 0.40),
-    _BarData('Jun', 0.55),
-    _BarData('Jul', 0.45),
-    _BarData('Aug', 0.70),
-    _BarData('Sep', 0.60),
-    _BarData('Oct', 0.85, isCurrent: true),
-  ];
+  final String _selectedPeriod = 'Last 6 Months';
 
   @override
   void initState() {
@@ -102,11 +94,24 @@ class _CashFlowChartState extends State<CashFlowChart>
           AnimatedBuilder(
             animation: _barAnimation,
             builder: (context, _) {
+              if (widget.data.isEmpty) {
+                return SizedBox(
+                  height: 140,
+                  child: Center(
+                    child: Text(
+                      'No cash flow data yet',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ),
+                );
+              }
               return SizedBox(
                 height: 140,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
-                  children: _data.map((bar) {
+                  children: widget.data.map((bar) {
                     return Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -123,7 +128,7 @@ class _CashFlowChartState extends State<CashFlowChart>
     );
   }
 
-  Widget _buildBar(_BarData bar) {
+  Widget _buildBar(CashFlowBarData bar) {
     final animatedFill = bar.fillPercent * _barAnimation.value;
 
     return Column(
@@ -186,10 +191,10 @@ class _CashFlowChartState extends State<CashFlowChart>
   }
 }
 
-class _BarData {
+class CashFlowBarData {
   final String label;
   final double fillPercent; // 0.0 to 1.0
   final bool isCurrent;
 
-  const _BarData(this.label, this.fillPercent, {this.isCurrent = false});
+  const CashFlowBarData(this.label, this.fillPercent, {this.isCurrent = false});
 }

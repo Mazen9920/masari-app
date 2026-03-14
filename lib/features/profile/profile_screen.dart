@@ -1,26 +1,35 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
-import '../../core/providers/app_providers.dart';
-import 'edit_profile_screen.dart';
-import 'business_info_screen.dart';
-import 'currency_language_screen.dart';
-import 'notification_preferences_screen.dart';
-import 'security_screen.dart';
-import 'data_backup_screen.dart';
-import 'help_center_screen.dart';
-import 'about_screen.dart';
-import 'manage_subscription_screen.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/providers/user_profile_provider.dart';
+import '../../core/providers/business_profile_provider.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../../core/navigation/app_router.dart';
+import '../shopify/providers/shopify_connection_provider.dart';
+import '../../shared/utils/safe_pop.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(userProvider);
+    final userProfile     = ref.watch(userProfileProvider);
+    final businessProfile  = ref.watch(businessProfileProvider);
+    final appSettings      = ref.watch(appSettingsProvider);
+    final currencyLangText = '${appSettings.currency} · ${appSettings.language}';
+
+    // Shopify connection status
+    final hasShopifyAccess = ref.watch(hasShopifyAccessProvider);
+    final shopifyConn = hasShopifyAccess
+        ? ref.watch(shopifyConnectionProvider).value
+        : null;
+    final isShopifyConnected = shopifyConn?.isActive ?? false;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -35,7 +44,7 @@ class ProfileScreen extends ConsumerWidget {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                child: _buildProfileCard(context, user.name)
+                child: _buildProfileCard(context, userProfile.initials, userProfile.name, businessProfile.businessName, userProfile.avatarUrl, appSettings.tier)
                     .animate()
                     .fadeIn(duration: 300.ms)
                     .slideY(begin: 0.05),
@@ -55,7 +64,7 @@ class ProfileScreen extends ConsumerWidget {
                       iconColor: const Color(0xFF3B82F6),
                       title: 'Edit Profile',
                       subtitle: 'Name, email, phone',
-                      onTap: () => _navigate(context, const EditProfileScreen()),
+                      onTap: () => context.pushNamed('EditProfileScreen'),
                     ),
                     _SettingItem(
                       icon: Icons.business_rounded,
@@ -63,23 +72,23 @@ class ProfileScreen extends ConsumerWidget {
                       iconColor: const Color(0xFF22C55E),
                       title: 'Business Info',
                       subtitle: 'Company details & tax ID',
-                      onTap: () => _navigate(context, const BusinessInfoScreen()),
+                      onTap: () => context.pushNamed('BusinessInfoScreen'),
                     ),
                     _SettingItem(
                       icon: Icons.language_rounded,
                       iconBg: const Color(0xFFFFF7ED),
                       iconColor: AppColors.accentOrange,
                       title: 'Currency & Language',
-                      subtitle: 'EGP · English',
-                      onTap: () => _navigate(context, const CurrencyLanguageScreen()),
+                      subtitle: currencyLangText,
+                      onTap: () => context.pushNamed('CurrencyLanguageScreen'),
                     ),
                     _SettingItem(
                       icon: Icons.workspace_premium_outlined,
                       iconBg: const Color(0xFFFEF2F2),
                       iconColor: const Color(0xFFEF4444),
                       title: 'Manage Subscription',
-                      subtitle: 'Current plan: Launch Mode',
-                      onTap: () => _navigate(context, const ManageSubscriptionScreen()),
+                      subtitle: 'Current plan: Free',
+                      onTap: () => context.pushNamed('ManageSubscriptionScreen'),
                     ),
                   ],
                 ).animate().fadeIn(duration: 300.ms, delay: 100.ms),
@@ -99,15 +108,24 @@ class ProfileScreen extends ConsumerWidget {
                       iconColor: const Color(0xFFEF4444),
                       title: 'Notification Preferences',
                       subtitle: 'Push, email & alerts',
-                      onTap: () => _navigate(context, const NotificationPreferencesScreen()),
+                      onTap: () => context.pushNamed('NotificationPreferencesScreen'),
                     ),
+                    if (hasShopifyAccess)
+                      _SettingItem(
+                        icon: Icons.store_rounded,
+                        iconBg: const Color(0xFFF5F3FF),
+                        iconColor: const Color(0xFF7C3AED),
+                        title: 'Shopify Integration',
+                        subtitle: isShopifyConnected ? 'Connected' : 'Not connected',
+                        onTap: () => context.push(AppRoutes.shopify),
+                      ),
                     _SettingItem(
                       icon: Icons.lock_outline_rounded,
                       iconBg: const Color(0xFFF5F3FF),
                       iconColor: const Color(0xFF8B5CF6),
                       title: 'Security & PIN',
                       subtitle: 'Biometrics, password',
-                      onTap: () => _navigate(context, const SecurityScreen()),
+                      onTap: () => context.pushNamed('SecurityScreen'),
                     ),
                     _SettingItem(
                       icon: Icons.cloud_upload_outlined,
@@ -115,7 +133,7 @@ class ProfileScreen extends ConsumerWidget {
                       iconColor: const Color(0xFF0EA5E9),
                       title: 'Data & Backup',
                       subtitle: 'Export, restore, auto-backup',
-                      onTap: () => _navigate(context, const DataBackupScreen()),
+                      onTap: () => context.pushNamed('DataBackupScreen'),
                     ),
                   ],
                 ).animate().fadeIn(duration: 300.ms, delay: 200.ms),
@@ -135,7 +153,7 @@ class ProfileScreen extends ConsumerWidget {
                       iconColor: const Color(0xFFF59E0B),
                       title: 'Help Center',
                       subtitle: 'FAQ & contact support',
-                      onTap: () => _navigate(context, const HelpCenterScreen()),
+                      onTap: () => context.pushNamed('HelpCenterScreen'),
                     ),
                     _SettingItem(
                       icon: Icons.info_outline_rounded,
@@ -143,7 +161,7 @@ class ProfileScreen extends ConsumerWidget {
                       iconColor: const Color(0xFF64748B),
                       title: 'About Masari',
                       subtitle: 'Version 1.0.0',
-                      onTap: () => _navigate(context, const AboutScreen()),
+                      onTap: () => context.pushNamed('AboutScreen'),
                     ),
                   ],
                 ).animate().fadeIn(duration: 300.ms, delay: 300.ms),
@@ -153,7 +171,7 @@ class ProfileScreen extends ConsumerWidget {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
-                child: _buildSignOutButton(context)
+                child: _buildSignOutButton(context, ref)
                     .animate()
                     .fadeIn(duration: 300.ms, delay: 400.ms),
               ),
@@ -164,12 +182,6 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  void _navigate(BuildContext context, Widget screen) {
-    HapticFeedback.lightImpact();
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen),
-    );
-  }
 
   Widget _buildHeader(BuildContext context) {
     return Padding(
@@ -177,7 +189,7 @@ class ProfileScreen extends ConsumerWidget {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => context.safePop(),
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
             color: AppColors.primaryNavy,
           ),
@@ -196,8 +208,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildProfileCard(BuildContext context, String userName) {
-    final initials = userName.isNotEmpty ? userName[0].toUpperCase() : 'U';
+  Widget _buildProfileCard(BuildContext context, String initials, String userName, String businessName, String? avatarUrl, SubscriptionTier tier) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -230,15 +241,30 @@ class ProfileScreen extends ConsumerWidget {
               color: Colors.white.withValues(alpha: 0.2),
               border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2),
             ),
-            child: Center(
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            child: ClipOval(
+              child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                  ? CachedNetworkImage(
+                      imageUrl: avatarUrl,
+                      fit: BoxFit.cover,
+                      width: 64,
+                      height: 64,
+                      placeholder: (_, __) => Center(
+                        child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                      ),
+                      errorWidget: (_, __, ___) => Center(
+                        child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                      ),
+                    )
+                  : Center(
+                      child: Text(
+                        initials,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
             ),
           ),
           const SizedBox(width: 16),
@@ -257,7 +283,7 @@ class ProfileScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'TechStyle Egypt',
+                  businessName.isNotEmpty ? businessName : 'My Business',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 14,
@@ -271,9 +297,9 @@ class ProfileScreen extends ConsumerWidget {
                     color: AppColors.accentOrange.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Text(
-                    'Pro Plan',
-                    style: TextStyle(
+                  child: Text(
+                    '${tier.label} Plan',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -285,7 +311,7 @@ class ProfileScreen extends ConsumerWidget {
           ),
           // Edit
           IconButton(
-            onPressed: () => _navigate(context, const EditProfileScreen()),
+            onPressed: () => context.pushNamed('EditProfileScreen'),
             icon: Icon(
               Icons.edit_rounded,
               color: Colors.white.withValues(alpha: 0.7),
@@ -392,7 +418,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSignOutButton(BuildContext context) {
+  Widget _buildSignOutButton(BuildContext context, WidgetRef ref) {
     return OutlinedButton.icon(
       onPressed: () {
         HapticFeedback.mediumImpact();
@@ -407,7 +433,10 @@ class ProfileScreen extends ConsumerWidget {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await ref.read(authProvider.notifier).signOut();
+                },
                 style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
                 child: const Text('Sign Out'),
               ),

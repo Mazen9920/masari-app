@@ -1,24 +1,93 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
-import '../dashboard/widgets/recent_transactions.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/category_data.dart';
-import 'edit_transaction_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../sales/sale_detail_screen.dart';
 
 /// Transaction detail screen showing full info for one transaction.
 /// Reached by tapping a transaction from the dashboard or transaction list.
-class TransactionDetailScreen extends StatelessWidget {
-  final TransactionItem transaction;
+class TransactionDetailScreen extends ConsumerWidget {
+  final Transaction transaction;
 
   const TransactionDetailScreen({super.key, required this.transaction});
 
   @override
-  Widget build(BuildContext context) {
-    final isIncome = transaction.amount > 0;
+  Widget build(BuildContext context, WidgetRef ref) {
+    // If this transaction is linked to a sale/order, show order detail instead
+    final latestTransactions = ref.watch(transactionsProvider).value ?? [];
+    final liveTx = latestTransactions.firstWhere(
+      (t) => t.id == transaction.id,
+      orElse: () => transaction,
+    );
+
+    final sales = ref.watch(salesProvider).value ?? [];
+
+    // 1) Direct saleId link
+    final effectiveSaleId = liveTx.saleId ?? transaction.saleId;
+    if (effectiveSaleId != null) {
+      for (final s in sales) {
+        if (s.id == effectiveSaleId) {
+          return SaleDetailScreen(sale: s);
+        }
+      }
+    }
+
+    // 2) Sale-category transactions → always try to find the matching order
+    if (liveTx.categoryId == 'cat_sales_revenue' ||
+        liveTx.categoryId == 'cat_cogs') {
+
+      // 2a) Try extracting saleId from transaction ID pattern
+      String? extractedSaleId;
+      if (liveTx.id.startsWith('sale_rev_')) {
+        extractedSaleId = liveTx.id.substring('sale_rev_'.length);
+      } else if (liveTx.id.startsWith('sale_cogs_')) {
+        extractedSaleId = liveTx.id.substring('sale_cogs_'.length);
+      }
+      if (extractedSaleId != null) {
+        for (final s in sales) {
+          if (s.id == extractedSaleId) {
+            return SaleDetailScreen(sale: s);
+          }
+        }
+      }
+
+      // 2b) Fallback: match by amount + date for revenue transactions
+      if (liveTx.categoryId == 'cat_sales_revenue') {
+        for (final s in sales) {
+          if (s.total == liveTx.amount &&
+              s.date.year == liveTx.dateTime.year &&
+              s.date.month == liveTx.dateTime.month &&
+              s.date.day == liveTx.dateTime.day) {
+            return SaleDetailScreen(sale: s);
+          }
+        }
+      }
+
+      // 2c) Fallback: match by COGS amount + date
+      if (liveTx.categoryId == 'cat_cogs') {
+        for (final s in sales) {
+          if (-s.totalCogs == liveTx.amount &&
+              s.date.year == liveTx.dateTime.year &&
+              s.date.month == liveTx.dateTime.month &&
+              s.date.day == liveTx.dateTime.day) {
+            return SaleDetailScreen(sale: s);
+          }
+        }
+      }
+    }
+
+    final displayTransaction = liveTx;
+
+    final isIncome = displayTransaction.amount > 0;
+    final currency = ref.watch(appSettingsProvider).currency;
     final formattedAmount =
-        '${isIncome ? '+' : '-'}EGP ${transaction.amount.abs().toStringAsFixed(0)}';
+        '${isIncome ? '+' : '-'}$currency ${displayTransaction.amount.abs().toStringAsFixed(0)}';
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -27,7 +96,7 @@ class TransactionDetailScreen extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
         ),
         title: Text(
@@ -45,28 +114,21 @@ class TransactionDetailScreen extends StatelessWidget {
             onSelected: (value) {
               switch (value) {
                 case 'edit':
-                  // Convert TransactionItem (UI model) to Transaction (Data model)
-                  final trueAmount = transaction.amount;
-                  
-                  final dataTransaction = Transaction(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(), // Use actual ID from DB in real implementation
-                    title: transaction.title,
-                    amount: trueAmount,
-                    dateTime: DateTime.now(), // Use actual Date from DB in real implementation
-                    category: CategoryData.all.firstWhere((c) => c.name == transaction.title, orElse: () => CategoryData.all.first),
-                    note: null,
-                    paymentMethod: 'Cash', // Uses actual method in real implementation
-                  );
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => EditTransactionScreen(transaction: dataTransaction),
-                    ),
-                  );
+                  context.pushNamed('EditTransactionScreen', extra: {'transaction': displayTransaction});
                 case 'duplicate':
                   HapticFeedback.lightImpact();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction duplicated')));
+                  final dup = displayTransaction.copyWith(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    dateTime: DateTime.now(),
+                    createdAt: DateTime.now(),
+                    saleId: null,
+                  );
+                  ref.read(transactionsProvider.notifier).addTransaction(dup);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction duplicated')));
+                  }
                 case 'delete':
-                  _showDeleteDialog(context);
+                  _showDeleteDialog(context, displayTransaction, ref);
               }
             },
             itemBuilder: (_) => [
@@ -85,7 +147,7 @@ class TransactionDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // ─── Amount + Payee + Status ───
-            _buildAmountSection(formattedAmount, isIncome),
+            _buildAmountSection(displayTransaction, formattedAmount, isIncome),
 
             const SizedBox(height: 24),
 
@@ -95,7 +157,7 @@ class TransactionDetailScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             // ─── Detail Info Rows ───
-            _buildInfoCard(),
+            _buildInfoCard(displayTransaction),
 
             const SizedBox(height: 16),
 
@@ -110,7 +172,7 @@ class TransactionDetailScreen extends StatelessWidget {
             const SizedBox(height: 20),
 
             // ─── Bottom Actions ───
-            _buildBottomActions(context),
+            _buildBottomActions(context, displayTransaction, ref),
 
             const SizedBox(height: 40),
           ],
@@ -119,7 +181,7 @@ class TransactionDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAmountSection(String formattedAmount, bool isIncome) {
+  Widget _buildAmountSection(Transaction currentTx, String formattedAmount, bool isIncome) {
     return Column(
       children: [
         // Icon
@@ -132,12 +194,12 @@ class TransactionDetailScreen extends StatelessWidget {
             border: Border.all(color: AppColors.borderLight),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 10,
               ),
             ],
           ),
-          child: Icon(transaction.icon,
+          child: Icon(CategoryData.findById(currentTx.categoryId).iconData,
               color: AppColors.textSecondary, size: 30),
         ),
         const SizedBox(height: 14),
@@ -156,7 +218,7 @@ class TransactionDetailScreen extends StatelessWidget {
 
         // Payee name
         Text(
-          transaction.title,
+          currentTx.title,
           style: AppTypography.bodyMedium.copyWith(
             color: AppColors.textSecondary,
             fontWeight: FontWeight.w500,
@@ -216,7 +278,7 @@ class TransactionDetailScreen extends StatelessWidget {
             border: Border.all(color: AppColors.borderLight),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 6,
               ),
             ],
@@ -237,7 +299,7 @@ class TransactionDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoCard() {
+  Widget _buildInfoCard(Transaction currentTx) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -248,12 +310,12 @@ class TransactionDetailScreen extends StatelessWidget {
         children: [
           _infoRow(
             'Date & Time',
-            transaction.subtitle,
+            currentTx.formattedTime,
             isLast: false,
           ),
           _infoRow(
             'Category',
-            transaction.category,
+            CategoryData.findById(currentTx.categoryId).name,
             isLast: false,
             leadingWidget: Container(
               width: 8,
@@ -266,20 +328,20 @@ class TransactionDetailScreen extends StatelessWidget {
           ),
           _infoRow(
             'Payment Method',
-            'Cash',
+            currentTx.paymentMethod,
             isLast: false,
             leadingWidget: Icon(Icons.payments_rounded,
                 size: 14, color: AppColors.textTertiary),
           ),
           _infoRow(
             'Transaction ID',
-            '#TX-8920394',
+            '#${currentTx.id}',
             isLast: true,
             isMono: true,
             trailingWidget: GestureDetector(
               onTap: () {
                 Clipboard.setData(
-                    const ClipboardData(text: 'TX-8920394'));
+                    ClipboardData(text: currentTx.id));
               },
               child: const Icon(Icons.content_copy_rounded,
                   size: 16, color: AppColors.accentOrange),
@@ -305,7 +367,7 @@ class TransactionDetailScreen extends StatelessWidget {
             ? null
             : Border(
                 bottom: BorderSide(
-                  color: AppColors.borderLight.withOpacity(0.5),
+                  color: AppColors.borderLight.withValues(alpha: 0.5),
                 ),
               ),
       ),
@@ -348,7 +410,7 @@ class TransactionDetailScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF).withOpacity(0.6), // blue-50
+        color: const Color(0xFFEFF6FF).withValues(alpha: 0.6), // blue-50
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFBFDBFE)), // blue-200
       ),
@@ -448,20 +510,40 @@ class TransactionDetailScreen extends StatelessWidget {
     );
   }
 
-  void _showDeleteDialog(BuildContext context) {
+  void _showDeleteDialog(BuildContext context, Transaction transaction, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Delete Transaction', style: AppTypography.h3),
-        content: const Text('This action cannot be undone. Are you sure you want to delete this transaction?'),
+        content: const Text('Are you sure you want to delete this transaction?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
             onPressed: () {
+              // Keep a copy for undo
+              final deleted = transaction;
+              ref.read(transactionsProvider.notifier).removeTransaction(transaction.id);
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(ctx);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction deleted')));
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) context.pop();
+              });
+              messenger.showSnackBar(
+                SnackBar(
+                  content: const Text('Transaction deleted'),
+                  backgroundColor: AppColors.primaryNavy,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  action: SnackBarAction(
+                    label: 'Undo',
+                    textColor: AppColors.accentOrange,
+                    onPressed: () {
+                      ref.read(transactionsProvider.notifier).addTransaction(deleted);
+                    },
+                  ),
+                ),
+              );
             },
             style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
             child: const Text('Delete'),
@@ -471,7 +553,7 @@ class TransactionDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomActions(BuildContext context) {
+  Widget _buildBottomActions(BuildContext context, Transaction currentTx, WidgetRef ref) {
     return Column(
       children: [
         // Duplicate button
@@ -480,6 +562,13 @@ class TransactionDetailScreen extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: () {
               HapticFeedback.lightImpact();
+              final dup = currentTx.copyWith(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                dateTime: DateTime.now(),
+                createdAt: DateTime.now(),
+                saleId: null,
+              );
+              ref.read(transactionsProvider.notifier).addTransaction(dup);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction duplicated')));
             },
             icon: const Icon(Icons.content_copy_rounded, size: 18),
@@ -498,7 +587,7 @@ class TransactionDetailScreen extends StatelessWidget {
 
         // Delete button
         TextButton(
-          onPressed: () => _showDeleteDialog(context),
+          onPressed: () => _showDeleteDialog(context, currentTx, ref),
           child: Text(
             'Delete Transaction',
             style: AppTypography.labelMedium.copyWith(
