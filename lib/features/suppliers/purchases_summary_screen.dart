@@ -1,20 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../../shared/models/purchase_model.dart';
 import '../transactions/transactions_list_screen.dart';
 import '../../shared/models/transaction_model.dart';
-import 'record_purchase_screen.dart';
+import 'purchase_detail_screen.dart';
 
 /// Purchases Summary Dashboard — overview of supplier purchase activity.
-class PurchasesSummaryScreen extends StatelessWidget {
+class PurchasesSummaryScreen extends ConsumerWidget {
   const PurchasesSummaryScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(currencyProvider);
+    final purchases = ref.watch(purchasesProvider);
     final fmt = NumberFormat('#,##0');
+
+    // Compute stats from real data
+    final now = DateTime.now();
+    final thisMonth = purchases.where((p) =>
+        p.date.year == now.year && p.date.month == now.month).toList();
+    final totalThisMonth = thisMonth.fold<double>(0, (s, p) => s + p.total);
+    final totalItems = thisMonth.fold<int>(0, (s, p) => s + p.items.length);
+    final avgOrder = thisMonth.isEmpty ? 0.0 : totalThisMonth / thisMonth.length;
+
+    // Recent 5 purchases
+    final sorted = List<Purchase>.from(purchases)
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final recent = sorted.take(5).toList();
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -30,20 +49,20 @@ class PurchasesSummaryScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _HeroCard(fmt: fmt)
+                    _HeroCard(fmt: fmt, currency: currency, total: totalThisMonth)
                         .animate()
                         .fadeIn(duration: 300.ms)
                         .slideY(begin: 0.04),
                     const SizedBox(height: 16),
-                    _StatsRow(fmt: fmt)
+                    _StatsRow(fmt: fmt, currency: currency, totalItems: totalItems, avgOrder: avgOrder)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 60.ms),
                     const SizedBox(height: 20),
-                    _TrendsChart()
+                    _TrendsChart(purchases: purchases)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 100.ms),
                     const SizedBox(height: 20),
-                    _RecentPurchases(fmt: fmt)
+                    _RecentPurchases(fmt: fmt, currency: currency, recent: recent)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 140.ms),
                   ],
@@ -97,7 +116,9 @@ class PurchasesSummaryScreen extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _HeroCard extends StatelessWidget {
   final NumberFormat fmt;
-  const _HeroCard({required this.fmt});
+  final String currency;
+  final double total;
+  const _HeroCard({required this.fmt, required this.currency, required this.total});
 
   @override
   Widget build(BuildContext context) {
@@ -151,7 +172,7 @@ class _HeroCard extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.7), size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    'Total Purchases (Feb)',
+                    'Total Purchases (${DateFormat('MMM').format(DateTime.now())})',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.8),
                       fontWeight: FontWeight.w500,
@@ -162,7 +183,7 @@ class _HeroCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'EGP ${fmt.format(124500)}',
+                '$currency ${fmt.format(total)}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -181,11 +202,11 @@ class _HeroCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.trending_up_rounded,
+                    Icon(Icons.shopping_bag_rounded,
                         color: Colors.white.withValues(alpha: 0.9), size: 14),
                     const SizedBox(width: 6),
                     Text(
-                      '+18% vs last month',
+                      'This month',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.9),
                         fontWeight: FontWeight.w500,
@@ -208,16 +229,19 @@ class _HeroCard extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _StatsRow extends StatelessWidget {
   final NumberFormat fmt;
-  const _StatsRow({required this.fmt});
+  final String currency;
+  final int totalItems;
+  final double avgOrder;
+  const _StatsRow({required this.fmt, required this.currency, required this.totalItems, required this.avgOrder});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _statCard('Items Ordered', 1240, '+5.2%',
+        Expanded(child: _statCard('Items Ordered', totalItems.toDouble(), '',
             AppColors.primaryNavy, Icons.inventory_2_rounded, fmt, isCurrency: false)),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('Avg. Order', 4200, '-2.1%',
+        Expanded(child: _statCard('Avg. Order', avgOrder, '',
             const Color(0xFF27AE60), Icons.receipt_rounded, fmt, isCurrency: true)),
       ],
     );
@@ -267,22 +291,24 @@ class _StatsRow extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            isCurrency ? 'EGP ${fmt.format(amount)}' : fmt.format(amount),
+            isCurrency ? '$currency ${fmt.format(amount)}' : fmt.format(amount),
             style: TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 20,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            sub,
-            style: TextStyle(
-              color: sub.startsWith('+') ? const Color(0xFF27AE60) : const Color(0xFFC0392B),
-              fontWeight: FontWeight.w500,
-              fontSize: 12,
+          if (sub.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              sub,
+              style: TextStyle(
+                color: sub.startsWith('+') ? const Color(0xFF27AE60) : const Color(0xFFC0392B),
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -293,10 +319,25 @@ class _StatsRow extends StatelessWidget {
 //  PURCHASE TRENDS (bar chart)
 // ═══════════════════════════════════════════════════════
 class _TrendsChart extends StatelessWidget {
+  final List<Purchase> purchases;
+  const _TrendsChart({required this.purchases});
+
   @override
   Widget build(BuildContext context) {
-    const months = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'];
-    const heights = [0.30, 0.55, 0.45, 0.75, 0.60, 0.85];
+    // Compute last 6 months of totals
+    final now = DateTime.now();
+    final monthLabels = <String>[];
+    final monthTotals = <double>[];
+    for (int i = 5; i >= 0; i--) {
+      final m = DateTime(now.year, now.month - i, 1);
+      monthLabels.add(DateFormat('MMM').format(m));
+      final total = purchases
+          .where((p) => p.date.year == m.year && p.date.month == m.month)
+          .fold<double>(0, (s, p) => s + p.total);
+      monthTotals.add(total);
+    }
+    final maxTotal = monthTotals.fold<double>(1, (a, b) => a > b ? a : b);
+    final heights = monthTotals.map((t) => (t / maxTotal).clamp(0.05, 1.0)).toList();
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -368,7 +409,7 @@ class _TrendsChart extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          months[i],
+                          monthLabels[i],
                           style: TextStyle(
                             color: isCurrent
                                 ? AppColors.textPrimary
@@ -397,23 +438,12 @@ class _TrendsChart extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _RecentPurchases extends StatelessWidget {
   final NumberFormat fmt;
-  const _RecentPurchases({required this.fmt});
+  final String currency;
+  final List<Purchase> recent;
+  const _RecentPurchases({required this.fmt, required this.currency, required this.recent});
 
   @override
   Widget build(BuildContext context) {
-    final purchases = [
-      _Purchase('Al-Amal Distributors', 'Feb 24 • Packaging', 5200,
-          Icons.inventory_2_rounded),
-      _Purchase('Cairo Logistics', 'Feb 22 • Shipping', 1500,
-          Icons.local_shipping_rounded),
-      _Purchase('Nile Packaging', 'Feb 20 • Raw Materials', 8400,
-          Icons.layers_rounded),
-      _Purchase('Tech Solutions', 'Feb 18 • Equipment', 12500,
-          Icons.computer_rounded),
-      _Purchase('Smart Office', 'Feb 15 • Stationery', 850,
-          Icons.edit_note_rounded),
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -474,15 +504,25 @@ class _RecentPurchases extends StatelessWidget {
             ],
           ),
           child: Column(
-            children: purchases.asMap().entries.map((e) {
+            children: recent.isEmpty
+                ? [
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        'No purchases yet',
+                        style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                      ),
+                    ),
+                  ]
+                : recent.asMap().entries.map((e) {
               final p = e.value;
-              final isLast = e.key == purchases.length - 1;
+              final isLast = e.key == recent.length - 1;
               return GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const RecordPurchaseScreen(),
+                      builder: (_) => PurchaseDetailScreen(purchase: p),
                     ),
                   );
                 },
@@ -507,7 +547,7 @@ class _RecentPurchases extends StatelessWidget {
                           color: const Color(0xFFF1F5F9),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(p.icon,
+                        child: Icon(Icons.receipt_rounded,
                             color: AppColors.textSecondary, size: 18),
                       ),
                       const SizedBox(width: 12),
@@ -516,7 +556,7 @@ class _RecentPurchases extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              p.name,
+                              p.supplierName,
                               style: TextStyle(
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
@@ -525,7 +565,7 @@ class _RecentPurchases extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              p.sub,
+                              '${DateFormat('MMM dd').format(p.date)} • ${p.referenceNo}',
                               style: TextStyle(
                                 color: AppColors.textTertiary,
                                 fontSize: 12,
@@ -535,7 +575,7 @@ class _RecentPurchases extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'EGP ${fmt.format(p.amount)}',
+                        '$currency ${fmt.format(p.total)}',
                         style: TextStyle(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w700,
@@ -552,11 +592,4 @@ class _RecentPurchases extends StatelessWidget {
       ],
     );
   }
-}
-
-class _Purchase {
-  final String name, sub;
-  final double amount;
-  final IconData icon;
-  const _Purchase(this.name, this.sub, this.amount, this.icon);
 }

@@ -800,6 +800,17 @@ class ShopifySyncService {
         productChanged = true;
       }
 
+      // Sync product image
+      final imageData = sp['image'];
+      final shopifyImageUrl = imageData is Map
+          ? Map<String, dynamic>.from(imageData)['src']?.toString()
+          : null;
+      if (shopifyImageUrl != null &&
+          shopifyImageUrl.isNotEmpty &&
+          product.imageUrl != shopifyImageUrl) {
+        productChanged = true;
+      }
+
       // Sync product options
       final newOptions = shopifyOptions.map((o) {
         final values =
@@ -833,7 +844,7 @@ class ShopifySyncService {
 
         final sv = svMap[mapping.shopifyVariantId];
         if (sv == null) {
-          updatedVariants.add(v);
+          // Shopify variant no longer exists — mark for removal
           continue;
         }
 
@@ -931,14 +942,31 @@ class ShopifySyncService {
         productChanged = true;
       }
 
+      // Detect removed Shopify variants — mappings whose Shopify variant
+      // no longer exists in the Shopify product payload
+      final staleMappings = <ShopifyProductMapping>[];
+      for (final m in productMappings) {
+        if (!svMap.containsKey(m.shopifyVariantId)) {
+          staleMappings.add(m);
+          productChanged = true;
+        }
+      }
+
       if (!productChanged) continue;
 
-      // Persist the updated product
-      final finalVariants = [...updatedVariants, ...newVariants];
+      // Build final variants: kept (updated) + new, excluding removed
+      final removedVarIds = staleMappings.map((m) => m.masariVariantId).toSet();
+      final keptVariants = updatedVariants
+          .where((v) => !removedVarIds.contains(v.id))
+          .toList();
+      final finalVariants = [...keptVariants, ...newVariants];
       final updatedProduct = product.copyWith(
         name: (shopifyTitle != null && shopifyTitle.isNotEmpty)
             ? shopifyTitle
             : product.name,
+        imageUrl: (shopifyImageUrl != null && shopifyImageUrl.isNotEmpty)
+            ? shopifyImageUrl
+            : product.imageUrl,
         options: newOptions.isNotEmpty ? newOptions : product.options,
         variants: finalVariants,
       );
@@ -950,6 +978,13 @@ class ShopifySyncService {
       // Create new mappings
       if (newMappings.isNotEmpty) {
         await _mappingRepo.createMappingsBatch(newMappings);
+      }
+
+      // Delete stale mappings (removed Shopify variants)
+      for (final m in staleMappings) {
+        if (m.id.isNotEmpty) {
+          await _mappingRepo.deleteMapping(m.id);
+        }
       }
 
       changed++;
@@ -1492,8 +1527,13 @@ class ShopifySyncService {
     final paymentStatus = _mapPaymentStatus(
       order['financial_status'] as String?,
     );
-    final orderStatus = _mapOrderStatus(
+    final fulfillmentStatus = _mapFulfillmentStatus(
       order['fulfillment_status'] as String?,
+    );
+    final orderStatus = _deriveOrderStatus(
+      paymentStatus,
+      fulfillmentStatus,
+      order['cancel_reason'] as String?,
     );
 
     final fulfillments = order['fulfillments'] as List<dynamic>? ?? [];
@@ -1526,6 +1566,7 @@ class ShopifySyncService {
           ? subtotal + taxAmount - discountAmount + shippingCost
           : 0,
       orderStatus: orderStatus,
+      fulfillmentStatus: fulfillmentStatus,
       externalOrderId: shopifyOrderId,
       externalSource: 'shopify',
       shopifyOrderNumber: order['order_number']?.toString(),
@@ -1649,15 +1690,33 @@ class ShopifySyncService {
     }
   }
 
-  OrderStatus _mapOrderStatus(String? status) {
+  FulfillmentStatus _mapFulfillmentStatus(String? status) {
     switch (status) {
       case 'fulfilled':
-        return OrderStatus.completed;
+        return FulfillmentStatus.fulfilled;
       case 'partial':
-        return OrderStatus.processing;
+        return FulfillmentStatus.partial;
       default:
-        return OrderStatus.confirmed;
+        return FulfillmentStatus.unfulfilled;
     }
+  }
+
+  OrderStatus _deriveOrderStatus(
+    PaymentStatus payment,
+    FulfillmentStatus fulfillment,
+    String? cancelReason,
+  ) {
+    if (cancelReason == 'declined' || cancelReason == 'fraud') {
+      return OrderStatus.cancelled;
+    }
+    if (payment == PaymentStatus.paid &&
+        fulfillment == FulfillmentStatus.fulfilled) {
+      return OrderStatus.completed;
+    }
+    if (payment.index >= 1 || fulfillment.index >= 1) {
+      return OrderStatus.processing;
+    }
+    return OrderStatus.confirmed;
   }
 
   String _mapDeliveryStatus(String? status) {

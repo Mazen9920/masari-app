@@ -138,6 +138,9 @@ class PurchaseItem {
   final int qty;
   final double unitPrice;
   final int receivedQty;
+  final String? productId;
+  final String? variantId;
+  final String? variantName;
 
   const PurchaseItem({
     required this.name,
@@ -145,6 +148,9 @@ class PurchaseItem {
     required this.qty,
     required this.unitPrice,
     this.receivedQty = 0,
+    this.productId,
+    this.variantId,
+    this.variantName,
   });
 
   double get total => roundMoney(qty * unitPrice);
@@ -156,6 +162,9 @@ class PurchaseItem {
       'qty': qty,
       'unit_price': unitPrice,
       'received_qty': receivedQty,
+      if (productId != null) 'product_id': productId,
+      if (variantId != null) 'variant_id': variantId,
+      if (variantName != null) 'variant_name': variantName,
     };
   }
 
@@ -166,6 +175,9 @@ class PurchaseItem {
       qty: json['qty'] as int? ?? 0,
       unitPrice: (json['unit_price'] as num?)?.toDouble() ?? 0,
       receivedQty: json['received_qty'] as int? ?? 0,
+      productId: json['product_id'] as String?,
+      variantId: json['variant_id'] as String?,
+      variantName: json['variant_name'] as String?,
     );
   }
 
@@ -175,6 +187,9 @@ class PurchaseItem {
     int? qty,
     double? unitPrice,
     int? receivedQty,
+    String? productId,
+    String? variantId,
+    String? variantName,
   }) {
     return PurchaseItem(
       name: name ?? this.name,
@@ -182,6 +197,9 @@ class PurchaseItem {
       qty: qty ?? this.qty,
       unitPrice: unitPrice ?? this.unitPrice,
       receivedQty: receivedQty ?? this.receivedQty,
+      productId: productId ?? this.productId,
+      variantId: variantId ?? this.variantId,
+      variantName: variantName ?? this.variantName,
     );
   }
 }

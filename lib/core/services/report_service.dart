@@ -13,6 +13,9 @@ import 'package:csv/csv.dart' as csv_lib;
 /// Centralised report generation service.
 /// Produces real PDF bytes and CSV strings from live app data.
 class ReportService {
+  // Categories excluded from P&L (non-operating)
+  static const _plExcludedCats = {'cat_investments'};
+
   // ──────────────────────────────────────────────────────
   //  COLOUR PALETTE (PdfColors for PDF widgets)
   // ──────────────────────────────────────────────────────
@@ -74,7 +77,7 @@ class ReportService {
 
     // ── Filter by period ──
     final filtered = transactions.where((tx) {
-      if (tx.excludeFromPL) return false;
+      if (tx.excludeFromPL || _plExcludedCats.contains(tx.categoryId)) return false;
       if (isMonthly) {
         return tx.dateTime.year == periodStart.year &&
             tx.dateTime.month == periodStart.month;
@@ -345,7 +348,7 @@ class ReportService {
 
     // ── P&L aggregation ──
     final plTx = transactions.where((tx) {
-      if (tx.excludeFromPL) return false;
+      if (tx.excludeFromPL || _plExcludedCats.contains(tx.categoryId)) return false;
       return tx.dateTime.year == month.year &&
           tx.dateTime.month == month.month;
     }).toList();

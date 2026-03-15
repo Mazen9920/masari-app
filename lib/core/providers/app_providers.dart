@@ -815,6 +815,18 @@ class SuppliersNotifier extends AsyncNotifier<List<Supplier>> {
     }
   }
 
+  Future<void> recordPurchase(String id, double amount, {DateTime? dueDate}) async {
+    final repo = ref.read(supplierRepositoryProvider);
+    final result = await repo.recordPurchase(id, amount, dueDate: dueDate);
+    if (result.isSuccess && result.data != null) {
+      final current = state.value ?? [];
+      state = AsyncValue.data([
+        for (final s in current)
+          if (s.id == id) result.data! else s,
+      ]);
+    }
+  }
+
   Future<void> refresh() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => build());

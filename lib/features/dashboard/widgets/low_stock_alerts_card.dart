@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/providers/app_settings_provider.dart';
 import '../../../core/navigation/app_router.dart';
 import '../../../shared/models/product_model.dart';
 import '../../../l10n/app_localizations.dart';
@@ -15,6 +16,11 @@ class LowStockAlertsCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+
+    // Respect the low-stock alerts setting
+    final alertsEnabled = ref.watch(appSettingsProvider).lowStockAlerts;
+    if (!alertsEnabled) return const SizedBox.shrink();
+
     final inventoryAsync = ref.watch(inventoryProvider);
     final products = inventoryAsync.value ?? [];
 

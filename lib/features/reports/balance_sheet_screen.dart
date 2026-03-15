@@ -33,6 +33,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
     Future.microtask(() {
       ref.read(inventoryProvider.notifier).loadAll();
       ref.read(salesProvider.notifier).loadAll();
+      ref.read(transactionsProvider.notifier).loadAll();
     });
   }
 
@@ -47,6 +48,14 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
     final inventoryProducts = ref.watch(inventoryProvider).value ?? [];
     final purchases = ref.watch(purchasesProvider);
     final sales = ref.watch(salesProvider).value ?? [];
+    final allTransactions = ref.watch(transactionsProvider).value ?? [];
+
+    // Bank balance = opening cash + all transaction flows (auto-computed from CF)
+    final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
+    final double bankBalance = roundMoney(openingCash + allTransactions.fold(
+      0.0,
+      (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
+    ));
 
     final double inventoryValue = roundMoney(inventoryProducts.fold(0.0, (sum, p) => sum + p.totalCostValue));
 
@@ -70,7 +79,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
         .fold(0.0, (sum, s) => sum + s.outstanding));
 
     // Totals
-    final double totalAssets = roundMoney(bs.bankAccounts + bs.cashOnHand + bs.unpaidInvoices + inventoryValue + accountsReceivable + supplierAdvancePayments);
+    final double totalAssets = roundMoney(bankBalance + bs.cashOnHand + bs.unpaidInvoices + inventoryValue + accountsReceivable + supplierAdvancePayments);
     final double totalLiabilities = roundMoney(suppliersOwing + bs.loans + bs.unpaidSalaries);
     final double netEquity = roundMoney(totalAssets - totalLiabilities);
 
@@ -113,13 +122,9 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                   items: [
                     _SheetItem(
                       label: AppLocalizations.of(context)!.bankAccounts,
-                      amount: bs.bankAccounts,
+                      amount: bankBalance,
                       icon: Icons.account_balance_rounded,
-                      pct: (totalAssets > 0) ? bs.bankAccounts / totalAssets : 0,
-                      onTap: () => _showEditDialog(AppLocalizations.of(context)!.bankAccounts, bs.bankAccounts, (v) {
-                        ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(bankAccounts: v));
-                      }),
-                      isEditable: true,
+                      pct: (totalAssets > 0) ? bankBalance / totalAssets : 0,
                     ),
                     _SheetItem(
                       label: AppLocalizations.of(context)!.cashOnHand,
@@ -321,9 +326,16 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
   Widget _buildTrendChart(NumberFormat fmt) {
     // Calculate historical Net Equity Trend based on transactions
     final transactions = ref.watch(transactionsProvider).value ?? [];
-    // Assuming starting equity factor
     final bs = ref.watch(balanceSheetEntriesProvider);
-    final baseAssets = bs.bankAccounts + bs.cashOnHand + bs.unpaidInvoices;
+
+    // Compute bank balance from CF (opening cash + all transaction flows)
+    final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
+    final double bankBalance = transactions.fold(
+      openingCash,
+      (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
+    );
+
+    final baseAssets = bankBalance + bs.cashOnHand + bs.unpaidInvoices;
     final baseLiabilities = bs.loans + bs.unpaidSalaries;
     // We will calculate backwards: Current Net Equity - net change per month
     
@@ -989,10 +1001,19 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
           final reportSvc = ref.read(reportServiceProvider);
           final shareSvc = ref.read(shareServiceProvider);
           final settings = ref.read(appSettingsProvider);
-          final bs = ref.read(balanceSheetEntriesProvider);
+          final bsManual = ref.read(balanceSheetEntriesProvider);
+          final allTxns = ref.read(transactionsProvider).value ?? [];
           final products = await ref.read(inventoryProvider.future);
           final purchases = ref.read(purchasesProvider);
           final sales = await ref.read(salesProvider.future);
+
+          // Compute bank balance from CF (opening cash + all transaction flows)
+          final computedBank = allTxns.fold(
+            settings.openingCashBalance,
+            (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
+          );
+          final bs = bsManual.copyWith(bankAccounts: computedBank);
+
           final inventoryValue = products.fold<double>(0, (s, p) => s + p.totalCostValue);
           final accountsReceivable = sales
               .where((s) => s.orderStatus != OrderStatus.cancelled)

@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/app_providers.dart';
 import '../../shared/models/supplier_model.dart';
 
 /// Edit Supplier — pre-filled form for modifying existing supplier data.
@@ -32,17 +33,6 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
 
   final _paymentTerms = ['On Receipt', 'Net 15', 'Net 30', 'Net 60'];
   final _currencies = ['EGP - Egyptian Pound', 'USD - US Dollar', 'EUR - Euro'];
-  final _categories = [
-    'Packaging',
-    'Raw Materials',
-    'Logistics',
-    'Maintenance',
-    'Wholesale',
-    'Stationery',
-    'IT Services',
-    'Marketing',
-    'Utilities',
-  ];
 
   bool get _canSave => _nameCtrl.text.trim().isNotEmpty;
 
@@ -76,7 +66,21 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
   void _save() {
     if (!_canSave) return;
     HapticFeedback.mediumImpact();
-    // In a real app, update the supplier via provider
+
+    final updated = widget.supplier.copyWith(
+      name: _nameCtrl.text.trim(),
+      supplierId: _idCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
+      email: _emailCtrl.text.trim(),
+      address: _addressCtrl.text.trim(),
+      notes: _notesCtrl.text.trim(),
+      category: _category,
+      whatsappAvailable: _whatsapp,
+      paymentTerms: _paymentTerms[_paymentTermIdx],
+    );
+
+    ref.read(suppliersProvider.notifier).updateSupplier(widget.supplier.id, updated);
+
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -107,6 +111,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
+              ref.read(suppliersProvider.notifier).removeSupplier(widget.supplier.id);
               Navigator.of(context).pop();
             },
             child: const Text('Delete',
@@ -308,25 +313,34 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
           decoration: _minimalDeco(),
         )),
         _sep(),
-        _fieldRow('Category', GestureDetector(
-          onTap: () => _showPicker(
-            'Select Category',
-            _categories,
-            _categories.indexOf(_category),
-            (i) => setState(() => _category = _categories[i]),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _category.isEmpty ? 'Select' : _category,
-                  style: _valueStyle,
-                ),
+        _fieldRow('Category', Builder(
+          builder: (context) {
+            final categories = ref.watch(categoriesProvider).value ?? [];
+            final categoryNames = categories.map((c) => c.name).toList();
+            if (categoryNames.isEmpty) {
+              categoryNames.addAll(['Packaging', 'Raw Materials', 'Logistics', 'Wholesale']);
+            }
+            return GestureDetector(
+              onTap: () => _showPicker(
+                'Select Category',
+                categoryNames,
+                categoryNames.indexOf(_category),
+                (i) => setState(() => _category = categoryNames[i]),
               ),
-              Icon(Icons.expand_more_rounded,
-                  color: AppColors.textTertiary, size: 22),
-            ],
-          ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _category.isEmpty ? 'Select' : _category,
+                      style: _valueStyle,
+                    ),
+                  ),
+                  Icon(Icons.expand_more_rounded,
+                      color: AppColors.textTertiary, size: 22),
+                ],
+              ),
+            );
+          },
         )),
         _sep(),
         _fieldRow('Supplier ID', TextField(

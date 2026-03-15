@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/hub_settings_provider.dart';
+import '../../core/providers/notifications_provider.dart';
 import '../categories/add_category_sheet.dart';
 import '../shopify/widgets/shopify_sync_status_widget.dart';
 
@@ -339,20 +340,46 @@ class _CleanHeader extends StatelessWidget {
                   HapticFeedback.lightImpact();
                   context.push(AppRoutes.notifications);
                 },
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    border: Border.all(color: AppColors.borderLight),
-                  ),
-                  child: const Icon(
-                    Icons.notifications_outlined,
-                    color: AppColors.textSecondary,
-                    size: 22,
-                  ),
-                ),
+                child: Consumer(builder: (ctx, ref, _) {
+                  final notifCount = ref.watch(notificationCountProvider);
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          border: Border.all(color: AppColors.borderLight),
+                        ),
+                        child: const Icon(
+                          Icons.notifications_outlined,
+                          color: AppColors.textSecondary,
+                          size: 22,
+                        ),
+                      ),
+                      if (notifCount > 0)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppColors.accentOrange,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                            child: Text(
+                              notifCount > 9 ? '9+' : '$notifCount',
+                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                }),
               ),
             ],
           ),

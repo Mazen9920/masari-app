@@ -23,4 +23,7 @@ abstract class SupplierRepository {
 
   /// Records a payment against a supplier's balance.
   Future<Result<Supplier>> recordPayment(String id, double amount);
+
+  /// Records a purchase — atomically increases supplier balance.
+  Future<Result<Supplier>> recordPurchase(String id, double amount, {DateTime? dueDate});
 }

@@ -117,9 +117,12 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     // Get date range for the selected period
     final dateRange = _getDateRange();
 
+    // Categories excluded from P&L (CF investing activities / BS only)
+    const plExcludedCats = {'cat_investments'};
+
     // Filter transactions (exclude P&L-excluded items like supplier payments)
     final filteredTransactions = transactions.where((tx) {
-      if (tx.excludeFromPL) return false;
+      if (tx.excludeFromPL || plExcludedCats.contains(tx.categoryId)) return false;
       return !tx.dateTime.isBefore(dateRange.start) && !tx.dateTime.isAfter(dateRange.end);
     }).toList();
 
@@ -130,7 +133,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     double prevRevenue = 0;
     double prevExpenses = 0;
     for (final tx in transactions) {
-      if (tx.excludeFromPL) continue;
+      if (tx.excludeFromPL || plExcludedCats.contains(tx.categoryId)) continue;
       if (tx.dateTime.isBefore(prevStart) || tx.dateTime.isAfter(prevEnd)) continue;
       if (tx.isIncome) {
         prevRevenue += tx.amount.abs();

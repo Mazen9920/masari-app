@@ -9,7 +9,7 @@ import '../../../core/providers/app_settings_provider.dart';
 import '../providers/shopify_connection_provider.dart';
 
 /// A banner that appears when the Shopify connection has an error/disconnected
-/// status but the user has a Shopify-tier subscription.
+/// status but the user has a Growth subscription (which includes Shopify).
 ///
 /// Shows on screens like dashboard, sales list, etc.
 class ShopifyReconnectBanner extends ConsumerWidget {
@@ -26,7 +26,7 @@ class ShopifyReconnectBanner extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (conn) {
         if (conn == null) {
-          // Has Shopify tier but never connected → show setup CTA
+          // Has Growth tier but never connected → show setup CTA
           return _SetupBanner();
         }
         if (conn.isActive) return const SizedBox.shrink();

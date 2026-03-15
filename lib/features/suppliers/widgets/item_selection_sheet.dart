@@ -6,15 +6,21 @@ import 'package:intl/intl.dart';
 
 class ItemSelectionResult {
   final Product? product;
+  final ProductVariant? variant;
   final String? customName;
 
-  ItemSelectionResult({this.product, this.customName});
+  ItemSelectionResult({this.product, this.variant, this.customName});
 }
 
 class ItemSelectionSheet extends StatefulWidget {
   final List<Product> inventory;
+  final String currency;
 
-  const ItemSelectionSheet({super.key, required this.inventory});
+  const ItemSelectionSheet({
+    super.key,
+    required this.inventory,
+    this.currency = 'EGP',
+  });
 
   @override
   State<ItemSelectionSheet> createState() => _ItemSelectionSheetState();
@@ -126,7 +132,12 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                       final product = _filteredInventory[index];
                       return ListTile(
                         onTap: () {
-                          Navigator.pop(context, ItemSelectionResult(product: product));
+                          if (product.hasVariants && product.variants.length > 1) {
+                            _showVariantPicker(context, product);
+                          } else {
+                            final variant = product.variants.isNotEmpty ? product.variants.first : null;
+                            Navigator.pop(context, ItemSelectionResult(product: product, variant: variant));
+                          }
                         },
                         contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                         leading: Container(
@@ -143,11 +154,12 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                         ),
                         subtitle: Text(
-                          '${product.isMaterial ? 'Raw Material' : 'Product'} • Stock: ${product.currentStock}',
+                          '${product.isMaterial ? 'Raw Material' : 'Product'} • Stock: ${product.currentStock}'
+                          '${product.hasVariants && product.variants.length > 1 ? ' • ${product.variants.length} variants' : ''}',
                           style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
                         ),
                         trailing: Text(
-                          'EGP ${fmt.format(product.costPrice)}',
+                          '${widget.currency} ${fmt.format(product.costPrice)}',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
@@ -207,6 +219,94 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showVariantPicker(BuildContext ctx, Product product) {
+    final fmt = NumberFormat('#,##0', 'en');
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(sheetCtx).size.height * 0.6,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Select Variant — ${product.name}',
+                    style: AppTypography.h3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(sheetCtx),
+                  icon: const Icon(Icons.close_rounded),
+                  color: AppColors.textTertiary,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const BouncingScrollPhysics(),
+                itemCount: product.variants.length,
+                separatorBuilder: (_, __) => Divider(
+                  height: 1,
+                  color: AppColors.borderLight.withValues(alpha: 0.3),
+                ),
+                itemBuilder: (_, i) {
+                  final v = product.variants[i];
+                  return ListTile(
+                    onTap: () {
+                      Navigator.pop(sheetCtx); // close variant picker
+                      Navigator.pop(ctx, ItemSelectionResult(product: product, variant: v));
+                    },
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    leading: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryNavy.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.style_rounded, color: AppColors.primaryNavy, size: 18),
+                    ),
+                    title: Text(
+                      v.displayName,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      'SKU: ${v.sku.isNotEmpty ? v.sku : '—'} • Stock: ${v.currentStock}',
+                      style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                    ),
+                    trailing: Text(
+                      '${widget.currency} ${fmt.format(v.costPrice)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,25 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/notification_settings_provider.dart';
 
-class NotificationPreferencesScreen extends StatefulWidget {
+class NotificationPreferencesScreen extends ConsumerWidget {
   const NotificationPreferencesScreen({super.key});
 
   @override
-  State<NotificationPreferencesScreen> createState() => _NotificationPreferencesScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(notificationSettingsProvider);
+    final notifier = ref.read(notificationSettingsProvider.notifier);
 
-class _NotificationPreferencesScreenState extends State<NotificationPreferencesScreen> {
-  bool _pushNotifications = true;
-  bool _emailNotifications = false;
-  bool _lowStockAlerts = true;
-  bool _paymentReminders = true;
-  bool _weeklyDigest = true;
-  bool _monthlyReport = false;
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -46,8 +39,8 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
                 iconColor: const Color(0xFF3B82F6),
                 title: 'Push Notifications',
                 subtitle: 'Get instant alerts on your device',
-                value: _pushNotifications,
-                onChanged: (v) => setState(() => _pushNotifications = v),
+                value: settings.pushNotifications,
+                onChanged: (v) => notifier.setPush(v),
               ),
               _divider(),
               _buildToggleRow(
@@ -55,8 +48,8 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
                 iconColor: const Color(0xFF8B5CF6),
                 title: 'Email Notifications',
                 subtitle: 'Receive updates via email',
-                value: _emailNotifications,
-                onChanged: (v) => setState(() => _emailNotifications = v),
+                value: settings.emailNotifications,
+                onChanged: (v) => notifier.setEmail(v),
               ),
             ]),
             const SizedBox(height: 24),
@@ -68,8 +61,8 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
                 iconColor: const Color(0xFFEF4444),
                 title: 'Low Stock Alerts',
                 subtitle: 'When items hit minimum quantity',
-                value: _lowStockAlerts,
-                onChanged: (v) => setState(() => _lowStockAlerts = v),
+                value: settings.lowStockAlerts,
+                onChanged: (v) => notifier.setLowStock(v),
               ),
               _divider(),
               _buildToggleRow(
@@ -77,8 +70,8 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
                 iconColor: const Color(0xFFF59E0B),
                 title: 'Payment Reminders',
                 subtitle: 'Upcoming vendor payments',
-                value: _paymentReminders,
-                onChanged: (v) => setState(() => _paymentReminders = v),
+                value: settings.paymentReminders,
+                onChanged: (v) => notifier.setPaymentReminders(v),
               ),
             ]),
             const SizedBox(height: 24),
@@ -90,8 +83,8 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
                 iconColor: const Color(0xFF22C55E),
                 title: 'Weekly Digest',
                 subtitle: 'Summary every Monday morning',
-                value: _weeklyDigest,
-                onChanged: (v) => setState(() => _weeklyDigest = v),
+                value: settings.weeklyDigest,
+                onChanged: (v) => notifier.setWeeklyDigest(v),
               ),
               _divider(),
               _buildToggleRow(
@@ -99,8 +92,8 @@ class _NotificationPreferencesScreenState extends State<NotificationPreferencesS
                 iconColor: const Color(0xFF0EA5E9),
                 title: 'Monthly Report',
                 subtitle: 'Detailed report on the 1st',
-                value: _monthlyReport,
-                onChanged: (v) => setState(() => _monthlyReport = v),
+                value: settings.monthlyReport,
+                onChanged: (v) => notifier.setMonthlyReport(v),
               ),
             ]),
           ],

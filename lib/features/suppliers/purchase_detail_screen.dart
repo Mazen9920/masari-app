@@ -1,23 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../../shared/models/purchase_model.dart';
+import '../../shared/models/supplier_model.dart';
 import 'record_payment_screen.dart';
 import 'record_purchase_screen.dart';
 import 'supplier_detail_screen.dart';
-import '../../shared/models/supplier_model.dart';
 
 /// Purchase receipt detail — status hero, supplier info, items breakdown,
 /// payment terms, sticky action bar.
-class PurchaseDetailScreen extends StatelessWidget {
+class PurchaseDetailScreen extends ConsumerWidget {
   final Supplier? supplier;
-  final dynamic purchase;
+  final Purchase? purchase;
   const PurchaseDetailScreen({super.key, this.supplier, this.purchase});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(currencyProvider);
     final fmt = NumberFormat('#,##0', 'en');
 
     return Scaffold(
@@ -34,22 +38,22 @@ class PurchaseDetailScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     // Status hero card
-                    _StatusHero(fmt: fmt)
+                    _StatusHero(fmt: fmt, purchase: purchase, currency: currency)
                         .animate()
                         .fadeIn(duration: 250.ms),
                     const SizedBox(height: 14),
                     // Supplier info
-                    _SupplierInfo(supplier: supplier)
+                    _SupplierInfo(supplier: supplier, purchase: purchase)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 60.ms),
                     const SizedBox(height: 14),
                     // Items breakdown
-                    _ItemsBreakdown(fmt: fmt)
+                    _ItemsBreakdown(fmt: fmt, purchase: purchase, currency: currency)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 120.ms),
                     const SizedBox(height: 14),
                     // Payment terms
-                    _PaymentTermsCard()
+                    _PaymentTermsCard(purchase: purchase, supplier: supplier)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 180.ms),
                   ],
@@ -60,7 +64,7 @@ class PurchaseDetailScreen extends StatelessWidget {
         ),
       ),
       // Sticky dual CTA
-      bottomSheet: _BottomActions(supplier: supplier),
+      bottomSheet: _BottomActions(supplier: supplier, purchase: purchase),
     );
   }
 
@@ -109,7 +113,9 @@ class PurchaseDetailScreen extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _StatusHero extends StatelessWidget {
   final NumberFormat fmt;
-  const _StatusHero({required this.fmt});
+  final Purchase? purchase;
+  final String currency;
+  const _StatusHero({required this.fmt, this.purchase, required this.currency});
 
   @override
   Widget build(BuildContext context) {
@@ -145,37 +151,49 @@ class _StatusHero extends StatelessWidget {
           Column(
             children: [
               // Status badge
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFD97706),
-                        shape: BoxShape.circle,
+              Builder(builder: (_) {
+                final status = purchase?.paymentStatus ?? 0;
+                final label = purchase?.statusLabel.toUpperCase() ?? 'UNPAID';
+                final color = status == 2
+                    ? const Color(0xFF27AE60)
+                    : status == 1
+                        ? const Color(0xFFD97706)
+                        : const Color(0xFFD97706);
+                final bgColor = status == 2
+                    ? const Color(0xFFF0FDF4)
+                    : const Color(0xFFFEF3C7);
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'UNPAID',
-                      style: TextStyle(
-                        color: Color(0xFFD97706),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
+                      const SizedBox(width: 6),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8,
                       ),
                     ),
                   ],
                 ),
-              ),
+              );
+              }),
               const SizedBox(height: 14),
               // Amount label
               Text(
@@ -188,7 +206,7 @@ class _StatusHero extends StatelessWidget {
               const SizedBox(height: 4),
               // Total
               Text(
-                'EGP ${fmt.format(2050)}',
+                '$currency ${fmt.format(purchase?.total ?? 0)}',
                 style: TextStyle(
                   color: AppColors.primaryNavy,
                   fontSize: 36,
@@ -205,7 +223,7 @@ class _StatusHero extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '#PR-902',
+                  purchase?.referenceNo ?? '',
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 13,
@@ -226,7 +244,8 @@ class _StatusHero extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _SupplierInfo extends StatelessWidget {
   final Supplier? supplier;
-  const _SupplierInfo({this.supplier});
+  final Purchase? purchase;
+  const _SupplierInfo({this.supplier, this.purchase});
 
   @override
   Widget build(BuildContext context) {
@@ -344,7 +363,7 @@ class _SupplierInfo extends StatelessWidget {
                             color: AppColors.textTertiary, size: 14),
                         const SizedBox(width: 4),
                         Text(
-                          '10/24/2023',
+                          purchase != null ? DateFormat('MM/dd/yyyy').format(purchase!.date) : '-',
                           style: TextStyle(
                             color: AppColors.primaryNavy,
                             fontWeight: FontWeight.w600,
@@ -399,15 +418,16 @@ class _SupplierInfo extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _ItemsBreakdown extends StatelessWidget {
   final NumberFormat fmt;
-  const _ItemsBreakdown({required this.fmt});
+  final Purchase? purchase;
+  final String currency;
+  const _ItemsBreakdown({required this.fmt, this.purchase, required this.currency});
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      _Item('Packaging Tape (Heavy Duty)', '5 rolls x EGP 100', 500),
-      _Item('Corrugated Boxes (L)', '50 units x EGP 25', 1250),
-      _Item('Label Stickers', '10 sheets x EGP 15', 150),
-    ];
+    final items = purchase?.items ?? [];
+    final subtotal = purchase?.subtotal ?? 0;
+    final tax = purchase?.tax ?? 0;
+    final total = purchase?.total ?? 0;
 
     return Container(
       decoration: BoxDecoration(
@@ -451,7 +471,46 @@ class _ItemsBreakdown extends StatelessWidget {
             ),
           ),
           // Items
-          ...items.map((item) => _itemRow(item)),
+          ...items.map((item) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: TextStyle(
+                          color: AppColors.primaryNavy,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${item.qty} x $currency ${fmt.format(item.unitPrice)}',
+                        style: TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  '$currency ${fmt.format(item.total)}',
+                  style: TextStyle(
+                    color: AppColors.primaryNavy,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          )),
           // Totals
           Container(
             padding: const EdgeInsets.all(16),
@@ -465,59 +524,16 @@ class _ItemsBreakdown extends StatelessWidget {
             ),
             child: Column(
               children: [
-                _totalRow('Subtotal', 'EGP ${fmt.format(1900)}', false),
+                _totalRow('Subtotal', '$currency ${fmt.format(subtotal)}', false),
                 const SizedBox(height: 8),
-                _totalRow('Tax (VAT 14%)', 'EGP ${fmt.format(150)}', false),
+                _totalRow('Tax', '$currency ${fmt.format(tax)}', false),
                 const SizedBox(height: 10),
                 Divider(
                     height: 1,
                     color: AppColors.borderLight.withValues(alpha: 0.5)),
                 const SizedBox(height: 10),
-                _totalRow('Total', 'EGP ${fmt.format(2050)}', true),
+                _totalRow('Total', '$currency ${fmt.format(total)}', true),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _itemRow(_Item item) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  style: TextStyle(
-                    color: AppColors.primaryNavy,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.detail,
-                  style: TextStyle(
-                    color: AppColors.textTertiary,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            'EGP ${NumberFormat('#,##0').format(item.total)}',
-            style: TextStyle(
-              color: AppColors.primaryNavy,
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
             ),
           ),
         ],
@@ -550,19 +566,17 @@ class _ItemsBreakdown extends StatelessWidget {
   }
 }
 
-class _Item {
-  final String name;
-  final String detail;
-  final double total;
-  const _Item(this.name, this.detail, this.total);
-}
-
 // ═══════════════════════════════════════════════════════
 //  PAYMENT TERMS CARD
 // ═══════════════════════════════════════════════════════
 class _PaymentTermsCard extends StatelessWidget {
+  final Purchase? purchase;
+  final Supplier? supplier;
+  const _PaymentTermsCard({this.purchase, this.supplier});
   @override
   Widget build(BuildContext context) {
+    final dueDate = purchase?.dueDate;
+    final terms = supplier?.paymentTerms ?? 'On Receipt';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -611,7 +625,7 @@ class _PaymentTermsCard extends StatelessWidget {
                             color: const Color(0xFFC0392B), size: 15),
                         const SizedBox(width: 4),
                         Text(
-                          '11/24/2023',
+                          dueDate != null ? DateFormat('MM/dd/yyyy').format(dueDate) : 'N/A',
                           style: TextStyle(
                             color: const Color(0xFFC0392B),
                             fontWeight: FontWeight.w600,
@@ -636,7 +650,7 @@ class _PaymentTermsCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Net 30 Days',
+                      terms,
                       style: TextStyle(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w600,
@@ -682,7 +696,8 @@ class _PaymentTermsCard extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _BottomActions extends StatelessWidget {
   final Supplier? supplier;
-  const _BottomActions({this.supplier});
+  final Purchase? purchase;
+  const _BottomActions({this.supplier, this.purchase});
 
   @override
   Widget build(BuildContext context) {
@@ -706,7 +721,10 @@ class _BottomActions extends StatelessWidget {
                 HapticFeedback.mediumImpact();
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => const RecordPaymentScreen(),
+                    builder: (_) => RecordPaymentScreen(
+                      preselectedSupplierId: supplier?.id,
+                      preselectedPurchaseId: purchase?.id,
+                    ),
                   ),
                 );
               },

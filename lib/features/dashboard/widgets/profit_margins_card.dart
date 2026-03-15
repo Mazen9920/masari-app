@@ -41,21 +41,26 @@ class ProfitMarginsCard extends ConsumerWidget {
     final cogsRatio =
         totalRevenue > 0 ? (totalCogs / totalRevenue * 100) : 0.0;
 
-    // Net margin: Revenue - all expenses from transactions
+    // Net margin: P&L income - expenses (investments excluded from P&L)
+    const plExcludedCats = {'cat_investments'};
     final transactionsAsync = ref.watch(transactionsProvider);
     final transactions = transactionsAsync.value ?? [];
+    double totalIncome = 0;
     double totalExpenses = 0;
     for (final tx in transactions) {
-      if (tx.excludeFromPL) continue;
-      if (!tx.isIncome &&
-          !tx.dateTime.isBefore(range.start) &&
+      if (tx.excludeFromPL || plExcludedCats.contains(tx.categoryId)) continue;
+      if (!tx.dateTime.isBefore(range.start) &&
           !tx.dateTime.isAfter(range.end)) {
-        totalExpenses += tx.amount.abs();
+        if (tx.isIncome) {
+          totalIncome += tx.amount.abs();
+        } else {
+          totalExpenses += tx.amount.abs();
+        }
       }
     }
-    final netProfit = totalRevenue - totalExpenses;
+    final netProfit = totalIncome - totalExpenses;
     final netMargin =
-        totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0.0;
+        totalIncome > 0 ? (netProfit / totalIncome * 100) : 0.0;
 
     final fmt = NumberFormat.compactCurrency(symbol: '$currency ');
 
@@ -100,7 +105,7 @@ class ProfitMarginsCard extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Text(
-             'Revenue: ${fmt.format(totalRevenue)}',
+             'Revenue: ${fmt.format(totalIncome)}',
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textSecondary,
             ),

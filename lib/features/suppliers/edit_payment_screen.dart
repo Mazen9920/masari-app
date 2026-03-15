@@ -6,14 +6,15 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/supplier_model.dart';
+import '../../shared/models/payment_model.dart';
 
 /// Edit Payment — pre-filled form for modifying an existing payment.
 class EditPaymentScreen extends ConsumerStatefulWidget {
   final String? supplierId;
-  final dynamic payment;
-  final dynamic supplier;
-  const EditPaymentScreen({super.key, this.supplierId, this.payment, this.supplier});
+  final Payment? payment;
+  const EditPaymentScreen({super.key, this.supplierId, this.payment});
 
   @override
   ConsumerState<EditPaymentScreen> createState() => _EditPaymentScreenState();
@@ -22,10 +23,8 @@ class EditPaymentScreen extends ConsumerStatefulWidget {
 class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
   late final TextEditingController _amountCtrl;
   late final TextEditingController _notesCtrl;
-  late final TextEditingController _refCtrl;
-  DateTime _paymentDate = DateTime(2023, 10, 24);
-  int _methodIdx = 1; // pre-set Bank Transfer
-  final Set<int> _selectedInvoices = {0};
+  DateTime _paymentDate = DateTime.now();
+  int _methodIdx = 0;
 
   final _methods = [
     _PayMethod(Icons.payments_rounded, 'Cash'),
@@ -34,29 +33,40 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
     _PayMethod(Icons.phone_iphone_rounded, 'Vodafone Cash'),
   ];
 
-  final _invoices = [
-    _Inv('#INV-2023-001', 'Oct 12, 2023', 5000, 'Settled'),
-    _Inv('#INV-2023-004', 'Oct 15, 2023', 2400, 'Partial'),
-  ];
-
   @override
   void initState() {
     super.initState();
-    _amountCtrl = TextEditingController(text: '5000');
-    _notesCtrl = TextEditingController(text: 'Monthly supply payment');
-    _refCtrl = TextEditingController(text: 'PAY-8829-X');
+    final p = widget.payment;
+    _amountCtrl = TextEditingController(text: p != null ? p.amount.toStringAsFixed(0) : '');
+    _notesCtrl = TextEditingController(text: p?.notes ?? '');
+    if (p != null) {
+      _paymentDate = p.date;
+      _methodIdx = _methods.indexWhere((m) => m.label == p.method);
+      if (_methodIdx < 0) _methodIdx = 0;
+    }
   }
 
   @override
   void dispose() {
     _amountCtrl.dispose();
     _notesCtrl.dispose();
-    _refCtrl.dispose();
     super.dispose();
   }
 
   void _save() {
+    final amount = double.tryParse(_amountCtrl.text) ?? 0;
+    if (amount <= 0 || widget.payment == null) return;
     HapticFeedback.mediumImpact();
+
+    final updated = widget.payment!.copyWith(
+      amount: amount,
+      date: _paymentDate,
+      method: _methods[_methodIdx].label,
+      notes: _notesCtrl.text.trim(),
+    );
+
+    ref.read(paymentsProvider.notifier).updatePayment(updated);
+
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -87,6 +97,9 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
+              if (widget.payment != null) {
+                ref.read(paymentsProvider.notifier).removePayment(widget.payment!.id);
+              }
               Navigator.of(context).pop();
             },
             child: const Text('Delete',
@@ -140,12 +153,6 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                     _buildDateMethod()
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 100.ms),
-                    const SizedBox(height: 16),
-
-                    // Reference
-                    _buildReferenceSection()
-                        .animate()
-                        .fadeIn(duration: 250.ms, delay: 120.ms),
                     const SizedBox(height: 16),
 
                     // Invoices
@@ -334,7 +341,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'EGP',
+                ref.watch(currencyProvider),
                 style: TextStyle(
                   color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
@@ -501,49 +508,14 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
   }
 
   // ═══════════════════════════════════════════════════════
-  //  REFERENCE
-  // ═══════════════════════════════════════════════════════
-  Widget _buildReferenceSection() {
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'REFERENCE NUMBER',
-            style: TextStyle(
-              color: AppColors.textTertiary,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _refCtrl,
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w500,
-              fontSize: 15,
-              fontFamily: 'monospace',
-            ),
-            decoration: InputDecoration(
-              hintText: 'e.g. PAY-1234-X',
-              hintStyle:
-                  TextStyle(color: AppColors.textTertiary, fontSize: 14),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-              isDense: true,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════
   //  INVOICES
   // ═══════════════════════════════════════════════════════
   Widget _buildInvoices(NumberFormat fmt) {
+    final currency = ref.watch(currencyProvider);
+    final allPurchases = ref.watch(purchasesProvider);
+    final appliedIds = widget.payment?.appliedToPurchaseIds ?? [];
+    final appliedPurchases = allPurchases.where((p) => appliedIds.contains(p.id)).toList();
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -577,25 +549,22 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
           Divider(
               height: 1,
               color: AppColors.borderLight.withValues(alpha: 0.3)),
-          ..._invoices.asMap().entries.map((e) {
-            final i = e.key;
-            final inv = e.value;
-            final selected = _selectedInvoices.contains(i);
-            return GestureDetector(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                setState(() {
-                  if (selected) {
-                    _selectedInvoices.remove(i);
-                  } else {
-                    _selectedInvoices.add(i);
-                  }
-                });
-              },
-              child: Container(
+          if (appliedPurchases.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'No linked invoices',
+                style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+              ),
+            )
+          else
+            ...appliedPurchases.asMap().entries.map((e) {
+              final i = e.key;
+              final purchase = e.value;
+              return Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  border: i < _invoices.length - 1
+                  border: i < appliedPurchases.length - 1
                       ? Border(
                           bottom: BorderSide(
                             color: AppColors.borderLight
@@ -606,34 +575,15 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                 ),
                 child: Row(
                   children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppColors.primaryNavy
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: selected
-                              ? AppColors.primaryNavy
-                              : AppColors.borderLight,
-                          width: 2,
-                        ),
-                      ),
-                      child: selected
-                          ? const Icon(Icons.check_rounded,
-                              color: Colors.white, size: 14)
-                          : null,
-                    ),
+                    Icon(Icons.receipt_long_rounded,
+                        color: AppColors.textTertiary, size: 20),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            inv.id,
+                            purchase.referenceNo.isNotEmpty ? purchase.referenceNo : '#${purchase.id.substring(0, 8)}',
                             style: TextStyle(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w600,
@@ -641,7 +591,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                             ),
                           ),
                           Text(
-                            inv.date,
+                            DateFormat('MMM dd, yyyy').format(purchase.date),
                             style: TextStyle(
                               color: AppColors.textTertiary,
                               fontSize: 12,
@@ -654,7 +604,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          'EGP ${fmt.format(inv.amount)}',
+                          '$currency ${fmt.format(purchase.total)}',
                           style: TextStyle(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w600,
@@ -666,15 +616,15 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: inv.status == 'Settled'
+                            color: purchase.paymentStatus == 2
                                 ? const Color(0xFFF0FDF4)
                                 : const Color(0xFFFFF7ED),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            inv.status,
+                            purchase.statusLabel,
                             style: TextStyle(
-                              color: inv.status == 'Settled'
+                              color: purchase.paymentStatus == 2
                                   ? const Color(0xFF27AE60)
                                   : const Color(0xFFE67E22),
                               fontWeight: FontWeight.w600,
@@ -686,9 +636,8 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                     ),
                   ],
                 ),
-              ),
-            );
-          }),
+              );
+            }),
         ],
       ),
     );
@@ -813,10 +762,4 @@ class _PayMethod {
   final IconData icon;
   final String label;
   const _PayMethod(this.icon, this.label);
-}
-
-class _Inv {
-  final String id, date, status;
-  final double amount;
-  const _Inv(this.id, this.date, this.amount, this.status);
 }

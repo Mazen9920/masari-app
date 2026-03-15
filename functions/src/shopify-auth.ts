@@ -58,6 +58,7 @@ const WEBHOOK_TOPICS = [
   "orders/cancelled",
   "products/update",
   "products/create",
+  "products/delete",
   "inventory_levels/update",
   "app/uninstalled",
 ];

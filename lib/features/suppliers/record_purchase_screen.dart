@@ -6,8 +6,10 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/supplier_model.dart';
 import '../../shared/models/product_model.dart';
+import '../../shared/models/purchase_model.dart';
 import '../../features/suppliers/widgets/item_selection_sheet.dart';
 import 'add_supplier_screen.dart';
 
@@ -41,6 +43,12 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   double get _total => _subtotal + _tax;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedSupplierId = widget.preselectedSupplierId;
+  }
+
+  @override
   void dispose() {
     _refCtrl.dispose();
     _taxCtrl.dispose();
@@ -49,6 +57,49 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   }
 
   void _save() {
+    if (_items.isEmpty) return;
+    final suppliers = ref.read(suppliersProvider).value ?? [];
+    final supplierId = _selectedSupplierId ?? (suppliers.isNotEmpty ? suppliers.first.id : '');
+    final supplierName = suppliers
+        .cast<Supplier?>()
+        .firstWhere((s) => s!.id == supplierId, orElse: () => null)
+        ?.name ?? '';
+    if (supplierId.isEmpty) return;
+
+    final purchase = Purchase(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      supplierId: supplierId,
+      supplierName: supplierName,
+      date: _purchaseDate,
+      referenceNo: _refCtrl.text.trim(),
+      items: _items.map((item) => PurchaseItem(
+        name: item.name,
+        category: item.category,
+        qty: item.qty,
+        unitPrice: item.unitPrice,
+        productId: item.productId,
+        variantId: item.variantId,
+        variantName: item.variantName,
+      )).toList(),
+      tax: _tax,
+      paymentStatus: _paymentStatus,
+      amountPaid: double.tryParse(_paidAmountCtrl.text) ?? 0,
+      dueDate: _dueDate,
+      createdAt: DateTime.now(),
+    );
+
+    ref.read(purchasesProvider.notifier).addPurchase(purchase);
+
+    // Update supplier balance (increase by outstanding amount)
+    final outstandingAmount = purchase.outstanding;
+    if (outstandingAmount > 0) {
+      ref.read(suppliersProvider.notifier).recordPurchase(
+        supplierId,
+        outstandingAmount,
+        dueDate: _dueDate,
+      );
+    }
+
     HapticFeedback.mediumImpact();
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -65,6 +116,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   Widget build(BuildContext context) {
     final suppliers = ref.watch(suppliersProvider).value ?? [];
     final inventory = ref.watch(inventoryProvider).value ?? [];
+    final currency = ref.watch(currencyProvider);
     final fmt = NumberFormat('#,##0.00', 'en');
 
     return Scaffold(
@@ -88,17 +140,17 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                     const SizedBox(height: 16),
                     // Items section
                     // Items section
-                    _buildItemsSection(fmt, inventory)
+                    _buildItemsSection(fmt, inventory, currency)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 60.ms),
                     const SizedBox(height: 16),
                     // Totals section
-                    _buildTotalsSection(fmt)
+                    _buildTotalsSection(fmt, currency)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 120.ms),
                     const SizedBox(height: 16),
                     // Payment status section
-                    _buildPaymentStatusSection()
+                    _buildPaymentStatusSection(currency)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 180.ms),
                     const SizedBox(height: 100),
@@ -419,7 +471,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   // ═══════════════════════════════════════════════════════
   //  SECTION 2 — ITEMS
   // ═══════════════════════════════════════════════════════
-  Widget _buildItemsSection(NumberFormat fmt, List<Product> inventory) {
+  Widget _buildItemsSection(NumberFormat fmt, List<Product> inventory, String currency) {
     return _Card(
       title: 'ITEMS PURCHASED',
       trailing: Container(
@@ -478,17 +530,21 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                               context: context,
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
-                              builder: (context) => ItemSelectionSheet(inventory: inventory),
+                              builder: (context) => ItemSelectionSheet(inventory: inventory, currency: currency),
                             );
 
                             if (result != null) {
                               setState(() {
                                 if (result.product != null) {
                                   final p = result.product!;
+                                  final v = result.variant;
                                   _items[i] = item.copyWith(
                                     name: p.name,
                                     category: p.isMaterial ? 'Raw Material' : p.category,
-                                    unitPrice: p.costPrice,
+                                    unitPrice: v?.costPrice ?? p.costPrice,
+                                    productId: p.id,
+                                    variantId: v?.id,
+                                    variantName: v != null && !v.isDefault ? v.displayName : null,
                                   );
                                 } else if (result.customName != null && result.customName!.isNotEmpty) {
                                   _items[i] = item.copyWith(
@@ -530,7 +586,9 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                         Padding(
                           padding: const EdgeInsets.only(left: 4),
                           child: Text(
-                            item.category,
+                            item.variantName != null
+                                ? '${item.category} • ${item.variantName}'
+                                : item.category,
                             style: TextStyle(
                               color: AppColors.textTertiary,
                               fontSize: 11,
@@ -717,7 +775,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   // ═══════════════════════════════════════════════════════
   //  SECTION 3 — TOTALS
   // ═══════════════════════════════════════════════════════
-  Widget _buildTotalsSection(NumberFormat fmt) {
+  Widget _buildTotalsSection(NumberFormat fmt, String currency) {
     return _Card(
       children: [
         // Subtotal
@@ -727,7 +785,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
             Text('Subtotal',
                 style: TextStyle(
                     color: AppColors.textSecondary, fontSize: 13)),
-            Text('${fmt.format(_subtotal)} EGP',
+            Text('${fmt.format(_subtotal)} $currency',
                 style: TextStyle(
                     color: AppColors.textSecondary, fontSize: 13)),
           ],
@@ -794,7 +852,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                   ),
                 ),
                 const SizedBox(width: 4),
-                Text('EGP',
+                Text(currency,
                     style: TextStyle(
                         color: AppColors.textTertiary, fontSize: 11)),
               ],
@@ -828,7 +886,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                     ),
                   ),
                   TextSpan(
-                    text: ' EGP',
+                    text: ' $currency',
                     style: TextStyle(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w500,
@@ -847,7 +905,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   // ═══════════════════════════════════════════════════════
   //  SECTION 4 — PAYMENT STATUS
   // ═══════════════════════════════════════════════════════
-  Widget _buildPaymentStatusSection() {
+  Widget _buildPaymentStatusSection(String currency) {
     final statusLabels = ['Unpaid', 'Partial', 'Fully Paid'];
 
     return _Card(
@@ -975,7 +1033,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(left: 14, right: 8),
                 child: Text(
-                  'EGP',
+                  currency,
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 14,
@@ -1159,12 +1217,18 @@ class _PurchaseItem {
   final String category;
   final int qty;
   final double unitPrice;
+  final String? productId;
+  final String? variantId;
+  final String? variantName;
 
   const _PurchaseItem({
     required this.name,
     required this.category,
     required this.qty,
     required this.unitPrice,
+    this.productId,
+    this.variantId,
+    this.variantName,
   });
 
   double get total => qty * unitPrice;
@@ -1174,12 +1238,18 @@ class _PurchaseItem {
     String? category,
     int? qty,
     double? unitPrice,
+    String? productId,
+    String? variantId,
+    String? variantName,
   }) {
     return _PurchaseItem(
       name: name ?? this.name,
       category: category ?? this.category,
       qty: qty ?? this.qty,
       unitPrice: unitPrice ?? this.unitPrice,
+      productId: productId ?? this.productId,
+      variantId: variantId ?? this.variantId,
+      variantName: variantName ?? this.variantName,
     );
   }
 }

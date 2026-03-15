@@ -22,27 +22,27 @@ class TransactionFilterSheet extends StatefulWidget {
 class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
   late TransactionType _selectedType;
   late RangeValues _amountRange;
-  late Set<String> _selectedCategories;
+  late Set<String> _selectedCategories; // stores category IDs
 
-  // Categories displayed in filter
-  static final _filterCategories = [
-    CategoryData.findByName('Food & Dining'),
-    CategoryData.findByName('Shopping'),
-    CategoryData.findByName('Transport'),
-    CategoryData.findByName('Utilities'),
-    CategoryData.findByName('Entertainment'),
-    CategoryData.findByName('Health'),
-    CategoryData.findByName('Groceries'),
-    CategoryData.findByName('Bills'),
-    CategoryData.findByName('Rent'),
-    CategoryData.findByName('Education'),
-  ];
+  List<CategoryData> get _filterCategories {
+    final seen = <String>{};
+    final result = <CategoryData>[];
+    for (final c in [...CategoryData.all, ...CategoryData.customCategories]) {
+      if (seen.add(c.id)) result.add(c);
+    }
+    return result;
+  }
 
   @override
   void initState() {
     super.initState();
     _selectedType = widget.initialFilter.type;
-    _amountRange = widget.initialFilter.amountRange;
+    // Clamp infinity to slider max for the UI
+    final end = widget.initialFilter.amountRange.end;
+    _amountRange = RangeValues(
+      widget.initialFilter.amountRange.start,
+      end.isInfinite || end > 10000 ? 10000 : end,
+    );
     _selectedCategories = Set.from(widget.initialFilter.selectedCategories);
   }
 
@@ -57,10 +57,13 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
 
   void _apply() {
     HapticFeedback.mediumImpact();
+    // Convert slider max back to infinity (means "no upper cap")
+    final effectiveEnd =
+        _amountRange.end >= 10000 ? double.infinity : _amountRange.end;
     Navigator.of(context).pop(
-      TransactionFilter(
+      widget.initialFilter.copyWith(
         type: _selectedType,
-        amountRange: _amountRange,
+        amountRange: RangeValues(_amountRange.start, effectiveEnd),
         selectedCategories: _selectedCategories,
       ),
     );
@@ -69,8 +72,8 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
   int get _activeFilterCount {
     int count = 0;
     if (_selectedType != TransactionType.all) count++;
-    if (_amountRange != const RangeValues(0, 10000)) count++;
-    count += _selectedCategories.length;
+    if (_amountRange.start > 0 || _amountRange.end < 10000) count++;
+    if (_selectedCategories.isNotEmpty) count++;
     return count;
   }
 
@@ -368,7 +371,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
         const SizedBox(height: 12),
         ...List.generate(_filterCategories.length, (index) {
           final cat = _filterCategories[index];
-          final isChecked = _selectedCategories.contains(cat.name);
+          final isChecked = _selectedCategories.contains(cat.id);
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: GestureDetector(
@@ -376,9 +379,9 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                 HapticFeedback.selectionClick();
                 setState(() {
                   if (isChecked) {
-                    _selectedCategories.remove(cat.name);
+                    _selectedCategories.remove(cat.id);
                   } else {
-                    _selectedCategories.add(cat.name);
+                    _selectedCategories.add(cat.id);
                   }
                 });
               },

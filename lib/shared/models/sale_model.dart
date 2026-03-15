@@ -23,6 +23,14 @@ enum OrderStatus {
   cancelled,  // 4 – cancelled (stock restored, txns zeroed)
 }
 
+/// Fulfillment status — tracks whether the order has been shipped/delivered.
+/// For Shopify-synced orders this maps directly from Shopify's fulfillment_status.
+enum FulfillmentStatus {
+  unfulfilled, // 0 – nothing shipped yet
+  partial,     // 1 – some items shipped
+  fulfilled,   // 2 – all items shipped / delivered
+}
+
 /// A single line-item within a sale.
 class SaleItem {
   final String? productId;
@@ -117,6 +125,9 @@ class Sale {
   // Order lifecycle
   final OrderStatus orderStatus;
 
+  // Fulfillment tracking (Shopify-synced; manual orders default to unfulfilled)
+  final FulfillmentStatus fulfillmentStatus;
+
   // Shopify-ready fields
   final String? externalOrderId;
   final String? externalSource;
@@ -149,6 +160,7 @@ class Sale {
     this.createdAt,
     this.updatedAt,
     this.orderStatus = OrderStatus.confirmed,
+    this.fulfillmentStatus = FulfillmentStatus.unfulfilled,
     this.externalOrderId,
     this.externalSource,
     this.shopifyOrderNumber,
@@ -187,6 +199,15 @@ class Sale {
   double get outstanding =>
       roundMoney((total - amountPaid).clamp(0.0, double.maxFinite));
 
+  /// Whether this order is fully completed (paid + fulfilled).
+  bool get isCompleted =>
+      paymentStatus == PaymentStatus.paid &&
+      fulfillmentStatus == FulfillmentStatus.fulfilled &&
+      orderStatus != OrderStatus.cancelled;
+
+  /// Whether this is a Shopify-synced order.
+  bool get isShopifyOrder => externalSource == 'shopify';
+
   // ── copyWith ─────────────────────────────────────────────
 
   Sale copyWith({
@@ -204,6 +225,7 @@ class Sale {
     DateTime? createdAt,
     DateTime? updatedAt,
     OrderStatus? orderStatus,
+    FulfillmentStatus? fulfillmentStatus,
     String? externalOrderId,
     String? externalSource,
     String? shopifyOrderNumber,
@@ -231,6 +253,7 @@ class Sale {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       orderStatus: orderStatus ?? this.orderStatus,
+      fulfillmentStatus: fulfillmentStatus ?? this.fulfillmentStatus,
       externalOrderId: externalOrderId ?? this.externalOrderId,
       externalSource: externalSource ?? this.externalSource,
       shopifyOrderNumber: shopifyOrderNumber ?? this.shopifyOrderNumber,
@@ -262,6 +285,7 @@ class Sale {
         if (createdAt != null) 'created_at': Timestamp.fromDate(createdAt!),
         if (updatedAt != null) 'updated_at': Timestamp.fromDate(updatedAt!),
         'order_status': orderStatus.index,
+        'fulfillment_status': fulfillmentStatus.index,
         if (externalOrderId != null) 'external_order_id': externalOrderId,
         if (externalSource != null) 'external_source': externalSource,
         if (shopifyOrderNumber != null) 'shopify_order_number': shopifyOrderNumber,
@@ -318,6 +342,27 @@ class Sale {
         ? rawOrder
         : 1; // default confirmed
 
+    final rawFulfill = (json['fulfillment_status'] as num?)?.toInt();
+    int fulfillIdx;
+    if (rawFulfill != null &&
+        rawFulfill >= 0 &&
+        rawFulfill < FulfillmentStatus.values.length) {
+      fulfillIdx = rawFulfill;
+    } else if (json['external_source'] == 'shopify') {
+      // Derive from legacy data: old Shopify orders stored fulfillment
+      // inside order_status (fulfilled → completed=3, partial → processing=2)
+      final ds = json['delivery_status']?.toString();
+      if (ds == 'delivered' || orderIdx == 3) {
+        fulfillIdx = 2; // fulfilled
+      } else if (ds == 'partially_shipped' || orderIdx == 2) {
+        fulfillIdx = 1; // partial
+      } else {
+        fulfillIdx = 0; // unfulfilled
+      }
+    } else {
+      fulfillIdx = 0; // default unfulfilled
+    }
+
     return Sale(
       id: json['id']?.toString() ?? '',
       userId: json['user_id']?.toString() ?? 'system',
@@ -337,6 +382,7 @@ class Sale {
       createdAt: _parseDateNullable(json['created_at']),
       updatedAt: _parseDateNullable(json['updated_at']),
       orderStatus: OrderStatus.values[orderIdx],
+      fulfillmentStatus: FulfillmentStatus.values[fulfillIdx],
       externalOrderId: json['external_order_id']?.toString(),
       externalSource: json['external_source']?.toString(),
       shopifyOrderNumber: json['shopify_order_number']?.toString(),

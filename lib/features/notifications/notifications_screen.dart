@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/notifications_provider.dart';
 
-class NotificationsScreen extends StatefulWidget {
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  State<NotificationsScreen> createState() => _NotificationsScreenState();
+  ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> with SingleTickerProviderStateMixin {
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
-  final List<_NotificationItem> _notifications = [];
 
   @override
   void initState() {
@@ -28,22 +30,45 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     super.dispose();
   }
 
-  List<_NotificationItem> _filtered(String type) {
-    if (type == 'all') return _notifications;
-    return _notifications.where((n) => n.type == type).toList();
+  List<AppNotification> _filtered(List<AppNotification> all, NotificationType? type) {
+    if (type == null) return all;
+    return all.where((n) => n.type == type).toList();
   }
 
-  void _markAllRead() {
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return DateFormat('dd MMM').format(dt);
+  }
+
+  void _onTap(AppNotification item) {
     HapticFeedback.lightImpact();
-    setState(() {
-      for (var n in _notifications) {
-        n.isUnread = false;
-      }
-    });
+    // Mark as read
+    ref.read(readNotificationIdsProvider.notifier).markRead(item.id);
+    // Navigate if route is set
+    if (item.routeName != null) {
+      context.pushNamed(item.routeName!, extra: item.routeExtra);
+    }
+  }
+
+  void _markAllRead(List<AppNotification> notifications) {
+    HapticFeedback.lightImpact();
+    ref
+        .read(readNotificationIdsProvider.notifier)
+        .markAllRead(notifications.map((n) => n.id).toList());
   }
 
   @override
   Widget build(BuildContext context) {
+    final notifications = ref.watch(notificationsProvider);
+    final readIds = ref.watch(readNotificationIdsProvider);
+    final alerts = _filtered(notifications, NotificationType.alert);
+    final updates = _filtered(notifications, NotificationType.update);
+    final hasUnread = notifications.any((n) => !readIds.contains(n.id));
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -56,10 +81,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
         title: Text('Notifications', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
         actions: [
-          TextButton(
-            onPressed: _markAllRead,
-            child: Text('Mark all read', style: TextStyle(color: AppColors.accentOrange, fontWeight: FontWeight.w600, fontSize: 12)),
-          ),
+          if (hasUnread)
+            TextButton(
+              onPressed: () => _markAllRead(notifications),
+              child: Text(
+                'Read All',
+                style: TextStyle(
+                  color: AppColors.secondaryBlue,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
@@ -84,9 +117,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
               labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
               unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
               tabs: [
-                Tab(text: 'All (${_notifications.length})'),
-                Tab(text: 'Alerts (${_filtered('alert').length})'),
-                Tab(text: 'Updates (${_filtered('update').length})'),
+                Tab(text: 'All (${notifications.length})'),
+                Tab(text: 'Alerts (${alerts.length})'),
+                Tab(text: 'Updates (${updates.length})'),
               ],
             ),
           ),
@@ -95,15 +128,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildNotificationList(_filtered('all')),
-          _buildNotificationList(_filtered('alert')),
-          _buildNotificationList(_filtered('update')),
+          _buildNotificationList(notifications, readIds),
+          _buildNotificationList(alerts, readIds),
+          _buildNotificationList(updates, readIds),
         ],
       ),
     );
   }
 
-  Widget _buildNotificationList(List<_NotificationItem> items) {
+  Widget _buildNotificationList(List<AppNotification> items, Set<String> readIds) {
     if (items.isEmpty) {
       return Center(
         child: Column(
@@ -112,14 +145,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
             Icon(Icons.notifications_off_outlined, size: 48, color: AppColors.textTertiary.withValues(alpha: 0.5)),
             const SizedBox(height: 12),
             Text('No notifications', style: TextStyle(fontSize: 15, color: AppColors.textTertiary, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text('You\'re all caught up!', style: TextStyle(fontSize: 13, color: AppColors.textTertiary)),
           ],
         ),
       );
     }
 
-    // Group by today / earlier
-    final today = items.where((n) => n.time.contains('min') || n.time.contains('hour')).toList();
-    final earlier = items.where((n) => !n.time.contains('min') && !n.time.contains('hour')).toList();
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final today = items.where((n) => !n.createdAt.isBefore(todayStart)).toList();
+    final earlier = items.where((n) => n.createdAt.isBefore(todayStart)).toList();
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -129,7 +165,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           _groupTitle('TODAY'),
           const SizedBox(height: 8),
           ...today.asMap().entries.map((e) =>
-            _buildNotificationTile(e.value)
+            _buildNotificationTile(e.value, readIds.contains(e.value.id))
                 .animate()
                 .fadeIn(duration: 250.ms, delay: (e.key * 50).ms)
                 .slideX(begin: 0.03),
@@ -140,7 +176,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
           _groupTitle('EARLIER'),
           const SizedBox(height: 8),
           ...earlier.asMap().entries.map((e) =>
-            _buildNotificationTile(e.value)
+            _buildNotificationTile(e.value, readIds.contains(e.value.id))
                 .animate()
                 .fadeIn(duration: 250.ms, delay: ((today.length + e.key) * 50).ms)
                 .slideX(begin: 0.03),
@@ -160,107 +196,95 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     );
   }
 
-  Widget _buildNotificationTile(_NotificationItem item) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: item.isUnread ? Colors.white : Colors.white.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: item.isUnread ? AppColors.borderLight : AppColors.borderLight.withValues(alpha: 0.5)),
-        boxShadow: item.isUnread
-            ? [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))]
-            : null,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            setState(() => item.isUnread = false);
-          },
+  Widget _buildNotificationTile(AppNotification item, bool isRead) {
+    final isAlert = item.type == NotificationType.alert;
+    return GestureDetector(
+      onTap: () => _onTap(item),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: isRead ? AppColors.backgroundLight : Colors.white,
           borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 42, height: 42,
-                  decoration: BoxDecoration(
-                    color: item.iconBg,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(item.icon, color: item.iconColor, size: 20),
+          border: Border.all(
+            color: isRead
+                ? AppColors.borderLight.withValues(alpha: 0.4)
+                : (isAlert ? AppColors.borderLight : AppColors.borderLight.withValues(alpha: 0.5)),
+          ),
+          boxShadow: (!isRead && isAlert)
+              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(
+                  color: isRead ? item.iconBg.withValues(alpha: 0.5) : item.iconBg,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item.title,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: item.isUnread ? FontWeight.w700 : FontWeight.w600,
-                                color: AppColors.textPrimary,
-                              ),
+                child: Icon(item.icon, color: isRead ? item.iconColor.withValues(alpha: 0.5) : item.iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: isRead ? FontWeight.w500 : (isAlert ? FontWeight.w700 : FontWeight.w600),
+                              color: isRead ? AppColors.textSecondary : AppColors.textPrimary,
                             ),
                           ),
-                          if (item.isUnread)
-                            Container(
-                              width: 8, height: 8,
-                              decoration: const BoxDecoration(
-                                color: AppColors.accentOrange,
-                                shape: BoxShape.circle,
-                              ),
+                        ),
+                        if (!isRead && isAlert)
+                          Container(
+                            width: 8, height: 8,
+                            decoration: BoxDecoration(
+                              color: item.iconColor,
+                              shape: BoxShape.circle,
                             ),
-                        ],
+                          ),
+                        if (!isRead && !isAlert)
+                          Container(
+                            width: 8, height: 8,
+                            decoration: BoxDecoration(
+                              color: AppColors.secondaryBlue,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isRead ? AppColors.textTertiary : AppColors.textSecondary,
+                        height: 1.4,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.subtitle,
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        item.time,
-                        style: TextStyle(fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _timeAgo(item.createdAt),
+                      style: TextStyle(fontSize: 11, color: AppColors.textTertiary, fontWeight: FontWeight.w500),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
-}
-
-class _NotificationItem {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String title;
-  final String subtitle;
-  final String time;
-  bool isUnread;
-  final String type;
-
-  _NotificationItem({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.title,
-    required this.subtitle,
-    required this.time,
-    required this.isUnread,
-    required this.type,
-  });
 }

@@ -233,6 +233,193 @@ class SaleDetailScreen extends ConsumerWidget {
 
   Widget _buildOrderStatusCard(
       BuildContext context, Sale live, WidgetRef ref) {
+    // Shopify-synced orders: show real separate statuses
+    if (live.isShopifyOrder) {
+      return _buildShopifyOrderStatusCard(context, live);
+    }
+    // Manual orders: keep existing stepper
+    return _buildManualOrderStatusCard(context, live, ref);
+  }
+
+  Widget _buildShopifyOrderStatusCard(BuildContext context, Sale live) {
+    final isCancelled = live.orderStatus == OrderStatus.cancelled;
+
+    // Payment status row
+    final (Color payColor, String payLabel, IconData payIcon) =
+        switch (live.paymentStatus) {
+      PaymentStatus.paid => (AppColors.success, 'Paid', Icons.check_circle_rounded),
+      PaymentStatus.partial => (AppColors.warning, 'Partially Paid', Icons.timelapse_rounded),
+      PaymentStatus.refunded => (AppColors.danger, 'Refunded', Icons.replay_rounded),
+      PaymentStatus.unpaid => (const Color(0xFFEF4444), 'Unpaid', Icons.money_off_rounded),
+    };
+
+    // Fulfillment status row
+    final (Color fulfillColor, String fulfillLabel, IconData fulfillIcon) =
+        switch (live.fulfillmentStatus) {
+      FulfillmentStatus.fulfilled => (AppColors.success, 'Fulfilled', Icons.check_circle_rounded),
+      FulfillmentStatus.partial => (AppColors.warning, 'Partially Fulfilled', Icons.timelapse_rounded),
+      FulfillmentStatus.unfulfilled => (AppColors.textTertiary, 'Unfulfilled', Icons.inventory_2_outlined),
+    };
+
+    // Overall badge
+    final (Color badgeColor, String badgeLabel, IconData badgeIcon) = isCancelled
+        ? (AppColors.danger, 'Cancelled', Icons.cancel_outlined)
+        : live.isCompleted
+            ? (AppColors.success, 'Completed', Icons.task_alt_rounded)
+            : (AppColors.warning, 'In Progress', Icons.sync_rounded);
+
+    return _Card(
+      children: [
+        // Header
+        Row(
+          children: [
+            Icon(Icons.local_shipping_rounded,
+                size: 20, color: AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Text(
+              'Order Status',
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(badgeIcon, size: 14, color: badgeColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    badgeLabel,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: badgeColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        if (isCancelled)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.danger.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.cancel_rounded, color: AppColors.danger, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'This order has been cancelled',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else ...[
+          // Payment row
+          _buildStatusRow(
+            icon: payIcon,
+            label: 'Payment',
+            value: payLabel,
+            color: payColor,
+          ),
+          const SizedBox(height: 12),
+          // Fulfillment row
+          _buildStatusRow(
+            icon: fulfillIcon,
+            label: 'Fulfillment',
+            value: fulfillLabel,
+            color: fulfillColor,
+          ),
+          const SizedBox(height: 12),
+          // Synced badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                  color: AppColors.success.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.sync_rounded,
+                    size: 14, color: AppColors.success),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    'Synced from Shopify — statuses update automatically',
+                    style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStatusRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: AppTypography.labelMedium.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildManualOrderStatusCard(
+      BuildContext context, Sale live, WidgetRef ref) {
     return _Card(
       children: [
         Row(

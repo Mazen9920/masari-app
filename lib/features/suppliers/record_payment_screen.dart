@@ -6,7 +6,10 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/supplier_model.dart';
+import '../../shared/models/payment_model.dart';
+import '../../shared/models/purchase_model.dart';
 import 'add_supplier_screen.dart';
 
 /// Record Payment form — supplier info, amount, method, invoice allocation, notes.
@@ -22,11 +25,11 @@ class RecordPaymentScreen extends ConsumerStatefulWidget {
 
 class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
   String? _selectedSupplierId;
-  final _amountCtrl = TextEditingController(text: '5000');
+  final _amountCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   DateTime _paymentDate = DateTime.now();
   int _methodIdx = 0; // 0=Cash, 1=Bank, 2=InstaPay, 3=VodafoneCash
-  final Set<int> _selectedInvoices = {0}; // pre-select first
+  final Set<String> _selectedPurchaseIds = {};
 
   final _methods = [
     _PaymentMethod(Icons.payments_rounded, 'Cash'),
@@ -35,18 +38,15 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
     _PaymentMethod(Icons.phone_iphone_rounded, 'Vodafone Cash'),
   ];
 
-  final _invoices = [
-    _Invoice('1', '#INV-2023-001', 'Oct 12, 2023', 5000, 'Unpaid'),
-    _Invoice('1', '#INV-2023-004', 'Oct 15, 2023', 2400, 'Partial'),
-    _Invoice('2', '#INV-2023-008', 'Oct 20, 2023', 8000, 'Unpaid'),
-  ];
-
   double get _payAmount => double.tryParse(_amountCtrl.text) ?? 0;
 
   @override
   void initState() {
     super.initState();
     _selectedSupplierId = widget.preselectedSupplierId;
+    if (widget.preselectedPurchaseId != null) {
+      _selectedPurchaseIds.add(widget.preselectedPurchaseId!);
+    }
   }
 
   @override
@@ -57,6 +57,67 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
   }
 
   void _save() {
+    if (_payAmount <= 0) return;
+    final suppliers = ref.read(suppliersProvider).value ?? [];
+    final supplierId = _selectedSupplierId ?? (suppliers.isNotEmpty ? suppliers.first.id : '');
+    final supplierName = suppliers
+        .cast<Supplier?>()
+        .firstWhere((s) => s!.id == supplierId, orElse: () => null)
+        ?.name ?? '';
+    if (supplierId.isEmpty) return;
+
+    final payment = Payment(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      supplierId: supplierId,
+      supplierName: supplierName,
+      amount: _payAmount,
+      date: _paymentDate,
+      method: _methods[_methodIdx].label,
+      notes: _notesCtrl.text.trim(),
+      appliedToPurchaseIds: _selectedPurchaseIds.toList(),
+      createdAt: DateTime.now(),
+    );
+
+    ref.read(paymentsProvider.notifier).addPayment(payment);
+
+    // Also record on supplier balance
+    ref.read(suppliersProvider.notifier).recordPayment(supplierId, _payAmount);
+
+    // Update purchase payment status for applied purchases
+    if (_selectedPurchaseIds.isNotEmpty) {
+      final purchasesNotifier = ref.read(purchasesProvider.notifier);
+      final allPurchases = ref.read(purchasesProvider);
+      var remaining = _payAmount;
+
+      for (final pid in _selectedPurchaseIds) {
+        if (remaining <= 0) break;
+        final purchase = allPurchases.cast<Purchase?>().firstWhere(
+          (p) => p!.id == pid,
+          orElse: () => null,
+        );
+        if (purchase == null) continue;
+
+        final newPaid = purchase.amountPaid + remaining;
+        final purchaseTotal = purchase.total;
+
+        if (newPaid >= purchaseTotal) {
+          // Fully paid
+          purchasesNotifier.updatePurchase(purchase.copyWith(
+            paymentStatus: 2,
+            amountPaid: purchaseTotal,
+          ));
+          remaining -= (purchaseTotal - purchase.amountPaid);
+        } else {
+          // Partial
+          purchasesNotifier.updatePurchase(purchase.copyWith(
+            paymentStatus: 1,
+            amountPaid: newPaid,
+          ));
+          remaining = 0;
+        }
+      }
+    }
+
     HapticFeedback.mediumImpact();
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -108,7 +169,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                       if (s.hasDue) ...[
                         const SizedBox(width: 8),
                         Text(
-                          'EGP ${NumberFormat('#,##0').format(s.balance)} due',
+                          '${ref.read(currencyProvider)} ${NumberFormat('#,##0').format(s.balance)} due',
                           style: const TextStyle(
                             color: Color(0xFFE67E22),
                             fontSize: 11,
@@ -155,12 +216,18 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     final suppliers = ref.watch(suppliersProvider).value ?? [];
+    final purchases = ref.watch(purchasesProvider);
+    final currency = ref.watch(currencyProvider);
     final supplier = _selectedSupplierId != null
         ? suppliers.cast<Supplier?>().firstWhere(
               (s) => s!.id == _selectedSupplierId,
               orElse: () => null,
             )
         : null;
+    // Filter purchases to the selected supplier's unpaid/partial purchases
+    final supplierPurchases = _selectedSupplierId != null
+        ? purchases.where((p) => p.supplierId == _selectedSupplierId && p.paymentStatus < 2).toList()
+        : <Purchase>[];
     final fmt = NumberFormat('#,##0', 'en');
 
     return Scaffold(
@@ -177,7 +244,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                 child: Column(
                   children: [
                     // Supplier picker
-                    _buildSupplierPicker(suppliers, supplier, fmt)
+                    _buildSupplierPicker(suppliers, supplier, fmt, currency)
                         .animate()
                         .fadeIn(duration: 250.ms),
                     const SizedBox(height: 14),
@@ -187,7 +254,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                         .fadeIn(duration: 250.ms, delay: 60.ms),
                     const SizedBox(height: 14),
                     // Open invoices
-                    _buildInvoices(fmt)
+                    _buildInvoices(fmt, supplierPurchases, currency)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 120.ms),
                     const SizedBox(height: 14),
@@ -250,7 +317,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      'EGP ${fmt.format(_payAmount)}',
+                      '$currency ${fmt.format(_payAmount)}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
@@ -269,7 +336,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
 
   // ─── SUPPLIER PICKER ───
   Widget _buildSupplierPicker(
-      List<Supplier> suppliers, Supplier? supplier, NumberFormat fmt) {
+      List<Supplier> suppliers, Supplier? supplier, NumberFormat fmt, String currency) {
     return GestureDetector(
       onTap: () => _showSupplierPicker(suppliers),
       child: Container(
@@ -367,7 +434,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                         ),
                       ),
                       Text(
-                        'EGP ${fmt.format(supplier.balance)}',
+                        '$currency ${fmt.format(supplier.balance)}',
                         style: const TextStyle(
                           color: Color(0xFFE67E22),
                           fontSize: 24,
@@ -464,6 +531,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
   // ─── PAYMENT DETAILS SECTION ───
   Widget _buildPaymentDetails(NumberFormat fmt) {
     final dateFmt = DateFormat('MMM dd, yyyy');
+    final currency = ref.watch(currencyProvider);
 
     return _Card(
       children: [
@@ -490,7 +558,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
             prefixIcon: Padding(
               padding: const EdgeInsets.only(left: 16, right: 8),
               child: Text(
-                'EGP',
+                currency,
                 style: TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 18,
@@ -649,12 +717,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
   }
 
   // ─── OPEN INVOICES SECTION ───
-  Widget _buildInvoices(NumberFormat fmt) {
-    // Filter invoices by selected supplier
-    final visibleInvoices = _selectedSupplierId == null
-        ? <_Invoice>[] // OR _invoices if you want to show all when none selected
-        : _invoices.where((i) => i.supplierId == _selectedSupplierId).toList();
-
+  Widget _buildInvoices(NumberFormat fmt, List<Purchase> openPurchases, String currency) {
     return _Card(
       headerTitle: 'Open Invoices',
       headerTrailing: Container(
@@ -664,7 +727,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
-          '${visibleInvoices.length} Open',
+          '${openPurchases.length} Open',
           style: const TextStyle(
             color: Color(0xFFD97706),
             fontSize: 11,
@@ -674,7 +737,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
       ),
       noPadding: true,
       children: [
-        if (visibleInvoices.isEmpty)
+        if (openPurchases.isEmpty)
           const Padding(
             padding: EdgeInsets.all(20),
             child: Center(
@@ -685,10 +748,10 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
             ),
           )
         else
-          ...List.generate(visibleInvoices.length, (i) {
-            final inv = visibleInvoices[i];
-          final checked = _selectedInvoices.contains(i);
-          final isUnpaid = inv.status == 'Unpaid';
+          ...List.generate(openPurchases.length, (i) {
+            final purchase = openPurchases[i];
+            final checked = _selectedPurchaseIds.contains(purchase.id);
+            final isUnpaid = purchase.paymentStatus == 0;
 
           return Column(
             children: [
@@ -703,9 +766,9 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                   HapticFeedback.selectionClick();
                   setState(() {
                     if (checked) {
-                      _selectedInvoices.remove(i);
+                      _selectedPurchaseIds.remove(purchase.id);
                     } else {
-                      _selectedInvoices.add(i);
+                      _selectedPurchaseIds.add(purchase.id);
                     }
                   });
                 },
@@ -752,7 +815,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    inv.id,
+                                    purchase.referenceNo.isNotEmpty ? purchase.referenceNo : '#${purchase.id.substring(0, 8)}',
                                     style: TextStyle(
                                       color: AppColors.primaryNavy,
                                       fontWeight: FontWeight.w600,
@@ -760,7 +823,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                                     ),
                                   ),
                                   Text(
-                                    'EGP ${fmt.format(inv.amount)}',
+                                    '$currency ${fmt.format(purchase.outstanding)}',
                                     style: TextStyle(
                                       color: AppColors.primaryNavy,
                                       fontWeight: FontWeight.w700,
@@ -775,7 +838,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    inv.date,
+                                    DateFormat('MMM dd, yyyy').format(purchase.date),
                                     style: TextStyle(
                                       color: AppColors.textTertiary,
                                       fontSize: 11,
@@ -792,7 +855,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                                           BorderRadius.circular(4),
                                     ),
                                     child: Text(
-                                      inv.status,
+                                      purchase.statusLabel,
                                       style: TextStyle(
                                         color: isUnpaid
                                             ? const Color(0xFFEA580C)
@@ -981,13 +1044,4 @@ class _PaymentMethod {
   final IconData icon;
   final String label;
   const _PaymentMethod(this.icon, this.label);
-}
-
-class _Invoice {
-  final String supplierId;
-  final String id;
-  final String date;
-  final double amount;
-  final String status;
-  const _Invoice(this.supplierId, this.id, this.date, this.amount, this.status);
 }

@@ -91,7 +91,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
 
   List<Product> get _filteredProducts {
     final products = ref.read(inventoryProvider).value ?? [];
-    final hideOos = ref.read(appSettingsProvider).hideOutOfStock;
+    final hideOos = ref.watch(appSettingsProvider).hideOutOfStock;
     var list = products.where((p) {
       // 1. Filter by Type (Product vs Material)
       if (p.isMaterial != _isMaterialsView) return false;
@@ -341,7 +341,18 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
             children: [
               _headerButton(Icons.filter_list_rounded, () async {
                 HapticFeedback.lightImpact();
-                final result = await showInventoryFilterSheet(context, initial: _filterResult);
+                final cats = ref.read(categoriesProvider).value
+                    ?.map((c) => c.name).toList() ?? [];
+                final sups = ref.read(suppliersProvider).value
+                    ?.map((s) => s.name).toList() ?? [];
+                final currency = ref.read(currencyProvider);
+                final result = await showInventoryFilterSheet(
+                  context,
+                  initial: _filterResult,
+                  categoryOptions: cats,
+                  supplierOptions: sups,
+                  currency: currency,
+                );
                 if (result != null) setState(() => _filterResult = result);
               }),
               if (_hasActiveFilters)

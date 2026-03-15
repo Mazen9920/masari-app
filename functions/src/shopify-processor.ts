@@ -8,12 +8,14 @@
  *  - orders/create   → create Masari Sale + Revenue/COGS txns + stock
  *  - orders/updated  → update existing Sale fields (Shopify wins)
  *  - orders/cancelled → cancel sale, reverse stock & transactions
- *  - products/update → update mapped Masari product fields
- *  - products/create → auto-add new variants + mappings
+ *  - products/update → sync title, image, variants, options, prices, SKUs
+ *  - products/create → auto-import new Shopify product with mappings
+ *  - products/delete → unlink Masari product, remove mappings
  *  - inventory_levels/update → update Masari variant stock level
  */
 
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
+import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import {
   getFirestore,
@@ -255,28 +257,47 @@ function mapPaymentStatus(status: string | null): number {
 }
 
 /**
- * Maps Shopify fulfillment_status to Masari OrderStatus index.
- * Also considers cancel_reason for rejected/returned orders.
+ * Maps Shopify fulfillment_status to Masari FulfillmentStatus index.
  * @param {string|null} status Shopify fulfillment_status.
+ * @return {number} FulfillmentStatus index (0=unfulfilled,1=partial,2=fulfilled).
+ */
+function mapFulfillmentStatus(status: string | null): number {
+  switch (status) {
+  case "fulfilled":
+    return 2; // FulfillmentStatus.fulfilled
+  case "partial":
+    return 1; // FulfillmentStatus.partial
+  default: // null = unfulfilled
+    return 0; // FulfillmentStatus.unfulfilled
+  }
+}
+
+/**
+ * Derives Masari OrderStatus from payment, fulfillment, and cancel state.
+ * "completed" (3) only when BOTH fully paid AND fully fulfilled.
+ * @param {number} paymentStatus Masari PaymentStatus index.
+ * @param {number} fulfillmentStatus Masari FulfillmentStatus index.
  * @param {string|null} cancelReason Shopify cancel_reason.
  * @return {number} OrderStatus index.
  */
-function mapOrderStatus(
-  status: string | null,
+function deriveOrderStatus(
+  paymentStatus: number,
+  fulfillmentStatus: number,
   cancelReason?: string | null,
 ): number {
   // Auto-cancel for rejected or returned
   if (cancelReason === "declined" || cancelReason === "fraud") {
     return 4; // OrderStatus.cancelled
   }
-  switch (status) {
-  case "fulfilled":
+  // Completed only when fully paid AND fully fulfilled
+  if (paymentStatus === 2 && fulfillmentStatus === 2) {
     return 3; // OrderStatus.completed
-  case "partial":
-    return 2; // OrderStatus.processing
-  default: // null = unfulfilled
-    return 1; // OrderStatus.confirmed
   }
+  // Any progress (partial payment or partial fulfillment) → processing
+  if (paymentStatus >= 1 || fulfillmentStatus >= 1) {
+    return 2; // OrderStatus.processing
+  }
+  return 1; // OrderStatus.confirmed
 }
 
 /**
@@ -401,6 +422,11 @@ export const processShopifyWebhook = onDocumentCreated(
       case "products/update":
       case "products/create":
         await handleProductUpdate(
+          userId, payload as ShopifyProduct
+        );
+        break;
+      case "products/delete":
+        await handleProductDelete(
           userId, payload as ShopifyProduct
         );
         break;
@@ -567,8 +593,12 @@ async function handleOrderCreate(
   const paymentStatus = mapPaymentStatus(
     order.financial_status as string | null
   );
-  const orderStatus = mapOrderStatus(
-    order.fulfillment_status as string | null,
+  const fulfillmentStatus = mapFulfillmentStatus(
+    order.fulfillment_status as string | null
+  );
+  const orderStatus = deriveOrderStatus(
+    paymentStatus,
+    fulfillmentStatus,
     order.cancel_reason as string | null,
   );
 
@@ -604,6 +634,7 @@ async function handleOrderCreate(
     payment_status: paymentStatus,
     amount_paid: paymentStatus === 2 ? total : 0,
     order_status: orderStatus,
+    fulfillment_status: fulfillmentStatus,
     external_order_id: shopifyOrderId,
     external_source: "shopify",
     shipping_address: [
@@ -765,9 +796,18 @@ async function handleOrderUpdated(
     updates.payment_status = newPaymentStatus;
   }
 
+  // Fulfillment status (separate from order status)
+  const newFulfillmentStatus = mapFulfillmentStatus(
+    order.fulfillment_status as string | null
+  );
+  if (saleData.fulfillment_status !== newFulfillmentStatus) {
+    updates.fulfillment_status = newFulfillmentStatus;
+  }
+
   // Check for cancelled / rejected → auto-cancel
-  const newOrderStatus = mapOrderStatus(
-    order.fulfillment_status as string | null,
+  const newOrderStatus = deriveOrderStatus(
+    newPaymentStatus,
+    newFulfillmentStatus,
     cancelReason,
   );
 
@@ -1382,6 +1422,9 @@ async function handleOrderCancelled(
   // ── Update sale status ─────────────────────────────────
   await saleDoc.ref.update({
     order_status: 4, // OrderStatus.cancelled
+    fulfillment_status: mapFulfillmentStatus(
+      order.fulfillment_status as string | null
+    ),
     payment_status: mapPaymentStatus(
       order.financial_status as string | null
     ),
@@ -1879,8 +1922,14 @@ async function handleProductUpdate(
   let changed = false;
   const now = new Date().toISOString();
 
-  // ── 1. Update product name if title changed ──────────────
+  // ── 1. Update product name / image if changed ────────────
   if (product.title && prodData.name !== product.title) {
+    changed = true;
+  }
+
+  // Sync product image
+  const shopifyImageUrl = product.image?.src || null;
+  if (shopifyImageUrl && prodData.image_url !== shopifyImageUrl) {
     changed = true;
   }
 
@@ -1935,7 +1984,21 @@ async function handleProductUpdate(
     }
   );
 
-  // ── 3. Detect new Shopify variants (not yet mapped) ──────
+  // ── 3a. Detect removed Shopify variants (deleted on Shopify) ──
+  const removedMappingDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  const removedMasariVarIds = new Set<string>();
+  for (const doc of mappingSnap.docs) {
+    const m = doc.data();
+    const svId = m.shopify_variant_id as string;
+    if (!shopifyVariantMap.has(svId)) {
+      // This Shopify variant no longer exists
+      removedMappingDocs.push(doc);
+      removedMasariVarIds.add(m.masari_variant_id as string);
+      changed = true;
+    }
+  }
+
+  // ── 3b. Detect new Shopify variants (not yet mapped) ─────
   const newVariants: Record<string, unknown>[] = [];
   const newMappings: Record<string, unknown>[] = [];
 
@@ -1989,8 +2052,12 @@ async function handleProductUpdate(
 
   // ── 4. Persist changes ───────────────────────────────────
   if (changed) {
+    // Filter out removed variants
+    const keptVariants = updatedVariants.filter(
+      (v: Record<string, unknown>) => !removedMasariVarIds.has(v.id as string)
+    );
     const finalVariants = [
-      ...updatedVariants,
+      ...keptVariants,
       ...newVariants,
     ];
 
@@ -2003,6 +2070,11 @@ async function handleProductUpdate(
     // Update name only if it changed
     if (product.title && prodData.name !== product.title) {
       updatePayload.name = product.title;
+    }
+
+    // Update product image if changed
+    if (shopifyImageUrl && prodData.image_url !== shopifyImageUrl) {
+      updatePayload.image_url = shopifyImageUrl;
     }
 
     // Sync product-level options array
@@ -2044,13 +2116,19 @@ async function handleProductUpdate(
       await ref.set(data);
     }
 
+    // Delete mappings for removed Shopify variants
+    for (const doc of removedMappingDocs) {
+      await doc.ref.delete();
+    }
+
     await writeSyncLog(db, userId, {
       action: "product_update",
       direction: "shopify_to_masari",
       status: "success",
       shopify_product_id: shopifyProductId,
-      variants_updated: updatedVariants.length,
+      variants_updated: keptVariants.length,
       variants_added: newVariants.length,
+      variants_removed: removedMappingDocs.length,
     });
   } else {
     logger.info("Product update processed — no changes detected", {
@@ -2063,6 +2141,87 @@ async function handleProductUpdate(
     changed,
     existingUpdated: updatedVariants.length,
     newAdded: newVariants.length,
+    variantsRemoved: removedMappingDocs.length,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  products/delete
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Handles a Shopify product deletion — removes mappings and optionally
+ * marks the Masari product as deleted (soft-archive via category flag).
+ *
+ * We don't hard-delete the Masari product because historical COGS /
+ * cost-layer data should be preserved.
+ *
+ * @param {string} userId Masari user ID.
+ * @param {ShopifyProduct} product Shopify product payload (may only contain id).
+ */
+async function handleProductDelete(
+  userId: string,
+  product: ShopifyProduct,
+): Promise<void> {
+  const db = getDb();
+  const shopifyProductId = String(product.id);
+
+  // Find all variant mappings for this product
+  const mappingSnap = await db
+    .collection("shopify_product_mappings")
+    .where("user_id", "==", userId)
+    .where("shopify_product_id", "==", shopifyProductId)
+    .get();
+
+  if (mappingSnap.empty) {
+    logger.info("Product delete — no mappings found, nothing to do", {
+      shopifyProductId,
+    });
+    return;
+  }
+
+  let masariProductId: string | null = null;
+  for (const doc of mappingSnap.docs) {
+    masariProductId = doc.data().masari_product_id as string;
+    await doc.ref.delete();
+  }
+
+  // Clear Shopify IDs from the Masari product (soft unlink)
+  if (masariProductId) {
+    const prodRef = db.collection("products").doc(masariProductId);
+    const prodSnap = await prodRef.get();
+    if (prodSnap.exists) {
+      const prodData = prodSnap.data();
+      const variants = (prodData?.variants as Record<string, unknown>[]) ?? [];
+      const cleanedVariants = variants.map((v) => {
+        const cleaned = {...v};
+        delete cleaned.shopify_variant_id;
+        delete cleaned.shopify_inventory_item_id;
+        return cleaned;
+      });
+
+      await prodRef.update({
+        shopify_product_id: null,
+        variants: cleanedVariants,
+        updated_at: new Date().toISOString(),
+        _last_modified_by: "shopify_webhook",
+      });
+    }
+  }
+
+  await writeSyncLog(db, userId, {
+    action: "product_delete",
+    direction: "shopify_to_masari",
+    status: "success",
+    shopify_product_id: shopifyProductId,
+    masari_product_id: masariProductId,
+    mappings_removed: mappingSnap.size,
+  });
+
+  logger.info("Product delete processed — unlinked Masari product", {
+    shopifyProductId,
+    masariProductId,
+    mappingsRemoved: mappingSnap.size,
   });
 }
 
@@ -2600,3 +2759,93 @@ async function handleAppUninstalled(userId: string): Promise<void> {
 
   logger.info("App uninstalled — connection deactivated", {userId});
 }
+
+// ═══════════════════════════════════════════════════════════
+//  MIGRATION: Backfill fulfillment_status for existing Shopify sales
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Callable Cloud Function that backfills the `fulfillment_status` field
+ * for existing Shopify sales that were created before we added it.
+ * Derives fulfillment from delivery_status and order_status.
+ */
+export const backfillFulfillmentStatus = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Must be authenticated",
+      );
+    }
+
+    const db = getDb();
+    const snap = await db
+      .collection("sales")
+      .where("user_id", "==", userId)
+      .where("external_source", "==", "shopify")
+      .get();
+
+    let updated = 0;
+    const batch = db.batch();
+
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      // Skip if already has fulfillment_status
+      if (data.fulfillment_status !== undefined &&
+          data.fulfillment_status !== null) {
+        continue;
+      }
+
+      // Derive from existing fields
+      const orderStatus = data.order_status as number ?? 1;
+      const deliveryStatus = data.delivery_status as string ?? "pending";
+      let fulfillmentStatus: number;
+
+      if (deliveryStatus === "delivered" || orderStatus === 3) {
+        fulfillmentStatus = 2; // fulfilled
+      } else if (deliveryStatus === "partially_shipped" ||
+                 orderStatus === 2) {
+        fulfillmentStatus = 1; // partial
+      } else {
+        fulfillmentStatus = 0; // unfulfilled
+      }
+
+      // Also re-derive order_status using the new logic
+      const paymentStatus = data.payment_status as number ?? 0;
+      const cancelReason = data.cancel_reason as string | null;
+      let newOrderStatus: number;
+
+      if (orderStatus === 4 || cancelReason === "declined" ||
+          cancelReason === "fraud") {
+        newOrderStatus = 4; // keep cancelled
+      } else if (paymentStatus === 2 && fulfillmentStatus === 2) {
+        newOrderStatus = 3; // completed
+      } else if (paymentStatus >= 1 || fulfillmentStatus >= 1) {
+        newOrderStatus = 2; // processing
+      } else {
+        newOrderStatus = 1; // confirmed
+      }
+
+      batch.update(doc.ref, {
+        fulfillment_status: fulfillmentStatus,
+        order_status: newOrderStatus,
+        updated_at: Timestamp.now(),
+      });
+      updated++;
+    }
+
+    if (updated > 0) {
+      await batch.commit();
+    }
+
+    logger.info("Backfilled fulfillment_status", {
+      userId,
+      total: snap.size,
+      updated,
+    });
+
+    return {total: snap.size, updated};
+  },
+);

@@ -1,21 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../../shared/models/payment_model.dart';
+import '../../shared/models/purchase_model.dart';
+import '../../shared/models/supplier_model.dart';
 import 'edit_payment_screen.dart';
+import 'record_payment_screen.dart';
 
 /// Payment Detail — read-only confirmation / receipt view.
-class PaymentDetailScreen extends StatelessWidget {
+class PaymentDetailScreen extends ConsumerWidget {
   final String? paymentId;
-  final dynamic payment;
-  final dynamic supplier;
+  final Payment? payment;
+  final Supplier? supplier;
   const PaymentDetailScreen({super.key, this.paymentId, this.payment, this.supplier});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(currencyProvider);
     final fmt = NumberFormat('#,##0');
+    final purchases = ref.watch(purchasesProvider);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -30,16 +39,16 @@ class PaymentDetailScreen extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 child: Column(
                   children: [
-                    _buildHeroCard(fmt)
+                    _buildHeroCard(fmt, currency)
                         .animate()
                         .fadeIn(duration: 300.ms)
                         .scale(begin: const Offset(0.95, 0.95)),
                     const SizedBox(height: 16),
-                    _buildInfoCard(fmt)
+                    _buildInfoCard(fmt, currency)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 80.ms),
                     const SizedBox(height: 16),
-                    _buildInvoicesCard(fmt)
+                    _buildInvoicesCard(fmt, currency, purchases)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 120.ms),
                     const SizedBox(height: 16),
@@ -98,7 +107,10 @@ class PaymentDetailScreen extends StatelessWidget {
               HapticFeedback.lightImpact();
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => EditPaymentScreen(supplierId: 'SUP-001'), // Mock ID
+                  builder: (_) => EditPaymentScreen(
+                    payment: payment,
+                    supplierId: payment?.supplierId,
+                  ),
                 ),
               );
             },
@@ -113,7 +125,7 @@ class PaymentDetailScreen extends StatelessWidget {
   // ═══════════════════════════════════════════════════════
   //  HERO CARD — success
   // ═══════════════════════════════════════════════════════
-  Widget _buildHeroCard(NumberFormat fmt) {
+  Widget _buildHeroCard(NumberFormat fmt, String currency) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
@@ -157,7 +169,7 @@ class PaymentDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'EGP ${fmt.format(5000)}',
+            '$currency ${fmt.format(payment?.amount ?? 0)}',
             style: TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
@@ -173,7 +185,7 @@ class PaymentDetailScreen extends StatelessWidget {
   // ═══════════════════════════════════════════════════════
   //  INFO ROWS
   // ═══════════════════════════════════════════════════════
-  Widget _buildInfoCard(NumberFormat fmt) {
+  Widget _buildInfoCard(NumberFormat fmt, String currency) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -207,7 +219,7 @@ class PaymentDetailScreen extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      'AS',
+                      supplier?.initials ?? 'N/A',
                       style: TextStyle(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w700,
@@ -218,7 +230,7 @@ class PaymentDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Al-Amal Supplies',
+                  payment?.supplierName ?? supplier?.name ?? '',
                   style: TextStyle(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
@@ -234,7 +246,7 @@ class PaymentDetailScreen extends StatelessWidget {
           _infoRow(
             'Date',
             Text(
-              'Oct 24, 2023',
+              payment != null ? DateFormat('MMM dd, yyyy').format(payment!.date) : '-',
               style: TextStyle(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w500,
@@ -254,7 +266,7 @@ class PaymentDetailScreen extends StatelessWidget {
                     size: 18, color: AppColors.textSecondary),
                 const SizedBox(width: 6),
                 Text(
-                  'Bank Transfer',
+                  payment?.method ?? '',
                   style: TextStyle(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w500,
@@ -277,7 +289,7 @@ class PaymentDetailScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                '#PAY-8829-X',
+                payment?.id ?? '',
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w500,
@@ -318,7 +330,10 @@ class PaymentDetailScreen extends StatelessWidget {
   // ═══════════════════════════════════════════════════════
   //  APPLIED TO INVOICES
   // ═══════════════════════════════════════════════════════
-  Widget _buildInvoicesCard(NumberFormat fmt) {
+  Widget _buildInvoicesCard(NumberFormat fmt, String currency, List<Purchase> purchases) {
+    final appliedIds = payment?.appliedToPurchaseIds ?? [];
+    final appliedPurchases = purchases.where((p) => appliedIds.contains(p.id)).toList();
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -359,66 +374,78 @@ class PaymentDetailScreen extends StatelessWidget {
               height: 1,
               color: AppColors.borderLight.withValues(alpha: 0.3)),
 
-          // Invoice row
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '#INV-2023-001',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Oct 12, 2023',
-                      style: TextStyle(
-                        color: AppColors.textTertiary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'EGP ${fmt.format(5000)}',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDF4),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'Settled',
+          if (appliedPurchases.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'No invoices linked',
+                style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+              ),
+            )
+          else
+            ...appliedPurchases.map((p) => Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        p.referenceNo,
                         style: TextStyle(
-                          color: Color(0xFF27AE60),
+                          color: AppColors.textPrimary,
                           fontWeight: FontWeight.w600,
-                          fontSize: 11,
+                          fontSize: 14,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+                      const SizedBox(height: 3),
+                      Text(
+                        DateFormat('MMM dd, yyyy').format(p.date),
+                        style: TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '$currency ${fmt.format(p.total)}',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: p.paymentStatus == 2
+                              ? const Color(0xFFF0FDF4)
+                              : const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          p.statusLabel,
+                          style: TextStyle(
+                            color: p.paymentStatus == 2
+                                ? const Color(0xFF27AE60)
+                                : const Color(0xFFD97706),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            )),
         ],
       ),
     );
@@ -428,6 +455,7 @@ class PaymentDetailScreen extends StatelessWidget {
   //  ATTACHMENTS
   // ═══════════════════════════════════════════════════════
   Widget _buildAttachmentsCard() {
+    final hasReceipt = payment?.receiptUrl != null && payment!.receiptUrl!.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -456,48 +484,46 @@ class PaymentDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.borderLight.withValues(alpha: 0.4),
+          if (hasReceipt)
+            Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.borderLight.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.description_rounded,
+                    color: Color(0xFF94A3B8),
+                    size: 28,
                   ),
                 ),
-                child: const Icon(
-                  Icons.description_rounded,
-                  color: Color(0xFF94A3B8),
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Bank_Receipt.pdf',
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    'Receipt',
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w500,
                       fontSize: 14,
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '1.2 MB • Uploaded Oct 24',
-                    style: TextStyle(
-                      color: AppColors.textTertiary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+                ),
+              ],
+            )
+          else
+            Text(
+              'No attachments',
+              style: TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 13,
               ),
-            ],
-          ),
+            ),
         ],
       ),
     );
@@ -555,7 +581,16 @@ class PaymentDetailScreen extends StatelessWidget {
 
           // Repeat Payment
           GestureDetector(
-            onTap: () => HapticFeedback.mediumImpact(),
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => RecordPaymentScreen(
+                    preselectedSupplierId: payment?.supplierId,
+                  ),
+                ),
+              );
+            },
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 15),

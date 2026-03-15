@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/notifications_provider.dart';
 import '../../core/providers/user_profile_provider.dart';
 import '../../l10n/app_localizations.dart';
 import 'providers/dashboard_state_provider.dart';
@@ -160,24 +161,46 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       HapticFeedback.lightImpact();
                       context.push(AppRoutes.notifications);
                     },
-                    child: Stack(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white,
-                            border: Border.all(color: AppColors.borderLight),
+                    child: Builder(builder: (ctx) {
+                      final notifCount = ref.watch(notificationCountProvider);
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white,
+                              border: Border.all(color: AppColors.borderLight),
+                            ),
+                            child: const Icon(
+                              Icons.notifications_outlined,
+                              color: AppColors.textSecondary,
+                              size: 22,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.notifications_outlined,
-                            color: AppColors.textSecondary,
-                            size: 22,
-                          ),
-                        ),
-                      ],
-                    ),
+                          if (notifCount > 0)
+                            Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: AppColors.accentOrange,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                                child: Text(
+                                  notifCount > 9 ? '9+' : '$notifCount',
+                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    }),
                   ),
                 ),
                 const SizedBox(width: 10),

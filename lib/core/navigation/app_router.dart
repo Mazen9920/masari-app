@@ -57,7 +57,6 @@ import '../../features/suppliers/purchases_summary_screen.dart';
 import '../../features/suppliers/received_goods_summary_screen.dart';
 import '../../features/inventory/inventory_settings_screen.dart';
 import '../../features/manage/pinned_actions_screen.dart';
-import '../../features/reports/screens/report_preview_screen.dart';
 import '../../features/ai/ai_chat_screen.dart';
 import '../../features/cash_flow/screens/scheduled_transactions_screen.dart';
 import '../../features/sales/sales_list_screen.dart';
@@ -288,6 +287,7 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         builder: (context, state) => const ProfileScreen(),
       ),
       GoRoute(
+        name: 'InventoryListScreen',
         path: AppRoutes.inventory,
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const InventoryListScreen(),
@@ -386,7 +386,7 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
           final args = state.extra as Map<String, dynamic>? ?? {};
           return EditPaymentScreen(
             payment: args['payment'],
-            supplier: args['supplier'],
+            supplierId: args['supplierId'],
           );
         },
       ),
@@ -646,12 +646,6 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
           appBarTitle: 'Pinned Actions',
           child: PinnedActionsScreen(),
         ),
-      ),
-      GoRoute(
-        name: 'ReportPreviewScreen',
-        path: '/reports/preview',
-        parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const ReportPreviewScreen(),
       ),
       GoRoute(
         name: 'AiChatScreen',

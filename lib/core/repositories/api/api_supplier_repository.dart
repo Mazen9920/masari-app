@@ -147,4 +147,31 @@ class ApiSupplierRepository implements SupplierRepository {
       return Result.failure( 'An unexpected error occurred: $e');
     }
   }
+
+  @override
+  Future<Result<Supplier>> recordPurchase(String id, double amount, {DateTime? dueDate}) async {
+    try {
+      final body = <String, dynamic>{'amount': amount};
+      if (dueDate != null) body['due_date'] = dueDate.toIso8601String();
+
+      final responseMap = await _client.post(
+        '/suppliers/$id/purchases',
+        body: body,
+      );
+      final response = ApiResponse<Supplier>.fromJson(
+        responseMap,
+        (json) => Supplier.fromJson(json),
+      );
+
+      if (response.success && response.data != null) {
+        return Result.success(response.data!);
+      } else {
+        return Result.failure(response.message ?? 'Failed to record purchase');
+      }
+    } on ApiException catch (e) {
+      return Result.failure(e.message);
+    } catch (e) {
+      return Result.failure('An unexpected error occurred: $e');
+    }
+  }
 }

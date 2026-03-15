@@ -71,4 +71,22 @@ class LocalSupplierRepository implements SupplierRepository {
     _suppliers[index] = updated;
     return Result.success(updated);
   }
+
+  @override
+  Future<Result<Supplier>> recordPurchase(String id, double amount, {DateTime? dueDate}) async {
+    final index = _suppliers.indexWhere((s) => s.id == id);
+    if (index == -1) return Result.failure('Supplier not found');
+
+    final supplier = _suppliers[index];
+    final updated = supplier.copyWith(
+      balance: supplier.balance + amount,
+      lastTransaction: DateTime.now(),
+      dueDate: dueDate != null &&
+              (supplier.dueDate == null || dueDate.isAfter(supplier.dueDate!))
+          ? dueDate
+          : supplier.dueDate,
+    );
+    _suppliers[index] = updated;
+    return Result.success(updated);
+  }
 }

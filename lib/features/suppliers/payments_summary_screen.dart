@@ -1,20 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
+import '../../shared/models/payment_model.dart';
 import 'payment_detail_screen.dart';
 import '../transactions/transactions_list_screen.dart';
 import '../../shared/models/transaction_model.dart';
 
 /// Payments Summary Dashboard — overview of supplier payment activity.
-class PaymentsSummaryScreen extends StatelessWidget {
+class PaymentsSummaryScreen extends ConsumerWidget {
   const PaymentsSummaryScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(currencyProvider);
+    final payments = ref.watch(paymentsProvider);
+    final purchases = ref.watch(purchasesProvider);
     final fmt = NumberFormat('#,##0');
+
+    // Compute stats from real data
+    final now = DateTime.now();
+    final thisMonth = payments.where((p) =>
+        p.date.year == now.year && p.date.month == now.month).toList();
+    final totalThisMonth = thisMonth.fold<double>(0, (s, p) => s + p.amount);
+    final totalPaid = payments.fold<double>(0, (s, p) => s + p.amount);
+    final totalPurchases = purchases.fold<double>(0, (s, p) => s + p.total);
+    final outstanding = (totalPurchases - totalPaid).clamp(0.0, double.infinity);
+
+    // Recent 5 payments
+    final sorted = List<Payment>.from(payments)
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final recent = sorted.take(5).toList();
+
+    // Method breakdown
+    final methodCounts = <String, int>{};
+    for (final p in payments) {
+      methodCounts[p.method] = (methodCounts[p.method] ?? 0) + 1;
+    }
+    final totalCount = payments.length.clamp(1, double.infinity).toDouble();
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -30,24 +58,24 @@ class PaymentsSummaryScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _HeroCard(fmt: fmt)
+                    _HeroCard(fmt: fmt, currency: currency, total: totalThisMonth)
                         .animate()
                         .fadeIn(duration: 300.ms)
                         .slideY(begin: 0.04),
                     const SizedBox(height: 16),
-                    _StatsRow(fmt: fmt)
+                    _StatsRow(fmt: fmt, currency: currency, paid: totalPaid, outstanding: outstanding)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 60.ms),
                     const SizedBox(height: 20),
-                    _TrendsChart()
+                    _TrendsChart(payments: payments)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 100.ms),
                     const SizedBox(height: 20),
-                    _PaymentMethods()
+                    _PaymentMethods(methodCounts: methodCounts, totalCount: totalCount)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 140.ms),
                     const SizedBox(height: 20),
-                    _RecentPayments(fmt: fmt)
+                    _RecentPayments(fmt: fmt, currency: currency, recent: recent)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 180.ms),
                   ],
@@ -101,7 +129,9 @@ class PaymentsSummaryScreen extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _HeroCard extends StatelessWidget {
   final NumberFormat fmt;
-  const _HeroCard({required this.fmt});
+  final String currency;
+  final double total;
+  const _HeroCard({required this.fmt, required this.currency, required this.total});
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +185,7 @@ class _HeroCard extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.7), size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    'Total Payments (Feb)',
+                    'Total Payments (${DateFormat('MMM').format(DateTime.now())})',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.8),
                       fontWeight: FontWeight.w500,
@@ -166,7 +196,7 @@ class _HeroCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'EGP ${fmt.format(82400)}',
+                '$currency ${fmt.format(total)}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -185,11 +215,11 @@ class _HeroCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.trending_up_rounded,
+                    Icon(Icons.calendar_month_rounded,
                         color: Colors.white.withValues(alpha: 0.9), size: 14),
                     const SizedBox(width: 6),
                     Text(
-                      '+12% vs last month',
+                      'This month',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.9),
                         fontWeight: FontWeight.w500,
@@ -212,22 +242,25 @@ class _HeroCard extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _StatsRow extends StatelessWidget {
   final NumberFormat fmt;
-  const _StatsRow({required this.fmt});
+  final String currency;
+  final double paid;
+  final double outstanding;
+  const _StatsRow({required this.fmt, required this.currency, required this.paid, required this.outstanding});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _statCard('Paid', 58000, '+8.4%',
+        Expanded(child: _statCard('Paid', paid,
             const Color(0xFF27AE60), Icons.check_circle_rounded, fmt)),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('Outstanding', 24400, 'Due in 5 days',
+        Expanded(child: _statCard('Outstanding', outstanding,
             const Color(0xFFE67E22), Icons.pending_rounded, fmt)),
       ],
     );
   }
 
-  Widget _statCard(String label, double amount, String sub, Color color,
+  Widget _statCard(String label, double amount, Color color,
       IconData icon, NumberFormat fmt) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -271,20 +304,11 @@ class _StatsRow extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'EGP ${fmt.format(amount)}',
+            '$currency ${fmt.format(amount)}',
             style: TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 20,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            sub,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w500,
-              fontSize: 12,
             ),
           ),
         ],
@@ -297,10 +321,24 @@ class _StatsRow extends StatelessWidget {
 //  PAYMENT TRENDS (bar chart)
 // ═══════════════════════════════════════════════════════
 class _TrendsChart extends StatelessWidget {
+  final List<Payment> payments;
+  const _TrendsChart({required this.payments});
+
   @override
   Widget build(BuildContext context) {
-    const months = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb'];
-    const heights = [0.40, 0.65, 0.55, 0.85, 0.30, 0.75];
+    final now = DateTime.now();
+    final monthLabels = <String>[];
+    final monthTotals = <double>[];
+    for (int i = 5; i >= 0; i--) {
+      final m = DateTime(now.year, now.month - i, 1);
+      monthLabels.add(DateFormat('MMM').format(m));
+      final total = payments
+          .where((p) => p.date.year == m.year && p.date.month == m.month)
+          .fold<double>(0, (s, p) => s + p.amount);
+      monthTotals.add(total);
+    }
+    final maxTotal = monthTotals.fold<double>(1, (a, b) => a > b ? a : b);
+    final heights = monthTotals.map((t) => (t / maxTotal).clamp(0.05, 1.0)).toList();
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -372,7 +410,7 @@ class _TrendsChart extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          months[i],
+                          monthLabels[i],
                           style: TextStyle(
                             color: isCurrent
                                 ? AppColors.primaryNavy
@@ -400,8 +438,30 @@ class _TrendsChart extends StatelessWidget {
 //  PAYMENT METHODS
 // ═══════════════════════════════════════════════════════
 class _PaymentMethods extends StatelessWidget {
+  final Map<String, int> methodCounts;
+  final double totalCount;
+  const _PaymentMethods({required this.methodCounts, required this.totalCount});
+
+  IconData _iconFor(String method) {
+    switch (method.toLowerCase()) {
+      case 'bank transfer': return Icons.account_balance_rounded;
+      case 'instapay': return Icons.bolt_rounded;
+      case 'cash': return Icons.payments_rounded;
+      case 'check': return Icons.receipt_rounded;
+      default: return Icons.payment_rounded;
+    }
+  }
+
+  Color _colorFor(int index) {
+    const colors = [Color(0xFF2563EB), Color(0xFF7C3AED), Color(0xFF059669), Color(0xFFE67E22)];
+    return colors[index % colors.length];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final methods = methodCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -418,19 +478,22 @@ class _PaymentMethods extends StatelessWidget {
         ),
         SizedBox(
           height: 100,
-          child: ListView(
+          child: methods.isEmpty
+              ? Center(child: Text('No data', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)))
+              : ListView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            children: [
-              _methodCard('Bank Transfer', '60%', 0.6,
-                  Icons.account_balance_rounded, const Color(0xFF2563EB)),
-              const SizedBox(width: 10),
-              _methodCard('InstaPay', '25%', 0.25,
-                  Icons.bolt_rounded, const Color(0xFF7C3AED)),
-              const SizedBox(width: 10),
-              _methodCard('Cash', '15%', 0.15,
-                  Icons.payments_rounded, const Color(0xFF059669)),
-            ],
+            children: methods.asMap().entries.map((e) {
+              final method = e.value.key;
+              final count = e.value.value;
+              final pct = (count / totalCount * 100).round();
+              final progress = count / totalCount;
+              final color = _colorFor(e.key);
+              return Padding(
+                padding: EdgeInsets.only(right: e.key < methods.length - 1 ? 10 : 0),
+                child: _methodCard(method, '$pct%', progress, _iconFor(method), color),
+              );
+            }).toList(),
           ),
         ),
       ],
@@ -510,23 +573,12 @@ class _PaymentMethods extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _RecentPayments extends StatelessWidget {
   final NumberFormat fmt;
-  const _RecentPayments({required this.fmt});
+  final String currency;
+  final List<Payment> recent;
+  const _RecentPayments({required this.fmt, required this.currency, required this.recent});
 
   @override
   Widget build(BuildContext context) {
-    final payments = [
-      _Pay('ABC Suppliers', 'Feb 24 • Bank Transfer', 12000,
-          Icons.storefront_rounded),
-      _Pay('Delta Logistics', 'Feb 22 • InstaPay', 4500,
-          Icons.inventory_2_rounded),
-      _Pay('Global Imports', 'Feb 20 • Bank Transfer', 28000,
-          Icons.local_shipping_rounded),
-      _Pay('Tech Solutions', 'Feb 18 • Cash', 1200,
-          Icons.build_rounded),
-      _Pay('Utilities Co.', 'Feb 15 • InstaPay', 850,
-          Icons.bolt_rounded),
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -587,15 +639,25 @@ class _RecentPayments extends StatelessWidget {
             ],
           ),
           child: Column(
-            children: payments.asMap().entries.map((e) {
+            children: recent.isEmpty
+                ? [
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        'No payments yet',
+                        style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                      ),
+                    ),
+                  ]
+                : recent.asMap().entries.map((e) {
               final p = e.value;
-              final isLast = e.key == payments.length - 1;
+              final isLast = e.key == recent.length - 1;
               return GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const PaymentDetailScreen(),
+                      builder: (_) => PaymentDetailScreen(payment: p),
                     ),
                   );
                 },
@@ -620,7 +682,7 @@ class _RecentPayments extends StatelessWidget {
                           color: const Color(0xFFF1F5F9),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(p.icon,
+                        child: Icon(Icons.payments_rounded,
                             color: AppColors.textSecondary, size: 18),
                       ),
                       const SizedBox(width: 12),
@@ -629,7 +691,7 @@ class _RecentPayments extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              p.name,
+                              p.supplierName,
                               style: TextStyle(
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
@@ -638,7 +700,7 @@ class _RecentPayments extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              p.sub,
+                              '${DateFormat('MMM dd').format(p.date)} • ${p.method}',
                               style: TextStyle(
                                 color: AppColors.textTertiary,
                                 fontSize: 12,
@@ -648,7 +710,7 @@ class _RecentPayments extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '- EGP ${fmt.format(p.amount)}',
+                        '- $currency ${fmt.format(p.amount)}',
                         style: TextStyle(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w700,
@@ -665,11 +727,4 @@ class _RecentPayments extends StatelessWidget {
       ],
     );
   }
-}
-
-class _Pay {
-  final String name, sub;
-  final double amount;
-  final IconData icon;
-  const _Pay(this.name, this.sub, this.amount, this.icon);
 }

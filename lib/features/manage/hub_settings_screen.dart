@@ -1,39 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/hub_settings_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import 'pinned_actions_screen.dart';
 
 /// Hub Settings — layout, dashboard customization, notifications for the Manage hub.
-class HubSettingsScreen extends StatefulWidget {
+class HubSettingsScreen extends ConsumerStatefulWidget {
   const HubSettingsScreen({super.key});
 
   @override
-  State<HubSettingsScreen> createState() => _HubSettingsScreenState();
+  ConsumerState<HubSettingsScreen> createState() => _HubSettingsScreenState();
 }
 
-class _HubSettingsScreenState extends State<HubSettingsScreen> {
-  // Layout
-  int _layoutIndex = 1; // 0 = Grid, 1 = List
-  bool _showQuickActions = true;
-  bool _showInsightsBanner = true;
-
-  // Default tab
-  int _defaultTabIndex = 0; // 0=Hub Overview, 1=Inventory, 2=Suppliers
-  final _tabOptions = const ['Hub Overview', 'Inventory', 'Suppliers'];
-
-  // Notifications
-  bool _lowStockAlerts = true;
-  bool _paymentDueReminders = true;
-  bool _showStatBadges = true;
+class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
+  static const _tabOptions = ['Hub Overview', 'Inventory', 'Suppliers'];
 
   // Pinned actions (preview list)
-  final _pinnedActions = const [
+  static const _pinnedActions = [
     {'icon': Icons.add_box_rounded, 'label': 'Add Product'},
     {'icon': Icons.local_shipping_rounded, 'label': 'New Supplier'},
     {'icon': Icons.receipt_long_rounded, 'label': 'Add Transaction'},
   ];
+
+  HubSettingsNotifier get _notifier => ref.read(hubSettingsProvider.notifier);
 
   @override
   Widget build(BuildContext context) {
@@ -149,6 +141,7 @@ class _HubSettingsScreenState extends State<HubSettingsScreen> {
   //  LAYOUT PREFERENCES
   // ═══════════════════════════════════════════════════════
   Widget _buildLayoutSection() {
+    final s = ref.watch(hubSettingsProvider);
     return _card(
       children: [
         // Layout picker
@@ -168,9 +161,9 @@ class _HubSettingsScreenState extends State<HubSettingsScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: _layoutOption(0, 'Grid (2×2)')),
+                  Expanded(child: _layoutOption(0, 'Grid (2×2)', s.layoutIndex)),
                   const SizedBox(width: 10),
-                  Expanded(child: _layoutOption(1, 'List')),
+                  Expanded(child: _layoutOption(1, 'List', s.layoutIndex)),
                 ],
               ),
             ],
@@ -180,26 +173,26 @@ class _HubSettingsScreenState extends State<HubSettingsScreen> {
         _toggleRow(
           title: 'Show Quick Actions',
           subtitle: 'Shortcuts below main cards',
-          value: _showQuickActions,
-          onChanged: (v) => setState(() => _showQuickActions = v),
+          value: s.showQuickActions,
+          onChanged: (v) => _notifier.setShowQuickActions(v),
         ),
         _divider(),
         _toggleRow(
           title: 'Show Insights Banner',
           subtitle: 'Weekly summaries & tips',
-          value: _showInsightsBanner,
-          onChanged: (v) => setState(() => _showInsightsBanner = v),
+          value: s.showInsightsBanner,
+          onChanged: (v) => _notifier.setShowInsightsBanner(v),
         ),
       ],
     );
   }
 
-  Widget _layoutOption(int index, String label) {
-    final selected = _layoutIndex == index;
+  Widget _layoutOption(int index, String label, int currentIndex) {
+    final selected = currentIndex == index;
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        setState(() => _layoutIndex = index);
+        _notifier.setLayout(index);
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -331,7 +324,7 @@ class _HubSettingsScreenState extends State<HubSettingsScreen> {
                   border: Border.all(color: AppColors.borderLight),
                 ),
                 child: DropdownButton<int>(
-                  value: _defaultTabIndex,
+                  value: ref.watch(hubSettingsProvider).defaultTabIndex,
                   isExpanded: true,
                   underline: const SizedBox(),
                   icon: const Icon(Icons.expand_more_rounded,
@@ -348,7 +341,7 @@ class _HubSettingsScreenState extends State<HubSettingsScreen> {
                     ),
                   ),
                   onChanged: (v) {
-                    if (v != null) setState(() => _defaultTabIndex = v);
+                    if (v != null) _notifier.setDefaultTab(v);
                   },
                 ),
               ),
@@ -457,27 +450,28 @@ class _HubSettingsScreenState extends State<HubSettingsScreen> {
   //  NOTIFICATIONS & BADGES
   // ═══════════════════════════════════════════════════════
   Widget _buildNotificationsSection() {
+    final s = ref.watch(hubSettingsProvider);
     return _card(
       children: [
         _toggleRow(
           title: 'Low Stock Alerts',
           subtitle: 'Notify when items hit minimum',
-          value: _lowStockAlerts,
-          onChanged: (v) => setState(() => _lowStockAlerts = v),
+          value: s.lowStockAlerts,
+          onChanged: (v) => _notifier.setLowStockAlerts(v),
         ),
         _divider(),
         _toggleRow(
           title: 'Payment Due Reminders',
           subtitle: 'Alerts for upcoming vendor payments',
-          value: _paymentDueReminders,
-          onChanged: (v) => setState(() => _paymentDueReminders = v),
+          value: s.paymentDueReminders,
+          onChanged: (v) => _notifier.setPaymentDueReminders(v),
         ),
         _divider(),
         _toggleRow(
           title: 'Show Stat Badges on Cards',
           subtitle: 'Display mini-stats on hub cards',
-          value: _showStatBadges,
-          onChanged: (v) => setState(() => _showStatBadges = v),
+          value: s.showStatBadges,
+          onChanged: (v) => _notifier.setShowStatBadges(v),
         ),
       ],
     );

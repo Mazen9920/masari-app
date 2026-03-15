@@ -134,6 +134,11 @@ class ShopifyWebhookListenerNotifier extends Notifier<ShopifyWebhookEvent?> {
         return title != null
             ? 'New Shopify product "$title" imported'
             :  'New Shopify product imported';
+      case 'products/delete':
+        final title = payload['title']?.toString();
+        return title != null
+            ? 'Shopify product "$title" deleted'
+            :  'Shopify product unlinked';
       case 'inventory_levels/update':
         return  'Shopify inventory level updated';
       default:
@@ -154,6 +159,7 @@ class ShopifyWebhookListenerNotifier extends Notifier<ShopifyWebhookEvent?> {
         ref.read(transactionsProvider.notifier).refreshAll();
       case 'products/update':
       case 'products/create':
+      case 'products/delete':
       case 'inventory_levels/update':
         ref.read(inventoryProvider.notifier).refreshAll();
     }

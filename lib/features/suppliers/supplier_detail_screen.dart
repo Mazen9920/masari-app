@@ -53,7 +53,7 @@ class SupplierDetailScreen extends ConsumerWidget {
                         .fadeIn(duration: 250.ms),
                     const SizedBox(height: 20),
                     // Total Due card
-                    _BalanceCard(balance: live.balance, fmt: fmt, currency: currency)
+                    _BalanceCard(supplier: live, fmt: fmt, currency: currency)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 60.ms),
                     const SizedBox(height: 16),
@@ -297,14 +297,22 @@ class _ProfileSection extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 //  BALANCE CARD — Total Due
 // ═══════════════════════════════════════════════════════
-class _BalanceCard extends StatelessWidget {
-  final double balance;
+class _BalanceCard extends ConsumerWidget {
+  final Supplier supplier;
   final NumberFormat fmt;
   final String currency;
-  const _BalanceCard({required this.balance, required this.fmt, required this.currency});
+  const _BalanceCard({required this.supplier, required this.fmt, required this.currency});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final purchases = ref.watch(purchasesProvider);
+    final payments = ref.watch(paymentsProvider);
+    final supplierPurchases = purchases.where((p) => p.supplierId == supplier.id);
+    final supplierPayments = payments.where((p) => p.supplierId == supplier.id);
+    final totalPurchased = supplierPurchases.fold<double>(0, (s, p) => s + p.total);
+    final totalPaid = supplierPayments.fold<double>(0, (s, p) => s + p.amount);
+    final outstanding = (totalPurchased - totalPaid).clamp(0.0, double.infinity);
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
@@ -355,7 +363,7 @@ class _BalanceCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '$currency ${fmt.format(balance)}',
+                  '$currency ${fmt.format(outstanding)}',
                   style: const TextStyle(
                     color: Color(0xFFE67E22),
                     fontSize: 30,
@@ -493,8 +501,11 @@ class _StatsRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(currencyProvider);
     final purchases = ref.watch(purchasesProvider);
+    final payments = ref.watch(paymentsProvider);
     final supplierPurchases = purchases.where((p) => p.supplierId == supplier.id).toList();
     final totalSpend = supplierPurchases.fold<double>(0, (s, p) => s + p.total);
+    final supplierPayments = payments.where((p) => p.supplierId == supplier.id).toList();
+    final totalPaid = supplierPayments.fold<double>(0, (s, p) => s + p.amount);
 
     final allReceipts = ref.watch(goodsReceiptsProvider);
     final supplierReceipts = allReceipts.where((r) => r.supplierId == supplier.id).toList();
@@ -551,6 +562,68 @@ class _StatsRow extends ConsumerWidget {
               const SizedBox(width: 12),
               _statCard(
                   'Last Purchase', dateFmt.format(supplier.lastTransaction)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Total Payments row
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.borderLight.withValues(alpha: 0.4),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.payments_rounded,
+                              size: 14, color: const Color(0xFF16A34A)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Total Payments',
+                            style: TextStyle(
+                              color: AppColors.textTertiary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '$currency ${fmt.format(totalPaid)}',
+                        style: const TextStyle(
+                          color: Color(0xFF16A34A),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _statCard(
+                '${supplierPayments.length} Payment${supplierPayments.length == 1 ? '' : 's'}',
+                supplierPayments.isNotEmpty
+                    ? dateFmt.format(supplierPayments.first.date)
+                    : '—',
+              ),
             ],
           ),
           const SizedBox(height: 10),

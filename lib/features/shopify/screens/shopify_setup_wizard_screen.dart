@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/app_router.dart';
+import '../../../core/providers/app_settings_provider.dart';
 import '../../../core/services/shopify_sync_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
@@ -509,6 +510,20 @@ class _ShopifySetupWizardScreenState
 
     setState(() { _connecting = true; _domainError = null; });
     HapticFeedback.mediumImpact();
+
+    // Ensure Firestore has the current tier (CF reads it for access check)
+    final tier = ref.read(appSettingsProvider).tier;
+    if (tier.hasShopifyAccess) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .set({'subscription_tier': tier.name}, SetOptions(merge: true));
+        } catch (_) {}
+      }
+    }
 
     final shopDomain = '$cleanDomain.myshopify.com';
     final result = await ref.read(shopifyConnectionProvider.notifier).connect(shopDomain);

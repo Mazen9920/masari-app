@@ -138,4 +138,48 @@ class FirestoreSupplierRepository implements SupplierRepository {
       return Result.failure( 'Failed to record payment: $e');
     }
   }
+
+  @override
+  Future<Result<Supplier>> recordPurchase(String id, double amount, {DateTime? dueDate}) async {
+    try {
+      final result = await _firestore.runTransaction<Supplier>((txn) async {
+        final docRef = _collection.doc(id);
+        final snapshot = await txn.get(docRef);
+
+        if (!snapshot.exists) throw Exception('Supplier not found');
+
+        final data = snapshot.data()!;
+        data['id'] = snapshot.id;
+        final supplier = Supplier.fromJson(data);
+        final newBalance = supplier.balance + amount;
+
+        final updates = <String, dynamic>{
+          'balance': newBalance,
+          'last_transaction': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        };
+        if (dueDate != null) {
+          // Only update dueDate if the new one is later than the current one
+          if (supplier.dueDate == null || dueDate.isAfter(supplier.dueDate!)) {
+            updates['due_date'] = dueDate.toIso8601String();
+          }
+        }
+
+        txn.update(docRef, updates);
+
+        return supplier.copyWith(
+          balance: newBalance,
+          lastTransaction: DateTime.now(),
+          dueDate: dueDate != null &&
+                  (supplier.dueDate == null || dueDate.isAfter(supplier.dueDate!))
+              ? dueDate
+              : supplier.dueDate,
+        );
+      });
+
+      return Result.success(result);
+    } catch (e) {
+      return Result.failure('Failed to record purchase: $e');
+    }
+  }
 }

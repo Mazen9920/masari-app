@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/navigation/app_router.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../shopify/providers/shopify_connection_provider.dart';
+import '../shopify/providers/shopify_sync_provider.dart';
 
-class InventorySettingsScreen extends StatefulWidget {
+class InventorySettingsScreen extends ConsumerStatefulWidget {
   const InventorySettingsScreen({super.key});
 
   @override
-  State<InventorySettingsScreen> createState() =>
+  ConsumerState<InventorySettingsScreen> createState() =>
       _InventorySettingsScreenState();
 }
 
-class _InventorySettingsScreenState extends State<InventorySettingsScreen> {
+class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScreen> {
   bool _autoUpdateStock = false;
   bool _lowStockAlerts = true;
-  bool _emailReports = false;
   bool _hideOutOfStock = false;
+  bool _breakdownEnabled = false;
 
   String _defaultUnit = 'Pieces';
   String _valuationMethod = 'FIFO (Default)';
@@ -27,6 +33,31 @@ class _InventorySettingsScreenState extends State<InventorySettingsScreen> {
   static const _valuations = ['FIFO (Default)', 'Average Cost', 'LIFO'];
   static const _currencies = ['EGP', 'USD', 'EUR', 'SAR'];
 
+  static const _valuationToKey = {
+    'FIFO (Default)': 'fifo',
+    'Average Cost': 'average',
+    'LIFO': 'lifo',
+  };
+  static const _keyToValuation = {
+    'fifo': 'FIFO (Default)',
+    'average': 'Average Cost',
+    'lifo': 'LIFO',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    final s = ref.read(appSettingsProvider);
+    _autoUpdateStock = s.autoUpdateStock;
+    _lowStockAlerts = s.lowStockAlerts;
+    _hideOutOfStock = s.hideOutOfStock;
+    _breakdownEnabled = s.breakdownEnabled;
+    _defaultUnit = _units.contains(s.defaultUnit) ? s.defaultUnit : 'Pieces';
+    _currency = _currencies.contains(s.currency) ? s.currency : 'EGP';
+    _valuationMethod = _keyToValuation[s.valuationMethod] ?? 'FIFO (Default)';
+    _thresholdController.text = s.alertThreshold.toString();
+  }
+
   @override
   void dispose() {
     _thresholdController.dispose();
@@ -35,6 +66,15 @@ class _InventorySettingsScreenState extends State<InventorySettingsScreen> {
 
   void _save() {
     HapticFeedback.mediumImpact();
+    final notifier = ref.read(appSettingsProvider.notifier);
+    notifier.setAutoUpdateStock(_autoUpdateStock);
+    notifier.setLowStockAlerts(_lowStockAlerts);
+    notifier.setAlertThreshold(int.tryParse(_thresholdController.text) ?? 10);
+    notifier.setHideOutOfStock(_hideOutOfStock);
+    notifier.setBreakdownEnabled(_breakdownEnabled);
+    notifier.setDefaultUnit(_defaultUnit);
+    notifier.setValuationMethod(_valuationToKey[_valuationMethod] ?? 'fifo');
+    notifier.setCurrency(_currency);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Settings saved'),
@@ -70,6 +110,8 @@ class _InventorySettingsScreenState extends State<InventorySettingsScreen> {
                     _buildConfigurationSection(),
                     const SizedBox(height: 24),
                     _buildAdvancedSection(),
+                    const SizedBox(height: 24),
+                    _buildShopifySyncSection(),
                     const SizedBox(height: 28),
                     _buildSaveButton(),
                     const SizedBox(height: 20),
@@ -269,13 +311,6 @@ class _InventorySettingsScreenState extends State<InventorySettingsScreen> {
                 ],
               ),
             ),
-            _divider(),
-            _toggleRow(
-              title: 'Email Reports',
-              subtitle: 'Receive weekly stock summary',
-              value: _emailReports,
-              onChanged: (v) => setState(() => _emailReports = v),
-            ),
           ],
         ),
       ],
@@ -298,7 +333,10 @@ class _InventorySettingsScreenState extends State<InventorySettingsScreen> {
               iconColor: const Color(0xFF2563EB),
               title: 'Manage Categories',
               subtitle: 'Edit existing groupings',
-              onTap: () => HapticFeedback.lightImpact(),
+              onTap: () {
+                HapticFeedback.lightImpact();
+                context.push(AppRoutes.categories);
+              },
             ),
             _divider(),
             _navRow(
@@ -307,7 +345,10 @@ class _InventorySettingsScreenState extends State<InventorySettingsScreen> {
               iconColor: const Color(0xFF9333EA),
               title: 'Manage Suppliers',
               subtitle: 'Edit vendor details',
-              onTap: () => HapticFeedback.lightImpact(),
+              onTap: () {
+                HapticFeedback.lightImpact();
+                context.push(AppRoutes.suppliers);
+              },
             ),
           ],
         ),
@@ -325,22 +366,36 @@ class _InventorySettingsScreenState extends State<InventorySettingsScreen> {
         _sectionTitle('Advanced'),
         _card(
           children: [
-            _dropdownRow(
+            // Valuation method
+            _tapRow(
               title: 'Valuation Method',
-              value: _valuationMethod,
-              items: _valuations,
-              onChanged: (v) =>
-                  setState(() => _valuationMethod = v ?? _valuationMethod),
+              subtitle: _valuationDescription(_valuationMethod),
+              trailing: _valuationMethod.replaceAll(' (Default)', ''),
+              onTap: () => _showValuationPicker(),
             ),
             _divider(),
-            _dropdownRow(
+            // Currency
+            _tapRow(
               title: 'Currency',
-              value: _currency,
-              items: _currencies,
-              onChanged: (v) =>
-                  setState(() => _currency = v ?? _currency),
+              subtitle: 'Used across all inventory screens',
+              trailing: _currency,
+              onTap: () => _showPicker(
+                'Currency',
+                _currencies,
+                _currency,
+                (v) => setState(() => _currency = v),
+              ),
             ),
             _divider(),
+            // Breakdown feature
+            _toggleRow(
+              title: 'Product Breakdown',
+              subtitle: 'Enable breakdown & selling options',
+              value: _breakdownEnabled,
+              onChanged: (v) => setState(() => _breakdownEnabled = v),
+            ),
+            _divider(),
+            // Hide out-of-stock
             _toggleRow(
               title: 'Hide out-of-stock items',
               subtitle: 'Remove from main inventory view',
@@ -351,6 +406,280 @@ class _InventorySettingsScreenState extends State<InventorySettingsScreen> {
         ),
       ],
     ).animate().fadeIn(duration: 300.ms, delay: 150.ms);
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  SHOPIFY SYNC
+  // ═══════════════════════════════════════════════════
+  Widget _buildShopifySyncSection() {
+    final asyncConn = ref.watch(shopifyConnectionProvider);
+    final conn = asyncConn.value;
+    if (conn == null || !conn.isActive) return const SizedBox.shrink();
+
+    final syncEnabled = conn.syncInventoryEnabled;
+    final isAlwaysOn = conn.inventorySyncMode == 'always';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Shopify Sync'),
+        _card(
+          children: [
+            // Inventory sync toggle
+            _toggleRow(
+              title: 'Inventory Sync',
+              subtitle: 'Sync stock levels with Shopify',
+              value: syncEnabled,
+              onChanged: (v) async {
+                HapticFeedback.mediumImpact();
+                await ref
+                    .read(shopifyConnectionProvider.notifier)
+                    .updateSettings(syncInventoryEnabled: v);
+                if (!v) {
+                  ref.read(shopifySyncProvider.notifier).stopAlwaysSyncTimer();
+                } else if (conn.inventorySyncMode == 'always') {
+                  ref.read(shopifySyncProvider.notifier).restartAlwaysSyncTimer();
+                }
+              },
+            ),
+            if (syncEnabled) ...[
+              _divider(),
+              // Sync mode selection
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Sync Mode',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Choose how inventory stays in sync',
+                      style: AppTypography.captionSmall.copyWith(
+                        color: AppColors.textTertiary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildSyncModeCard(
+                      icon: Icons.sync_rounded,
+                      iconColor: const Color(0xFF16A34A),
+                      iconBg: const Color(0xFFDCFCE7),
+                      title: 'Always-On',
+                      subtitle: 'Real-time sync every 30 seconds',
+                      selected: isAlwaysOn,
+                      onTap: () => _setSyncMode('always'),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildSyncModeCard(
+                      icon: Icons.touch_app_rounded,
+                      iconColor: const Color(0xFF2563EB),
+                      iconBg: const Color(0xFFDBEAFE),
+                      title: 'On-Demand',
+                      subtitle: 'Sync manually when you choose',
+                      selected: !isAlwaysOn,
+                      onTap: () => _setSyncMode('on_demand'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    ).animate().fadeIn(duration: 300.ms, delay: 175.ms);
+  }
+
+  Widget _buildSyncModeCard({
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBg,
+    required String title,
+    required String subtitle,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? iconBg.withValues(alpha: 0.4)
+              : const Color(0xFFF8F9FA),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? iconColor.withValues(alpha: 0.5)
+                : AppColors.borderLight.withValues(alpha: 0.5),
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 18, color: iconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTypography.labelMedium.copyWith(
+                      color: selected
+                          ? AppColors.primaryNavy
+                          : AppColors.textPrimary,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Icon(Icons.check_circle_rounded,
+                  color: iconColor, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setSyncMode(String mode) async {
+    HapticFeedback.mediumImpact();
+    await ref
+        .read(shopifyConnectionProvider.notifier)
+        .updateSettings(inventorySyncMode: mode);
+    if (mode == 'always') {
+      ref.read(shopifySyncProvider.notifier).restartAlwaysSyncTimer();
+    } else {
+      ref.read(shopifySyncProvider.notifier).stopAlwaysSyncTimer();
+    }
+  }
+
+  String _valuationDescription(String method) {
+    return switch (method) {
+      'FIFO (Default)' => 'First In, First Out — oldest stock sold first',
+      'LIFO'           => 'Last In, First Out — newest stock sold first',
+      'Average Cost'   => 'Weighted average of all purchase costs',
+      _                => '',
+    };
+  }
+
+  void _showValuationPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 12, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Valuation Method',
+                      style: AppTypography.h3.copyWith(
+                        color: AppColors.primaryNavy,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close_rounded,
+                          color: AppColors.textTertiary, size: 22),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(
+                  height: 1,
+                  color: AppColors.borderLight.withValues(alpha: 0.5)),
+              ..._valuations.map((val) {
+                final selected = val == _valuationMethod;
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      setState(() => _valuationMethod = val);
+                      HapticFeedback.lightImpact();
+                      Navigator.pop(ctx);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 14),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  val,
+                                  style: AppTypography.labelMedium.copyWith(
+                                    color: selected
+                                        ? AppColors.primaryNavy
+                                        : AppColors.textPrimary,
+                                    fontWeight: selected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _valuationDescription(val),
+                                  style: AppTypography.captionSmall.copyWith(
+                                    color: AppColors.textTertiary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (selected)
+                            const Icon(Icons.check_rounded,
+                                color: AppColors.accentOrange, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ═══════════════════════════════════════════════════

@@ -26,7 +26,8 @@ class TransactionDetailScreen extends ConsumerWidget {
       orElse: () => transaction,
     );
 
-    final sales = ref.watch(salesProvider).value ?? [];
+    final salesAsync = ref.watch(salesProvider);
+    final sales = salesAsync.value ?? [];
 
     // 1) Direct saleId link
     final effectiveSaleId = liveTx.saleId ?? transaction.saleId;
@@ -40,7 +41,8 @@ class TransactionDetailScreen extends ConsumerWidget {
 
     // 2) Sale-category transactions → always try to find the matching order
     if (liveTx.categoryId == 'cat_sales_revenue' ||
-        liveTx.categoryId == 'cat_cogs') {
+        liveTx.categoryId == 'cat_cogs' ||
+        liveTx.categoryId == 'cat_shipping') {
 
       // 2a) Try extracting saleId from transaction ID pattern
       String? extractedSaleId;
@@ -48,6 +50,8 @@ class TransactionDetailScreen extends ConsumerWidget {
         extractedSaleId = liveTx.id.substring('sale_rev_'.length);
       } else if (liveTx.id.startsWith('sale_cogs_')) {
         extractedSaleId = liveTx.id.substring('sale_cogs_'.length);
+      } else if (liveTx.id.startsWith('sale_ship_')) {
+        extractedSaleId = liveTx.id.substring('sale_ship_'.length);
       }
       if (extractedSaleId != null) {
         for (final s in sales) {
@@ -79,6 +83,32 @@ class TransactionDetailScreen extends ConsumerWidget {
             return SaleDetailScreen(sale: s);
           }
         }
+      }
+
+      // If this is a sale-related transaction but sales are still loading,
+      // show a loading indicator instead of the generic detail screen.
+      if (salesAsync is AsyncLoading || (effectiveSaleId != null && sales.isEmpty)) {
+        return Scaffold(
+          backgroundColor: AppColors.backgroundLight,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              onPressed: () => context.pop(),
+              icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            ),
+            title: Text(
+              'Transaction Detail',
+              style: AppTypography.h3.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            centerTitle: true,
+          ),
+          body: const Center(child: CircularProgressIndicator()),
+        );
       }
     }
 
@@ -151,23 +181,8 @@ class TransactionDetailScreen extends ConsumerWidget {
 
             const SizedBox(height: 24),
 
-            // ─── Quick Action Buttons ───
-            _buildQuickActions(),
-
-            const SizedBox(height: 24),
-
             // ─── Detail Info Rows ───
             _buildInfoCard(displayTransaction),
-
-            const SizedBox(height: 16),
-
-            // ─── AI Note ───
-            _buildAINote(),
-
-            const SizedBox(height: 16),
-
-            // ─── Attachments ───
-            _buildAttachments(),
 
             const SizedBox(height: 20),
 
@@ -255,51 +270,8 @@ class TransactionDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickActions() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _actionButton(Icons.receipt_long_rounded, 'Download\nReceipt'),
-        _actionButton(Icons.auto_fix_high_rounded, 'Categorize\nAI'),
-        _actionButton(Icons.flag_rounded, 'Report\nIssue'),
-      ],
-    );
-  }
-
-  Widget _actionButton(IconData icon, String label) {
-    return Column(
-      children: [
-        Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
-            border: Border.all(color: AppColors.borderLight),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 6,
-              ),
-            ],
-          ),
-          child: Icon(icon, size: 22, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: AppTypography.captionSmall.copyWith(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w500,
-            height: 1.3,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
   Widget _buildInfoCard(Transaction currentTx) {
+    final hasNote = currentTx.note != null && currentTx.note!.isNotEmpty;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -333,6 +305,12 @@ class TransactionDetailScreen extends ConsumerWidget {
             leadingWidget: Icon(Icons.payments_rounded,
                 size: 14, color: AppColors.textTertiary),
           ),
+          if (hasNote)
+            _infoRow(
+              'Note',
+              currentTx.note!,
+              isLast: false,
+            ),
           _infoRow(
             'Transaction ID',
             '#${currentTx.id}',
@@ -403,110 +381,6 @@ class TransactionDetailScreen extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildAINote() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF).withValues(alpha: 0.6), // blue-50
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFBFDBFE)), // blue-200
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.auto_awesome,
-                  size: 18, color: AppColors.secondaryBlue),
-              const SizedBox(width: 8),
-              Text(
-                'AI Note',
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.primaryNavy,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          RichText(
-            text: TextSpan(
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.5,
-              ),
-              children: [
-                const TextSpan(text: 'This is '),
-                TextSpan(
-                  text: '12% higher',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primaryNavy,
-                  ),
-                ),
-                const TextSpan(
-                  text:
-                      ' than your average bill for this category. It usually occurs on the 10th of each month.',
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAttachments() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Attachments',
-          style: AppTypography.labelMedium.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          width: double.infinity,
-          height: 90,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppColors.borderLight,
-              style: BorderStyle.solid,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.backgroundLight,
-                ),
-                child: const Icon(Icons.add_a_photo_rounded,
-                    size: 18, color: AppColors.textTertiary),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Add Receipt',
-                style: AppTypography.captionSmall.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 

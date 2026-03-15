@@ -1,71 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/pinned_actions_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 
 /// Pinned Actions screen — reorder and toggle visibility of hub quick actions.
-class PinnedActionsScreen extends StatefulWidget {
+class PinnedActionsScreen extends ConsumerStatefulWidget {
   const PinnedActionsScreen({super.key});
 
   @override
-  State<PinnedActionsScreen> createState() => _PinnedActionsScreenState();
+  ConsumerState<PinnedActionsScreen> createState() => _PinnedActionsScreenState();
 }
 
-class _PinnedActionsScreenState extends State<PinnedActionsScreen> {
-  // Visible threshold — first 4 are shown on the dashboard
+class _PinnedActionsScreenState extends ConsumerState<PinnedActionsScreen> {
   static const _visibleCount = 4;
 
-  late List<_ActionItem> _actions;
-
-  @override
-  void initState() {
-    super.initState();
-    _actions = [
-      _ActionItem(
-        icon: Icons.add_circle_rounded,
-        label: 'Add Product',
-        iconBg: const Color(0xFFFFF7ED),
-        iconColor: const Color(0xFFE67E22),
-      ),
-      _ActionItem(
-        icon: Icons.person_add_rounded,
-        label: 'New Supplier',
-        iconBg: const Color(0xFFEFF6FF),
-        iconColor: AppColors.primaryNavy,
-      ),
-      _ActionItem(
-        icon: Icons.receipt_long_rounded,
-        label: 'Record Purchase',
-        iconBg: const Color(0xFFEFF6FF),
-        iconColor: AppColors.primaryNavy,
-      ),
-      _ActionItem(
-        icon: Icons.category_rounded,
-        label: 'Create Category',
-        iconBg: const Color(0xFFFFF7ED),
-        iconColor: const Color(0xFFE67E22),
-      ),
-      // Below threshold — hidden by default
-      _ActionItem(
-        icon: Icons.payments_rounded,
-        label: 'Record Payment',
-        iconBg: const Color(0xFFEFF6FF),
-        iconColor: AppColors.primaryNavy,
-      ),
-      _ActionItem(
-        icon: Icons.inventory_2_rounded,
-        label: 'Adjust Stock',
-        iconBg: const Color(0xFFEFF6FF),
-        iconColor: AppColors.primaryNavy,
-      ),
-    ];
-  }
+  PinnedActionsNotifier get _notifier => ref.read(pinnedActionsProvider.notifier);
 
   @override
   Widget build(BuildContext context) {
-    final visible = _actions.take(_visibleCount).toList();
-    final hidden = _actions.skip(_visibleCount).toList();
+    final s = ref.watch(pinnedActionsProvider);
+    final actions = s.actions;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -94,7 +51,7 @@ class _PinnedActionsScreenState extends State<PinnedActionsScreen> {
               child: ReorderableListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
                 proxyDecorator: _proxyDecorator,
-                itemCount: _actions.length + 1, // +1 for divider
+                itemCount: actions.length + 1, // +1 for divider
                 onReorder: _onReorder,
                 itemBuilder: (context, index) {
                   // Divider between visible and hidden
@@ -104,33 +61,21 @@ class _PinnedActionsScreenState extends State<PinnedActionsScreen> {
 
                   final actualIndex =
                       index < _visibleCount ? index : index - 1;
-                  final action = _actions[actualIndex];
+                  if (actualIndex >= actions.length) {
+                    return const SizedBox.shrink(key: ValueKey('__empty__'));
+                  }
+                  final action = actions[actualIndex];
                   final isHidden = actualIndex >= _visibleCount;
 
                   return _ActionTile(
-                    key: ValueKey(action.label),
+                    key: ValueKey(action.id),
                     action: action,
                     isHidden: isHidden,
                     index: actualIndex,
+                    visibleCount: _visibleCount,
                     onVisibilityTap: () {
                       HapticFeedback.lightImpact();
-                      // Move item between visible/hidden zones
-                      setState(() {
-                        final item = _actions.removeAt(actualIndex);
-                        if (isHidden) {
-                          // Move to end of visible
-                          _actions.insert(
-                              _visibleCount - 1 < 0 ? 0 : _visibleCount - 1,
-                              item);
-                        } else {
-                          // Move to start of hidden
-                          _actions.insert(
-                              _visibleCount < _actions.length
-                                  ? _visibleCount
-                                  : _actions.length,
-                              item);
-                        }
-                      });
+                      _notifier.toggleVisibility(actualIndex);
                     },
                   );
                 },
@@ -177,7 +122,6 @@ class _PinnedActionsScreenState extends State<PinnedActionsScreen> {
             onTap: () {
               HapticFeedback.mediumImpact();
               Navigator.of(context).pop();
-              // In production, persist the order
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: const Text('Pinned actions saved'),
@@ -261,25 +205,22 @@ class _PinnedActionsScreenState extends State<PinnedActionsScreen> {
   // ═══════════════════════════════════════════════════════
   void _onReorder(int oldIndex, int newIndex) {
     HapticFeedback.lightImpact();
-    setState(() {
-      // Account for divider
-      final oldActual =
-          oldIndex < _visibleCount ? oldIndex : oldIndex - 1;
+    // Account for divider
+    final oldActual =
+        oldIndex < _visibleCount ? oldIndex : oldIndex - 1;
 
-      // Skip if trying to drag the divider
-      if (oldIndex == _visibleCount) return;
+    // Skip if trying to drag the divider
+    if (oldIndex == _visibleCount) return;
 
-      var newActual =
-          newIndex < _visibleCount ? newIndex : newIndex - 1;
+    var newActual =
+        newIndex < _visibleCount ? newIndex : newIndex - 1;
 
-      // Clamp
-      if (newActual > _actions.length) newActual = _actions.length;
-      if (oldActual >= _actions.length) return;
+    final actions = ref.read(pinnedActionsProvider).actions;
+    // Clamp
+    if (newActual > actions.length) newActual = actions.length;
+    if (oldActual >= actions.length) return;
 
-      final item = _actions.removeAt(oldActual);
-      if (newActual > oldActual) newActual--;
-      _actions.insert(newActual.clamp(0, _actions.length), item);
-    });
+    _notifier.reorder(oldActual, newActual);
   }
 
   // ═══════════════════════════════════════════════════════
@@ -308,29 +249,13 @@ class _PinnedActionsScreenState extends State<PinnedActionsScreen> {
 }
 
 // ═══════════════════════════════════════════════════════
-//  DATA CLASS
-// ═══════════════════════════════════════════════════════
-class _ActionItem {
-  final IconData icon;
-  final String label;
-  final Color iconBg;
-  final Color iconColor;
-
-  const _ActionItem({
-    required this.icon,
-    required this.label,
-    required this.iconBg,
-    required this.iconColor,
-  });
-}
-
-// ═══════════════════════════════════════════════════════
 //  ACTION TILE
 // ═══════════════════════════════════════════════════════
 class _ActionTile extends StatelessWidget {
-  final _ActionItem action;
+  final PinnedAction action;
   final bool isHidden;
   final int index;
+  final int visibleCount;
   final VoidCallback onVisibilityTap;
 
   const _ActionTile({
@@ -338,6 +263,7 @@ class _ActionTile extends StatelessWidget {
     required this.action,
     required this.isHidden,
     required this.index,
+    required this.visibleCount,
     required this.onVisibilityTap,
   });
 
@@ -420,7 +346,7 @@ class _ActionTile extends StatelessWidget {
               const SizedBox(width: 4),
               // Drag handle
               ReorderableDragStartListener(
-                index: index < _PinnedActionsScreenState._visibleCount
+                index: index < visibleCount
                     ? index
                     : index + 1, // account for divider
                 child: Padding(

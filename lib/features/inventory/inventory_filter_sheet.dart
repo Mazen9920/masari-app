@@ -26,18 +26,34 @@ class InventoryFilterResult {
 Future<InventoryFilterResult?> showInventoryFilterSheet(
   BuildContext context, {
   InventoryFilterResult? initial,
+  List<String> categoryOptions = const [],
+  List<String> supplierOptions = const [],
+  String currency = 'EGP',
 }) {
   return showModalBottomSheet<InventoryFilterResult>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _InventoryFilterSheet(initial: initial),
+    builder: (_) => _InventoryFilterSheet(
+      initial: initial,
+      categoryOptions: categoryOptions,
+      supplierOptions: supplierOptions,
+      currency: currency,
+    ),
   );
 }
 
 class _InventoryFilterSheet extends StatefulWidget {
   final InventoryFilterResult? initial;
-  const _InventoryFilterSheet({this.initial});
+  final List<String> categoryOptions;
+  final List<String> supplierOptions;
+  final String currency;
+  const _InventoryFilterSheet({
+    this.initial,
+    required this.categoryOptions,
+    required this.supplierOptions,
+    required this.currency,
+  });
 
   @override
   State<_InventoryFilterSheet> createState() => _InventoryFilterSheetState();
@@ -59,21 +75,6 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
   ];
 
   static const _statusOptions = ['In Stock', 'Low Stock', 'Out of Stock'];
-
-  static const _categoryOptions = [
-    'Gym Gear',
-    'Weights',
-    'Yoga',
-    'Supplements',
-    'Accessories',
-  ];
-
-  static const _supplierOptions = [
-    'IronFit',
-    'HeavyLift',
-    'ZenLife',
-    'GymSupps',
-  ];
 
   @override
   void initState() {
@@ -310,21 +311,26 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
       children: [
         _sectionLabel('Category'),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _categoryOptions.map((cat) {
-            final isSelected = _categories.contains(cat);
-            return _buildChip(cat, isSelected, () {
-              HapticFeedback.lightImpact();
-              setState(() {
-                isSelected
-                    ? _categories.remove(cat)
-                    : _categories.add(cat);
+        if (widget.categoryOptions.isEmpty)
+          Text('No categories yet',
+              style: AppTypography.bodySmall
+                  .copyWith(color: AppColors.textTertiary))
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: widget.categoryOptions.map((cat) {
+              final isSelected = _categories.contains(cat);
+              return _buildChip(cat, isSelected, () {
+                HapticFeedback.lightImpact();
+                setState(() {
+                  isSelected
+                      ? _categories.remove(cat)
+                      : _categories.add(cat);
+                });
               });
-            });
-          }).toList(),
-        ),
+            }).toList(),
+          ),
       ],
     );
   }
@@ -336,21 +342,26 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
       children: [
         _sectionLabel('Supplier'),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _supplierOptions.map((sup) {
-            final isSelected = _suppliers.contains(sup);
-            return _buildChip(sup, isSelected, () {
-              HapticFeedback.lightImpact();
-              setState(() {
-                isSelected
-                    ? _suppliers.remove(sup)
-                    : _suppliers.add(sup);
+        if (widget.supplierOptions.isEmpty)
+          Text('No suppliers yet',
+              style: AppTypography.bodySmall
+                  .copyWith(color: AppColors.textTertiary))
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: widget.supplierOptions.map((sup) {
+              final isSelected = _suppliers.contains(sup);
+              return _buildChip(sup, isSelected, () {
+                HapticFeedback.lightImpact();
+                setState(() {
+                  isSelected
+                      ? _suppliers.remove(sup)
+                      : _suppliers.add(sup);
+                });
               });
-            });
-          }).toList(),
-        ),
+            }).toList(),
+          ),
       ],
     );
   }
@@ -398,7 +409,7 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Price Range (EGP)'),
+        _sectionLabel('Price Range (${widget.currency})'),
         const SizedBox(height: 10),
         Row(
           children: [

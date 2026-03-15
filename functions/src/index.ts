@@ -25,7 +25,7 @@ import * as logger from "firebase-functions/logger";
 // ── Shopify (Phases 3–5) ───────────────────────────────────
 export {shopifyAuthStart, shopifyAuthCallback} from "./shopify-auth.js";
 export {shopifyWebhook} from "./shopify-webhooks.js";
-export {processShopifyWebhook} from "./shopify-processor.js";
+export {processShopifyWebhook, backfillFulfillmentStatus} from "./shopify-processor.js";
 export {shopifyProxy} from "./shopify-proxy.js";
 export {shopifyHealthCheck} from "./shopify-health.js";
 export {shopifyDisconnect} from "./shopify-disconnect.js";

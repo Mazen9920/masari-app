@@ -11,6 +11,7 @@ import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/sale_model.dart';
 import 'widgets/transaction_filter_sheet.dart';
+import 'widgets/sale_filter_sheet.dart';
 import 'widgets/transaction_search_delegate.dart';
 import '../../shared/widgets/async_value_widget.dart';
 import 'package:go_router/go_router.dart';
@@ -38,9 +39,13 @@ class TransactionsListScreen extends ConsumerStatefulWidget {
 class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen> {
   int _selectedPeriodIndex = 2; // "This Month" default
   TransactionFilter _filter = TransactionFilter.empty;
+  SaleFilter _salesFilter = SaleFilter.empty;
   DateTimeRange? _customRange;
   int _tabIndex = 0; // 0 = All, 1 = Sales
   bool _isRefreshing = false;
+
+  // ── Expanded sale groups (tracks which saleIds are expanded) ──
+  final Set<String> _expandedSaleIds = {};
 
   // ── Bulk selection (Sales tab only) ────────────────────
   bool _selectionMode = false;
@@ -310,13 +315,6 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
   /// Sales category IDs for the Sales tab
   static const _salesCategoryIds = {'cat_sales_revenue', 'cat_cogs'};
 
-  /// Transactions linked to sales — swipe actions are disabled for these.
-  static const _saleRelatedCategoryIds = {
-    'cat_sales_revenue',
-    'cat_cogs',
-    'cat_shipping',
-  };
-
   List<Transaction> get _filteredTransactions {
     var list = List<Transaction>.from(_allTransactions);
 
@@ -344,10 +342,10 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           absAmount <= _filter.amountRange.end;
     }).toList();
 
-    // Filter by categories
+    // Filter by categories (by ID)
     if (_filter.selectedCategories.isNotEmpty) {
       list = list
-          .where((t) => _filter.selectedCategories.contains(CategoryData.findById(t.categoryId).name))
+          .where((t) => _filter.selectedCategories.contains(t.categoryId))
           .toList();
     }
 
@@ -361,17 +359,42 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     return list;
   }
 
+  /// Map from revenue transaction ID → list of child transactions (COGS, shipping)
+  /// for the same sale, used to render expandable groups.
+  Map<String, List<Transaction>> get _saleChildTransactions {
+    final all = _filteredTransactions;
+    // Build saleId → list of child txns (COGS + shipping)
+    final childrenBySaleId = <String, List<Transaction>>{};
+    for (final tx in all) {
+      if (tx.saleId != null &&
+          (tx.categoryId == 'cat_cogs' || tx.categoryId == 'cat_shipping')) {
+        childrenBySaleId.putIfAbsent(tx.saleId!, () => []).add(tx);
+      }
+    }
+    // Map revenue tx ID → children
+    final result = <String, List<Transaction>>{};
+    for (final tx in all) {
+      if (tx.saleId != null && tx.categoryId == 'cat_sales_revenue') {
+        final children = childrenBySaleId[tx.saleId];
+        if (children != null && children.isNotEmpty) {
+          result[tx.id] = children;
+        }
+      }
+    }
+    return result;
+  }
+
   Map<String, List<Transaction>> get _groupedTransactions {
     final map = <String, List<Transaction>>{};
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
 
-    // On the Sales tab, hide COGS line items from the list
-    // (they're still included in _filteredTransactions for the summary bar)
-    final displayList = _tabIndex == 1
-        ? _filteredTransactions.where((t) => t.categoryId != 'cat_cogs').toList()
-        : _filteredTransactions;
+    // Hide COGS and shipping from the main list — they appear as
+    // expandable children under their revenue transaction.
+    final displayList = _filteredTransactions
+        .where((t) => t.categoryId != 'cat_cogs' && t.categoryId != 'cat_shipping')
+        .toList();
 
     for (final tx in displayList) {
       final txDate = DateTime(tx.dateTime.year, tx.dateTime.month, tx.dateTime.day);
@@ -415,6 +438,22 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     final (from, to) = _periodBounds;
     if (from != null) list = list.where((s) => !s.date.isBefore(from)).toList();
     if (to != null)   list = list.where((s) => !s.date.isAfter(to)).toList();
+
+    // Payment status filter
+    if (_salesFilter.paymentStatus != null) {
+      list = list.where((s) => s.paymentStatus == _salesFilter.paymentStatus).toList();
+    }
+    // Fulfillment status filter
+    if (_salesFilter.fulfillmentStatus != null) {
+      list = list.where((s) => s.fulfillmentStatus == _salesFilter.fulfillmentStatus).toList();
+    }
+    // Amount range filter
+    list = list.where((s) {
+      final amt = s.total;
+      return amt >= _salesFilter.amountRange.start &&
+          amt <= _salesFilter.amountRange.end;
+    }).toList();
+
     // Sort by date descending
     list.sort((a, b) => b.date.compareTo(a.date));
     return list;
@@ -442,16 +481,28 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
 
   void _openFilter() async {
     HapticFeedback.lightImpact();
-    final result = await showModalBottomSheet<TransactionFilter>(
-      
-  useRootNavigator: true,
-  context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => TransactionFilterSheet(initialFilter: _filter),
-    );
-    if (result != null) {
-      setState(() => _filter = result);
+    if (_tabIndex == 1) {
+      final result = await showModalBottomSheet<SaleFilter>(
+        useRootNavigator: true,
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => SaleFilterSheet(initialFilter: _salesFilter),
+      );
+      if (result != null) {
+        setState(() => _salesFilter = result);
+      }
+    } else {
+      final result = await showModalBottomSheet<TransactionFilter>(
+        useRootNavigator: true,
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => TransactionFilterSheet(initialFilter: _filter),
+      );
+      if (result != null) {
+        setState(() => _filter = result);
+      }
     }
   }
 
@@ -564,13 +615,17 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     }
 
     // 2) Sale-category transactions
-    if (tx.categoryId == 'cat_sales_revenue' || tx.categoryId == 'cat_cogs') {
+    if (tx.categoryId == 'cat_sales_revenue' ||
+        tx.categoryId == 'cat_cogs' ||
+        tx.categoryId == 'cat_shipping') {
       // 2a) Extract saleId from tx ID pattern
       String? extractedId;
       if (tx.id.startsWith('sale_rev_')) {
         extractedId = tx.id.substring('sale_rev_'.length);
       } else if (tx.id.startsWith('sale_cogs_')) {
         extractedId = tx.id.substring('sale_cogs_'.length);
+      } else if (tx.id.startsWith('sale_ship_')) {
+        extractedId = tx.id.substring('sale_ship_'.length);
       }
       if (extractedId != null) {
         for (final s in sales) {
@@ -969,35 +1024,43 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               const SizedBox(width: 2),
               _headerButton(Icons.search_rounded, _openSearch),
               const SizedBox(width: 2),
-              Stack(
-                children: [
-                  _headerButton(Icons.filter_list_rounded, _openFilter),
-                  if (!_filter.isDefault)
-                    Positioned(
-                      right: 6,
-                      top: 6,
-                      child: Container(
-                        width: 18,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          color: AppColors.accentOrange,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.backgroundLight, width: 2),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${_filter.activeCount}',
-                            style: const TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
+              Builder(builder: (ctx) {
+                final isActive = _tabIndex == 1
+                    ? !_salesFilter.isDefault
+                    : !_filter.isDefault;
+                final count = _tabIndex == 1
+                    ? _salesFilter.activeCount
+                    : _filter.activeCount;
+                return Stack(
+                  children: [
+                    _headerButton(Icons.filter_list_rounded, _openFilter),
+                    if (isActive)
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: AppColors.accentOrange,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.backgroundLight, width: 2),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$count',
+                              style: const TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
+                  ],
+                );
+              }),
             ],
           ),
         ],
@@ -1218,38 +1281,98 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       );
 
       // Transaction tiles
+      final saleChildren = _saleChildTransactions;
       for (final tx in entry.value) {
         final i = animIndex++;
-        final isSaleRelated = _saleRelatedCategoryIds.contains(tx.categoryId);
-        items.add(
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            child: isSaleRelated
-                ? _TransactionTile(
-                    transaction: tx,
-                    onTap: () => _onTransactionTap(tx),
-                  )
-                : _SwipeActionTile(
-                    transaction: tx,
-                    onTap: () => _onTransactionTap(tx),
-                    onEdit: () => _editTransaction(tx),
-                    onDuplicate: () => _duplicateTransaction(tx),
-                    onDelete: () => _deleteTransaction(tx),
-                  ),
-          )
-              .animate()
-              .fadeIn(
-                duration: 350.ms,
-                delay: Duration(milliseconds: 50 * i),
-              )
-              .slideX(
-                begin: 0.05,
-                end: 0,
-                duration: 350.ms,
-                delay: Duration(milliseconds: 50 * i),
-                curve: Curves.easeOutCubic,
+        final isSaleRevenue = tx.categoryId == 'cat_sales_revenue';
+        final children = isSaleRevenue ? saleChildren[tx.id] : null;
+        final hasChildren = children != null && children.isNotEmpty;
+
+        if (isSaleRevenue && hasChildren) {
+          // Expandable sale group
+          final isExpanded = _expandedSaleIds.contains(tx.saleId ?? tx.id);
+          items.add(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: _SaleGroupTile(
+                revenueTransaction: tx,
+                childTransactions: children,
+                isExpanded: isExpanded,
+                onToggleExpand: () {
+                  setState(() {
+                    final key = tx.saleId ?? tx.id;
+                    if (_expandedSaleIds.contains(key)) {
+                      _expandedSaleIds.remove(key);
+                    } else {
+                      _expandedSaleIds.add(key);
+                    }
+                  });
+                },
+                onTap: () => _onTransactionTap(tx),
               ),
-        );
+            )
+                .animate()
+                .fadeIn(
+                  duration: 350.ms,
+                  delay: Duration(milliseconds: 50 * i),
+                )
+                .slideX(
+                  begin: 0.05,
+                  end: 0,
+                  duration: 350.ms,
+                  delay: Duration(milliseconds: 50 * i),
+                  curve: Curves.easeOutCubic,
+                ),
+          );
+        } else if (isSaleRevenue) {
+          // Sale revenue with no children — plain tile
+          items.add(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: _TransactionTile(
+                transaction: tx,
+                onTap: () => _onTransactionTap(tx),
+              ),
+            )
+                .animate()
+                .fadeIn(
+                  duration: 350.ms,
+                  delay: Duration(milliseconds: 50 * i),
+                )
+                .slideX(
+                  begin: 0.05,
+                  end: 0,
+                  duration: 350.ms,
+                  delay: Duration(milliseconds: 50 * i),
+                  curve: Curves.easeOutCubic,
+                ),
+          );
+        } else {
+          items.add(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: _SwipeActionTile(
+                transaction: tx,
+                onTap: () => _onTransactionTap(tx),
+                onEdit: () => _editTransaction(tx),
+                onDuplicate: () => _duplicateTransaction(tx),
+                onDelete: () => _deleteTransaction(tx),
+              ),
+            )
+                .animate()
+                .fadeIn(
+                  duration: 350.ms,
+                  delay: Duration(milliseconds: 50 * i),
+                )
+                .slideX(
+                  begin: 0.05,
+                  end: 0,
+                  duration: 350.ms,
+                  delay: Duration(milliseconds: 50 * i),
+                  curve: Curves.easeOutCubic,
+                ),
+          );
+        }
       }
     }
 
@@ -1357,6 +1480,15 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     final items = <Widget>[];
     int animIndex = 0;
 
+    // Build a map of saleId → child transactions for expandable breakdown
+    final allTxns = ref.watch(transactionsProvider).value ?? [];
+    final saleTxnMap = <String, List<Transaction>>{};
+    for (final tx in allTxns) {
+      if (tx.saleId != null) {
+        saleTxnMap.putIfAbsent(tx.saleId!, () => []).add(tx);
+      }
+    }
+
     if (shopifyBanner != null) {
       items.add(shopifyBanner);
     }
@@ -1379,23 +1511,47 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
 
       for (final sale in entry.value) {
         final i = animIndex++;
+        final saleTxns = saleTxnMap[sale.id] ?? [];
+        final isExpanded = _expandedSaleIds.contains(sale.id);
         items.add(
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            child: _SaleTile(
-              sale: sale,
-              currency: currency,
-              fmt: fmt,
-              selectionMode: _selectionMode,
-              isSelected: _selectedIds.contains(sale.id),
-              onToggle: () => _toggleSaleSelection(sale.id),
-              onTap: _selectionMode
-                  ? () => _toggleSaleSelection(sale.id)
-                  : () {
-                      HapticFeedback.lightImpact();
-                      context.pushNamed('SaleDetailScreen', extra: {'sale': sale});
-                    },
-              onLongPress: _selectionMode ? null : _enterSelectionMode,
+            child: Column(
+              children: [
+                _SaleTileWithExpand(
+                  sale: sale,
+                  currency: currency,
+                  fmt: fmt,
+                  selectionMode: _selectionMode,
+                  isSelected: _selectedIds.contains(sale.id),
+                  onToggle: () => _toggleSaleSelection(sale.id),
+                  hasChildren: saleTxns.isNotEmpty,
+                  isExpanded: isExpanded,
+                  onToggleExpand: saleTxns.isNotEmpty
+                      ? () {
+                          setState(() {
+                            if (_expandedSaleIds.contains(sale.id)) {
+                              _expandedSaleIds.remove(sale.id);
+                            } else {
+                              _expandedSaleIds.add(sale.id);
+                            }
+                          });
+                        }
+                      : null,
+                  onTap: _selectionMode
+                      ? () => _toggleSaleSelection(sale.id)
+                      : () {
+                          HapticFeedback.lightImpact();
+                          context.pushNamed('SaleDetailScreen', extra: {'sale': sale});
+                        },
+                  onLongPress: _selectionMode ? null : _enterSelectionMode,
+                ),
+                if (isExpanded)
+                  ...saleTxns.map((tx) => _SaleChildRow(
+                        transaction: tx,
+                        currency: currency,
+                      )),
+              ],
             ),
           )
               .animate()
@@ -1749,13 +1905,6 @@ class _SwipeActionTileState extends State<_SwipeActionTile>
                 onHorizontalDragStart: _onHorizontalDragStart,
                 onHorizontalDragUpdate: _onHorizontalDragUpdate,
                 onHorizontalDragEnd: _onHorizontalDragEnd,
-                onTap: () {
-                  if (_isOpen) {
-                    _close();
-                  } else {
-                    widget.onTap();
-                  }
-                },
                 child: Container(
                   decoration: BoxDecoration(
                     color: AppColors.backgroundLight,
@@ -1763,7 +1912,13 @@ class _SwipeActionTileState extends State<_SwipeActionTile>
                   ),
                   child: _TransactionTile(
                     transaction: widget.transaction,
-                    onTap: () {}, // handled by GestureDetector above
+                    onTap: () {
+                      if (_isOpen) {
+                        _close();
+                      } else {
+                        widget.onTap();
+                      }
+                    },
                   ),
                 ),
               ),
@@ -1911,236 +2066,6 @@ class _SalesBulkActionBar extends StatelessWidget {
         .animate()
         .slideY(begin: 1.0, duration: 220.ms, curve: Curves.easeOut)
         .fadeIn(duration: 180.ms);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-//  SALE TILE WIDGET (for Sales tab — renders Sale objects directly)
-// ═══════════════════════════════════════════════════════════
-class _SaleTile extends StatelessWidget {
-  final Sale sale;
-  final String currency;
-  final NumberFormat fmt;
-  final VoidCallback onTap;
-  final VoidCallback? onLongPress;
-  final bool selectionMode;
-  final bool isSelected;
-  final VoidCallback onToggle;
-
-  const _SaleTile({
-    required this.sale,
-    required this.currency,
-    required this.fmt,
-    required this.onTap,
-    this.onLongPress,
-    this.selectionMode = false,
-    this.isSelected = false,
-    required this.onToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isCancelled = sale.orderStatus == OrderStatus.cancelled;
-
-    Color statusColor;
-    String statusLabel;
-    switch (sale.paymentStatus) {
-      case PaymentStatus.paid:
-        statusColor = AppColors.success;
-        statusLabel = 'Paid';
-        break;
-      case PaymentStatus.refunded:
-        statusColor = AppColors.danger;
-        statusLabel = 'Refunded';
-        break;
-      case PaymentStatus.partial:
-        statusColor = AppColors.warning;
-        statusLabel = 'Partial';
-        break;
-      case PaymentStatus.unpaid:
-        statusColor = AppColors.danger;
-        statusLabel = 'Unpaid';
-        break;
-    }
-
-    Color borderColor;
-    Color cardColor;
-    if (isSelected) {
-      borderColor = AppColors.primaryNavy;
-      cardColor = AppColors.primaryNavy.withValues(alpha: 0.04);
-    } else if (isCancelled) {
-      borderColor = AppColors.danger.withValues(alpha: 0.2);
-      cardColor = const Color(0xFFFEFCFC);
-    } else {
-      borderColor = AppColors.borderLight.withValues(alpha: 0.4);
-      cardColor = Colors.white;
-    }
-
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor, width: isSelected ? 2 : 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Checkbox / Icon
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: selectionMode
-                  ? SizedBox(
-                      key: const ValueKey('cb'),
-                      width: 48,
-                      height: 48,
-                      child: Center(
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          width: 26,
-                          height: 26,
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primaryNavy : Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.primaryNavy
-                                  : AppColors.borderLight,
-                              width: 2,
-                            ),
-                          ),
-                          child: isSelected
-                              ? const Icon(Icons.check_rounded,
-                                  size: 16, color: Colors.white)
-                              : null,
-                        ),
-                      ),
-                    )
-                  : Container(
-                      key: const ValueKey('ic'),
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: isCancelled
-                            ? AppColors.danger.withValues(alpha: 0.08)
-                            : const Color(0xFFECFDF5),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        isCancelled
-                            ? Icons.cancel_rounded
-                            : Icons.shopping_bag_rounded,
-                        size: 22,
-                        color: isCancelled
-                            ? AppColors.danger
-                            : const Color(0xFF10B981),
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 14),
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    sale.shopifyOrderNumber != null
-                        ? 'Shopify #${sale.shopifyOrderNumber}'
-                        : sale.customerName ?? 'Walk-in Customer',
-                    style: AppTypography.labelLarge.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.accentOrange.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: Text(
-                      'Sales Revenue',
-                      style: AppTypography.captionSmall.copyWith(
-                        color: AppColors.accentOrange,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Amount + status
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '+$currency ${fmt.format(sale.total)}',
-                  style: AppTypography.labelLarge.copyWith(
-                    color: isCancelled
-                        ? AppColors.textTertiary
-                        : AppColors.success,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    decoration:
-                        isCancelled ? TextDecoration.lineThrough : null,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isCancelled
-                            ? AppColors.danger.withValues(alpha: 0.1)
-                            : statusColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        isCancelled ? 'Cancelled' : statusLabel,
-                        style: AppTypography.captionSmall.copyWith(
-                          color: isCancelled ? AppColors.danger : statusColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 9,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      DateFormat('h:mm a').format(sale.date),
-                      style: AppTypography.captionSmall.copyWith(
-                        color: AppColors.textTertiary,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -2297,6 +2222,528 @@ class _ShopifyBanner extends StatelessWidget {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EXPANDABLE SALE GROUP TILE (All Transactions tab)
+// ═══════════════════════════════════════════════════════════
+
+/// Shows a revenue transaction with an expand chevron.
+/// When expanded, reveals COGS and shipping child rows.
+class _SaleGroupTile extends ConsumerWidget {
+  final Transaction revenueTransaction;
+  final List<Transaction> childTransactions;
+  final bool isExpanded;
+  final VoidCallback onToggleExpand;
+  final VoidCallback onTap;
+
+  const _SaleGroupTile({
+    required this.revenueTransaction,
+    required this.childTransactions,
+    required this.isExpanded,
+    required this.onToggleExpand,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(appSettingsProvider).currency;
+    final categories = ref.watch(categoriesProvider).value ?? [];
+    final category = categories.firstWhere(
+      (c) => c.id == revenueTransaction.categoryId,
+      orElse: () => CategoryData.findById(revenueTransaction.categoryId),
+    );
+
+    return Column(
+      children: [
+        // Main revenue row
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  // Category icon
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: category.displayBgColor,
+                    ),
+                    child: Icon(
+                      category.iconData,
+                      color: category.displayColor,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  // Title + category badge
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          revenueTransaction.title,
+                          style: AppTypography.labelLarge.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentOrange.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(50),
+                          ),
+                          child: Text(
+                            category.name,
+                            style: AppTypography.captionSmall.copyWith(
+                              color: AppColors.accentOrange,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Amount + time
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        revenueTransaction.formattedAmountWith(currency),
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        revenueTransaction.formattedTime,
+                        style: AppTypography.captionSmall.copyWith(
+                          color: AppColors.textTertiary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 4),
+                  // Expand chevron
+                  GestureDetector(
+                    onTap: onToggleExpand,
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: AnimatedRotation(
+                        turns: isExpanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 22,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Expanded children
+        AnimatedCrossFade(
+          firstChild: const SizedBox.shrink(),
+          secondChild: Column(
+            children: childTransactions
+                .map((tx) => _SaleChildRow(transaction: tx, currency: currency))
+                .toList(),
+          ),
+          crossFadeState:
+              isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 200),
+        ),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SALE CHILD ROW (COGS / Shipping sub-item)
+// ═══════════════════════════════════════════════════════════
+
+class _SaleChildRow extends StatelessWidget {
+  final Transaction transaction;
+  final String currency;
+
+  const _SaleChildRow({
+    required this.transaction,
+    required this.currency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final category = CategoryData.findById(transaction.categoryId);
+    final isExpense = transaction.amount < 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 40, right: 8, top: 2, bottom: 2),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.backgroundLight,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: AppColors.borderLight.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: category.displayBgColor,
+              ),
+              child: Icon(category.iconData, size: 16, color: category.displayColor),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                category.name,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              transaction.formattedAmountWith(currency),
+              style: AppTypography.labelMedium.copyWith(
+                color: isExpense ? AppColors.danger : AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Fulfillment status helpers
+// ═══════════════════════════════════════════════════════════
+
+Color _fulfillmentColor(FulfillmentStatus s) {
+  switch (s) {
+    case FulfillmentStatus.fulfilled:
+      return AppColors.success;
+    case FulfillmentStatus.partial:
+      return AppColors.warning;
+    case FulfillmentStatus.unfulfilled:
+      return AppColors.textTertiary;
+  }
+}
+
+String _fulfillmentLabel(FulfillmentStatus s) {
+  switch (s) {
+    case FulfillmentStatus.fulfilled:
+      return 'Fulfilled';
+    case FulfillmentStatus.partial:
+      return 'Partial Ship';
+    case FulfillmentStatus.unfulfilled:
+      return 'Unfulfilled';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SALE TILE WITH EXPAND (Sales tab)
+// ═══════════════════════════════════════════════════════════
+
+class _SaleTileWithExpand extends StatelessWidget {
+  final Sale sale;
+  final String currency;
+  final NumberFormat fmt;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final bool selectionMode;
+  final bool isSelected;
+  final VoidCallback onToggle;
+  final bool hasChildren;
+  final bool isExpanded;
+  final VoidCallback? onToggleExpand;
+
+  const _SaleTileWithExpand({
+    required this.sale,
+    required this.currency,
+    required this.fmt,
+    required this.onTap,
+    this.onLongPress,
+    this.selectionMode = false,
+    this.isSelected = false,
+    required this.onToggle,
+    required this.hasChildren,
+    required this.isExpanded,
+    this.onToggleExpand,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isCancelled = sale.orderStatus == OrderStatus.cancelled;
+
+    Color statusColor;
+    String statusLabel;
+    switch (sale.paymentStatus) {
+      case PaymentStatus.paid:
+        statusColor = AppColors.success;
+        statusLabel = 'Paid';
+        break;
+      case PaymentStatus.refunded:
+        statusColor = AppColors.danger;
+        statusLabel = 'Refunded';
+        break;
+      case PaymentStatus.partial:
+        statusColor = AppColors.warning;
+        statusLabel = 'Partial';
+        break;
+      case PaymentStatus.unpaid:
+        statusColor = AppColors.danger;
+        statusLabel = 'Unpaid';
+        break;
+    }
+
+    Color borderColor;
+    Color cardColor;
+    if (isSelected) {
+      borderColor = AppColors.primaryNavy;
+      cardColor = AppColors.primaryNavy.withValues(alpha: 0.04);
+    } else if (isCancelled) {
+      borderColor = AppColors.danger.withValues(alpha: 0.2);
+      cardColor = const Color(0xFFFEFCFC);
+    } else {
+      borderColor = AppColors.borderLight.withValues(alpha: 0.4);
+      cardColor = Colors.white;
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor, width: isSelected ? 2 : 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Checkbox / Icon
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: selectionMode
+                  ? SizedBox(
+                      key: const ValueKey('cb'),
+                      width: 48,
+                      height: 48,
+                      child: Center(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: isSelected ? AppColors.primaryNavy : Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.primaryNavy
+                                  : AppColors.borderLight,
+                              width: 2,
+                            ),
+                          ),
+                          child: isSelected
+                              ? const Icon(Icons.check_rounded,
+                                  size: 16, color: Colors.white)
+                              : null,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      key: const ValueKey('ic'),
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isCancelled
+                            ? AppColors.danger.withValues(alpha: 0.08)
+                            : const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        isCancelled
+                            ? Icons.cancel_rounded
+                            : Icons.shopping_bag_rounded,
+                        size: 22,
+                        color: isCancelled
+                            ? AppColors.danger
+                            : const Color(0xFF10B981),
+                      ),
+                    ),
+            ),
+            const SizedBox(width: 14),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    sale.shopifyOrderNumber != null
+                        ? 'Shopify #${sale.shopifyOrderNumber}'
+                        : sale.customerName ?? 'Walk-in Customer',
+                    style: AppTypography.labelLarge.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Amount + status
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '+$currency ${fmt.format(sale.total)}',
+                  style: AppTypography.labelLarge.copyWith(
+                    color: isCancelled
+                        ? AppColors.textTertiary
+                        : AppColors.success,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    decoration:
+                        isCancelled ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // Status tags row — wrap for Shopify dual tags
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
+                    if (sale.isCompleted)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Completed ✓',
+                          style: AppTypography.captionSmall.copyWith(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 9,
+                          ),
+                        ),
+                      )
+                    else ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isCancelled
+                              ? AppColors.danger.withValues(alpha: 0.1)
+                              : statusColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          isCancelled ? 'Cancelled' : statusLabel,
+                          style: AppTypography.captionSmall.copyWith(
+                            color: isCancelled ? AppColors.danger : statusColor,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ),
+                      if (sale.isShopifyOrder && !isCancelled)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _fulfillmentColor(sale.fulfillmentStatus)
+                                .withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _fulfillmentLabel(sale.fulfillmentStatus),
+                            style: AppTypography.captionSmall.copyWith(
+                              color: _fulfillmentColor(sale.fulfillmentStatus),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 9,
+                            ),
+                          ),
+                        ),
+                    ],
+                    Text(
+                      DateFormat('h:mm a').format(sale.date),
+                      style: AppTypography.captionSmall.copyWith(
+                        color: AppColors.textTertiary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            // Expand chevron
+            if (hasChildren && !selectionMode) ...[
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: onToggleExpand,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 22,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

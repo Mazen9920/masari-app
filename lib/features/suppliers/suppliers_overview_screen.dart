@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/supplier_model.dart';
 import 'add_supplier_screen.dart';
 import 'record_purchase_screen.dart';
@@ -13,6 +14,7 @@ import 'record_payment_screen.dart';
 import 'supplier_detail_screen.dart';
 import 'payments_summary_screen.dart';
 import 'purchases_summary_screen.dart';
+import 'received_goods_summary_screen.dart';
 
 /// Suppliers Overview — summary, quick actions, filter chips, supplier list.
 class SuppliersOverviewScreen extends ConsumerStatefulWidget {
@@ -45,15 +47,25 @@ class _SuppliersOverviewScreenState
   @override
   Widget build(BuildContext context) {
     final suppliers = ref.watch(suppliersProvider).value ?? [];
+    final currency = ref.watch(currencyProvider);
+    final purchases = ref.watch(purchasesProvider);
+    final payments = ref.watch(paymentsProvider);
+    final receipts = ref.watch(goodsReceiptsProvider);
 
     // Filtered list
     final filtered = _applyFilter(suppliers);
 
     // Stats
     final totalSuppliers = suppliers.length;
-    final totalOutstanding =
-        suppliers.fold<double>(0, (sum, s) => sum + s.balance);
     final overdueCount = suppliers.where((s) => s.isOverdue).length;
+    final totalPurchases =
+        purchases.fold<double>(0, (sum, p) => sum + p.total);
+    final totalPayments =
+        payments.fold<double>(0, (sum, p) => sum + p.amount);
+    final totalOutstanding =
+        (totalPurchases - totalPayments).clamp(0.0, double.infinity);
+    final totalReceived =
+        receipts.fold<double>(0, (sum, r) => sum + r.totalCost);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -74,12 +86,16 @@ class _SuppliersOverviewScreenState
                       totalSuppliers: totalSuppliers,
                       totalOutstanding: totalOutstanding,
                       overdueCount: overdueCount,
+                      currency: currency,
                     ).animate().fadeIn(duration: 250.ms),
 
                     // Summary Cards
-                    _buildSummaryCards()
-                        .animate()
-                        .fadeIn(duration: 250.ms, delay: 50.ms),
+                    _buildSummaryCards(
+                      currency,
+                      totalPayments,
+                      totalPurchases,
+                      totalReceived,
+                    ).animate().fadeIn(duration: 250.ms, delay: 50.ms),
 
                     // Quick actions
                     _buildQuickActions()
@@ -96,7 +112,7 @@ class _SuppliersOverviewScreenState
                       return Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 4),
-                        child: _SupplierCard(supplier: filtered[i])
+                        child: _SupplierCard(supplier: filtered[i], currency: currency)
                             .animate()
                             .fadeIn(
                                 duration: 200.ms,
@@ -751,43 +767,76 @@ class _SuppliersOverviewScreenState
   // ═══════════════════════════════════════════════════════
   //  SUMMARY CARDS
   // ═══════════════════════════════════════════════════════
-  Widget _buildSummaryCards() {
+  String _compactAmount(String currency, double amount) {
+    if (amount >= 1000000) {
+      return '$currency ${(amount / 1000000).toStringAsFixed(1)}M';
+    } else if (amount >= 1000) {
+      return '$currency ${(amount / 1000).toStringAsFixed(1)}k';
+    }
+    return '$currency ${NumberFormat('#,##0').format(amount)}';
+  }
+
+  Widget _buildSummaryCards(
+    String currency,
+    double totalPayments,
+    double totalPurchases,
+    double totalReceived,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: _summaryNavCard(
-              title: 'Payments',
-              subtitle: 'EGP 82.4k',
-              icon: Icons.payments_rounded,
-              color: AppColors.primaryNavy,
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const PaymentsSummaryScreen(),
-                  ),
-                );
-              },
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _summaryNavCard(
+                  title: 'Payments',
+                  subtitle: _compactAmount(currency, totalPayments),
+                  icon: Icons.payments_rounded,
+                  color: AppColors.primaryNavy,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PaymentsSummaryScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _summaryNavCard(
+                  title: 'Purchases',
+                  subtitle: _compactAmount(currency, totalPurchases),
+                  icon: Icons.shopping_bag_rounded,
+                  color: const Color(0xFFE67E22),
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PurchasesSummaryScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _summaryNavCard(
-              title: 'Purchases',
-              subtitle: 'EGP 124.5k',
-              icon: Icons.shopping_bag_rounded,
-              color: const Color(0xFFE67E22),
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const PurchasesSummaryScreen(),
-                  ),
-                );
-              },
-            ),
+          const SizedBox(height: 12),
+          _summaryNavCard(
+            title: 'Received Goods',
+            subtitle: _compactAmount(currency, totalReceived),
+            icon: Icons.inventory_2_rounded,
+            color: const Color(0xFF16A34A),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const ReceivedGoodsSummaryScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -904,6 +953,18 @@ class _SuppliersOverviewScreenState
                 Navigator.of(context).push(
                   MaterialPageRoute(
                       builder: (_) => const RecordPaymentScreen()),
+                );
+              },
+            ),
+            const SizedBox(width: 10),
+            _quickActionPill(
+              icon: Icons.inventory_2_rounded,
+              label: 'Received Goods',
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const ReceivedGoodsSummaryScreen()),
                 );
               },
             ),
@@ -1043,11 +1104,13 @@ class _SummaryStrip extends StatelessWidget {
   final int totalSuppliers;
   final double totalOutstanding;
   final int overdueCount;
+  final String currency;
 
   const _SummaryStrip({
     required this.totalSuppliers,
     required this.totalOutstanding,
     required this.overdueCount,
+    required this.currency,
   });
 
   @override
@@ -1076,7 +1139,7 @@ class _SummaryStrip extends StatelessWidget {
               VerticalDivider(
                   color: AppColors.borderLight.withValues(alpha: 0.5),
                   width: 1),
-              _stat('Outstanding', fmt.format(totalOutstanding), 'EGP'),
+              _stat('Outstanding', fmt.format(totalOutstanding), currency),
               VerticalDivider(
                   color: AppColors.borderLight.withValues(alpha: 0.5),
                   width: 1),
@@ -1135,8 +1198,9 @@ class _SummaryStrip extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _SupplierCard extends StatelessWidget {
   final Supplier supplier;
+  final String currency;
 
-  const _SupplierCard({required this.supplier});
+  const _SupplierCard({required this.supplier, required this.currency});
 
   @override
   Widget build(BuildContext context) {
@@ -1254,7 +1318,7 @@ class _SupplierCard extends StatelessWidget {
                     child: Text(
                       supplier.isPaid
                           ? 'Paid'
-                          : 'EGP ${NumberFormat('#,##0').format(supplier.balance)} due',
+                          : '$currency ${NumberFormat('#,##0').format(supplier.balance)} due',
                       style: TextStyle(
                         color: supplier.isPaid
                             ? AppColors.textTertiary

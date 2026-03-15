@@ -43,15 +43,20 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
             !s.date.isAfter(range.previousEnd))
         .toList();
 
+    // Categories excluded from P&L (CF investing activities / BS only)
+    const plExcludedCats = {'cat_investments'};
+
     final curTxns = allTxns
         .where((t) =>
             !t.excludeFromPL &&
+            !plExcludedCats.contains(t.categoryId) &&
             !t.dateTime.isBefore(range.start) &&
             !t.dateTime.isAfter(range.end))
         .toList();
     final prevTxns = allTxns
         .where((t) =>
             !t.excludeFromPL &&
+            !plExcludedCats.contains(t.categoryId) &&
             !t.dateTime.isBefore(range.previousStart) &&
             !t.dateTime.isAfter(range.previousEnd))
         .toList();
@@ -475,7 +480,7 @@ List<double> _aggregate(
 
   switch (metric) {
     case _Metric.sales:
-      // Use income transactions — same source as the Revenue stat card
+      // Revenue — investments already excluded at the pre-filter stage
       for (final t in txns) {
         if ((t as dynamic).isIncome as bool) {
           final idx = bucketIndex((t as dynamic).dateTime as DateTime);
