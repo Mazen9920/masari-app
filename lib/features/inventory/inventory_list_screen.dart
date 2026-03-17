@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:csv/csv.dart' as csv_lib;
 import 'package:file_picker/file_picker.dart';
@@ -40,6 +42,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
   final _searchController = TextEditingController();
   final _searchFocus = FocusNode();
   final _scrollController = ScrollController();
+  Timer? _searchDebounce;
 
   /// Cached notifier reference — safe to use in dispose().
   ShopifySyncNotifier? _syncNotifier;
@@ -68,7 +71,12 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
   }
 
   void _startAlwaysSyncIfNeeded() {
-    if (_isAlwaysOnSync) {
+    // Always start the sync timer when Shopify is connected.
+    // Product detail sync runs unconditionally; inventory sync
+    // is gated by mode inside the timer handler.
+    final hasAccess = ref.read(hasShopifyAccessProvider);
+    final conn = ref.read(shopifyConnectionProvider).value;
+    if (hasAccess && conn != null && conn.isActive) {
       _syncNotifier?.startAlwaysSyncTimer();
     }
   }
@@ -83,6 +91,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _syncNotifier?.stopAlwaysSyncTimer();
+    _searchDebounce?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
     _scrollController.dispose();
@@ -92,12 +101,16 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
   List<Product> get _filteredProducts {
     final products = ref.read(inventoryProvider).value ?? [];
     final hideOos = ref.watch(appSettingsProvider).hideOutOfStock;
+    final hideDrafts = ref.watch(appSettingsProvider).hideShopifyDrafts;
     var list = products.where((p) {
       // 1. Filter by Type (Product vs Material)
       if (p.isMaterial != _isMaterialsView) return false;
 
       // 1b. Hide out-of-stock if setting is on
       if (hideOos && p.status == StockStatus.outOfStock) return false;
+
+      // 1c. Hide Shopify drafted products if setting is on
+      if (hideDrafts && p.shopifyStatus == 'draft') return false;
 
       // 2. Filter by Search
       if (_searchQuery.isNotEmpty) {
@@ -251,7 +264,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                   return RefreshIndicator(
                     onRefresh: _refreshWithAutoSync,
                     color: _isAlwaysOnSync
-                        ? const Color(0xFF7C3AED)
+                        ? AppColors.shopifyPurple
                         : AppColors.primaryNavy,
                     child: SingleChildScrollView(
                     controller: _scrollController,
@@ -382,7 +395,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Color(0xFF7C3AED),
+                        color: AppColors.shopifyPurple,
                       ),
                     ),
                   )
@@ -432,27 +445,27 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  const Color(0xFF7C3AED).withValues(alpha: 0.08),
-                  const Color(0xFF7C3AED).withValues(alpha: 0.03),
+                  AppColors.shopifyPurple.withValues(alpha: 0.08),
+                  AppColors.shopifyPurple.withValues(alpha: 0.03),
                 ],
               ),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.15)),
+              border: Border.all(color: AppColors.shopifyPurple.withValues(alpha: 0.15)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.sync_rounded, color: Color(0xFF7C3AED), size: 18),
+                Icon(Icons.sync_rounded, color: AppColors.shopifyPurple, size: 18),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Sync inventory with Shopify',
                     style: AppTypography.labelSmall.copyWith(
-                      color: const Color(0xFF7C3AED),
+                      color: AppColors.shopifyPurple,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, color: Color(0xFF7C3AED), size: 20),
+                Icon(Icons.chevron_right_rounded, color: AppColors.shopifyPurple, size: 20),
               ],
             ),
           ),
@@ -467,7 +480,12 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       child: TextField(
         controller: _searchController,
         focusNode: _searchFocus,
-        onChanged: (v) => setState(() => _searchQuery = v),
+        onChanged: (v) {
+          _searchDebounce?.cancel();
+          _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+            if (mounted) setState(() => _searchQuery = v);
+          });
+        },
         decoration: InputDecoration(
           hintText: 'Search products, SKU...',
           hintStyle: AppTypography.bodySmall
@@ -767,6 +785,14 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
   }
 
   Widget _buildEmptyState() {
+    final hasSearch = _searchQuery.isNotEmpty;
+    final hasFilters = _filterResult.sortIndex != 0 ||
+        _filterResult.statusFilters.isNotEmpty ||
+        _filterResult.categories.isNotEmpty ||
+        _filterResult.suppliers.isNotEmpty ||
+        _filterResult.minPrice != null ||
+        _filterResult.maxPrice != null;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 48),
@@ -777,16 +803,34 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                 color: AppColors.textTertiary.withValues(alpha: 0.4)),
             const SizedBox(height: 16),
             Text(
-              'No products found',
+              hasSearch || hasFilters
+                  ? 'No products match your search'
+                  : 'No products found',
               style: AppTypography.labelMedium
                   .copyWith(color: AppColors.textTertiary),
             ),
             const SizedBox(height: 6),
             Text(
-              'Try changing your filter or add new products',
+              hasSearch || hasFilters
+                  ? 'Try changing your search or filters'
+                  : 'Add your first product to get started',
               style: AppTypography.captionSmall
                   .copyWith(color: AppColors.textTertiary, fontSize: 11),
             ),
+            if (hasSearch || hasFilters) ...[
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _searchQuery = '';
+                    _searchController.clear();
+                    _filterResult = const InventoryFilterResult();
+                  });
+                },
+                icon: const Icon(Icons.clear_rounded, size: 16),
+                label: const Text('Clear filters'),
+              ),
+            ],
           ],
         ),
       ),
@@ -809,18 +853,38 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       if (bytes == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not read file'), backgroundColor: Colors.red),
+            SnackBar(content: Text('Could not read file'), backgroundColor: AppColors.danger),
           );
         }
         return;
       }
 
-      final csvString = String.fromCharCodes(bytes);
-      final rows = const csv_lib.CsvToListConverter(eol: '\n').convert(csvString);
+      // Reject files over 5 MB to avoid UI freeze
+      if (bytes.length > 5 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('CSV file exceeds 5 MB limit'), backgroundColor: AppColors.danger),
+          );
+        }
+        return;
+      }
+
+      // Prefer strict UTF-8 first (with optional BOM). Fall back to latin1
+      // for Excel/exported files that are not UTF-8 encoded.
+      String csvString;
+      try {
+        csvString = utf8.decode(bytes, allowMalformed: false);
+      } catch (_) {
+        csvString = latin1.decode(bytes, allowInvalid: true);
+      }
+      if (csvString.isNotEmpty && csvString.codeUnitAt(0) == 0xFEFF) {
+        csvString = csvString.substring(1);
+      }
+      final rows = const csv_lib.CsvToListConverter().convert(csvString);
       if (rows.length < 2) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('CSV file is empty or has no data rows'), backgroundColor: Colors.red),
+            SnackBar(content: Text('CSV file is empty or has no data rows'), backgroundColor: AppColors.danger),
           );
         }
         return;
@@ -842,7 +906,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       if (iName < 0) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('CSV must have a "Name" column'), backgroundColor: Colors.red),
+            SnackBar(content: Text('CSV must have a "Name" column'), backgroundColor: AppColors.danger),
           );
         }
         return;
@@ -851,6 +915,16 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
       final defaultUnit = ref.read(appSettingsProvider).defaultUnit;
       final notifier = ref.read(inventoryProvider.notifier);
+        final existing = ref.read(inventoryProvider).value ?? [];
+        final existingNames = existing
+          .map((p) => p.name.trim().toLowerCase())
+          .where((n) => n.isNotEmpty)
+          .toSet();
+        final existingSkus = existing
+          .expand((p) => p.variants)
+          .map((v) => v.sku.trim().toLowerCase())
+          .where((s) => s.isNotEmpty)
+          .toSet();
 
       // Group rows by product name to merge variants
       final productGroups = <String, List<List<dynamic>>>{};
@@ -863,6 +937,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       }
 
       var imported = 0;
+      var skippedDuplicates = 0;
       for (final entry in productGroups.entries) {
         final name = entry.key;
         final groupRows = entry.value;
@@ -874,6 +949,18 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
             idx >= 0 && idx < r.length ? (double.tryParse(r[idx].toString().trim()) ?? 0) : 0;
         int cellInt(List<dynamic> r, int idx) =>
             idx >= 0 && idx < r.length ? (int.tryParse(r[idx].toString().trim()) ?? 0) : 0;
+
+        final normalizedName = name.trim().toLowerCase();
+        final groupSkus = groupRows
+            .map((r) => cellStr(r, iSku).toLowerCase())
+            .where((s) => s.isNotEmpty)
+            .toSet();
+        final hasDuplicateName = existingNames.contains(normalizedName);
+        final hasDuplicateSku = groupSkus.any(existingSkus.contains);
+        if (hasDuplicateName || hasDuplicateSku) {
+          skippedDuplicates++;
+          continue;
+        }
 
         final prodId = 'csv_${DateTime.now().millisecondsSinceEpoch}_$imported';
 
@@ -903,13 +990,19 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
         );
 
         await notifier.addProduct(product);
+        existingNames.add(normalizedName);
+        existingSkus.addAll(groupSkus);
         imported++;
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Imported $imported product(s) from CSV'),
+            content: Text(
+              skippedDuplicates > 0
+                  ? 'Imported $imported product(s), skipped $skippedDuplicates duplicate(s)'
+                  : 'Imported $imported product(s) from CSV',
+            ),
             backgroundColor: AppColors.success,
           ),
         );
@@ -918,7 +1011,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       debugPrint('CSV import error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to import CSV. Check file format.'), backgroundColor: Colors.red),
+          const SnackBar(content: Text('Failed to import CSV. Check file format.'), backgroundColor: AppColors.danger),
         );
       }
     }
@@ -1003,7 +1096,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                         } catch (e) {
                           debugPrint('Inventory export error: $e');
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: AppColors.danger));
                           }
                         }
                       },
@@ -1960,7 +2053,7 @@ class _ProductCard extends ConsumerWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'SKU: ${product.sku}${product.category.isNotEmpty && product.category.toLowerCase() != 'shopify import' ? ' • ${product.category}' : ''}',
+                              'SKU: ${product.sku}${product.category.isNotEmpty && !{'shopify import', 'shopify_import'}.contains(product.category.toLowerCase()) ? ' • ${product.category}' : ''}',
                               style: AppTypography.captionSmall.copyWith(
                                 color: AppColors.textTertiary,
                                 fontSize: 11,

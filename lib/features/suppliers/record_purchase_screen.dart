@@ -58,8 +58,9 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
 
   void _save() {
     if (_items.isEmpty) return;
+    if (_selectedSupplierId == null) return;
     final suppliers = ref.read(suppliersProvider).value ?? [];
-    final supplierId = _selectedSupplierId ?? (suppliers.isNotEmpty ? suppliers.first.id : '');
+    final supplierId = _selectedSupplierId!;
     final supplierName = suppliers
         .cast<Supplier?>()
         .firstWhere((s) => s!.id == supplierId, orElse: () => null)
@@ -83,7 +84,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
       )).toList(),
       tax: _tax,
       paymentStatus: _paymentStatus,
-      amountPaid: double.tryParse(_paidAmountCtrl.text) ?? 0,
+      amountPaid: _paymentStatus == 2 ? (_subtotal + _tax) : (double.tryParse(_paidAmountCtrl.text) ?? 0),
       dueDate: _dueDate,
       createdAt: DateTime.now(),
     );
@@ -294,9 +295,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                             .firstWhere((s) => s.id == _selectedSupplierId,
                                 orElse: () => suppliers.first)
                             .name
-                        : suppliers.isNotEmpty
-                            ? suppliers.first.name
-                            : 'Select a supplier',
+                        : 'Select a supplier',
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 15,
@@ -469,6 +468,155 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   }
 
   // ═══════════════════════════════════════════════════════
+  //  ADD ITEM TYPE PICKER
+  // ═══════════════════════════════════════════════════════
+  void _showAddItemTypePicker(List<Product> inventory, String currency) {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'What are you purchasing?',
+                style: AppTypography.h2.copyWith(
+                  color: AppColors.primaryNavy,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 17,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ..._ItemType.values.map((type) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _addItemOfType(type, inventory, currency);
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: type.bgColor.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: type.color.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: type.bgColor,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(type.icon, color: type.color, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                type.label,
+                                style: TextStyle(
+                                  color: AppColors.primaryNavy,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              Text(
+                                type == _ItemType.rawMaterial
+                                    ? 'Materials used in production'
+                                    : type == _ItemType.product
+                                        ? 'Finished goods for resale'
+                                        : 'Processing & assembly costs',
+                                style: TextStyle(
+                                  color: AppColors.textTertiary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios_rounded,
+                            color: AppColors.textTertiary, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addItemOfType(_ItemType type, List<Product> inventory, String currency) async {
+    if (type == _ItemType.manufacturingFee) {
+      setState(() {
+        _items.add(_PurchaseItem(
+          name: '',
+          category: 'Manufacturing Fee',
+          itemType: type,
+          qty: 1,
+          unitPrice: 0,
+        ));
+      });
+      return;
+    }
+
+    // Filter inventory based on type
+    final filtered = type == _ItemType.rawMaterial
+        ? inventory.where((p) => p.isMaterial).toList()
+        : inventory.where((p) => !p.isMaterial).toList();
+
+    final result = await showModalBottomSheet<ItemSelectionResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ItemSelectionSheet(
+        inventory: filtered,
+        currency: currency,
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        if (result.product != null) {
+          final p = result.product!;
+          final v = result.variant;
+          _items.add(_PurchaseItem(
+            name: p.name,
+            category: p.isMaterial ? 'Raw Material' : p.category,
+            itemType: type,
+            qty: 1,
+            unitPrice: v?.costPrice ?? p.costPrice,
+            productId: p.id,
+            variantId: v?.id,
+            variantName: v != null && !v.isDefault ? v.displayName : null,
+          ));
+        } else if (result.customName != null && result.customName!.isNotEmpty) {
+          _items.add(_PurchaseItem(
+            name: result.customName!,
+            category: type == _ItemType.rawMaterial ? 'Raw Material' : 'General',
+            itemType: type,
+            qty: 1,
+            unitPrice: 0,
+          ));
+        }
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
   //  SECTION 2 — ITEMS
   // ═══════════════════════════════════════════════════════
   Widget _buildItemsSection(NumberFormat fmt, List<Product> inventory, String currency) {
@@ -526,11 +674,18 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                         const SizedBox(height: 2),
                         GestureDetector(
                           onTap: () async {
+                            if (item.itemType == _ItemType.manufacturingFee) {
+                              // For mfg fees, just let them edit inline (name field)
+                              return;
+                            }
+                            final filtered = item.itemType == _ItemType.rawMaterial
+                                ? inventory.where((p) => p.isMaterial).toList()
+                                : inventory.where((p) => !p.isMaterial).toList();
                             final result = await showModalBottomSheet<ItemSelectionResult>(
                               context: context,
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
-                              builder: (context) => ItemSelectionSheet(inventory: inventory, currency: currency),
+                              builder: (context) => ItemSelectionSheet(inventory: filtered, currency: currency),
                             );
 
                             if (result != null) {
@@ -549,13 +704,47 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                                 } else if (result.customName != null && result.customName!.isNotEmpty) {
                                   _items[i] = item.copyWith(
                                     name: result.customName,
-                                    category: 'General',
+                                    category: item.itemType == _ItemType.rawMaterial ? 'Raw Material' : 'General',
                                   );
                                 }
                               });
                             }
                           },
-                          child: Container(
+                          child: item.itemType == _ItemType.manufacturingFee
+                            ? SizedBox(
+                                height: 32,
+                                child: TextField(
+                                  controller: TextEditingController(text: item.name),
+                                  onChanged: (v) {
+                                    _items[i] = item.copyWith(name: v);
+                                  },
+                                  decoration: InputDecoration(
+                                    hintText: 'e.g. Stitching fee, Printing...',
+                                    hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                                    filled: true,
+                                    fillColor: const Color(0xFFF8FAFC),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                      borderSide: BorderSide(color: AppColors.borderLight.withValues(alpha: 0.5)),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                      borderSide: BorderSide(color: AppColors.borderLight.withValues(alpha: 0.5)),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                      borderSide: BorderSide(color: AppColors.primaryNavy),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                                  ),
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              )
+                            : Container(
                             height: 32,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
@@ -585,14 +774,40 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                         const SizedBox(height: 4),
                         Padding(
                           padding: const EdgeInsets.only(left: 4),
-                          child: Text(
-                            item.variantName != null
-                                ? '${item.category} • ${item.variantName}'
-                                : item.category,
-                            style: TextStyle(
-                              color: AppColors.textTertiary,
-                              fontSize: 11,
-                            ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: item.itemType.bgColor,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  item.itemType.label,
+                                  style: TextStyle(
+                                    color: item.itemType.color,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              if (item.variantName != null || item.category.isNotEmpty) ...[
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    item.variantName != null
+                                        ? '${item.category} • ${item.variantName}'
+                                        : item.category,
+                                    style: TextStyle(
+                                      color: AppColors.textTertiary,
+                                      fontSize: 11,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ],
@@ -729,17 +944,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
         const SizedBox(height: 8),
         // Add item button
         GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            setState(() {
-              _items.add(_PurchaseItem(
-                name: 'New Item',
-                category: 'General',
-                qty: 1,
-                unitPrice: 0,
-              ));
-            });
-          },
+          onTap: () => _showAddItemTypePicker(inventory, currency),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -757,7 +962,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                     color: const Color(0xFFE67E22), size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'Add Another Item',
+                  'Add Item',
                   style: TextStyle(
                     color: const Color(0xFFE67E22),
                     fontWeight: FontWeight.w700,
@@ -1212,9 +1417,58 @@ class _Label extends StatelessWidget {
 }
 
 /// Purchase item data
+enum _ItemType { rawMaterial, product, manufacturingFee }
+
+extension _ItemTypeExt on _ItemType {
+  String get label {
+    switch (this) {
+      case _ItemType.rawMaterial:
+        return 'Raw Material';
+      case _ItemType.product:
+        return 'Product';
+      case _ItemType.manufacturingFee:
+        return 'Manufacturing Fee';
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case _ItemType.rawMaterial:
+        return const Color(0xFF0F766E);
+      case _ItemType.product:
+        return const Color(0xFF4F46E5);
+      case _ItemType.manufacturingFee:
+        return const Color(0xFFD97706);
+    }
+  }
+
+  Color get bgColor {
+    switch (this) {
+      case _ItemType.rawMaterial:
+        return const Color(0xFFCCFBF1);
+      case _ItemType.product:
+        return const Color(0xFFE0E7FF);
+      case _ItemType.manufacturingFee:
+        return const Color(0xFFFEF3C7);
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case _ItemType.rawMaterial:
+        return Icons.science_rounded;
+      case _ItemType.product:
+        return Icons.inventory_2_rounded;
+      case _ItemType.manufacturingFee:
+        return Icons.precision_manufacturing_rounded;
+    }
+  }
+}
+
 class _PurchaseItem {
   final String name;
   final String category;
+  final _ItemType itemType;
   final int qty;
   final double unitPrice;
   final String? productId;
@@ -1224,6 +1478,7 @@ class _PurchaseItem {
   const _PurchaseItem({
     required this.name,
     required this.category,
+    required this.itemType,
     required this.qty,
     required this.unitPrice,
     this.productId,
@@ -1236,6 +1491,7 @@ class _PurchaseItem {
   _PurchaseItem copyWith({
     String? name,
     String? category,
+    _ItemType? itemType,
     int? qty,
     double? unitPrice,
     String? productId,
@@ -1245,6 +1501,7 @@ class _PurchaseItem {
     return _PurchaseItem(
       name: name ?? this.name,
       category: category ?? this.category,
+      itemType: itemType ?? this.itemType,
       qty: qty ?? this.qty,
       unitPrice: unitPrice ?? this.unitPrice,
       productId: productId ?? this.productId,

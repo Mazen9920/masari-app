@@ -352,10 +352,8 @@ class ReceiptDetailScreen extends ConsumerWidget {
               (s) => s.id == purchase.supplierId,
               orElse: () => null,
             );
-        if (supplier != null) {
-          context.pushNamed('PurchaseDetailScreen',
-              extra: {'supplier': supplier, 'purchase': purchase});
-        }
+        context.pushNamed('PurchaseDetailScreen',
+            extra: {if (supplier != null) 'supplier': supplier, 'purchase': purchase});
       },
       child: Container(
         padding: const EdgeInsets.all(14),

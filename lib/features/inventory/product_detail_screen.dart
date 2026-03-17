@@ -544,14 +544,24 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: _adjustQuantity != 0
-                  ? () {
-                      ref.read(inventoryProvider.notifier).adjustStock(
+                  ? () async {
+                      final result = await ref.read(inventoryProvider.notifier).adjustStock(
                             widget.productId,
                             _adjustVariantId ?? product.defaultVariant.id,
                             _adjustQuantity,
                             _adjustReason,
                             valuationMethod: ref.read(appSettingsProvider).valuationMethod,
                           );
+                      if (!mounted) return;
+                      if (!result.isSuccess) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(result.error ?? 'Adjustment failed'),
+                            backgroundColor: AppColors.danger,
+                          ),
+                        );
+                        return;
+                      }
                       HapticFeedback.mediumImpact();
                       setState(() {
                         _adjustQuantity = 0;
@@ -621,8 +631,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     int quantity = 0;
     String? selectedVariantId = product.defaultVariant.id;
     final quantityCtrl = TextEditingController(text: '0');
+    final unitCostCtrl = TextEditingController(
+      text: product.defaultVariant.costPrice > 0
+          ? product.defaultVariant.costPrice.toStringAsFixed(2)
+          : '',
+    );
     final notifier = ref.read(inventoryProvider.notifier);
     final valMethod = ref.read(appSettingsProvider).valuationMethod;
+    final currency = ref.read(currencyProvider);
 
     showDialog(
       context: context,
@@ -681,8 +697,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                 ),
                               ))
                           .toList(),
-                      onChanged: (v) =>
-                          setDialogState(() => selectedVariantId = v),
+                      onChanged: (v) => setDialogState(() {
+                        selectedVariantId = v;
+                        final selected = product.variantById(v ?? '') ??
+                            product.defaultVariant;
+                        unitCostCtrl.text = selected.costPrice > 0
+                            ? selected.costPrice.toStringAsFixed(2)
+                            : '';
+                      }),
                     ),
                   ),
                 ),
@@ -786,6 +808,38 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: unitCostCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'\d*\.?\d*')),
+                ],
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Unit Cost',
+                  prefixText: '$currency ',
+                  filled: true,
+                  fillColor: AppColors.backgroundLight,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: AppColors.borderLight),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: AppColors.borderLight),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                        color: AppColors.primaryNavy, width: 1.5),
+                  ),
+                ),
+              ),
             ],
           ),
           actions: [
@@ -799,16 +853,37 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             ),
             ElevatedButton(
               onPressed: quantity > 0
-                  ? () {
-                      notifier.adjustStock(
+                  ? () async {
+                      final unitCost =
+                          double.tryParse(unitCostCtrl.text.trim()) ?? 0;
+                      if (unitCost <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Enter a valid unit cost'),
+                            backgroundColor: AppColors.danger,
+                          ),
+                        );
+                        return;
+                      }
+
+                      final result = await notifier.adjustStock(
                             widget.productId,
                             selectedVariantId ?? product.defaultVariant.id,
                             quantity,
                             'Restock',
+                            unitCost: unitCost,
                             valuationMethod: valMethod,
                           );
                       HapticFeedback.mediumImpact();
                       Navigator.pop(ctx);
+                      if (!result.isSuccess && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(result.error ?? 'Restock failed'),
+                            backgroundColor: AppColors.danger,
+                          ),
+                        );
+                      }
                     }
                   : null,
               style: ElevatedButton.styleFrom(
@@ -835,7 +910,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         ),
       ),
     ).then((_) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => quantityCtrl.dispose());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        quantityCtrl.dispose();
+        unitCostCtrl.dispose();
+      });
     });
   }
 }
@@ -1044,7 +1122,7 @@ class _StockOverviewCard extends ConsumerWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${ref.watch(appSettingsProvider).currency} ${product.totalValue.toStringAsFixed(0)}',
+                            '${ref.watch(appSettingsProvider).currency} ${NumberFormat('#,##0.00').format(product.totalValue)}',
                             style: AppTypography.labelMedium.copyWith(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w700,
@@ -1127,9 +1205,9 @@ class _PricingCard extends ConsumerWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              _priceItem('Cost', '${ref.watch(appSettingsProvider).currency} ${product.costPrice.toStringAsFixed(0)}'),
+              _priceItem('Cost', '${ref.watch(appSettingsProvider).currency} ${NumberFormat('#,##0.00').format(product.costPrice)}'),
               _priceItem(
-                  'Selling', '${ref.watch(appSettingsProvider).currency} ${product.sellingPrice.toStringAsFixed(0)}'),
+                  'Selling', '${ref.watch(appSettingsProvider).currency} ${NumberFormat('#,##0.00').format(product.sellingPrice)}'),
               _priceItem(
                 'Margin',
                 '${product.profitMargin.toStringAsFixed(1)}%',

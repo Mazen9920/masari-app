@@ -1271,11 +1271,15 @@ class _SupplierCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Row(
                       children: [
-                        Text(
-                          supplier.category,
-                          style: TextStyle(
-                            color: AppColors.textTertiary,
-                            fontSize: 12,
+                        Flexible(
+                          child: Text(
+                            supplier.category,
+                            style: TextStyle(
+                              color: AppColors.textTertiary,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Padding(

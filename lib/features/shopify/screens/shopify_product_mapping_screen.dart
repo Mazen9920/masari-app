@@ -49,6 +49,10 @@ class _ShopifyProductMappingScreenState
     if (_didAutoRelink || _autoMatching) return;
     _didAutoRelink = true;
 
+    // Refresh inventory to pick up any webhook-imported products
+    // that exist in Firestore but aren't in local provider state yet.
+    ref.read(inventoryProvider.notifier).refresh();
+
     // Only run if there are unmapped Shopify products
     final mappedIds = <String>{for (final m in mappings) m.shopifyProductId};
     final hasUnmapped = shopifyProds.any(
@@ -615,7 +619,7 @@ class _ShopifyProductMappingScreenState
       name: title,
       category: 'Shopify Import',
       supplier: '',
-      unitOfMeasure: 'Pieces',
+      unitOfMeasure: 'pcs',
       imageUrl: imageUrl,
       shopifyProductId: shopifyProductId,
       options: options,

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/supplier_model.dart';
 
 /// Add New Supplier — multi-section form.
@@ -120,6 +121,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                       onTermChanged: (i) =>
                           setState(() => _paymentTermIdx = i),
                       balanceCtrl: _balanceCtrl,
+                      currency: ref.watch(currencyProvider),
                     ).animate().fadeIn(duration: 250.ms, delay: 120.ms),
                     const SizedBox(height: 16),
                     _LocationNotesSection(
@@ -259,7 +261,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
 // ═══════════════════════════════════════════════════════
 //  SECTION 1 — SUPPLIER BASICS
 // ═══════════════════════════════════════════════════════
-class _SupplierBasicsSection extends StatelessWidget {
+class _SupplierBasicsSection extends StatefulWidget {
   final TextEditingController nameCtrl;
   final TextEditingController idCtrl;
   final String category;
@@ -277,7 +279,51 @@ class _SupplierBasicsSection extends StatelessWidget {
   });
 
   @override
+  State<_SupplierBasicsSection> createState() => _SupplierBasicsSectionState();
+}
+
+class _SupplierBasicsSectionState extends State<_SupplierBasicsSection> {
+  late final TextEditingController _catCtrl;
+  final _catFocus = FocusNode();
+  bool _showSuggestions = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _catCtrl = TextEditingController(text: widget.category);
+    _catFocus.addListener(() {
+      setState(() => _showSuggestions = _catFocus.hasFocus);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _SupplierBasicsSection old) {
+    super.didUpdateWidget(old);
+    if (widget.category != _catCtrl.text) {
+      _catCtrl.text = widget.category;
+      _catCtrl.selection = TextSelection.collapsed(offset: _catCtrl.text.length);
+    }
+  }
+
+  @override
+  void dispose() {
+    _catCtrl.dispose();
+    _catFocus.dispose();
+    super.dispose();
+  }
+
+  List<String> get _filteredSuggestions {
+    final query = _catCtrl.text.trim().toLowerCase();
+    if (query.isEmpty) return widget.categories;
+    return widget.categories
+        .where((c) => c.toLowerCase().contains(query) && c.toLowerCase() != query)
+        .toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final suggestions = _filteredSuggestions;
+
     return _FormSection(
       title: 'SUPPLIER BASICS',
       children: [
@@ -285,8 +331,8 @@ class _SupplierBasicsSection extends StatelessWidget {
           label: 'Business Name',
           required: true,
           child: TextField(
-            controller: nameCtrl,
-            onChanged: (_) => onChanged(),
+            controller: widget.nameCtrl,
+            onChanged: (_) => widget.onChanged(),
             decoration: _inputDecoration('e.g. Al-Amal Supplies'),
             style: _inputStyle,
           ),
@@ -294,36 +340,70 @@ class _SupplierBasicsSection extends StatelessWidget {
         const SizedBox(height: 16),
         _FormField(
           label: 'Category',
-          child: GestureDetector(
-            onTap: () => _showCategoryPicker(context),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: AppColors.borderLight.withValues(alpha: 0.7),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _catCtrl,
+                focusNode: _catFocus,
+                onChanged: (v) {
+                  widget.onCategoryChanged(v.trim());
+                  setState(() {});
+                },
+                decoration: _inputDecoration('e.g. Packaging').copyWith(
+                  suffixIcon: _catCtrl.text.isNotEmpty
+                      ? GestureDetector(
+                          onTap: () {
+                            _catCtrl.clear();
+                            widget.onCategoryChanged('');
+                            setState(() {});
+                          },
+                          child: Icon(Icons.close_rounded,
+                              color: AppColors.textTertiary, size: 18),
+                        )
+                      : null,
                 ),
+                style: _inputStyle,
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      category.isEmpty ? 'Select a category' : category,
-                      style: TextStyle(
-                        color: category.isEmpty
-                            ? AppColors.textTertiary
-                            : AppColors.textPrimary,
-                        fontSize: 15,
+              if (_showSuggestions && suggestions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: suggestions.map((c) {
+                    return GestureDetector(
+                      onTap: () {
+                        _catCtrl.text = c;
+                        _catCtrl.selection =
+                            TextSelection.collapsed(offset: c.length);
+                        widget.onCategoryChanged(c);
+                        _catFocus.unfocus();
+                        setState(() {});
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryNavy.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppColors.primaryNavy.withValues(alpha: 0.15),
+                          ),
+                        ),
+                        child: Text(
+                          c,
+                          style: TextStyle(
+                            color: AppColors.primaryNavy,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  Icon(Icons.expand_more_rounded,
-                      color: AppColors.textTertiary, size: 22),
-                ],
-              ),
-            ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(height: 16),
@@ -331,51 +411,12 @@ class _SupplierBasicsSection extends StatelessWidget {
           label: 'Supplier ID',
           optional: true,
           child: TextField(
-            controller: idCtrl,
+            controller: widget.idCtrl,
             decoration: _inputDecoration('e.g. SUP-001'),
             style: _inputStyle,
           ),
         ),
       ],
-    );
-  }
-
-  void _showCategoryPicker(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Select Category',
-                style: AppTypography.h2.copyWith(
-                  color: AppColors.primaryNavy,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17,
-                ),
-              ),
-            ),
-            ...categories.map((c) => ListTile(
-                  title: Text(c),
-                  trailing: c == category
-                      ? const Icon(Icons.check_rounded,
-                          color: Color(0xFFE67E22))
-                      : null,
-                  onTap: () {
-                    onCategoryChanged(c);
-                    Navigator.of(ctx).pop();
-                  },
-                )),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -558,12 +599,14 @@ class _PaymentDetailsSection extends StatelessWidget {
   final int selectedIdx;
   final ValueChanged<int> onTermChanged;
   final TextEditingController balanceCtrl;
+  final String currency;
 
   const _PaymentDetailsSection({
     required this.paymentTerms,
     required this.selectedIdx,
     required this.onTermChanged,
     required this.balanceCtrl,
+    required this.currency,
   });
 
   @override
@@ -627,7 +670,7 @@ class _PaymentDetailsSection extends StatelessWidget {
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(left: 14, right: 8),
                 child: Text(
-                  'EGP',
+                  currency,
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 14,

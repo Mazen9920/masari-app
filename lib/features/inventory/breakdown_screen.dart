@@ -48,7 +48,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-               'Not enough stock. Available: ${sourceVariant.currentStock}'),
+              'Not enough stock. Available: ${sourceVariant.currentStock}'),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -103,7 +103,36 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
     if (product == null || !product.hasBreakdown) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.breakdown)),
-        body: Center(child: Text(l10n.noBreakdownRecipeFound)),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.call_split_rounded, size: 64,
+                  color: AppColors.textTertiary.withValues(alpha: 0.3)),
+              const SizedBox(height: 16),
+              Text(
+                'Breakdown recipe not configured',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textTertiary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Add a breakdown recipe in product settings to enable this feature.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textTertiary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => context.safePop(),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -112,7 +141,23 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
     if (sourceVariant == null) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.breakdown)),
-        body: Center(child: Text(l10n.sourceVariantNotFound)),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded, size: 64,
+                  color: AppColors.textTertiary.withValues(alpha: 0.3)),
+              const SizedBox(height: 16),
+              Text(l10n.sourceVariantNotFound,
+                  style: AppTypography.labelMedium.copyWith(color: AppColors.textTertiary)),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => context.safePop(),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -127,8 +172,10 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
 
     // Compute per-output allocations for preview
     double totalSellingValue = 0;
+    int totalOutputQty = 0;
     for (final output in recipe.outputs) {
       final v = product.variantById(output.variantId);
+      totalOutputQty += (output.quantityPerUnit * qty).round();
       if (v != null) {
         totalSellingValue += output.quantityPerUnit * v.sellingPrice;
       }
@@ -237,6 +284,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                           children: [
                             _qtyButton(
                               icon: Icons.remove_rounded,
+                              enabled: _qty > 1,
                               onTap: () {
                                 final v = _qty;
                                 if (v > 1) {
@@ -286,6 +334,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                             ),
                             _qtyButton(
                               icon: Icons.add_rounded,
+                              enabled: _qty < sourceVariant.currentStock,
                               onTap: () {
                                 final v = _qty;
                                 if (v < sourceVariant.currentStock) {
@@ -369,6 +418,12 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                                           .roundToDouble() /
                                       100
                                   : 0;
+                            } else {
+                              allocatedUnitCost = totalOutputQty > 0
+                                ? (totalCost / totalOutputQty * 100)
+                                    .roundToDouble() /
+                                  100
+                                : 0;
                             }
                             return Padding(
                               padding:
@@ -531,22 +586,34 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
   }
 
   Widget _qtyButton(
-      {required IconData icon, required VoidCallback onTap}) {
+      {required IconData icon,
+      required bool enabled,
+      required VoidCallback onTap}) {
     return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
+      onTap: enabled
+          ? () {
+              HapticFeedback.selectionClick();
+              onTap();
+            }
+          : null,
       child: Container(
         width: 44,
         height: 44,
         margin: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          color: AppColors.backgroundLight,
+          color: enabled
+              ? AppColors.backgroundLight
+              : AppColors.backgroundLight.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppColors.borderLight),
         ),
-        child: Icon(icon, size: 20, color: AppColors.primaryNavy),
+        child: Icon(
+          icon,
+          size: 20,
+          color: enabled
+              ? AppColors.primaryNavy
+              : AppColors.textTertiary,
+        ),
       ),
     );
   }

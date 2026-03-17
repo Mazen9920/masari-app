@@ -58,7 +58,7 @@ class _CategorizeTransactionsSheetState
 
   int get _assignedCount =>
       _selectedCategories.values
-          .where((id) => CategoryData.findById(id).name != 'Uncategorized')
+          .where((id) => id != 'cat_uncategorized')
           .length;
 
   Future<void> _saveAll() async {
@@ -69,7 +69,7 @@ class _CategorizeTransactionsSheetState
     for (final tx in widget.uncategorized) {
       final newCategoryId = _selectedCategories[tx.id];
       if (newCategoryId != null &&
-          CategoryData.findById(newCategoryId).name != 'Uncategorized') {
+          newCategoryId != 'cat_uncategorized') {
         final updated = tx.copyWith(categoryId: newCategoryId);
         await ref.read(transactionsProvider.notifier).updateTransaction(updated);
         saved++;

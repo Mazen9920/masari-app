@@ -50,24 +50,24 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
     final map = <String, _CategoryBreakdown>{};
 
     for (final tx in _filteredByType) {
-      final name = CategoryData.findById(tx.categoryId).name;
-      final existing = map[name];
+      final cat = CategoryData.findById(tx.categoryId);
+      final existing = map[cat.id];
       if (existing != null) {
-        map[name] = _CategoryBreakdown(
-          category: CategoryData.findById(tx.categoryId),
+        map[cat.id] = _CategoryBreakdown(
+          category: cat,
           totalAmount: existing.totalAmount + tx.amount.abs(),
           transactionCount: existing.transactionCount + 1,
         );
       } else {
-        map[name] = _CategoryBreakdown(
-          category: CategoryData.findById(tx.categoryId),
+        map[cat.id] = _CategoryBreakdown(
+          category: cat,
           totalAmount: tx.amount.abs(),
           transactionCount: 1,
         );
       }
     }
 
-    final list = map.values.toList();
+    var list = map.values.toList();
 
     // Sort according to the filter sheet setting
     switch (_categoryFilter.sortBy) {
@@ -83,7 +83,14 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
 
     // Hide categories with zero spending when requested
     if (_categoryFilter.hideEmpty) {
-      return list.where((b) => b.totalAmount > 0).toList();
+      list = list.where((b) => b.totalAmount > 0).toList();
+    }
+
+    if (_categoryFilter.showOverBudget) {
+      list = list.where((b) {
+        final budget = b.category.budgetLimit;
+        return budget != null && budget > 0 && b.totalAmount > budget;
+      }).toList();
     }
 
     return list;
@@ -148,7 +155,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                       // Re-calculate derived data since we don't have heavy providers for these yet
                       _recalculateData(transactions);
                       
-                      final uncategorizedCount = transactions.where((t) => CategoryData.findById(t.categoryId).name == 'Uncategorized').length;
+                      final uncategorizedCount = transactions.where((t) => t.categoryId == 'cat_uncategorized').length;
 
                       return RefreshIndicator(
                         onRefresh: () => ref.read(transactionsProvider.notifier).refresh(),
@@ -165,7 +172,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                               _buildSummaryCard(uncategorizedCount),
                               const SizedBox(height: 20),
                               _buildCategoryList(),
-                              const SizedBox(height: 140),
+                              const SizedBox(height: 90),
                             ],
                           ),
                         ),
@@ -178,12 +185,34 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                 ),
               ],
             ),
-            // FAB positioned above the bottom nav bar
+            // FAB pinned at the bottom with fade scrim
             Positioned(
-              bottom: 100,
+              bottom: 0,
               left: 0,
               right: 0,
-              child: Center(child: _buildFAB()),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    height: 24,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          AppColors.backgroundLight.withValues(alpha: 0),
+                          AppColors.backgroundLight,
+                        ],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    color: AppColors.backgroundLight,
+                    padding: const EdgeInsets.only(bottom: 28, top: 4),
+                    child: Center(child: _buildFAB()),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -211,7 +240,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
             child: Padding(
               padding: EdgeInsets.only(left: canPop ? 0 : 8),
               child: Text(
-                'Categories',
+                'Budget & Categories',
                 style: AppTypography.h1.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w800,
@@ -272,6 +301,19 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                   current: _categoryFilter,
                 );
                 if (result != null) {
+                  DateTime? customMonth;
+                  if (result.dateRange == 'Custom') {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedMonth,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) {
+                      customMonth = DateTime(picked.year, picked.month);
+                    }
+                  }
+                  if (!mounted) return;
                   setState(() {
                     _categoryFilter = result;
                     // Sync dateRange selection to the month navigator
@@ -284,6 +326,8 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                       // Show start of current quarter's month
                       final quarterStartMonth = ((now.month - 1) ~/ 3) * 3 + 1;
                       _selectedMonth = DateTime(now.year, quarterStartMonth);
+                    } else if (customMonth != null) {
+                      _selectedMonth = customMonth;
                     }
                   });
                 }
@@ -572,8 +616,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                       onTap: () async {
                         final uncategorized = _transactions
                             .where((t) =>
-                                CategoryData.findById(t.categoryId).name ==
-                                'Uncategorized')
+                                t.categoryId == 'cat_uncategorized')
                             .toList();
                         if (uncategorized.isEmpty || !context.mounted) return;
                         final saved = await showCategorizeTransactionsSheet(

@@ -30,7 +30,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
   bool _isPhysical = true;
   String _selectedCategory = '';
-  String _selectedUom = 'Pieces';
+  String _selectedUom = 'pcs';
   String _selectedSupplier = '';
   bool _isRawMaterial = false;
   String _baseMaterialType = '';
@@ -39,16 +39,17 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   // Photo
   File? _pickedImage;
   bool _uploadingImage = false;
+  bool _isSaving = false;
 
   // Variants
   final List<ProductOption> _options = [];
   List<_AddVariantRow> _variantRows = [];
 
   static const _uomOptions = [
-    'Pieces',
-    'Kilograms (kg)',
-    'Liters (l)',
-    'Boxes',
+    'pcs',
+    'kg',
+    'liters',
+    'boxes',
   ];
 
   static const _materialTypes = [
@@ -83,9 +84,19 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   void _autoGenerateSku() {
     final name = _nameController.text.trim().toUpperCase();
     if (name.isEmpty) return;
-    final parts = name.split(' ');
-    final prefix =
-        parts.length >= 2 ? '${parts[0].substring(0, 3)}-${parts[1].substring(0, parts[1].length.clamp(0, 3))}' : name.substring(0, name.length.clamp(0, 6));
+    final parts = name
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
+    final first = parts.isNotEmpty ? parts[0] : name;
+    final second = parts.length >= 2 ? parts[1] : '';
+    final firstPrefix = first.substring(0, first.length >= 3 ? 3 : first.length);
+    final secondPrefix = second.isNotEmpty
+      ? second.substring(0, second.length >= 3 ? 3 : second.length)
+      : '';
+    final prefix = secondPrefix.isNotEmpty
+      ? '$firstPrefix-$secondPrefix'
+      : name.substring(0, name.length >= 6 ? 6 : name.length);
     _skuController.text = prefix;
     HapticFeedback.lightImpact();
   }
@@ -128,16 +139,51 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         costCtrl: TextEditingController(),
         priceCtrl: TextEditingController(),
         stockCtrl: TextEditingController(text: '0'),
-        reorderCtrl: TextEditingController(text: '10'),
+        reorderCtrl: TextEditingController(
+            text: ref.read(appSettingsProvider).alertThreshold.toString()),
       );
     }).toList();
   }
 
   void _save() async {
+    if (_isSaving) return;
     if (!_canSave) {
       HapticFeedback.heavyImpact();
       return;
     }
+
+    // Validate numeric inputs are non-negative
+    if (_variantRows.isEmpty) {
+      final cost = double.tryParse(_costController.text) ?? 0;
+      final price = double.tryParse(_priceController.text) ?? 0;
+      final stock = int.tryParse(_stockController.text) ?? 0;
+      if (cost < 0 || price < 0 || stock < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cost, price, and stock must not be negative'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+        return;
+      }
+    } else {
+      for (final row in _variantRows) {
+        final cost = double.tryParse(row.costCtrl.text) ?? 0;
+        final price = double.tryParse(row.priceCtrl.text) ?? 0;
+        final stock = int.tryParse(row.stockCtrl.text) ?? 0;
+        if (cost < 0 || price < 0 || stock < 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${row.displayName}: cost, price, and stock must not be negative'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+          return;
+        }
+      }
+    }
+
+    setState(() => _isSaving = true);
 
     final sku = _skuController.text.trim().isEmpty
         ? 'SKU-${DateTime.now().millisecondsSinceEpoch % 100000}'
@@ -205,9 +251,24 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       variants: variants,
     );
 
-    ref.read(inventoryProvider.notifier).addProduct(product);
+    final result = await ref.read(inventoryProvider.notifier).addProduct(product);
+    if (!result.isSuccess) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'Failed to save product'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+      return;
+    }
+
     HapticFeedback.mediumImpact();
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) {
+      setState(() => _isSaving = false);
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -230,15 +291,18 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         ),
         centerTitle: true,
         actions: [
-          TextButton(
-            onPressed: _canSave ? _save : null,
-            child: Text(
-              'Save',
-              style: AppTypography.labelMedium.copyWith(
-                color: _canSave
-                    ? AppColors.primaryNavy
-                    : AppColors.textTertiary,
-                fontWeight: FontWeight.w600,
+          Opacity(
+            opacity: _canSave ? 1.0 : 0.5,
+            child: TextButton(
+              onPressed: _canSave ? _save : null,
+              child: Text(
+                'Save',
+                style: AppTypography.labelMedium.copyWith(
+                  color: _canSave
+                      ? AppColors.primaryNavy
+                      : AppColors.textTertiary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -429,12 +493,22 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             ),
             GestureDetector(
               onTap: _autoGenerateSku,
-              child: Text(
-                'Auto-generate',
-                style: AppTypography.captionSmall.copyWith(
-                  color: AppColors.primaryNavy,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryNavy.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: AppColors.primaryNavy.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Text(
+                  'Auto-generate',
+                  style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.primaryNavy,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
                 ),
               ),
             ),
@@ -963,7 +1037,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             value: _selectedUom,
             hint: 'Select',
             items: _uomOptions,
-            onChanged: (v) => setState(() => _selectedUom = v ?? 'Pieces'),
+            onChanged: (v) => setState(() => _selectedUom = v ?? 'pcs'),
           ),
         ),
         const SizedBox(height: 14),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
@@ -11,7 +12,13 @@ import '../../core/services/share_service.dart';
 import '../../shared/models/sale_model.dart';
 import '../../shared/utils/money_utils.dart';
 
-const _plExcludedCats = {'cat_investments'};
+const _plExcludedCats = {
+  'cat_investments',
+  'cat_loan_received',
+  'cat_loan_repayment',
+  'cat_equity_injection',
+  'cat_owner_withdrawal',
+};
 
 class ExportShareScreen extends ConsumerStatefulWidget {
   const ExportShareScreen({super.key});
@@ -63,6 +70,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
 
   Future<void> _generateMonthlyReport() => _withBusy(() async {
     HapticFeedback.mediumImpact();
+    final l10n = AppLocalizations.of(context)!;
     final transactions = ref.read(transactionsProvider).value ?? [];
     final sales = ref.read(salesProvider).value ?? [];
     final products = ref.read(inventoryProvider).value ?? [];
@@ -86,6 +94,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
     final shareService = ref.read(shareServiceProvider);
 
     final pdfBytes = await reportService.generateMonthlyReportPdf(
+      l10n: l10n,
       transactions: transactions,
       sales: sales,
       products: products,
@@ -142,6 +151,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
 
   Future<void> _exportPnl() => _withBusy(() async {
     HapticFeedback.mediumImpact();
+    final l10n = AppLocalizations.of(context)!;
     final transactions = ref.read(transactionsProvider).value ?? [];
     final settings = ref.read(appSettingsProvider);
     final currency = settings.currency;
@@ -176,6 +186,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
     final shareService = ref.read(shareServiceProvider);
 
     final pdfBytes = await reportService.generatePnlPdf(
+      l10n: l10n,
       transactions: plTransactions,
       currency: currency,
       periodStart: periodStart,

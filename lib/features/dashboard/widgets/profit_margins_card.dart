@@ -42,7 +42,13 @@ class ProfitMarginsCard extends ConsumerWidget {
         totalRevenue > 0 ? (totalCogs / totalRevenue * 100) : 0.0;
 
     // Net margin: P&L income - expenses (investments excluded from P&L)
-    const plExcludedCats = {'cat_investments'};
+    const plExcludedCats = {
+      'cat_investments',
+      'cat_loan_received',
+      'cat_loan_repayment',
+      'cat_equity_injection',
+      'cat_owner_withdrawal',
+    };
     final transactionsAsync = ref.watch(transactionsProvider);
     final transactions = transactionsAsync.value ?? [];
     double totalIncome = 0;

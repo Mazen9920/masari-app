@@ -159,6 +159,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       supplierId: _selectedSupplierId, 
       createdAt: widget.transaction.createdAt,
       updatedAt: DateTime.now(), // Update timestamp
+      saleId: widget.transaction.saleId,
+      excludeFromPL: widget.transaction.excludeFromPL,
     );
     
     final transNotifier = ref.read(transactionsProvider.notifier);

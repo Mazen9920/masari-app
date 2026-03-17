@@ -44,7 +44,13 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
         .toList();
 
     // Categories excluded from P&L (CF investing activities / BS only)
-    const plExcludedCats = {'cat_investments'};
+    const plExcludedCats = {
+      'cat_investments',
+      'cat_loan_received',
+      'cat_loan_repayment',
+      'cat_equity_injection',
+      'cat_owner_withdrawal',
+    };
 
     final curTxns = allTxns
         .where((t) =>

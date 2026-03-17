@@ -239,6 +239,14 @@ class _StatusHero extends StatelessWidget {
   }
 }
 
+String _initialsFromName(String name) {
+  if (name.trim().isEmpty) return '?';
+  final parts = name.trim().split(RegExp(r'\s+'));
+  if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  if (name.length >= 2) return name.substring(0, 2).toUpperCase();
+  return name.toUpperCase();
+}
+
 // ═══════════════════════════════════════════════════════
 //  SUPPLIER INFO SECTION
 // ═══════════════════════════════════════════════════════
@@ -282,7 +290,7 @@ class _SupplierInfo extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    (supplier?.initials ?? 'AA'),
+                    _initialsFromName(supplier?.name ?? purchase?.supplierName ?? ''),
                     style: TextStyle(
                       color: supplier?.avatarTextColor ?? AppColors.primaryNavy,
                       fontWeight: FontWeight.w800,
@@ -304,7 +312,7 @@ class _SupplierInfo extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      (supplier?.name ?? 'Al-Amal Distributors'),
+                      (supplier?.name ?? purchase?.supplierName ?? ''),
                       style: TextStyle(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w700,
@@ -393,7 +401,7 @@ class _SupplierInfo extends StatelessWidget {
                             color: AppColors.textTertiary, size: 14),
                         const SizedBox(width: 4),
                         Text(
-                          (supplier?.category ?? 'Raw Materials'),
+                          (supplier?.category ?? ''),
                           style: TextStyle(
                             color: AppColors.primaryNavy,
                             fontWeight: FontWeight.w600,
@@ -577,6 +585,9 @@ class _PaymentTermsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final dueDate = purchase?.dueDate;
     final terms = supplier?.paymentTerms ?? 'On Receipt';
+    final isPaid = (purchase?.paymentStatus ?? 0) == 2;
+    final isOverdue = !isPaid && dueDate != null && dueDate.isBefore(DateTime.now());
+    final dueDateColor = isOverdue ? const Color(0xFFC0392B) : AppColors.primaryNavy;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -621,13 +632,13 @@ class _PaymentTermsCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.event_busy_rounded,
-                            color: const Color(0xFFC0392B), size: 15),
+                        Icon(isOverdue ? Icons.event_busy_rounded : Icons.event_rounded,
+                            color: dueDateColor, size: 15),
                         const SizedBox(width: 4),
                         Text(
                           dueDate != null ? DateFormat('MM/dd/yyyy').format(dueDate) : 'N/A',
                           style: TextStyle(
-                            color: const Color(0xFFC0392B),
+                            color: dueDateColor,
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
@@ -675,7 +686,9 @@ class _PaymentTermsCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Payment is due within 30 days of receipt date. Late fees may apply.',
+                  terms == 'On Receipt'
+                      ? 'Payment is due upon receipt of goods.'
+                      : 'Payment is due within ${terms.replaceAll('Net ', '')} days of receipt date.',
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 12,
@@ -722,7 +735,7 @@ class _BottomActions extends StatelessWidget {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => RecordPaymentScreen(
-                      preselectedSupplierId: supplier?.id,
+                      preselectedSupplierId: supplier?.id ?? purchase?.supplierId,
                       preselectedPurchaseId: purchase?.id,
                     ),
                   ),
@@ -766,7 +779,7 @@ class _BottomActions extends StatelessWidget {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => RecordPurchaseScreen(
-                      preselectedSupplierId: supplier?.id,
+                      preselectedSupplierId: supplier?.id ?? purchase?.supplierId,
                     ),
                   ),
                 );

@@ -63,7 +63,23 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final categories = ref.watch(categoriesProvider).value ?? [];
     if (categories.isEmpty) return [];
     
-    return categories.where((c) => c.isExpense == _isExpense).toList();
+    final filtered = categories.where((c) => c.isExpense == _isExpense).toList();
+
+    // Sort by most used, but push COGS and Shipping to the end
+    const pinToEnd = {'cat_cogs', 'cat_shipping', 'cat_sales_revenue'};
+    final transactions = ref.read(transactionsProvider).value ?? [];
+    final usageCount = <String, int>{};
+    for (final t in transactions) {
+      usageCount[t.categoryId] = (usageCount[t.categoryId] ?? 0) + 1;
+    }
+    filtered.sort((a, b) {
+      final aPinned = pinToEnd.contains(a.id) ? 1 : 0;
+      final bPinned = pinToEnd.contains(b.id) ? 1 : 0;
+      if (aPinned != bPinned) return aPinned - bPinned;
+      return (usageCount[b.id] ?? 0).compareTo(usageCount[a.id] ?? 0);
+    });
+
+    return filtered;
   }
 
   bool _isCategoryExpanded = false;
@@ -469,7 +485,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   // ═══════════════════════════════════════════════════
   Widget _buildQuickTags() {
     final transactions = ref.watch(transactionsProvider).value ?? [];
-    final filteredTxs = transactions.where((t) => t.isIncome == !_isExpense).toList();
+    final filteredTxs = transactions.where((t) =>
+        t.isIncome == !_isExpense &&
+        t.categoryId != 'cat_cogs' &&
+        t.categoryId != 'cat_shipping' &&
+        t.categoryId != 'cat_sales_revenue').toList();
     
     if (filteredTxs.isEmpty) return const SizedBox.shrink();
 

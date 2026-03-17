@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/category_data.dart';
 import 'edit_category_screen.dart';
@@ -17,14 +18,28 @@ class CategoryDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(currencyProvider);
     final allTransactions = ref.watch(transactionsProvider).value ?? [];
+
+    // Watch the live category from provider (so edits reflect immediately)
+    final categories = ref.watch(categoriesProvider).value ?? [];
+    final liveCategory = categories.firstWhere(
+      (c) => c.id == category.id,
+      orElse: () => category,
+    );
+
     final categoryTx = allTransactions
-        .where((t) => t.categoryId == category.id)
+        .where((t) => t.categoryId == liveCategory.id)
         .toList()
       ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
-    final totalSpend = categoryTx.fold(0.0, (sum, t) => sum + t.amount.abs());
-    final budget = category.budgetLimit ?? 0.0;
+    // Filter to selected month for budget calculations
+    final budgetMonth = month ?? DateTime.now();
+    final monthTx = categoryTx.where((t) =>
+        t.dateTime.year == budgetMonth.year && t.dateTime.month == budgetMonth.month).toList();
+
+    final totalSpend = monthTx.fold(0.0, (sum, t) => sum + t.amount.abs());
+    final budget = liveCategory.budgetLimit ?? 0.0;
     final usedPercent = budget > 0 ? (totalSpend / budget * 100).clamp(0.0, 100.0).toInt() : 0;
     final remaining = budget > 0 ? (budget - totalSpend).clamp(0.0, double.infinity) : 0.0;
 
@@ -34,7 +49,7 @@ class CategoryDetailScreen extends ConsumerWidget {
         bottom: false,
         child: Column(
           children: [
-            _buildHeader(context),
+            _buildHeader(context, ref, liveCategory),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -43,17 +58,37 @@ class CategoryDetailScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _SpendCard(
-                      category: category,
+                      category: liveCategory,
                       totalSpend: totalSpend,
                       budget: budget,
                       usedPercent: usedPercent,
                       remaining: remaining,
-                      transactionCount: categoryTx.length,
+                      transactionCount: monthTx.length,
+                      currency: currency,
+                    ),
+                    const SizedBox(height: 16),
+                    _BudgetControl(
+                      category: liveCategory,
+                      currency: currency,
+                      onBudgetChanged: (newBudget) {
+                        final updated = liveCategory.copyWith(
+                          budgetLimit: newBudget,
+                          updatedAt: DateTime.now(),
+                        );
+                        ref.read(categoriesProvider.notifier).updateCategory(updated);
+                      },
                     ),
                     const SizedBox(height: 20),
-                    _TrendChart(category: category),
+                    _TrendChart(
+                      category: liveCategory,
+                      allCategoryTransactions: categoryTx,
+                      currency: currency,
+                    ),
                     const SizedBox(height: 24),
-                    _TransactionsList(transactions: categoryTx),
+                    _TransactionsList(
+                      transactions: categoryTx,
+                      currency: currency,
+                    ),
                   ],
                 ),
               ),
@@ -64,7 +99,7 @@ class CategoryDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, WidgetRef ref, CategoryData liveCategory) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
       child: Row(
@@ -76,7 +111,7 @@ class CategoryDetailScreen extends ConsumerWidget {
           ),
           Expanded(
             child: Text(
-              category.name,
+              liveCategory.name,
               textAlign: TextAlign.center,
               style: AppTypography.h3.copyWith(
                 color: AppColors.textPrimary,
@@ -89,7 +124,7 @@ class CategoryDetailScreen extends ConsumerWidget {
             HapticFeedback.lightImpact();
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => EditCategoryScreen(category: category),
+                builder: (_) => EditCategoryScreen(category: liveCategory),
               ),
             );
           },
@@ -98,6 +133,252 @@ class CategoryDetailScreen extends ConsumerWidget {
         ),
         ],
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BUDGET CONTROL — inline set/edit budget
+// ═══════════════════════════════════════════════════════════
+class _BudgetControl extends StatefulWidget {
+  final CategoryData category;
+  final String currency;
+  final ValueChanged<double?> onBudgetChanged;
+
+  const _BudgetControl({
+    required this.category,
+    required this.currency,
+    required this.onBudgetChanged,
+  });
+
+  @override
+  State<_BudgetControl> createState() => _BudgetControlState();
+}
+
+class _BudgetControlState extends State<_BudgetControl> {
+  bool _isEditing = false;
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: widget.category.budgetLimit?.toStringAsFixed(0) ?? '',
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _BudgetControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isEditing && oldWidget.category.budgetLimit != widget.category.budgetLimit) {
+      _controller.text = widget.category.budgetLimit?.toStringAsFixed(0) ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _saveBudget() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      widget.onBudgetChanged(null);
+      HapticFeedback.mediumImpact();
+    } else {
+      final value = double.tryParse(text.replaceAll(',', ''));
+      if (value != null && value > 0) {
+        widget.onBudgetChanged(value);
+        HapticFeedback.mediumImpact();
+      } else {
+        HapticFeedback.heavyImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a valid budget amount')),
+        );
+        return;
+      }
+    }
+    setState(() => _isEditing = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasBudget = widget.category.budgetLimit != null && widget.category.budgetLimit! > 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
+      ),
+      child: _isEditing ? _buildEditMode() : _buildViewMode(hasBudget),
+    );
+  }
+
+  Widget _buildViewMode(bool hasBudget) {
+    return Row(
+      children: [
+        Icon(
+          Icons.account_balance_wallet_rounded,
+          size: 20,
+          color: hasBudget ? AppColors.primaryNavy : AppColors.textTertiary,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Monthly Budget',
+                style: AppTypography.captionSmall.copyWith(
+                  color: AppColors.textTertiary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                hasBudget
+                    ? '${widget.currency} ${widget.category.budgetLimit!.toStringAsFixed(0)}'
+                    : 'No budget set',
+                style: AppTypography.labelMedium.copyWith(
+                  color: hasBudget ? AppColors.primaryNavy : AppColors.textTertiary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            setState(() => _isEditing = true);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.accentOrange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              hasBudget ? 'Edit' : 'Set Budget',
+              style: TextStyle(
+                color: AppColors.accentOrange,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditMode() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'SET MONTHLY BUDGET',
+          style: AppTypography.captionSmall.copyWith(
+            color: AppColors.textTertiary,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.0,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _controller,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          style: AppTypography.labelLarge.copyWith(
+            color: AppColors.primaryNavy,
+            fontWeight: FontWeight.w600,
+          ),
+          decoration: InputDecoration(
+            prefixText: '${widget.currency} ',
+            prefixStyle: AppTypography.labelLarge.copyWith(
+              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w600,
+            ),
+            hintText: '0',
+            filled: true,
+            fillColor: AppColors.backgroundLight,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.accentOrange, width: 2),
+            ),
+            contentPadding: const EdgeInsets.all(14),
+          ),
+          onSubmitted: (_) => _saveBudget(),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            if (widget.category.budgetLimit != null) ...[
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  widget.onBudgetChanged(null);
+                  setState(() => _isEditing = false);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: Text(
+                    'Remove',
+                    style: TextStyle(
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            GestureDetector(
+              onTap: () => setState(() => _isEditing = false),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: AppColors.textTertiary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: _saveBudget,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.accentOrange,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Save',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -112,6 +393,7 @@ class _SpendCard extends StatelessWidget {
   final int usedPercent;
   final double remaining;
   final int transactionCount;
+  final String currency;
 
   const _SpendCard({
     required this.category,
@@ -120,6 +402,7 @@ class _SpendCard extends StatelessWidget {
     required this.usedPercent,
     required this.remaining,
     required this.transactionCount,
+    required this.currency,
   });
 
   @override
@@ -194,7 +477,7 @@ class _SpendCard extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                '\$${totalSpend.toStringAsFixed(0)}',
+                '$currency ${totalSpend.toStringAsFixed(0)}',
                 style: AppTypography.h1.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w800,
@@ -236,7 +519,7 @@ class _SpendCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '\$${remaining.toStringAsFixed(0)} Left',
+                '$currency ${remaining.toStringAsFixed(0)} Left',
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontSize: 11,
@@ -294,17 +577,43 @@ class _SpendCard extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════
 class _TrendChart extends StatelessWidget {
   final CategoryData category;
+  final List<Transaction> allCategoryTransactions;
+  final String currency;
 
-  const _TrendChart({required this.category});
+  const _TrendChart({
+    required this.category,
+    required this.allCategoryTransactions,
+    required this.currency,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // Simulated month data — will derive from transactions when backend arrives
-    final data = [
-      _MonthData('Dec', 4200, 0.6),
-      _MonthData('Jan', 4900, 0.7),
-      _MonthData('Feb', 5800, 0.85),
+    // Build real 3-month trend from transactions
+    final now = DateTime.now();
+    const monthNames = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
+
+    final data = <_MonthData>[];
+    double maxAmount = 0;
+    for (int i = 2; i >= 0; i--) {
+      final targetDate = DateTime(now.year, now.month - i, 1);
+      final year = targetDate.year;
+      final month = targetDate.month;
+      final label = monthNames[month - 1];
+      final amount = allCategoryTransactions
+          .where((t) => t.dateTime.year == year && t.dateTime.month == month)
+          .fold(0.0, (sum, t) => sum + t.amount.abs());
+      if (amount > maxAmount) maxAmount = amount;
+      data.add(_MonthData(label, amount, 0));
+    }
+
+    // Calculate height fractions relative to max
+    final chartData = data.map((d) {
+      final fraction = maxAmount > 0 ? (d.amount / maxAmount).clamp(0.05, 1.0) : 0.05;
+      return _MonthData(d.label, d.amount, fraction);
+    }).toList();
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -335,16 +644,16 @@ class _TrendChart extends StatelessWidget {
             height: 130,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
-              children: data.asMap().entries.map((entry) {
+              children: chartData.asMap().entries.map((entry) {
                 final i = entry.key;
                 final d = entry.value;
-                final isCurrent = i == data.length - 1;
+                final isCurrent = i == chartData.length - 1;
 
                 return Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(
                       left: i > 0 ? 12 : 0,
-                      right: i < data.length - 1 ? 12 : 0,
+                      right: i < chartData.length - 1 ? 12 : 0,
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -422,8 +731,9 @@ class _MonthData {
 // ═══════════════════════════════════════════════════════════
 class _TransactionsList extends StatelessWidget {
   final List<Transaction> transactions;
+  final String currency;
 
-  const _TransactionsList({required this.transactions});
+  const _TransactionsList({required this.transactions, required this.currency});
 
   @override
   Widget build(BuildContext context) {
@@ -446,7 +756,7 @@ class _TransactionsList extends StatelessWidget {
             final tx = entry.value;
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _TransactionTile(transaction: tx, index: i),
+              child: _TransactionTile(transaction: tx, index: i, currency: currency),
             );
           }),
       ],
@@ -480,8 +790,9 @@ class _TransactionsList extends StatelessWidget {
 class _TransactionTile extends StatelessWidget {
   final Transaction transaction;
   final int index;
+  final String currency;
 
-  const _TransactionTile({required this.transaction, required this.index});
+  const _TransactionTile({required this.transaction, required this.index, required this.currency});
 
   String get _formattedDate {
     final d = transaction.dateTime;
@@ -548,8 +859,8 @@ class _TransactionTile extends StatelessWidget {
           ),
           Text(
             transaction.isIncome
-                ? '+\$${transaction.amount.abs().toStringAsFixed(0)}'
-                : '-\$${transaction.amount.abs().toStringAsFixed(0)}',
+                ? '+$currency ${transaction.amount.abs().toStringAsFixed(0)}'
+                : '-$currency ${transaction.amount.abs().toStringAsFixed(0)}',
             style: AppTypography.labelMedium.copyWith(
               color: transaction.isIncome ? AppColors.success : AppColors.danger,
               fontWeight: FontWeight.w800,

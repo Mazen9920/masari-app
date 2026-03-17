@@ -27,6 +27,10 @@ class AppColors {
   static const Color textTertiary = Color(0xFFBDC3C7);
   static const Color borderLight = Color(0xFFE5E8EB);
   static const Color dividerLight = Color(0xFFF0F0F0);
+  static const Color surfaceSubtle = Color(0xFFF8FAFC);
+
+  // ─── Integration Colors ─────────────────────────────────
+  static const Color shopifyPurple = Color(0xFF7C3AED);
 
   // ─── Dark Theme ─────────────────────────────────────────
   static const Color backgroundDark = Color(0xFF0D1117);
@@ -72,7 +76,7 @@ class AppColors {
   static const LinearGradient navyGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [primaryNavy, secondaryBlue, Color(0xFF7C3AED)],
+    colors: [primaryNavy, secondaryBlue, shopifyPurple],
   );
 
   // ─── Shadows ────────────────────────────────────────────

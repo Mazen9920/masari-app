@@ -23,13 +23,14 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
   bool _lowStockAlerts = true;
   bool _hideOutOfStock = false;
   bool _breakdownEnabled = false;
+  bool _hideShopifyDrafts = false;
 
-  String _defaultUnit = 'Pieces';
+  String _defaultUnit = 'pcs';
   String _valuationMethod = 'FIFO (Default)';
   String _currency = 'EGP';
   final _thresholdController = TextEditingController(text: '10');
 
-  static const _units = ['Pieces', 'Kilograms', 'Liters', 'Meters', 'Boxes'];
+  static const _units = ['pcs', 'kg', 'liters', 'meters', 'boxes'];
   static const _valuations = ['FIFO (Default)', 'Average Cost', 'LIFO'];
   static const _currencies = ['EGP', 'USD', 'EUR', 'SAR'];
 
@@ -52,7 +53,8 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
     _lowStockAlerts = s.lowStockAlerts;
     _hideOutOfStock = s.hideOutOfStock;
     _breakdownEnabled = s.breakdownEnabled;
-    _defaultUnit = _units.contains(s.defaultUnit) ? s.defaultUnit : 'Pieces';
+    _hideShopifyDrafts = s.hideShopifyDrafts;
+    _defaultUnit = _units.contains(s.defaultUnit) ? s.defaultUnit : 'pcs';
     _currency = _currencies.contains(s.currency) ? s.currency : 'EGP';
     _valuationMethod = _keyToValuation[s.valuationMethod] ?? 'FIFO (Default)';
     _thresholdController.text = s.alertThreshold.toString();
@@ -72,6 +74,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
     notifier.setAlertThreshold(int.tryParse(_thresholdController.text) ?? 10);
     notifier.setHideOutOfStock(_hideOutOfStock);
     notifier.setBreakdownEnabled(_breakdownEnabled);
+    notifier.setHideShopifyDrafts(_hideShopifyDrafts);
     notifier.setDefaultUnit(_defaultUnit);
     notifier.setValuationMethod(_valuationToKey[_valuationMethod] ?? 'fifo');
     notifier.setCurrency(_currency);
@@ -193,7 +196,9 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
               value: _autoUpdateStock,
               onChanged: (v) => setState(() => _autoUpdateStock = v),
             ),
+            const SizedBox(height: 12),
             _divider(),
+            const SizedBox(height: 12),
             _tapRow(
               title: 'Unit of Measure',
               subtitle: 'Default unit for new items',
@@ -266,6 +271,9 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
                             controller: _thresholdController,
                             keyboardType: TextInputType.number,
                             textAlign: TextAlign.center,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
                             decoration: InputDecoration(
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(
@@ -425,6 +433,14 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
         _sectionTitle('Shopify Sync'),
         _card(
           children: [
+            // Hide drafted products toggle
+            _toggleRow(
+              title: 'Hide drafted products',
+              subtitle: 'Hide Shopify products with draft status',
+              value: _hideShopifyDrafts,
+              onChanged: (v) => setState(() => _hideShopifyDrafts = v),
+            ),
+            _divider(),
             // Inventory sync toggle
             _toggleRow(
               title: 'Inventory Sync',

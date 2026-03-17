@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/category_data.dart';
 
 /// Shows the Add Category bottom sheet. Call this from anywhere.
@@ -72,16 +73,75 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
       return;
     }
 
+    // Check for duplicate category name
+    final existing = [
+      ...CategoryData.all,
+      ...CategoryData.customCategories,
+    ];
+    final isDuplicate = existing.any(
+      (c) => c.name.toLowerCase() == name.toLowerCase(),
+    );
+    if (isDuplicate) {
+      HapticFeedback.heavyImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('A category named "$name" already exists'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    // Validate budget limit
+    double? budgetLimit;
+    if (_hasLimit) {
+      budgetLimit = double.tryParse(_limitController.text.trim());
+      if (budgetLimit == null) {
+        HapticFeedback.heavyImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please enter a valid budget amount'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        return;
+      }
+      if (budgetLimit < 0) {
+        HapticFeedback.heavyImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Budget limit cannot be negative'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        return;
+      }
+      if (budgetLimit > 10000000) {
+        HapticFeedback.heavyImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Budget limit cannot exceed 10,000,000'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        return;
+      }
+    }
+
     final color = _colors[_selectedColorIndex];
     final category = CategoryData(
       id: 'cat_${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
       userId: '',
       name: name,
       iconName: CategoryDataUIExt.iconNameFromData(_icons[_selectedIconIndex]),
-      colorValue: color.value,
-      bgColorValue: color.withValues(alpha: 0.1).value,
+      colorValue: color.toARGB32(),
+      bgColorValue: color.withValues(alpha: 0.1).toARGB32(),
       isExpense: _isExpense,
-      budgetLimit: _hasLimit ? double.tryParse(_limitController.text.trim()) : null,
+      budgetLimit: budgetLimit,
     );
 
     ref.read(categoriesProvider.notifier).addCategory(category);
@@ -159,8 +219,10 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
                   _buildTypeToggle(),
                   const SizedBox(height: 24),
 
-                  _buildLimitSection(),
-                  const SizedBox(height: 24),
+                  if (_isExpense) ...[
+                    _buildLimitSection(),
+                    const SizedBox(height: 24),
+                  ],
 
                   _buildSectionLabel('Icon'),
                   const SizedBox(height: 10),
@@ -170,13 +232,22 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
                   _buildSectionLabel('Color Tag'),
                   const SizedBox(height: 10),
                   _buildColorPicker(),
-                  const SizedBox(height: 28),
-
-                  _buildSaveButton(),
                   const SizedBox(height: 16),
                 ],
               ),
             ),
+          ),
+
+          // Pinned save button at bottom
+          Container(
+            padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + bottomInset),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                top: BorderSide(color: AppColors.borderLight.withValues(alpha: 0.5)),
+              ),
+            ),
+            child: _buildSaveButton(),
           ),
         ],
       ),
@@ -244,7 +315,13 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        setState(() => _isExpense = isExpenseMode);
+        setState(() {
+          _isExpense = isExpenseMode;
+          if (!isExpenseMode) {
+            _hasLimit = false;
+            _limitController.clear();
+          }
+        });
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -302,7 +379,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
                   fontWeight: FontWeight.w600,
                 ),
                 decoration: InputDecoration(
-                  hintText: 'EGP 0,000',
+                  hintText: '${ref.watch(currencyProvider)} 0,000',
                   hintStyle: AppTypography.labelLarge.copyWith(
                     color: AppColors.textTertiary,
                     fontWeight: FontWeight.w400,

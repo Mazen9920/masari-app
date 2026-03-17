@@ -38,13 +38,13 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
   String _baseMaterialType = '';
   bool _showOptional = false;
 
-  static const _uomPresets = ['Kilograms (kg)',
-     'Grams (g)',
-     'Liters (l)',
-     'Meters (m)',
-     'Pieces',
-     'Rolls',
-     'Sheets',
+  static const _uomPresets = ['kg',
+     'g',
+     'liters',
+     'meters',
+     'pcs',
+     'rolls',
+     'sheets',
   ];
 
   static const _materialTypes = [
@@ -83,14 +83,20 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
       );
       return;
     }
-    final parts = name.split(' ');
+    final parts = name
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     final timestamp = DateTime.now().millisecondsSinceEpoch % 10000;
     String prefix;
     if (parts.length >= 2) {
-      prefix =
-          '${parts[0].substring(0, parts[0].length.clamp(0, 3))}-${parts[1].substring(0, parts[1].length.clamp(0, 3))}';
+      final first = parts[0];
+      final second = parts[1];
+      final firstPrefix = first.substring(0, first.length >= 3 ? 3 : first.length);
+      final secondPrefix = second.substring(0, second.length >= 3 ? 3 : second.length);
+      prefix = '$firstPrefix-$secondPrefix';
     } else {
-      prefix = name.substring(0, name.length.clamp(0, 6));
+      prefix = name.substring(0, name.length >= 6 ? 6 : name.length);
     }
     setState(() {
       _skuController.text = 'MAT-$prefix-$timestamp';
@@ -116,7 +122,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
     return '';
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!_canSave) {
       HapticFeedback.heavyImpact();
       return;
@@ -152,7 +158,19 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
       variants: [defaultVariant],
     );
 
-    ref.read(inventoryProvider.notifier).addProduct(product);
+    final result = await ref.read(inventoryProvider.notifier).addProduct(product);
+    if (!result.isSuccess) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? l10n.somethingWentWrong),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+      return;
+    }
+
     HapticFeedback.mediumImpact();
     context.safePop();
   }

@@ -166,6 +166,27 @@ class FirestoreShopifyProductMappingRepository
   }
 
   @override
+  Future<Result<void>> deleteMappingsByMasariProductId(
+      String masariProductId) async {
+    try {
+      final snapshot = await _collection
+          .where('user_id', isEqualTo: _uid)
+          .where('masari_product_id', isEqualTo: masariProductId)
+          .get();
+      if (snapshot.docs.isEmpty) return Result.success(null);
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      return Result.success(null);
+    } catch (e) {
+      return Result.failure(
+          'Failed to delete mappings for product: $e');
+    }
+  }
+
+  @override
   Future<Result<void>> deleteAllMappings() async {
     try {
       final snapshot =

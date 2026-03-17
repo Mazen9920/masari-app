@@ -140,14 +140,15 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
               height: 88,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                  colors: [AppColors.shopifyPurple, Color(0xFF5B21B6)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(22),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                    color:
+                        AppColors.shopifyPurple.withValues(alpha: 0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -188,13 +189,14 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
             child: FilledButton(
               onPressed: () => context.push(AppRoutes.shopifySetupWizard),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF7C3AED),
+                backgroundColor: AppColors.shopifyPurple,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 56),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 elevation: 4,
-                shadowColor: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                shadowColor:
+                    AppColors.shopifyPurple.withValues(alpha: 0.3),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -343,7 +345,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
                     : 'On demand',
                 statusColor: conn.inventorySyncMode == 'always'
                     ? AppColors.success
-                    : const Color(0xFF7C3AED),
+                    : AppColors.shopifyPurple,
               ),
             ),
           ]).animate().fadeIn(duration: 250.ms, delay: 120.ms),

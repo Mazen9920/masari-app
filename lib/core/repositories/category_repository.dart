@@ -13,9 +13,8 @@ abstract class CategoryRepository {
   Future<Result<CategoryData>> createCategory(CategoryData category);
 
   /// Updates an existing category.
-  Future<Result<CategoryData>> updateCategory(
-      String oldName, CategoryData updated);
+  Future<Result<CategoryData>> updateCategory(CategoryData updated);
 
-  /// Deletes a category by name.
-  Future<Result<void>> deleteCategory(String name);
+  /// Deletes a category by ID.
+  Future<Result<void>> deleteCategory(String id);
 }

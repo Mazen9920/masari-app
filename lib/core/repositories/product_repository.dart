@@ -32,5 +32,20 @@ abstract class ProductRepository {
   /// is created and the variant's cost price is recalculated.
   /// [valuationMethod] controls how cost layers are consumed on negative deltas:
   /// 'fifo' (default), 'lifo', or 'average'.
-  Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false});
+  /// [skipCostLayer] when true, adjusts quantity without creating a cost layer
+  /// or recalculating WAC — used for manufactured products whose cost is
+  /// managed separately.
+  Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false});
+
+  /// Performs a full breakdown operation atomically:
+  /// deducts [qty] from [sourceVariantId] and adds proportional quantities
+  /// to each output variant, all within a single Firestore transaction.
+  /// [outputAllocations] maps output variantId → (quantity, unitCost).
+  Future<Result<Product>> breakdownStock({
+    required String productId,
+    required String sourceVariantId,
+    required int qty,
+    required String valuationMethod,
+    required Map<String, ({int quantity, double unitCost})> outputAllocations,
+  });
 }

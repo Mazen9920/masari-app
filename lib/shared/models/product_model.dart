@@ -362,6 +362,9 @@ class Product {
   /// Shopify product ID for two-way sync.
   final String? shopifyProductId;
 
+  /// Shopify product status: 'active', 'draft', or 'archived'.
+  final String? shopifyStatus;
+
   /// Up to 3 user-defined option types (e.g. Color, Size, Material).
   final List<ProductOption> options;
 
@@ -372,13 +375,18 @@ class Product {
   /// into output variants within this product.
   final BreakdownRecipe? breakdownRecipe;
 
+  /// Whether this product goes through multi-supplier manufacturing phases.
+  /// When true, goods receipts adjust stock quantity but skip cost-layer
+  /// creation — cost is managed manually or via Production Batches (Pro).
+  final bool isManufactured;
+
   const Product({
     required this.id,
     required this.userId,
     required this.name,
     required this.category,
     required this.supplier,
-    this.unitOfMeasure = 'Pieces',
+    this.unitOfMeasure = 'pcs',
     this.icon = Icons.inventory_2_rounded,
     this.color = const Color(0xFF1B4F72),
     this.imageUrl,
@@ -388,9 +396,11 @@ class Product {
     this.createdAt,
     this.updatedAt,
     this.shopifyProductId,
+    this.shopifyStatus,
     this.options = const [],
     this.variants = const [],
     this.breakdownRecipe,
+    this.isManufactured = false,
   });
 
   // ── Aggregate computed properties across all variants ───
@@ -497,9 +507,11 @@ class Product {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? shopifyProductId,
+    String? shopifyStatus,
     List<ProductOption>? options,
     List<ProductVariant>? variants,
     BreakdownRecipe? breakdownRecipe,
+    bool? isManufactured,
   }) {
     return Product(
       id: id,
@@ -517,9 +529,11 @@ class Product {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       shopifyProductId: shopifyProductId ?? this.shopifyProductId,
+      shopifyStatus: shopifyStatus ?? this.shopifyStatus,
       options: options ?? this.options,
       variants: variants ?? this.variants,
       breakdownRecipe: breakdownRecipe ?? this.breakdownRecipe,
+      isManufactured: isManufactured ?? this.isManufactured,
     );
   }
 
@@ -542,10 +556,12 @@ class Product {
       if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
       if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
       if (shopifyProductId != null) 'shopify_product_id': shopifyProductId,
+      if (shopifyStatus != null) 'shopify_status': shopifyStatus,
       'options': options.map((o) => o.toJson()).toList(),
       'variants': variants.map((v) => v.toJson()).toList(),
       if (breakdownRecipe != null)
         'breakdown_recipe': breakdownRecipe!.toJson(),
+      'is_manufactured': isManufactured,
       // Aggregate fields kept for backward compat / Firestore queries
       'cost_price': costPrice,
       'selling_price': sellingPrice,
@@ -598,7 +614,7 @@ class Product {
       name: json['name'] as String,
       category: json['category'] as String,
       supplier: json['supplier'] as String,
-      unitOfMeasure: json['unit_of_measure'] as String? ?? 'Pieces',
+      unitOfMeasure: json['unit_of_measure'] as String? ?? 'pcs',
       icon: json['icon_code'] != null
           ? IconData(json['icon_code'] as int, fontFamily: 'MaterialIcons')
           : Icons.inventory_2_rounded,
@@ -616,12 +632,14 @@ class Product {
           ? DateTime.parse(json['updated_at'] as String)
           : null,
       shopifyProductId: json['shopify_product_id'] as String?,
+      shopifyStatus: json['shopify_status'] as String?,
       options: optionsList,
       variants: variantsList,
       breakdownRecipe: json['breakdown_recipe'] != null
           ? BreakdownRecipe.fromJson(
               json['breakdown_recipe'] as Map<String, dynamic>)
           : null,
+      isManufactured: json['is_manufactured'] as bool? ?? false,
     );
   }
 }

@@ -67,6 +67,14 @@ class PaymentDetailScreen extends ConsumerWidget {
     );
   }
 
+  String _initials(String name) {
+    if (name.trim().isEmpty) return '?';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    if (name.length >= 2) return name.substring(0, 2).toUpperCase();
+    return name.toUpperCase();
+  }
+
   // ═══════════════════════════════════════════════════════
   //  HEADER
   // ═══════════════════════════════════════════════════════
@@ -219,7 +227,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                   ),
                   child: Center(
                     child: Text(
-                      supplier?.initials ?? 'N/A',
+                      _initials(payment?.supplierName ?? supplier?.name ?? ''),
                       style: TextStyle(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w700,

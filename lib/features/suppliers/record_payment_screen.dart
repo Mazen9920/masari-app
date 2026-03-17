@@ -10,6 +10,7 @@ import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/supplier_model.dart';
 import '../../shared/models/payment_model.dart';
 import '../../shared/models/purchase_model.dart';
+import '../../shared/models/transaction_model.dart';
 import 'add_supplier_screen.dart';
 
 /// Record Payment form — supplier info, amount, method, invoice allocation, notes.
@@ -58,8 +59,9 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
 
   void _save() {
     if (_payAmount <= 0) return;
+    if (_selectedSupplierId == null) return;
     final suppliers = ref.read(suppliersProvider).value ?? [];
-    final supplierId = _selectedSupplierId ?? (suppliers.isNotEmpty ? suppliers.first.id : '');
+    final supplierId = _selectedSupplierId!;
     final supplierName = suppliers
         .cast<Supplier?>()
         .firstWhere((s) => s!.id == supplierId, orElse: () => null)
@@ -119,6 +121,30 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
     }
 
     HapticFeedback.mediumImpact();
+
+    // Auto-create a transaction entry (visible but excluded from P&L)
+    final settings = ref.read(appSettingsProvider);
+    if (settings.autoCreateTransactionOnSupplierPayment) {
+      final now = DateTime.now();
+      final txId = 'sp_${now.millisecondsSinceEpoch}';
+      ref.read(transactionsProvider.notifier).addTransaction(
+        Transaction(
+          id: txId,
+          userId: '',
+          title: 'Supplier Payment — $supplierName',
+          amount: -_payAmount,
+          dateTime: _paymentDate,
+          categoryId: 'cat_supplier_payment',
+          paymentMethod: _methods[_methodIdx].label,
+          note: _notesCtrl.text.trim(),
+          supplierId: supplierId,
+          excludeFromPL: true,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+    }
+
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

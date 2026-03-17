@@ -12,9 +12,9 @@ import '../../core/services/share_service.dart';
 import '../../core/providers/export_providers.dart';
 import '../cash_flow/providers/scheduled_transactions_provider.dart';
 import '../cash_flow/widgets/add_recurring_sheet.dart';
-import '../dashboard/providers/dashboard_state_provider.dart';
-import '../dashboard/widgets/custom_date_range_picker.dart';
+import 'widgets/financial_period_sheet.dart';
 import '../../shared/utils/money_utils.dart';
+import '../../shared/models/category_data.dart';
 import '../../l10n/app_localizations.dart';
 import 'widgets/report_card.dart';
 import 'widgets/chart_toggle.dart';
@@ -28,67 +28,22 @@ class CashFlowScreen extends ConsumerStatefulWidget {
 }
 
 class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
-  DashboardPeriod _selectedPeriod = DashboardPeriod.monthToDate;
-  DateTimeRange? _customRange;
+  FinancialPeriodResult _period = FinancialPeriodResult(
+    type: FinancialPeriodType.monthEnd,
+    range: DateTimeRange(
+      start: DateTime(DateTime.now().year, DateTime.now().month, 1),
+      end: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, 23, 59, 59),
+    ),
+    label: DateFormat('MMMM yyyy').format(DateTime.now()),
+  );
   bool _monthlyChart = true;
 
-  DateTimeRange _getDateRange() {
-    if (_selectedPeriod == DashboardPeriod.custom && _customRange != null) {
-      return _customRange!;
-    }
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day, 23, 59, 59);
-    switch (_selectedPeriod) {
-      case DashboardPeriod.today:
-        return DateTimeRange(start: DateTime(now.year, now.month, now.day), end: today);
-      case DashboardPeriod.yesterday:
-        final y = now.subtract(const Duration(days: 1));
-        return DateTimeRange(start: DateTime(y.year, y.month, y.day), end: DateTime(y.year, y.month, y.day, 23, 59, 59));
-      case DashboardPeriod.last7Days:
-        return DateTimeRange(start: now.subtract(const Duration(days: 7)), end: today);
-      case DashboardPeriod.last30Days:
-        return DateTimeRange(start: now.subtract(const Duration(days: 30)), end: today);
-      case DashboardPeriod.last90Days:
-        return DateTimeRange(start: now.subtract(const Duration(days: 90)), end: today);
-      case DashboardPeriod.last365Days:
-        return DateTimeRange(start: now.subtract(const Duration(days: 365)), end: today);
-      case DashboardPeriod.lastMonth:
-        final lastMonth = DateTime(now.year, now.month - 1);
-        return DateTimeRange(start: lastMonth, end: DateTime(now.year, now.month, 0, 23, 59, 59));
-      case DashboardPeriod.last12Months:
-        return DateTimeRange(start: DateTime(now.year - 1, now.month, now.day), end: today);
-      case DashboardPeriod.lastYear:
-        return DateTimeRange(start: DateTime(now.year - 1, 1, 1), end: DateTime(now.year - 1, 12, 31, 23, 59, 59));
-      case DashboardPeriod.weekToDate:
-        final weekday = now.weekday;
-        return DateTimeRange(start: now.subtract(Duration(days: weekday - 1)), end: today);
-      case DashboardPeriod.monthToDate:
-        return DateTimeRange(start: DateTime(now.year, now.month, 1), end: today);
-      case DashboardPeriod.quarterToDate:
-        final qStart = DateTime(now.year, ((now.month - 1) ~/ 3) * 3 + 1, 1);
-        return DateTimeRange(start: qStart, end: today);
-      case DashboardPeriod.yearToDate:
-        return DateTimeRange(start: DateTime(now.year, 1, 1), end: today);
-      case DashboardPeriod.custom:
-        return DateTimeRange(start: DateTime(now.year, now.month, 1), end: today);
-    }
-  }
+  DateTimeRange _getDateRange() => _period.range;
 
   Future<void> _openDatePicker() async {
-    final result = await showDateRangeSheet(
-      context,
-      currentPeriod: _selectedPeriod,
-    );
+    final result = await showFinancialPeriodSheet(context, current: _period);
     if (result == null) return;
-    setState(() {
-      if (result.period != null) {
-        _selectedPeriod = result.period!;
-        _customRange = null;
-      } else if (result.customRange != null) {
-        _selectedPeriod = DashboardPeriod.custom;
-        _customRange = result.customRange;
-      }
-    });
+    setState(() => _period = result);
   }
 
   @override
@@ -119,6 +74,23 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
     final double moneyOut = roundMoney(periodTransactions
         .where((t) => !t.isIncome)
         .fold(0.0, (sum, t) => sum + t.amount.abs()));
+
+    // GAAP classification: Operating / Investing / Financing
+    double operatingNet = 0, investingNet = 0, financingNet = 0;
+    for (final t in periodTransactions) {
+      final signed = t.isIncome ? t.amount.abs() : -t.amount.abs();
+      switch (cashFlowTypeFor(t.categoryId)) {
+        case CashFlowType.operating:
+          operatingNet += signed;
+        case CashFlowType.investing:
+          investingNet += signed;
+        case CashFlowType.financing:
+          financingNet += signed;
+      }
+    }
+    operatingNet = roundMoney(operatingNet);
+    investingNet = roundMoney(investingNet);
+    financingNet = roundMoney(financingNet);
 
     // Calculate cash balance up to the end of the selected period (includes opening cash)
     final double currentCashBalance = roundMoney(openingCash + transactions
@@ -158,13 +130,16 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
                       const SizedBox(height: 16),
                       _buildHeroCard(currentCashBalance, prevCashBalance, fmt),
                       const SizedBox(height: 16),
-                      if (currentCashBalance < 5000) ...[
+                      // Show low-balance alert when cash covers less than ~10% of period outflow
+                      if (moneyOut > 0 && currentCashBalance < moneyOut * 0.1 && currentCashBalance >= 0) ...[
                         _buildAlertBanner(currentCashBalance),
                         const SizedBox(height: 16),
                       ],
                       _buildAIForecastCard(currentCashBalance, moneyIn, moneyOut, fmt),
                       const SizedBox(height: 16),
                       _buildKPICards(moneyIn, moneyOut, fmt),
+                      const SizedBox(height: 16),
+                      _buildGaapActivities(operatingNet, investingNet, financingNet, fmt),
                       const SizedBox(height: 16),
                       _buildChartSection(),
                       const SizedBox(height: 16),
@@ -238,7 +213,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
                     Padding(
                       padding: const EdgeInsets.only(top: 1, bottom: 1),
                       child: Text(
-                        'How much cash did you start with before using Masari?',
+                        AppLocalizations.of(context)!.openingCashHelpText,
                         style: AppTypography.captionSmall.copyWith(
                           fontSize: 10,
                           color: const Color(0xFFA16207).withValues(alpha: 0.7),
@@ -249,7 +224,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
                   Text(
                     hasOpeningCash
                         ? '$currency ${fmt.format(openingCash)}'
-                        : 'Tap to set your starting cash',
+                        : AppLocalizations.of(context)!.tapToSetStartingCash,
                     style: hasOpeningCash
                         ? AppTypography.metricSmall.copyWith(fontSize: 16, color: AppColors.badgeTextPositive)
                         : AppTypography.bodySmall.copyWith(fontSize: 12, color: const Color(0xFFA16207)),
@@ -291,7 +266,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Enter the cash you had before you started tracking transactions in Masari.',
+              AppLocalizations.of(context)!.openingCashDialogDesc,
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
@@ -333,7 +308,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
-              'Cancel',
+              AppLocalizations.of(context)!.cancel,
               style: TextStyle(color: AppColors.textTertiary, fontWeight: FontWeight.w600),
             ),
           ),
@@ -347,7 +322,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
               backgroundColor: AppColors.primaryNavy,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w700)),
+            child: Text(AppLocalizations.of(context)!.save, style: const TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -357,10 +332,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
 
 
   Widget _buildDateSelector() {
-    final dateRange = _getDateRange();
-    final label = _selectedPeriod == DashboardPeriod.custom
-        ? '${DateFormat('MMM d').format(dateRange.start)} – ${DateFormat('MMM d').format(dateRange.end)}'
-        : _selectedPeriod.name.replaceAllMapped(RegExp(r'[A-Z]'), (m) => ' ${m[0]}').trim();
+    final label = _period.label;
 
     return Center(
       child: GestureDetector(
@@ -456,7 +428,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'vs last month',
+                      AppLocalizations.of(context)!.vsLastMonthLabel,
                       style: AppTypography.captionSmall.copyWith(color: AppColors.textTertiary),
                     ),
                   ],
@@ -504,7 +476,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Your current balance is critically low. Consider reviewing upcoming expenses to avoid a negative balance.',
+                  AppLocalizations.of(context)!.lowCashAlertBody,
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.accentOrangeDark.withValues(alpha: 0.8),
@@ -529,9 +501,10 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
     final expectedRemainingFlow = dailyNetRate * daysRemaining;
     final forecastAmount = balance + expectedRemainingFlow;
 
+    final currency = ref.watch(appSettingsProvider).currency;
     final forecastText = expectedRemainingFlow >= 0 
-      ? 'Based on your recent transaction patterns, you should reach a healthy ${ref.watch(appSettingsProvider).currency} ${fmt.format(forecastAmount)} by the end of the month.'
-      : 'Based on your recent spending, your balance may dip to ${ref.watch(appSettingsProvider).currency} ${fmt.format(forecastAmount)} by month-end. Consider cutting back on expenses.';
+      ? AppLocalizations.of(context)!.forecastPositive(currency, fmt.format(forecastAmount))
+      : AppLocalizations.of(context)!.forecastNegative(currency, fmt.format(forecastAmount));
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -661,6 +634,72 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
     );
   }
 
+  Widget _buildGaapActivities(
+    double operatingNet,
+    double investingNet,
+    double financingNet,
+    NumberFormat fmt,
+  ) {
+    final currency = ref.watch(appSettingsProvider).currency;
+    final l10n = AppLocalizations.of(context)!;
+
+    Widget row(String label, double value, IconData icon, Color color) {
+      final isPositive = value >= 0;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+            ),
+            Text(
+              '${isPositive ? '+' : ''}$currency ${fmt.format(value)}',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: isPositive ? AppColors.chartGreen : AppColors.chartRed,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ReportCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.gaapCashFlowNote,
+            style: AppTypography.captionSmall.copyWith(
+              color: AppColors.textTertiary,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 12),
+          row(l10n.operatingActivities, operatingNet, Icons.storefront_rounded, AppColors.chartBlue),
+          const Divider(height: 1),
+          row(l10n.investingActivities, investingNet, Icons.trending_up_rounded, AppColors.chartOrange),
+          const Divider(height: 1),
+          row(l10n.financingActivities, financingNet, Icons.account_balance_rounded, AppColors.chartGreen),
+        ],
+      ),
+    ).animate().fadeIn(duration: 400.ms, delay: 350.ms);
+  }
+
   Widget _buildChartSection() {
     final transactions = ref.watch(transactionsProvider).value ?? [];
     
@@ -775,7 +814,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Coming Up',
+                AppLocalizations.of(context)!.comingUp,
                 style: AppTypography.sectionTitle,
               ),
               GestureDetector(
@@ -783,7 +822,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
                   context.pushNamed('ScheduledTransactionsScreen');
                 },
                 child: Text(
-                  'Manage',
+                  AppLocalizations.of(context)!.manage,
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -808,7 +847,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
                 Icon(Icons.calendar_today_rounded, color: AppColors.textTertiary, size: 32),
                 const SizedBox(height: 8),
                 Text(
-                  'No upcoming payments',
+                  AppLocalizations.of(context)!.noUpcomingPayments,
                   style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
                 ),
               ],
@@ -821,10 +860,10 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
             final daysUntil = t.nextDueDate.difference(DateTime.now()).inDays;
             final progress = (30 - daysUntil).clamp(0, 30) / 30.0;
             final countdownText = daysUntil <= 0
-                ? 'Due today'
+                ? AppLocalizations.of(context)!.dueToday
                 : daysUntil == 1
-                    ? 'Due tomorrow'
-                    : 'Due in $daysUntil days';
+                    ? AppLocalizations.of(context)!.dueTomorrow
+                    : AppLocalizations.of(context)!.dueInDays(daysUntil);
             
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -945,7 +984,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
               ] else ...[
                  const SizedBox(height: 6),
                  Text(
-                   'Invoiced',
+                   AppLocalizations.of(context)!.invoiced,
                    style: TextStyle(fontSize: 10, color: AppColors.textTertiary),
                  )
               ]
@@ -962,6 +1001,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
       onPressed: () async {
         HapticFeedback.lightImpact();
         final origin = ShareService.originFrom(context);
+        final l10n = AppLocalizations.of(context)!;
         try {
           final reportSvc = ref.read(reportServiceProvider);
           final shareSvc = ref.read(shareServiceProvider);
@@ -969,9 +1009,11 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
           final txs = await ref.read(transactionsProvider.future);
           final range = _getDateRange();
           final bytes = await reportSvc.generateCashFlowPdf(
+            l10n: l10n,
             transactions: txs,
             currency: settings.currency,
             periodStart: range.start,
+            periodEnd: range.end,
             isMonthly: _monthlyChart,
             openingBalance: settings.openingCashBalance,
           );
@@ -985,7 +1027,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
         }
       },
       icon: const Icon(Icons.ios_share_rounded, size: 18),
-      label: const Text('Share Summary'),
+      label: Text(AppLocalizations.of(context)!.shareSummary),
       style: TextButton.styleFrom(
         foregroundColor: AppColors.textTertiary,
         textStyle: const TextStyle(fontWeight: FontWeight.w600),

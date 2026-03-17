@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/category_data.dart';
 import 'category_detail_screen.dart';
 
@@ -14,6 +15,7 @@ class BudgetsOverviewScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final currency = ref.watch(currencyProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final categories = categoriesAsync.value ?? [];
     final transactions = ref.watch(transactionsProvider).value ?? [];
@@ -26,8 +28,7 @@ class BudgetsOverviewScreen extends ConsumerWidget {
 
     final spendingMap = <String, double>{};
     for (final tx in expenses) {
-      final cat = CategoryData.findById(tx.categoryId);
-      spendingMap[cat.name] = (spendingMap[cat.name] ?? 0) + tx.amount.abs();
+      spendingMap[tx.categoryId] = (spendingMap[tx.categoryId] ?? 0) + tx.amount.abs();
     }
 
     // Build budget items only for categories that have budgets
@@ -35,7 +36,7 @@ class BudgetsOverviewScreen extends ConsumerWidget {
     for (final cat in categories) {
       final budget = cat.budgetLimit;
       if (budget == null || budget <= 0) continue;
-      final spent = spendingMap[cat.name] ?? 0;
+      final spent = spendingMap[cat.id] ?? 0;
       items.add(_BudgetItem(category: cat, budget: budget, spent: spent));
     }
 
@@ -73,6 +74,7 @@ class BudgetsOverviewScreen extends ConsumerWidget {
                       overCount: overBudgetCount,
                       nearCount: nearBudgetCount,
                       safeCount: items.length - overBudgetCount - nearBudgetCount,
+                      currency: currency,
                     ).animate().fadeIn(duration: 300.ms),
 
                     const SizedBox(height: 20),
@@ -92,6 +94,7 @@ class BudgetsOverviewScreen extends ConsumerWidget {
                         padding: const EdgeInsets.only(bottom: 10),
                         child: _BudgetCard(
                           item: items[i],
+                          currency: currency,
                           onTap: () {
                             HapticFeedback.lightImpact();
                             Navigator.of(context).push(
@@ -219,6 +222,7 @@ class _SummaryCard extends StatelessWidget {
   final int overCount;
   final int nearCount;
   final int safeCount;
+  final String currency;
 
   const _SummaryCard({
     required this.totalBudget,
@@ -226,6 +230,7 @@ class _SummaryCard extends StatelessWidget {
     required this.overCount,
     required this.nearCount,
     required this.safeCount,
+    required this.currency,
   });
 
   @override
@@ -291,7 +296,7 @@ class _SummaryCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'EGP ${_fmt(totalSpent)}',
+                '$currency ${_fmt(totalSpent)}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 26,
@@ -303,7 +308,7 @@ class _SummaryCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 3),
                 child: Text(
-                  '/ EGP ${_fmt(totalBudget)}',
+                  '/ $currency ${_fmt(totalBudget)}',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.65),
                     fontSize: 14,
@@ -330,8 +335,8 @@ class _SummaryCard extends StatelessWidget {
           // Remaining
           Text(
             isOver
-                ? 'Over by EGP ${_fmt(totalSpent - totalBudget)}'
-                : 'EGP ${_fmt(remaining)} remaining',
+                ? 'Over by $currency ${_fmt(totalSpent - totalBudget)}'
+                : '$currency ${_fmt(remaining)} remaining',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.75),
               fontSize: 12,
@@ -412,9 +417,10 @@ class _StatusChips extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 class _BudgetCard extends StatelessWidget {
   final _BudgetItem item;
+  final String currency;
   final VoidCallback onTap;
 
-  const _BudgetCard({required this.item, required this.onTap});
+  const _BudgetCard({required this.item, required this.currency, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -469,7 +475,7 @@ class _BudgetCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'EGP ${_fmt(item.spent)} / ${_fmt(item.budget)}',
+                          '$currency ${_fmt(item.spent)} / ${_fmt(item.budget)}',
                           style: AppTypography.captionSmall.copyWith(
                             color: AppColors.textTertiary,
                             fontSize: 11,
@@ -526,7 +532,7 @@ class _BudgetCard extends StatelessWidget {
                         size: 13, color: item.statusColor),
                     const SizedBox(width: 4),
                     Text(
-                      'Over by EGP ${_fmt(item.spent - item.budget)}',
+                      'Over by $currency ${_fmt(item.spent - item.budget)}',
                       style: TextStyle(
                         color: item.statusColor,
                         fontSize: 11,

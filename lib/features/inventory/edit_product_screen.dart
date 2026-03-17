@@ -13,6 +13,7 @@ import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/image_upload_service.dart';
 import '../../shared/models/product_model.dart';
+import '../../shared/widgets/feature_gate.dart';
 import '../../shared/widgets/image_source_picker.dart';
 import '../../shared/widgets/discard_changes_dialog.dart';
 import '../../shared/utils/safe_pop.dart';
@@ -27,20 +28,22 @@ class EditProductScreen extends ConsumerStatefulWidget {
 }
 
 class _EditProductScreenState extends ConsumerState<EditProductScreen> {
-  late TextEditingController _nameController;
-  late TextEditingController _skuController;
-  late TextEditingController _categoryController;
-  late TextEditingController _costController;
-  late TextEditingController _priceController;
-  late TextEditingController _reorderController;
-  late TextEditingController _unitController;
-  late TextEditingController _supplierCustomController;
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _skuController = TextEditingController();
+  final TextEditingController _categoryController = TextEditingController();
+  final TextEditingController _costController = TextEditingController();
+  final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _reorderController = TextEditingController();
+  final TextEditingController _unitController = TextEditingController();
+  final TextEditingController _supplierCustomController =
+      TextEditingController();
 
   String? _selectedSupplierId;
   bool _showSupplierCustom = false;
   String _storageLocation = '';
   bool _showAdvanced = false;
   bool _hasChanges = false;
+  bool _isSaving = false;
 
   File? _pickedImage;
   String? _existingImageUrl;
@@ -54,6 +57,9 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
   String? _breakdownSourceVariantId;
   final Map<String, TextEditingController> _breakdownOutputQtys = {};
 
+  // ── Manufacturing mode state ────────────────────────────
+  bool _isManufactured = false;
+
   static const _storageOptions = [
     'Warehouse A - Shelf 3',
     'Warehouse A - Shelf 4',
@@ -66,19 +72,9 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     super.initState();
     final products = ref.read(inventoryProvider).value ?? [];
     if (products.isEmpty) {
-      // Defer pop to avoid calling Navigator during initState
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) context.safePop();
       });
-      // Initialize with empty defaults to avoid late init errors
-      _nameController = TextEditingController();
-      _skuController = TextEditingController();
-      _categoryController = TextEditingController();
-      _costController = TextEditingController();
-      _priceController = TextEditingController();
-      _reorderController = TextEditingController();
-      _unitController = TextEditingController();
-      _supplierCustomController = TextEditingController();
       return;
     }
     final product = products.cast<Product?>().firstWhere(
@@ -86,7 +82,6 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
       orElse: () => null,
     );
     if (product == null) {
-      // Product was deleted or not found — go back.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -95,27 +90,17 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
           context.safePop();
         }
       });
-      _nameController = TextEditingController();
-      _skuController = TextEditingController();
-      _categoryController = TextEditingController();
-      _costController = TextEditingController();
-      _priceController = TextEditingController();
-      _reorderController = TextEditingController();
-      _unitController = TextEditingController();
-      _supplierCustomController = TextEditingController();
       return;
     }
 
-    _nameController = TextEditingController(text: product.name);
-    _skuController = TextEditingController(text: product.sku);
-    _categoryController = TextEditingController(text: product.category);
-    _costController =
-        TextEditingController(text: product.costPrice.toStringAsFixed(2));
-    _priceController =
-        TextEditingController(text: product.sellingPrice.toStringAsFixed(2));
-    _reorderController =
-        TextEditingController(text: product.reorderPoint.toString());
-    _unitController = TextEditingController(text: product.unitOfMeasure);
+    // Populate with actual product data
+    _nameController.text = product.name;
+    _skuController.text = product.sku;
+    _categoryController.text = product.category;
+    _costController.text = product.costPrice.toStringAsFixed(2);
+    _priceController.text = product.sellingPrice.toStringAsFixed(2);
+    _reorderController.text = product.reorderPoint.toString();
+    _unitController.text = product.unitOfMeasure;
     _storageLocation = _storageOptions.first;
     _existingImageUrl = product.imageUrl;
 
@@ -124,12 +109,12 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     final matched = suppliers.where((s) => s.name == product.supplier);
     if (matched.isNotEmpty) {
       _selectedSupplierId = matched.first.id;
-      _supplierCustomController = TextEditingController();
+      _supplierCustomController.clear();
     } else if (product.supplier.isNotEmpty) {
       _showSupplierCustom = true;
-      _supplierCustomController = TextEditingController(text: product.supplier);
+      _supplierCustomController.text = product.supplier;
     } else {
-      _supplierCustomController = TextEditingController();
+      _supplierCustomController.clear();
     }
 
     // Initialize variant rows
@@ -155,6 +140,9 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
             TextEditingController(text: output.quantityPerUnit.toString());
       }
     }
+
+    // Initialize manufacturing mode
+    _isManufactured = product.isManufactured;
   }
 
   @override
@@ -240,6 +228,17 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
   }
 
   Future<void> _save() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+
+    try {
+      await _doSave();
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _doSave() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       HapticFeedback.heavyImpact();
@@ -274,10 +273,14 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     if (_pickedImage != null) {
       setState(() => _uploadingImage = true);
       final uid = ref.read(authProvider).user?.id ?? '';
-      imageUrl = await ImageUploadService.uploadFile(
+      final uploadedUrl = await ImageUploadService.uploadFile(
         file: _pickedImage!,
         storagePath: 'products/$uid/${widget.productId}.jpg',
       );
+      // Preserve existing image if upload fails.
+      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+        imageUrl = uploadedUrl;
+      }
       if (mounted) setState(() => _uploadingImage = false);
     }
 
@@ -330,6 +333,20 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     // Build breakdown recipe
     BreakdownRecipe? breakdownRecipe;
     if (_hasBreakdownRecipe && _breakdownSourceVariantId != null) {
+      // Validate source variant still exists
+      final sourceExists = updatedVariants.any((v) => v.id == _breakdownSourceVariantId);
+      if (!sourceExists) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Breakdown source variant no longer exists'),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+        }
+        return;
+      }
+
       final outputs = <BreakdownOutput>[];
       for (final row in _editVariantRows) {
         if (row.variantId == _breakdownSourceVariantId) continue;
@@ -359,19 +376,35 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
       supplier: _showSupplierCustom
           ? _supplierCustomController.text.trim()
           : (_selectedSupplierId != null
-              ? ((ref.read(suppliersProvider).value ?? []).isEmpty
-                  ? original.supplier
-                  : (ref.read(suppliersProvider).value ?? [])
-                      .firstWhere((s) => s.id == _selectedSupplierId,
-                          orElse: () => (ref.read(suppliersProvider).value ?? []).first)
-                      .name)
+              ? ((ref.read(suppliersProvider).value ?? [])
+                      .where((s) => s.id == _selectedSupplierId)
+                      .map((s) => s.name)
+                      .firstOrNull ?? original.supplier)
               : original.supplier),
       unitOfMeasure: _unitController.text.trim(),
       imageUrl: imageUrl,
       variants: updatedVariants,
+      isManufactured: _isManufactured,
     );
 
-    ref.read(inventoryProvider.notifier).updateProduct(widget.productId, updated);
+    final result = await ref
+        .read(inventoryProvider.notifier)
+        .updateProduct(widget.productId, updated);
+    if (!result.isSuccess) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'Failed to update product'),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+      return;
+    }
+
     HapticFeedback.mediumImpact();
     if (mounted) context.safePop();
   }
@@ -1250,6 +1283,68 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                       ),
                     );
                   }),
+
+                  // ── Manufacturing mode (Pro) ──
+                  const SizedBox(height: 18),
+                  FeatureGate(
+                    feature: GrowthFeature.manufacturingMode,
+                    requiredTier: SubscriptionTier.pro,
+                    inline: true,
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F9FA),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.borderLight.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.precision_manufacturing_rounded,
+                                color: Color(0xFF8B5CF6), size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Manufactured Product',
+                                  style: AppTypography.labelMedium.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Goods receipts adjust stock only — cost is managed separately',
+                                  style: TextStyle(
+                                    color: AppColors.textTertiary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: _isManufactured,
+                            activeColor: const Color(0xFF8B5CF6),
+                            onChanged: (val) {
+                              setState(() => _isManufactured = val);
+                              _markChanged();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

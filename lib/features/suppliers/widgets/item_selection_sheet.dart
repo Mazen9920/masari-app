@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_styles.dart';
@@ -147,7 +148,19 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                             color: product.color.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Icon(product.icon, color: product.color, size: 20),
+                          child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: CachedNetworkImage(
+                                    imageUrl: product.imageUrl!,
+                                    fit: BoxFit.cover,
+                                    width: 40,
+                                    height: 40,
+                                    placeholder: (_, __) => Icon(product.icon, color: product.color, size: 20),
+                                    errorWidget: (_, __, ___) => Icon(product.icon, color: product.color, size: 20),
+                                  ),
+                                )
+                              : Icon(product.icon, color: product.color, size: 20),
                         ),
                         title: Text(
                           product.name,
@@ -276,14 +289,31 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                       Navigator.pop(ctx, ItemSelectionResult(product: product, variant: v));
                     },
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    leading: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryNavy.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.style_rounded, color: AppColors.primaryNavy, size: 18),
+                    leading: Builder(
+                      builder: (_) {
+                        final imgUrl = v.imageUrl ?? product.imageUrl;
+                        return Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryNavy.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: imgUrl != null && imgUrl.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: CachedNetworkImage(
+                                    imageUrl: imgUrl,
+                                    fit: BoxFit.cover,
+                                    width: 36,
+                                    height: 36,
+                                    placeholder: (_, __) => const Icon(Icons.style_rounded, color: AppColors.primaryNavy, size: 18),
+                                    errorWidget: (_, __, ___) => const Icon(Icons.style_rounded, color: AppColors.primaryNavy, size: 18),
+                                  ),
+                                )
+                              : const Icon(Icons.style_rounded, color: AppColors.primaryNavy, size: 18),
+                        );
+                      },
                     ),
                     title: Text(
                       v.displayName,

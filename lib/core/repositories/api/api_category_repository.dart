@@ -78,9 +78,8 @@ class ApiCategoryRepository implements CategoryRepository {
   }
 
   @override
-  Future<Result<CategoryData>> updateCategory(String oldName, CategoryData updated) async {
+  Future<Result<CategoryData>> updateCategory(CategoryData updated) async {
     try {
-      // Assuming we update by ID now since we normalized, but keeping interface intact
       final responseMap = await _client.put(
         '/categories/${updated.id}',
         body: updated.toJson(),
@@ -103,11 +102,9 @@ class ApiCategoryRepository implements CategoryRepository {
   }
 
   @override
-  Future<Result<void>> deleteCategory(String name) async {
+  Future<Result<void>> deleteCategory(String id) async {
     try {
-      // Interface passes name, but ideally we'd pass ID.
-      // In a real implementation we would look up the ID or the backend would support name delete.
-      final responseMap = await _client.delete('/categories/by-name/$name');
+      final responseMap = await _client.delete('/categories/$id');
       final response = ApiResponse<dynamic>.fromJson(responseMap, null);
 
       if (response.success) {

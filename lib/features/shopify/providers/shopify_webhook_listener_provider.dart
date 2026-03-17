@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/app_providers.dart';
+import '../../../core/services/shopify_sync_service.dart';
 import 'shopify_connection_provider.dart';
 
 /// Represents a real-time webhook event for the UI.
@@ -160,8 +161,45 @@ class ShopifyWebhookListenerNotifier extends Notifier<ShopifyWebhookEvent?> {
       case 'products/update':
       case 'products/create':
       case 'products/delete':
+        // Refresh inventory provider immediately for UI
+        ref.read(inventoryProvider.notifier).refreshAll();
+        // Also trigger a full product detail sync from Shopify to ensure
+        // new products, variant edits, title changes, etc. are all captured.
+        // This handles cases where the Cloud Function may still be processing.
+        _syncProductDetailsFromShopify();
       case 'inventory_levels/update':
         ref.read(inventoryProvider.notifier).refreshAll();
+        // Also pull inventory levels to ensure stock is synced
+        _pullInventoryFromShopify();
+    }
+  }
+
+  /// Triggers a full product detail sync from Shopify after a short delay.
+  /// The delay gives the Cloud Function time to finish processing.
+  Future<void> _syncProductDetailsFromShopify() async {
+    // Wait for the Cloud Function to finish creating/updating the product
+    await Future.delayed(const Duration(seconds: 3));
+    try {
+      final syncService = ref.read(shopifySyncServiceProvider);
+      final result = await syncService.pullProductDetailsFromShopify();
+      if (result.isSuccess && (result.data ?? 0) > 0) {
+        // Refresh inventory again to show updated products
+        ref.read(inventoryProvider.notifier).refreshAll();
+      }
+    } catch (_) {
+      // Non-critical — webhook handler should have handled it
+    }
+  }
+
+  /// Pulls the latest inventory levels from Shopify after a short delay.
+  Future<void> _pullInventoryFromShopify() async {
+    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final syncService = ref.read(shopifySyncServiceProvider);
+      await syncService.pullInventoryFromShopify();
+      ref.read(inventoryProvider.notifier).refreshAll();
+    } catch (_) {
+      // Non-critical
     }
   }
 

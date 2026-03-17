@@ -21,6 +21,7 @@ const _kDefaultUnit = 'settings_default_unit';
 const _kLowStockAlerts = 'settings_low_stock_alerts';
 const _kAlertThreshold = 'settings_alert_threshold';
 const _kHideOutOfStock = 'settings_hide_out_of_stock';
+const _kHideShopifyDrafts = 'settings_hide_shopify_drafts';
 
 // ─── Subscription Tier ───────────────────────────────────────────────────────
 enum SubscriptionTier {
@@ -67,7 +68,8 @@ enum GrowthFeature {
   goodsReceiving('Goods Receiving', 'Track received items vs ordered & auto-update inventory'),
   salesSystem('Sales & COGS', 'Record sales, track cost of goods sold & gross profit'),
   supplierPaymentToggle('Payment Settings', 'Control whether supplier payments create transactions'),
-  shopifyIntegration('Shopify Integration', 'Connect your Shopify store for two-way order and inventory sync');
+  shopifyIntegration('Shopify Integration', 'Connect your Shopify store for two-way order and inventory sync'),
+  manufacturingMode('Manufacturing Mode', 'Flag products as manufactured to decouple goods receipt from cost layers');
 
   const GrowthFeature(this.displayName, this.description);
   final String displayName;
@@ -93,6 +95,7 @@ class AppSettingsState {
   final bool   lowStockAlerts; // show low stock alerts
   final int    alertThreshold; // notify when stock below this
   final bool   hideOutOfStock; // hide out-of-stock from main list
+  final bool   hideShopifyDrafts; // hide Shopify drafted products
 
   const AppSettingsState({
     this.currency   = 'EGP',
@@ -108,10 +111,11 @@ class AppSettingsState {
     this.valuationMethod = 'fifo',
     this.breakdownEnabled = false,
     this.autoUpdateStock = true,
-    this.defaultUnit = 'Pieces',
+    this.defaultUnit = 'pcs',
     this.lowStockAlerts = true,
     this.alertThreshold = 10,
     this.hideOutOfStock = false,
+    this.hideShopifyDrafts = false,
   });
 
   /// Quick check: does the current tier have access to the [required] tier?
@@ -141,6 +145,7 @@ class AppSettingsState {
     bool?   lowStockAlerts,
     int?    alertThreshold,
     bool?   hideOutOfStock,
+    bool?   hideShopifyDrafts,
   }) {
     return AppSettingsState(
       currency:   currency   ?? this.currency,
@@ -162,6 +167,7 @@ class AppSettingsState {
       lowStockAlerts: lowStockAlerts ?? this.lowStockAlerts,
       alertThreshold: alertThreshold ?? this.alertThreshold,
       hideOutOfStock: hideOutOfStock ?? this.hideOutOfStock,
+      hideShopifyDrafts: hideShopifyDrafts ?? this.hideShopifyDrafts,
     );
   }
 }
@@ -235,10 +241,11 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
       valuationMethod: valuationMethod,
       breakdownEnabled: prefs.getBool(_key(_kBreakdownEnabled)) ?? false,
       autoUpdateStock: prefs.getBool(_key(_kAutoUpdateStock)) ?? true,
-      defaultUnit: prefs.getString(_key(_kDefaultUnit)) ?? 'Pieces',
+      defaultUnit: prefs.getString(_key(_kDefaultUnit)) ?? 'pcs',
       lowStockAlerts: prefs.getBool(_key(_kLowStockAlerts)) ?? true,
       alertThreshold: prefs.getInt(_key(_kAlertThreshold)) ?? 10,
       hideOutOfStock: prefs.getBool(_key(_kHideOutOfStock)) ?? false,
+      hideShopifyDrafts: prefs.getBool(_key(_kHideShopifyDrafts)) ?? false,
     );
   }
 
@@ -385,6 +392,13 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
     if (!_isAuth) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_key(_kHideOutOfStock), value);
+  }
+
+  Future<void> setHideShopifyDrafts(bool value) async {
+    state = state.copyWith(hideShopifyDrafts: value);
+    if (!_isAuth) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_key(_kHideShopifyDrafts), value);
   }
 }
 

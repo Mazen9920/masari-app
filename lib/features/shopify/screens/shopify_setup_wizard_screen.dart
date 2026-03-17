@@ -228,9 +228,9 @@ class _ShopifySetupWizardScreenState
               margin: EdgeInsets.only(right: i < 4 ? 4 : 0),
               decoration: BoxDecoration(
                 color: isCompleted
-                    ? const Color(0xFF7C3AED)
+                    ? AppColors.shopifyPurple
                     : isCurrent
-                        ? const Color(0xFF7C3AED).withValues(alpha: 0.4)
+                        ? AppColors.shopifyPurple.withValues(alpha: 0.4)
                         : AppColors.borderLight,
                 borderRadius: BorderRadius.circular(2),
               ),
@@ -288,14 +288,15 @@ class _ShopifySetupWizardScreenState
               height: 80,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                  colors: [AppColors.shopifyPurple, Color(0xFF5B21B6)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                    color:
+                        AppColors.shopifyPurple.withValues(alpha: 0.3),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -404,12 +405,12 @@ class _ShopifySetupWizardScreenState
             child: FilledButton(
               onPressed: _connecting ? null : _onConnectDomain,
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF7C3AED),
+                backgroundColor: AppColors.shopifyPurple,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 54),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 4,
-                shadowColor: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                shadowColor: AppColors.shopifyPurple.withValues(alpha: 0.3),
               ),
               child: _connecting
                   ? const SizedBox(
@@ -457,7 +458,7 @@ class _ShopifySetupWizardScreenState
               color: const Color(0xFFF8F5FF),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
+                color: AppColors.shopifyPurple.withValues(alpha: 0.2),
               ),
             ),
             child: Column(
@@ -468,13 +469,13 @@ class _ShopifySetupWizardScreenState
                     Icon(
                       Icons.privacy_tip_outlined,
                       size: 16,
-                      color: const Color(0xFF7C3AED),
+                      color: AppColors.shopifyPurple,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       'Data Masari Will Access',
                       style: AppTypography.labelSmall.copyWith(
-                        color: const Color(0xFF7C3AED),
+                        color: AppColors.shopifyPurple,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -557,12 +558,13 @@ class _ShopifySetupWizardScreenState
             width: 100,
             height: 100,
             decoration: BoxDecoration(
-              color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+              color: AppColors.shopifyPurple.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
             child: _oauthCompleted
                 ? const Icon(Icons.check_circle_rounded, color: Color(0xFF22C55E), size: 56)
-                : const Icon(Icons.open_in_browser_rounded, color: Color(0xFF7C3AED), size: 48),
+                : const Icon(Icons.open_in_browser_rounded,
+                    color: AppColors.shopifyPurple, size: 48),
           ),
           const SizedBox(height: 24),
           Text(
@@ -591,7 +593,7 @@ class _ShopifySetupWizardScreenState
               child: FilledButton(
                 onPressed: _checkingOAuth ? null : _checkOAuthCompletion,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C3AED),
+                  backgroundColor: AppColors.shopifyPurple,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -654,7 +656,7 @@ class _ShopifySetupWizardScreenState
                   _fetchLocations();
                 },
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C3AED),
+                  backgroundColor: AppColors.shopifyPurple,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -727,10 +729,11 @@ class _ShopifySetupWizardScreenState
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                color: AppColors.shopifyPurple.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.location_on_rounded, color: Color(0xFF7C3AED), size: 36),
+              child: const Icon(Icons.location_on_rounded,
+                  color: AppColors.shopifyPurple, size: 36),
             ),
           ),
           const SizedBox(height: 20),
@@ -754,19 +757,19 @@ class _ShopifySetupWizardScreenState
               padding: const EdgeInsets.all(12),
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                color: Colors.red.shade50,
+                color: AppColors.dangerLight,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.red.shade200),
+                border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                  const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _locationsError!,
-                      style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                      style: const TextStyle(color: AppColors.danger, fontSize: 13),
                     ),
                   ),
                 ],
@@ -774,7 +777,9 @@ class _ShopifySetupWizardScreenState
             ),
           ],
           if (_loadingLocations) ...[
-            const Center(child: CircularProgressIndicator(color: Color(0xFF7C3AED))),
+            const Center(
+              child: CircularProgressIndicator(
+                color: AppColors.shopifyPurple)),
           ] else if (_locations.isEmpty) ...[
             _buildLocationEmptyState(),
           ] else ...[
@@ -796,11 +801,13 @@ class _ShopifySetupWizardScreenState
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? const Color(0xFF7C3AED).withValues(alpha: 0.05)
+                          ? AppColors.shopifyPurple.withValues(alpha: 0.05)
                           : Colors.white,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isSelected ? const Color(0xFF7C3AED) : AppColors.borderLight,
+                        color: isSelected
+                            ? AppColors.shopifyPurple
+                            : AppColors.borderLight,
                         width: isSelected ? 2 : 1,
                       ),
                     ),
@@ -808,7 +815,9 @@ class _ShopifySetupWizardScreenState
                       children: [
                         Icon(
                           isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                          color: isSelected ? const Color(0xFF7C3AED) : AppColors.textTertiary,
+                          color: isSelected
+                              ? AppColors.shopifyPurple
+                              : AppColors.textTertiary,
                           size: 22,
                         ),
                         const SizedBox(width: 12),
@@ -823,7 +832,7 @@ class _ShopifySetupWizardScreenState
                               )),
                               if (isPrimary)
                                 Text('Primary location', style: TextStyle(
-                                  color: const Color(0xFF7C3AED),
+                                  color: AppColors.shopifyPurple,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                 )),
@@ -844,7 +853,7 @@ class _ShopifySetupWizardScreenState
             child: FilledButton(
               onPressed: _selectedLocationId != null ? () => _saveLocationAndProceed() : null,
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF7C3AED),
+                backgroundColor: AppColors.shopifyPurple,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 54),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -919,7 +928,7 @@ class _ShopifySetupWizardScreenState
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                color: AppColors.shopifyPurple.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: _syncingProducts
@@ -927,14 +936,14 @@ class _ShopifySetupWizardScreenState
                       padding: EdgeInsets.all(18),
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        color: Color(0xFF7C3AED),
+                        color: AppColors.shopifyPurple,
                       ),
                     )
                   : Icon(
                       _productSyncDone
                           ? Icons.check_circle_rounded
                           : Icons.inventory_2_outlined,
-                      color: const Color(0xFF7C3AED),
+                      color: AppColors.shopifyPurple,
                       size: 36,
                     ),
             ),
@@ -1050,7 +1059,7 @@ class _ShopifySetupWizardScreenState
               child: FilledButton(
                 onPressed: _startProductSync,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C3AED),
+                  backgroundColor: AppColors.shopifyPurple,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(
@@ -1080,7 +1089,7 @@ class _ShopifySetupWizardScreenState
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
-                  side: BorderSide(color: const Color(0xFF7C3AED)),
+                  side: BorderSide(color: AppColors.shopifyPurple),
                 ),
                 child: const Text('Retry',
                     style: TextStyle(
@@ -1095,7 +1104,7 @@ class _ShopifySetupWizardScreenState
               child: FilledButton(
                 onPressed: () => _goToStep(4),
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C3AED),
+                  backgroundColor: AppColors.shopifyPurple,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(
@@ -1167,14 +1176,14 @@ class _ShopifySetupWizardScreenState
             height: 88,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                colors: [AppColors.shopifyPurple, Color(0xFF5B21B6)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                  color: AppColors.shopifyPurple.withValues(alpha: 0.3),
                   blurRadius: 20,
                   offset: const Offset(0, 6),
                 ),
@@ -1228,12 +1237,12 @@ class _ShopifySetupWizardScreenState
             child: FilledButton(
               onPressed: _isFinishing ? null : _onFinishSetup,
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF7C3AED),
+                backgroundColor: AppColors.shopifyPurple,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 56),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 4,
-                shadowColor: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                shadowColor: AppColors.shopifyPurple.withValues(alpha: 0.3),
               ),
               child: _isFinishing
                   ? const SizedBox(
@@ -1313,10 +1322,10 @@ class _InfoCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+              color: AppColors.shopifyPurple.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: const Color(0xFF7C3AED), size: 18),
+            child: Icon(icon, color: AppColors.shopifyPurple, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1348,7 +1357,7 @@ class _DataBullet extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 5),
-            child: Icon(Icons.circle, size: 5, color: Color(0xFF7C3AED)),
+            child: Icon(Icons.circle, size: 5, color: AppColors.shopifyPurple),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1378,7 +1387,7 @@ class _SummaryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: const Color(0xFF7C3AED), size: 20),
+        Icon(icon, color: AppColors.shopifyPurple, size: 20),
         const SizedBox(width: 10),
         Text(label, style: TextStyle(color: AppColors.textTertiary, fontSize: 13, fontWeight: FontWeight.w500)),
         const Spacer(),

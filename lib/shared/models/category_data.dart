@@ -1,5 +1,24 @@
 import 'package:flutter/material.dart';
 
+/// GAAP cash-flow activity classification.
+enum CashFlowType { operating, investing, financing }
+
+/// Default mapping from built-in category IDs to GAAP cash-flow types.
+/// Custom / unknown categories fall back to [CashFlowType.operating].
+CashFlowType cashFlowTypeFor(String categoryId) {
+  switch (categoryId) {
+    case 'cat_investments':
+      return CashFlowType.investing;
+    case 'cat_loan_received':
+    case 'cat_loan_repayment':
+    case 'cat_equity_injection':
+    case 'cat_owner_withdrawal':
+      return CashFlowType.financing;
+    default:
+      return CashFlowType.operating;
+  }
+}
+
 /// Category data used across transactions list, filter, and add screens.
 class CategoryData {
   final String id;
@@ -34,7 +53,7 @@ class CategoryData {
     int? colorValue,
     int? bgColorValue,
     bool? isExpense,
-    double? budgetLimit,
+    Object? budgetLimit = const _Sentinel(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -46,7 +65,7 @@ class CategoryData {
       colorValue: colorValue ?? this.colorValue,
       bgColorValue: bgColorValue ?? this.bgColorValue,
       isExpense: isExpense ?? this.isExpense,
-      budgetLimit: budgetLimit ?? this.budgetLimit,
+      budgetLimit: budgetLimit is _Sentinel ? this.budgetLimit : budgetLimit as double?,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -76,7 +95,7 @@ class CategoryData {
       iconName: json['icon_name'] as String? ?? 'grid_view',
       colorValue: json['color_value'] as int? ?? 0xFF9E9E9E,
       bgColorValue: json['bg_color_value'] as int? ?? 0xFFF5F5F5,
-      isExpense: json['is_expense'] as bool? ?? (json['id'] != 'cat_income' && json['id'] != 'cat_investments'),
+      isExpense: json['is_expense'] as bool? ?? (json['id'] != 'cat_income' && json['id'] != 'cat_investments' && json['id'] != 'cat_loan_received' && json['id'] != 'cat_equity_injection'),
       budgetLimit: (json['budget_limit'] as num?)?.toDouble(),
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
@@ -216,7 +235,7 @@ class CategoryData {
       userId: 'system',
       name: 'Insurance',
       iconName: 'shield',
-      colorValue: 0xFF3F51B5,
+      colorValue: 0xFF5C6BC0,
       bgColorValue: 0xFFE8EAF6
     ),
     CategoryData(
@@ -276,38 +295,84 @@ class CategoryData {
       colorValue: 0xFF6366F1,
       bgColorValue: 0xFFEEF2FF,
     ),
+    CategoryData(
+      id: 'cat_loan_received',
+      userId: 'system',
+      name: 'Loan Received',
+      iconName: 'account_balance',
+      colorValue: 0xFF26A69A,
+      bgColorValue: 0xFFE0F2F1,
+      isExpense: false,
+    ),
+    CategoryData(
+      id: 'cat_loan_repayment',
+      userId: 'system',
+      name: 'Loan Repayment',
+      iconName: 'money_off',
+      colorValue: 0xFFEF5350,
+      bgColorValue: 0xFFFFEBEE,
+    ),
+    CategoryData(
+      id: 'cat_equity_injection',
+      userId: 'system',
+      name: 'Capital Injection',
+      iconName: 'savings',
+      colorValue: 0xFF42A5F5,
+      bgColorValue: 0xFFE3F2FD,
+      isExpense: false,
+    ),
+    CategoryData(
+      id: 'cat_owner_withdrawal',
+      userId: 'system',
+      name: 'Owner Withdrawal',
+      iconName: 'output',
+      colorValue: 0xFFFF7043,
+      bgColorValue: 0xFFFBE9E7,
+    ),
+    CategoryData(
+      id: 'cat_other',
+      userId: 'system',
+      name: 'Other',
+      iconName: 'more_horiz',
+      colorValue: 0xFF9E9E9E,
+      bgColorValue: 0xFFF5F5F5,
+    ),
+    CategoryData(
+      id: 'cat_uncategorized',
+      userId: 'system',
+      name: 'Uncategorized',
+      iconName: 'help_outline',
+      colorValue: 0xFF9E9E9E,
+      bgColorValue: 0xFFF5F5F5,
+    ),
+    CategoryData(
+      id: 'cat_tax_payable',
+      userId: 'system',
+      name: 'Tax Payable',
+      iconName: 'receipt',
+      colorValue: 0xFF8E44AD,
+      bgColorValue: 0xFFF3E5F5,
+    ),
   ];
 
   static List<CategoryData> customCategories = [];
 
-  /// Find category by name (case insensitive). Falls back to first category.
-  static CategoryData findByName(String name) {
-    for (final c in customCategories) {
-      if (c.name.toLowerCase() == name.toLowerCase()) return c;
-    }
-    return all.firstWhere(
-      (c) => c.name.toLowerCase() == name.toLowerCase(),
-      orElse: () => all.first,
-    );
-  }
-
-  /// Find category by ID. Falls back to Uncategorized category.
+  /// Find category by ID. Falls back to the system Uncategorized category.
   static CategoryData findById(String id) {
     for (final c in customCategories) {
       if (c.id == id) return c;
     }
     return all.firstWhere(
       (c) => c.id == id,
-      orElse: () => CategoryData(
-        id: id,
-        userId: 'system',
-        name: 'Uncategorized',
-        iconName: 'help_outline',
-        colorValue: 0xFFE67E22,
-        bgColorValue: 0xFFFFF3E0,
-      ),
+      orElse: () => all.firstWhere((c) => c.id == 'cat_uncategorized'),
     );
   }
+}
+
+/// Sentinel value used by [CategoryData.copyWith] to distinguish
+/// "not provided" from an explicit null (to clear budgetLimit).
+class _Sentinel {
+  const _Sentinel();
 }
 
 /// Extension to map normalized data to UI classes
@@ -346,6 +411,8 @@ extension CategoryDataUIExt on CategoryData {
       case 'more_horiz': return Icons.more_horiz_rounded;
       case 'store': return Icons.store_rounded;
       case 'inventory_2': return Icons.inventory_2_rounded;
+      case 'local_shipping': return Icons.local_shipping_rounded;
+      case 'help_outline': return Icons.help_outline_rounded;
       case 'grid_view':
       default:
         return Icons.grid_view_rounded;
@@ -382,6 +449,8 @@ extension CategoryDataUIExt on CategoryData {
     if (icon == Icons.more_horiz_rounded) return 'more_horiz';
     if (icon == Icons.store_rounded) return 'store';
     if (icon == Icons.inventory_2_rounded) return 'inventory_2';
+    if (icon == Icons.local_shipping_rounded) return 'local_shipping';
+    if (icon == Icons.help_outline_rounded) return 'help_outline';
     return 'grid_view';
   }
 }

@@ -29,16 +29,16 @@ class LocalCategoryRepository implements CategoryRepository {
 
   @override
   Future<Result<CategoryData>> updateCategory(
-      String oldName, CategoryData updated) async {
-    final index = _categories.indexWhere((c) => c.name == oldName);
+      CategoryData updated) async {
+    final index = _categories.indexWhere((c) => c.id == updated.id);
     if (index == -1) return Result.failure('Category not found');
     _categories[index] = updated;
     return Result.success(updated);
   }
 
   @override
-  Future<Result<void>> deleteCategory(String name) async {
-    _categories.removeWhere((c) => c.name == name);
+  Future<Result<void>> deleteCategory(String id) async {
+    _categories.removeWhere((c) => c.id == id);
     return Result.success(null);
   }
 }

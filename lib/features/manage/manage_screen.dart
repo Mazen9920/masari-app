@@ -297,7 +297,7 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
         _SectionTile(
             icon: Icons.category_rounded,
             iconGradient: const [Color(0xFF7C3AED), Color(0xFFA78BFA)],
-            title: 'Categories',
+            title: 'Budget & Categories',
             subtitle: 'Organize expenses & income',
             trailing: categoriesChip,
             onTap: () {

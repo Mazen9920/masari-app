@@ -15,6 +15,7 @@ import '../../shared/utils/money_utils.dart';
 import '../../l10n/app_localizations.dart';
 import 'widgets/report_card.dart';
 import 'widgets/chart_toggle.dart';
+import 'widgets/financial_period_sheet.dart';
 
 class BalanceSheetScreen extends ConsumerStatefulWidget {
   const BalanceSheetScreen({super.key});
@@ -25,6 +26,20 @@ class BalanceSheetScreen extends ConsumerStatefulWidget {
 
 class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
   bool _showTrend = false;
+  FinancialPeriodResult _period = FinancialPeriodResult(
+    type: FinancialPeriodType.monthEnd,
+    range: DateTimeRange(
+      start: DateTime(DateTime.now().year, DateTime.now().month, 1),
+      end: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, 23, 59, 59),
+    ),
+    label: DateFormat('MMMM yyyy').format(DateTime.now()),
+  );
+
+  Future<void> _openDatePicker() async {
+    final result = await showFinancialPeriodSheet(context, current: _period);
+    if (result == null) return;
+    setState(() => _period = result);
+  }
 
   @override
   void initState() {
@@ -50,38 +65,77 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
     final sales = ref.watch(salesProvider).value ?? [];
     final allTransactions = ref.watch(transactionsProvider).value ?? [];
 
-    // Bank balance = opening cash + all transaction flows (auto-computed from CF)
+    // Filter date: balance sheet is "as of" the period end
+    final asOf = _period.range.end;
+
+    // Bank balance = opening cash + transactions up to the selected date
     final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
-    final double bankBalance = roundMoney(openingCash + allTransactions.fold(
+    final double bankBalance = roundMoney(openingCash + allTransactions
+        .where((t) => !t.dateTime.isAfter(asOf))
+        .fold(
       0.0,
       (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
     ));
 
     final double inventoryValue = roundMoney(inventoryProducts.fold(0.0, (sum, p) => sum + p.totalCostValue));
 
+    // Only include purchases created on or before the reporting date
+    final periodPurchases = purchases.where((p) => !p.date.isAfter(asOf)).toList();
+
     // Supplier payable = received goods value minus amount paid (accrual basis)
-    final double suppliersOwing = roundMoney(purchases.fold(0.0, (sum, p) {
+    final double suppliersOwing = roundMoney(periodPurchases.fold(0.0, (sum, p) {
       final receivedValue = p.totalReceivedValue;
       final paid = p.amountPaid;
       return sum + (receivedValue - paid).clamp(0.0, double.maxFinite);
     }));
 
     // Supplier advance payments = paid ahead of receiving goods (a prepaid asset)
-    final double supplierAdvancePayments = roundMoney(purchases.fold(0.0, (sum, p) {
+    final double supplierAdvancePayments = roundMoney(periodPurchases.fold(0.0, (sum, p) {
       final receivedValue = p.totalReceivedValue;
       final paid = p.amountPaid;
       return sum + (paid - receivedValue).clamp(0.0, double.maxFinite);
     }));
 
-    // Accounts receivable = outstanding from active (non-cancelled) sales
+    // Accounts receivable = outstanding from active (non-cancelled) sales up to period
     final double accountsReceivable = roundMoney(sales
         .where((s) => s.orderStatus != OrderStatus.cancelled)
+        .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOf))
         .fold(0.0, (sum, s) => sum + s.outstanding));
+
+    // Net income from P&L-eligible transactions up to the period end
+    const plExcludedCats = {
+      'cat_investments',
+      'cat_loan_received',
+      'cat_loan_repayment',
+      'cat_equity_injection',
+      'cat_owner_withdrawal',
+    };
+    final plEligible = allTransactions
+        .where((t) => !t.dateTime.isAfter(asOf))
+        .where((t) => !t.excludeFromPL && !plExcludedCats.contains(t.categoryId));
+
+    // Retained earnings = accumulated P&L net income from ALL prior periods
+    final periodStart = _period.range.start;
+    final double retainedEarnings = roundMoney(plEligible
+        .where((t) => t.dateTime.isBefore(periodStart))
+        .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
+
+    // Current period net income = P&L net income within the selected period only
+    final double currentPeriodNetIncome = roundMoney(plEligible
+        .where((t) => !t.dateTime.isBefore(periodStart))
+        .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
 
     // Totals
     final double totalAssets = roundMoney(bankBalance + bs.cashOnHand + bs.unpaidInvoices + inventoryValue + accountsReceivable + supplierAdvancePayments);
     final double totalLiabilities = roundMoney(suppliersOwing + bs.loans + bs.unpaidSalaries);
     final double netEquity = roundMoney(totalAssets - totalLiabilities);
+
+    // Auto-derive opening capital so the BS always balances.
+    // If the user manually set a value, honour it and show an adjustment line.
+    final bool hasManualCapital = bs.openingCapital != 0;
+    final double autoOpeningCapital = roundMoney(netEquity - retainedEarnings - currentPeriodNetIncome);
+    final double effectiveCapital = hasManualCapital ? bs.openingCapital : autoOpeningCapital;
+    final double reconAdjustment = roundMoney(netEquity - (effectiveCapital + retainedEarnings + currentPeriodNetIncome));
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -90,7 +144,9 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
               await Future.wait([
                 ref.read(inventoryProvider.notifier).refreshAll(),
                 ref.read(salesProvider.notifier).refreshAll(),
+                ref.read(transactionsProvider.notifier).refreshAll(),
               ]);
+              ref.invalidate(purchasesProvider);
             },
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(24, 24, 24, 100 + MediaQuery.of(context).padding.bottom),
@@ -98,8 +154,10 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                   parent: BouncingScrollPhysics()),
               child: Column(
               children: [
-                // Header / Trend Toggle
+                // Header / Trend Toggle + Period Selector
                 _buildHeaderControls(),
+                const SizedBox(height: 12),
+                _buildPeriodSelector(),
                 const SizedBox(height: 16),
 
                 // Net Equity / Trend Section
@@ -229,63 +287,90 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                   iconBg: AppColors.chartGreenLight,
                   items: [
                     _SheetItem(
-                      label: AppLocalizations.of(context)!.totalAssets,
-                      amount: totalAssets,
-                      icon: Icons.account_balance_wallet_rounded,
-                      pct: (totalAssets > 0) ? 1.0 : 0,
+                      label: hasManualCapital
+                          ? AppLocalizations.of(context)!.openingCapital
+                          : '${AppLocalizations.of(context)!.openingCapital} (${AppLocalizations.of(context)!.autoCalculated})',
+                      amount: effectiveCapital,
+                      icon: Icons.account_balance_rounded,
+                      pct: netEquity != 0 ? (effectiveCapital / netEquity).clamp(-1.0, 1.0) : 0,
+                      onTap: () => _showEditDialog(AppLocalizations.of(context)!.openingCapital, bs.openingCapital, (v) {
+                        ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(openingCapital: v));
+                      }),
+                      isEditable: true,
                     ),
                     _SheetItem(
-                      label: AppLocalizations.of(context)!.lessTotalLiabilities,
-                      amount: -totalLiabilities,
-                      icon: Icons.remove_circle_outline_rounded,
-                      pct: (totalAssets > 0) ? totalLiabilities / totalAssets : 0,
+                      label: AppLocalizations.of(context)!.retainedEarnings,
+                      amount: retainedEarnings,
+                      icon: Icons.savings_rounded,
+                      pct: netEquity != 0 ? (retainedEarnings / netEquity).clamp(-1.0, 1.0) : 0,
                     ),
+                    _SheetItem(
+                      label: AppLocalizations.of(context)!.currentPeriodNetIncome,
+                      amount: currentPeriodNetIncome,
+                      icon: Icons.trending_up_rounded,
+                      pct: netEquity != 0 ? (currentPeriodNetIncome / netEquity).clamp(-1.0, 1.0) : 0,
+                    ),
+                    if (reconAdjustment.abs() >= 0.01)
+                      _SheetItem(
+                        label: AppLocalizations.of(context)!.reconAdjustment,
+                        amount: reconAdjustment,
+                        icon: Icons.tune_rounded,
+                        pct: netEquity != 0 ? (reconAdjustment / netEquity).clamp(-1.0, 1.0) : 0,
+                      ),
                   ],
                   fmt: fmt,
                   isAssets: true,
                 ).animate().fadeIn(duration: 400.ms, delay: 250.ms),
 
-                // Accounting equation check
-                Padding(
-                  padding: const EdgeInsets.only(top: 12, bottom: 8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppColors.chartGreenLight, Color(0xFFD1FAE5)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                // Accounting equation check — always balanced because the
+                // auto-derived capital (or the adjustment line) absorbs the gap.
+                Builder(builder: (_) {
+                  const badgeColor = AppColors.badgeTextPositive;
+                  const bgColors = [AppColors.chartGreenLight, Color(0xFFD1FAE5)];
+                  const borderColor = AppColors.badgeBgPositive;
+                  const icon = Icons.check_circle_rounded;
+                  final text = AppLocalizations.of(context)!.accountingEquationBalanced;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 12, bottom: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: bgColors,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: borderColor),
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.badgeBgPositive),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0.0, end: 1.0),
-                          duration: const Duration(milliseconds: 600),
-                          curve: Curves.elasticOut,
-                          builder: (_, value, child) => Transform.scale(
-                            scale: value,
-                            child: child,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.0, end: 1.0),
+                            duration: const Duration(milliseconds: 600),
+                            curve: Curves.elasticOut,
+                            builder: (_, value, child) => Transform.scale(
+                              scale: value,
+                              child: child,
+                            ),
+                            child: Icon(icon, size: 18, color: badgeColor),
                           ),
-                          child: const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.badgeTextPositive),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          AppLocalizations.of(context)!.accountingEquationBalanced,
-                          style: AppTypography.badge.copyWith(
-                            fontSize: 12,
-                            color: AppColors.badgeTextPositive,
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(width: 8),
+                          Text(
+                            text,
+                            style: AppTypography.badge.copyWith(
+                              fontSize: 12,
+                              color: badgeColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 24),
+                  );
+                }),
 
                 // AI Insight
                 _buildAIInsightCard(totalAssets, totalLiabilities, netEquity)
@@ -320,6 +405,48 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
           onToggle: () => setState(() => _showTrend = !_showTrend),
         ),
       ],
+    );
+  }
+
+  Widget _buildPeriodSelector() {
+    return Center(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          _openDatePicker();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(50),
+            border: Border.all(color: AppColors.borderLight),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.calendar_today_rounded,
+                  size: 15, color: AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Text(
+                _period.label,
+                style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.textPrimary),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.expand_more_rounded,
+                  size: 18, color: AppColors.textTertiary),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -397,7 +524,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'NET WORTH TREND',
+            AppLocalizations.of(context)!.netWorthTrend,
             style: AppTypography.badge.copyWith(
               fontSize: 11,
               letterSpacing: 1.2,
@@ -488,7 +615,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
     return Column(
       children: [
         Text(
-          'NET EQUITY POSITION',
+          AppLocalizations.of(context)!.netEquityPosition,
           style: AppTypography.badge.copyWith(
             fontSize: 11,
             letterSpacing: 1.2,
@@ -524,13 +651,13 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: AppColors.badgeBgPositive),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF6B7280)),
               SizedBox(width: 4),
               Text(
-                'Add last month\'s data to see trend',
+                AppLocalizations.of(context)!.addLastMonthTrend,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -550,7 +677,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Distribution',
+                    AppLocalizations.of(context)!.distribution,
                     style: AppTypography.sectionTitle.copyWith(fontSize: 14),
                   ),
                 ],
@@ -582,7 +709,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildLegendItem(
-                    label: 'Assets',
+                    label: AppLocalizations.of(context)!.assets,
                     amount: '$currency ${(totalAssets / 1000).toStringAsFixed(0)}k',
                     color: AppColors.chartBlue,
                   ),
@@ -592,7 +719,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                     color: AppColors.borderLight,
                   ),
                   _buildLegendItem(
-                    label: 'Liabilities',
+                    label: AppLocalizations.of(context)!.liabilities,
                     amount: '$currency ${(totalLiabilities / 1000).toStringAsFixed(0)}k',
                     color: AppColors.chartRed,
                     alignRight: true,
@@ -789,6 +916,8 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
     final controller = TextEditingController(text: currentValue.toStringAsFixed(0));
     final currency = ref.read(appSettingsProvider).currency;
     final formKey = GlobalKey<FormState>();
+    final l10n = AppLocalizations.of(context)!;
+    final fmt = NumberFormat('#,##0', 'en');
 
     return showModalBottomSheet(
       context: context,
@@ -815,10 +944,10 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              Text('Edit $title', style: AppTypography.h3),
+              Text(l10n.editField(title), style: AppTypography.h3),
               const SizedBox(height: 4),
               Text(
-                'Current value: $currency ${NumberFormat('#,##0').format(currentValue)}',
+                l10n.currentValueLabel(currency, fmt.format(currentValue)),
                 style: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary),
               ),
               const SizedBox(height: 16),
@@ -827,18 +956,24 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 autofocus: true,
                 decoration: InputDecoration(
-                  labelText: 'Amount ($currency)',
+                  labelText: l10n.amountWithCurrency(currency),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.attach_money_rounded),
+                  prefixText: '$currency ',
+                  prefixStyle: AppTypography.labelLarge.copyWith(
+                    color: AppColors.textTertiary,
+                    fontWeight: FontWeight.w600,
+                  ),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.clear_rounded, size: 18),
                     onPressed: () => controller.clear(),
-                    tooltip: 'Clear',
+                    tooltip: l10n.clear,
                   ),
                 ),
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Enter an amount';
-                  if (double.tryParse(v.trim()) == null) return 'Enter a valid number';
+                  if (v == null || v.trim().isEmpty) return l10n.enterAnAmount;
+                  final parsed = double.tryParse(v.trim());
+                  if (parsed == null) return l10n.enterAValidNumber;
+                  if (parsed < 0) return l10n.amountCannotBeNegative;
                   return null;
                 },
               ),
@@ -852,7 +987,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Cancel'),
+                      child: Text(l10n.cancel),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -868,7 +1003,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Save'),
+                      child: Text(l10n.save),
                     ),
                   ),
                 ],
@@ -883,6 +1018,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
 
 
   Widget _buildAIInsightCard(double totalAssets, double totalLiabilities, double netEquity) {
+    final l10n = AppLocalizations.of(context)!;
     return ReportCard(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -918,7 +1054,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                   border: Border.all(color: AppColors.borderLight),
                 ),
                 child: Text(
-                  'Coming Soon',
+                  l10n.comingSoon,
                   style: AppTypography.badge.copyWith(
                     fontSize: 10,
                     color: AppColors.textTertiary,
@@ -942,14 +1078,14 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
             onTap: () {
               HapticFeedback.lightImpact();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('AI analysis — coming soon!')),
+                SnackBar(content: Text(AppLocalizations.of(context)!.aiAnalysisComingSoon)),
               );
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'View Full Analysis',
+                  l10n.viewFullAnalysis,
                   style: AppTypography.badge.copyWith(
                     fontSize: 12,
                     color: AppColors.chartIndigo,
@@ -967,24 +1103,26 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
   }
 
   String _generateAIInsight(double totalAssets, double totalLiabilities, double netEquity) {
+    final l10n = AppLocalizations.of(context)!;
+    final fmt = NumberFormat('#,##0', 'en');
     if (totalAssets == 0 && totalLiabilities == 0) {
-      return 'Start by adding your bank accounts, cash on hand, and liabilities to get a snapshot of your financial position.';
+      return l10n.bsInsightEmpty;
     }
     final debtRatio = totalAssets > 0 ? totalLiabilities / totalAssets : 0.0;
     if (debtRatio > 0.8) {
-      return 'Your debt-to-asset ratio is ${(debtRatio * 100).toStringAsFixed(0)}%, which is high. Consider prioritizing debt repayment to improve your financial health.';
+      return l10n.bsInsightHighDebt((debtRatio * 100).toStringAsFixed(0));
     }
     if (debtRatio > 0.5) {
-      return 'Your debt-to-asset ratio is ${(debtRatio * 100).toStringAsFixed(0)}%. This is moderate — consider reducing liabilities to build a stronger equity position.';
+      return l10n.bsInsightModerateDebt((debtRatio * 100).toStringAsFixed(0));
     }
     final bsAi = ref.read(balanceSheetEntriesProvider);
     if (bsAi.cashOnHand > bsAi.loans && bsAi.loans > 0) {
-      return 'Your cash on hand exceeds your loan balance. Consider paying down the loan to reduce interest expenses.';
+      return l10n.bsInsightCashExceedsLoan;
     }
     if (netEquity > 0) {
-      return 'Your net equity is positive at ${NumberFormat("#,##0").format(netEquity)}. Keep monitoring your balance sheet to maintain a healthy position.';
+      return l10n.bsInsightPositiveEquity(fmt.format(netEquity));
     }
-    return 'Your liabilities exceed your assets. Focus on increasing revenue or reducing debt to improve your equity position.';
+    return l10n.bsInsightNegativeEquity;
   }
 
   Widget _buildDownloadButton() {
@@ -997,6 +1135,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
       onPressed: () async {
         HapticFeedback.mediumImpact();
         final origin = ShareService.originFrom(context);
+        final l10n = AppLocalizations.of(context)!;
         try {
           final reportSvc = ref.read(reportServiceProvider);
           final shareSvc = ref.read(shareServiceProvider);
@@ -1007,43 +1146,71 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
           final purchases = ref.read(purchasesProvider);
           final sales = await ref.read(salesProvider.future);
 
-          // Compute bank balance from CF (opening cash + all transaction flows)
-          final computedBank = allTxns.fold(
-            settings.openingCashBalance,
-            (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
-          );
-          final bs = bsManual.copyWith(bankAccounts: computedBank);
+          // Compute bank balance from opening cash + transactions up to now (consistent with screen)
+          final asOfDate = _period.range.end;
+          final computedBank = roundMoney(settings.openingCashBalance + allTxns
+              .where((t) => !t.dateTime.isAfter(asOfDate))
+              .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
 
           final inventoryValue = products.fold<double>(0, (s, p) => s + p.totalCostValue);
           final accountsReceivable = sales
               .where((s) => s.orderStatus != OrderStatus.cancelled)
               .fold<double>(0, (sum, s) => sum + s.outstanding);
-          final suppliersOwing = purchases.fold<double>(0.0, (sum, p) {
+          final pdfPurchases = purchases.where((p) => !p.date.isAfter(asOfDate)).toList();
+          final suppliersOwing = pdfPurchases.fold<double>(0.0, (sum, p) {
             final received = p.totalReceivedValue;
             return sum + (received - p.amountPaid).clamp(0.0, double.maxFinite);
           });
-          final supplierPrepayments = purchases.fold<double>(0.0, (sum, p) {
+          final supplierPrepayments = pdfPurchases.fold<double>(0.0, (sum, p) {
             final received = p.totalReceivedValue;
             return sum + (p.amountPaid - received).clamp(0.0, double.maxFinite);
           });
+          // Compute equity components for PDF (same logic as the screen)
+          const plExcl = {'cat_investments'};
+          final pdfRetained = roundMoney(allTxns
+              .where((t) => t.dateTime.isBefore(_period.range.start))
+              .where((t) => !t.excludeFromPL && !plExcl.contains(t.categoryId))
+              .fold(0.0, (s, t) => s + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
+          final pdfCurrentNet = roundMoney(allTxns
+              .where((t) => !t.dateTime.isBefore(_period.range.start) && !t.dateTime.isAfter(asOfDate))
+              .where((t) => !t.excludeFromPL && !plExcl.contains(t.categoryId))
+              .fold(0.0, (s, t) => s + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
+
+          // Auto-derive opening capital (mirrors screen logic)
+          final pdfTotalAssets = roundMoney(computedBank + bsManual.cashOnHand + bsManual.unpaidInvoices +
+              inventoryValue + accountsReceivable + supplierPrepayments);
+          final pdfTotalLiabilities = roundMoney(suppliersOwing + bsManual.loans + bsManual.unpaidSalaries);
+          final pdfNetEquity = roundMoney(pdfTotalAssets - pdfTotalLiabilities);
+          final pdfHasManual = bsManual.openingCapital != 0;
+          final pdfAutoCapital = roundMoney(pdfNetEquity - pdfRetained - pdfCurrentNet);
+          final pdfEffectiveCapital = pdfHasManual ? bsManual.openingCapital : pdfAutoCapital;
+          final pdfAdjustment = roundMoney(pdfNetEquity - (pdfEffectiveCapital + pdfRetained + pdfCurrentNet));
+
           final bytes = await reportSvc.generateBalanceSheetPdf(
-            bs: bs,
+            l10n: l10n,
+            bs: bsManual,
+            bankBalance: computedBank,
             inventoryValue: inventoryValue,
             accountsReceivable: accountsReceivable,
             supplierPrepayments: supplierPrepayments,
             suppliersOwing: suppliersOwing,
             currency: settings.currency,
+            retainedEarnings: pdfRetained,
+            currentPeriodNetIncome: pdfCurrentNet,
+            effectiveOpeningCapital: pdfEffectiveCapital,
+            reconAdjustment: pdfAdjustment,
+            asOfDate: asOfDate,
           );
           await shareSvc.sharePdf(bytes, 'Balance_Sheet.pdf', subject: 'Balance Sheet', origin: origin);
         } catch (e) {
           debugPrint('Balance Sheet share error: $e');
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: Colors.red));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.somethingWentWrong), backgroundColor: Colors.red));
           }
         }
       },
       icon: const Icon(Icons.ios_share_rounded, size: 18),
-      label: const Text('Share Report', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      label: Text(AppLocalizations.of(context)!.shareReport, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.primaryNavy,
         foregroundColor: Colors.white,

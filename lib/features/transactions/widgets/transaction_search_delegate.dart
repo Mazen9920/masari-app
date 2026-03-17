@@ -74,6 +74,7 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
 
   Widget _buildSearchResults() {
     final results = transactions.where((tx) {
+      if (tx.saleId != null) return false;
       final q = query.toLowerCase();
       final cat = CategoryData.findById(tx.categoryId);
       return tx.title.toLowerCase().contains(q) ||

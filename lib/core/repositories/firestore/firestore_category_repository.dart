@@ -84,32 +84,18 @@ class FirestoreCategoryRepository implements CategoryRepository {
 
   @override
   Future<Result<CategoryData>> updateCategory(
-      String oldName, CategoryData updated) async {
+      CategoryData updated) async {
     try {
-      // Find the doc by user_id + old name
-      final snapshot = await _collection
-          .where('user_id', isEqualTo: _uid)
-          .where('name', isEqualTo: oldName)
-          .limit(1)
-          .get();
-
       final json = updated.toJson();
       json['updated_at'] = DateTime.now().toIso8601String();
       json.remove('id');
-
-      if (snapshot.docs.isEmpty) {
-        // System category — create a user-specific override in Firestore
-        json['user_id'] = _uid;
-        final overrideId = updated.id;
-        await _collection.doc(overrideId).set(json);
-        json['id'] = overrideId;
-        return Result.success(CategoryData.fromJson(json));
-      }
-
-      final docId = snapshot.docs.first.id;
       json['user_id'] = _uid;
-      await _collection.doc(docId).update(json);
-      json['id'] = docId;
+
+      // Use set() to handle both existing and new (system override) docs
+      // without a pre-read that would fail on security rules for non-existent docs
+      await _collection.doc(updated.id).set(json);
+
+      json['id'] = updated.id;
       return Result.success(CategoryData.fromJson(json));
     } catch (e) {
       return Result.failure( 'Failed to update category: $e');
@@ -117,19 +103,16 @@ class FirestoreCategoryRepository implements CategoryRepository {
   }
 
   @override
-  Future<Result<void>> deleteCategory(String name) async {
+  Future<Result<void>> deleteCategory(String id) async {
     try {
-      final snapshot = await _collection
-          .where('user_id', isEqualTo: _uid)
-          .where('name', isEqualTo: name)
-          .limit(1)
-          .get();
+      final doc = _collection.doc(id);
+      final snapshot = await doc.get();
 
-      if (snapshot.docs.isEmpty) {
-        return Result.failure('Category "$name" not found');
+      if (!snapshot.exists) {
+        return Result.failure('Category "$id" not found');
       }
 
-      await _collection.doc(snapshot.docs.first.id).delete();
+      await doc.delete();
       return Result.success(null);
     } catch (e) {
       return Result.failure( 'Failed to delete category: $e');

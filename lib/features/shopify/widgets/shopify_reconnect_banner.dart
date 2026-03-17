@@ -46,15 +46,15 @@ class _SetupBanner extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF7C3AED).withValues(alpha: 0.08),
-            const Color(0xFF7C3AED).withValues(alpha: 0.03),
+            AppColors.shopifyPurple.withValues(alpha: 0.08),
+            AppColors.shopifyPurple.withValues(alpha: 0.03),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
+          color: AppColors.shopifyPurple.withValues(alpha: 0.2),
         ),
       ),
       child: Row(
@@ -63,10 +63,11 @@ class _SetupBanner extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+              color: AppColors.shopifyPurple.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.store_rounded, color: Color(0xFF7C3AED), size: 20),
+            child: const Icon(Icons.store_rounded,
+                color: AppColors.shopifyPurple, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -76,7 +77,7 @@ class _SetupBanner extends StatelessWidget {
                 Text(
                   'Shopify integration ready',
                   style: AppTypography.labelSmall.copyWith(
-                    color: const Color(0xFF7C3AED),
+                    color: AppColors.shopifyPurple,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -97,7 +98,7 @@ class _SetupBanner extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF7C3AED),
+                color: AppColors.shopifyPurple,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(

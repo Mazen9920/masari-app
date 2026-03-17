@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/providers/app_settings_provider.dart';
 import '../../../shared/models/category_data.dart';
 import '../../../shared/models/transaction_model.dart';
 import '../../transactions/transaction_detail_screen.dart';
@@ -15,7 +16,11 @@ class RecentTransactions extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final allTransactions = ref.watch(transactionsProvider).value ?? [];
-    final recentTransactions = allTransactions.take(5).toList();
+    final currency = ref.watch(appSettingsProvider).currency;
+    final recentTransactions = allTransactions
+        .where((t) => t.saleId == null)
+        .take(5)
+        .toList();
     return Column(
       children: [
         // Header
@@ -69,7 +74,7 @@ class RecentTransactions extends ConsumerWidget {
               padding: EdgeInsets.only(
                 bottom: index < recentTransactions.length - 1 ? 10 : 0,
               ),
-              child: _TransactionCard(item: item, transaction: tx),
+              child: _TransactionCard(item: item, transaction: tx, currency: currency),
             );
           },
         ),
@@ -81,13 +86,14 @@ class RecentTransactions extends ConsumerWidget {
 class _TransactionCard extends StatelessWidget {
   final TransactionItem item;
   final Transaction transaction;
-  const _TransactionCard({required this.item, required this.transaction});
+  final String currency;
+  const _TransactionCard({required this.item, required this.transaction, required this.currency});
 
   @override
   Widget build(BuildContext context) {
     final isIncome = item.amount > 0;
     final formattedAmount =
-        '${isIncome ? '+' : '-'}EGP ${item.amount.abs().toStringAsFixed(0)}';
+        '${isIncome ? '+' : '-'}$currency ${item.amount.abs().toStringAsFixed(0)}';
 
     return GestureDetector(
       onTap: () {

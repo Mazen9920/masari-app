@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/sale_model.dart';
 import '../../shared/models/product_model.dart';
@@ -14,7 +15,13 @@ import 'package:csv/csv.dart' as csv_lib;
 /// Produces real PDF bytes and CSV strings from live app data.
 class ReportService {
   // Categories excluded from P&L (non-operating)
-  static const _plExcludedCats = {'cat_investments'};
+  static const _plExcludedCats = {
+    'cat_investments',
+    'cat_loan_received',
+    'cat_loan_repayment',
+    'cat_equity_injection',
+    'cat_owner_withdrawal',
+  };
 
   // ──────────────────────────────────────────────────────
   //  COLOUR PALETTE (PdfColors for PDF widgets)
@@ -62,6 +69,7 @@ class ReportService {
   /// Generates a Profit & Loss PDF for [month] (if non-null, monthly;
   /// otherwise annual for year of [periodStart]).
   Future<Uint8List> generatePnlPdf({
+    required AppLocalizations l10n,
     required List<Transaction> transactions,
     required String currency,
     required DateTime periodStart,
@@ -71,7 +79,7 @@ class ReportService {
     final theme = await _loadTheme();
     final pdf = pw.Document(
       theme: theme,
-      title:  'Profit & Loss Statement',
+      title:  l10n.pnlStatement,
       author: businessName ?? 'Masari',
     );
 
@@ -113,14 +121,14 @@ class ReportService {
     final fmt = NumberFormat('#,##0.00', 'en');
     final periodLabel = isMonthly
         ? DateFormat( 'MMMM yyyy').format(periodStart)
-        :  'Year ${periodStart.year}';
+        :  l10n.yearPeriod(periodStart.year);
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         header: (ctx) => _pdfHeader(
-           'Profit & Loss Statement',
+           l10n.pnlStatement,
           periodLabel,
           businessName,
         ),
@@ -128,35 +136,41 @@ class ReportService {
         build: (ctx) => [
           // KPI row
           _kpiRow(fmt, currency, [
-            ( 'Total Revenue', totalRevenue, _green),
-            ( 'Gross Profit', grossProfit, _blue),
-            ( 'Net Profit', netProfit, netProfit >= 0 ? _green : _red),
+            ( l10n.totalRevenue, totalRevenue, _green),
+            ( l10n.grossProfit, grossProfit, _blue),
+            ( l10n.netProfit, netProfit, netProfit >= 0 ? _green : _red),
           ]),
           pw.SizedBox(height: 20),
 
           // Revenue breakdown
-          _sectionTitle( 'Revenue Sources'),
-          _breakdownTable(revenueMap, totalRevenue, currency, fmt),
+          _sectionTitle( l10n.revenueSources),
+          _breakdownTable(revenueMap, totalRevenue, currency, fmt,
+              noDataLabel: l10n.noDataForPeriod,
+              amountHeader: l10n.amountWithCurrency(currency)),
           pw.SizedBox(height: 16),
 
           // COGS breakdown
-          _sectionTitle( 'Cost of Goods Sold'),
-          _breakdownTable(cogsMap, cogs, currency, fmt),
+          _sectionTitle( l10n.costOfGoodsSold),
+          _breakdownTable(cogsMap, cogs, currency, fmt,
+              noDataLabel: l10n.noDataForPeriod,
+              amountHeader: l10n.amountWithCurrency(currency)),
           pw.SizedBox(height: 16),
 
           // OpEx breakdown
-          _sectionTitle( 'Operating Expenses'),
-          _breakdownTable(opexMap, opex, currency, fmt),
+          _sectionTitle( l10n.operatingExpenses),
+          _breakdownTable(opexMap, opex, currency, fmt,
+              noDataLabel: l10n.noDataForPeriod,
+              amountHeader: l10n.amountWithCurrency(currency)),
           pw.SizedBox(height: 24),
 
           // Summary
           _summaryTable(fmt, currency, [
-            ( 'Sales Revenue', salesRevenue),
-            ( 'Cost of Goods Sold', -cogs),
-            ( 'Gross Profit', grossProfit),
-            ( 'Other Income', otherIncome),
-            ( 'Operating Expenses', -opex),
-            ( 'Net Profit', netProfit),
+            ( l10n.salesRevenue, salesRevenue),
+            ( l10n.costOfGoodsSold, -cogs),
+            ( l10n.grossProfit, grossProfit),
+            ( l10n.otherIncome, otherIncome),
+            ( l10n.operatingExpenses, -opex),
+            ( l10n.netProfit, netProfit),
           ]),
         ],
       ),
@@ -170,24 +184,31 @@ class ReportService {
   // ═══════════════════════════════════════════════════════
 
   Future<Uint8List> generateBalanceSheetPdf({
+    required AppLocalizations l10n,
     required BalanceSheetEntries bs,
+    required double bankBalance,
     required double inventoryValue,
     required double accountsReceivable,
     required double supplierPrepayments,
     required double suppliersOwing,
     required String currency,
+    required double retainedEarnings,
+    required double currentPeriodNetIncome,
+    required double effectiveOpeningCapital,
+    required double reconAdjustment,
+    required DateTime asOfDate,
     String? businessName,
   }) async {
     final theme = await _loadTheme();
     final pdf = pw.Document(
       theme: theme,
-      title:  'Balance Sheet',
+      title:  l10n.balanceSheet,
       author: businessName ?? 'Masari',
     );
     final fmt = NumberFormat('#,##0.00', 'en');
-    final dateLabel = DateFormat('dd MMMM yyyy').format(DateTime.now());
+    final dateLabel = DateFormat('dd MMMM yyyy').format(asOfDate);
 
-    final totalAssets = bs.bankAccounts +
+    final totalAssets = bankBalance +
         bs.cashOnHand +
         bs.unpaidInvoices +
         inventoryValue +
@@ -200,32 +221,43 @@ class ReportService {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
-        header: (ctx) => _pdfHeader( 'Balance Sheet',  'As of $dateLabel', businessName),
+        header: (ctx) => _pdfHeader( l10n.balanceSheet,  l10n.asOfDate(dateLabel), businessName),
         footer: (ctx) => _pdfFooter(ctx),
         build: (ctx) => [
           // Assets
-          _sectionTitle( 'Assets (What You Own)'),
+          _sectionTitle( l10n.assetsSection),
           _balanceTable(fmt, currency, [
-            ( 'Bank Accounts', bs.bankAccounts),
-            ( 'Cash on Hand', bs.cashOnHand),
-            ('Inventory', inventoryValue),
-            ( 'Unpaid Invoices', bs.unpaidInvoices),
-            ('Receivables', accountsReceivable),
-            ('Supplier Prepayments', supplierPrepayments),
-          ], totalAssets,  'Total Assets'),
+            ( l10n.bankAccounts, bankBalance),
+            ( l10n.cashOnHand, bs.cashOnHand),
+            (l10n.inventory, inventoryValue),
+            (l10n.otherReceivables, bs.unpaidInvoices),
+            (l10n.salesReceivables, accountsReceivable),
+            (l10n.supplierPrepayments, supplierPrepayments),
+          ], totalAssets,  l10n.totalAssets),
           pw.SizedBox(height: 20),
 
           // Liabilities
-          _sectionTitle( 'Liabilities (What You Owe)'),
+          _sectionTitle( l10n.liabilitiesSection),
           _balanceTable(fmt, currency, [
-            ('Supplier Payable', suppliersOwing),
-            ('Loans', bs.loans),
-            ( 'Unpaid Salaries', bs.unpaidSalaries),
-          ], totalLiabilities,  'Total Liabilities'),
+            (l10n.supplierPayable, suppliersOwing),
+            (l10n.loans, bs.loans),
+            ( l10n.unpaidSalaries, bs.unpaidSalaries),
+          ], totalLiabilities,  l10n.totalLiabilities),
           pw.SizedBox(height: 20),
 
           // Net Equity
-          _netEquityRow(fmt, currency, netEquity),
+          _netEquityRow(fmt, currency, netEquity, label: l10n.netEquity),
+          pw.SizedBox(height: 16),
+
+          // Equity Breakdown
+          _sectionTitle(l10n.ownersEquity),
+          _balanceTable(fmt, currency, [
+            (l10n.openingCapital, effectiveOpeningCapital),
+            (l10n.retainedEarnings, retainedEarnings),
+            (l10n.currentPeriodNetIncome, currentPeriodNetIncome),
+            if (reconAdjustment.abs() >= 0.01)
+              (l10n.reconAdjustment, reconAdjustment),
+          ], netEquity, l10n.netEquity),
         ],
       ),
     );
@@ -237,9 +269,11 @@ class ReportService {
   // ═══════════════════════════════════════════════════════
 
   Future<Uint8List> generateCashFlowPdf({
+    required AppLocalizations l10n,
     required List<Transaction> transactions,
     required String currency,
     required DateTime periodStart,
+    required DateTime periodEnd,
     required bool isMonthly,
     required double openingBalance,
     String? businessName,
@@ -247,36 +281,53 @@ class ReportService {
     final theme = await _loadTheme();
     final pdf = pw.Document(
       theme: theme,
-      title:  'Cash Flow Statement',
+      title:  l10n.cashFlowStatement,
       author: businessName ?? 'Masari',
     );
     final fmt = NumberFormat('#,##0.00', 'en');
     final periodLabel = isMonthly
         ? DateFormat( 'MMMM yyyy').format(periodStart)
-        :  'Year ${periodStart.year}';
+        :  l10n.yearPeriod(periodStart.year);
 
-    final filtered = transactions.where((tx) {
-      if (isMonthly) {
-        return tx.dateTime.year == periodStart.year &&
-            tx.dateTime.month == periodStart.month;
-      }
-      return tx.dateTime.year == periodStart.year;
-    }).toList()
+    final filtered = transactions.where((tx) =>
+      !tx.dateTime.isBefore(periodStart) && !tx.dateTime.isAfter(periodEnd)
+    ).toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
     double totalInflow = 0, totalOutflow = 0;
     final Map<String, double> inflowByCat = {};
     final Map<String, double> outflowByCat = {};
 
+    // GAAP classification accumulators
+    double operatingNet = 0, investingNet = 0, financingNet = 0;
+    final Map<String, double> operatingByCat = {};
+    final Map<String, double> investingByCat = {};
+    final Map<String, double> financingByCat = {};
+
     for (final tx in filtered) {
-      if (tx.amount > 0) {
-        totalInflow += tx.amount;
+      final signed = tx.isIncome ? tx.amount.abs() : -tx.amount.abs();
+      if (tx.isIncome) {
+        totalInflow += tx.amount.abs();
         inflowByCat[tx.categoryId] =
-            (inflowByCat[tx.categoryId] ?? 0) + tx.amount;
+            (inflowByCat[tx.categoryId] ?? 0) + tx.amount.abs();
       } else {
         totalOutflow += tx.amount.abs();
         outflowByCat[tx.categoryId] =
             (outflowByCat[tx.categoryId] ?? 0) + tx.amount.abs();
+      }
+      switch (cashFlowTypeFor(tx.categoryId)) {
+        case CashFlowType.operating:
+          operatingNet += signed;
+          operatingByCat[tx.categoryId] =
+              (operatingByCat[tx.categoryId] ?? 0) + signed;
+        case CashFlowType.investing:
+          investingNet += signed;
+          investingByCat[tx.categoryId] =
+              (investingByCat[tx.categoryId] ?? 0) + signed;
+        case CashFlowType.financing:
+          financingNet += signed;
+          financingByCat[tx.categoryId] =
+              (financingByCat[tx.categoryId] ?? 0) + signed;
       }
     }
     final netCashFlow = totalInflow - totalOutflow;
@@ -287,33 +338,65 @@ class ReportService {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         header: (ctx) =>
-            _pdfHeader( 'Cash Flow Statement', periodLabel, businessName),
+            _pdfHeader( l10n.cashFlowStatement, periodLabel, businessName),
         footer: (ctx) => _pdfFooter(ctx),
         build: (ctx) => [
           _kpiRow(fmt, currency, [
-            ( 'Total Inflow', totalInflow, _green),
-            ( 'Total Outflow', totalOutflow, _red),
-            ( 'Net Cash Flow', netCashFlow, netCashFlow >= 0 ? _green : _red),
+            ( l10n.totalInflow, totalInflow, _green),
+            ( l10n.totalOutflow, totalOutflow, _red),
+            ( l10n.netCashFlow, netCashFlow, netCashFlow >= 0 ? _green : _red),
           ]),
           pw.SizedBox(height: 20),
 
           // Cash Inflows
-          _sectionTitle( 'Cash Inflows'),
-          _breakdownTable(inflowByCat, totalInflow, currency, fmt),
+          _sectionTitle( l10n.cashInflows),
+          _breakdownTable(inflowByCat, totalInflow, currency, fmt,
+              noDataLabel: l10n.noDataForPeriod,
+              amountHeader: l10n.amountWithCurrency(currency)),
           pw.SizedBox(height: 16),
 
           // Cash Outflows
-          _sectionTitle( 'Cash Outflows'),
-          _breakdownTable(outflowByCat, totalOutflow, currency, fmt),
+          _sectionTitle( l10n.cashOutflows),
+          _breakdownTable(outflowByCat, totalOutflow, currency, fmt,
+              noDataLabel: l10n.noDataForPeriod,
+              amountHeader: l10n.amountWithCurrency(currency)),
+          pw.SizedBox(height: 24),
+
+          // GAAP Activities breakdown
+          _sectionTitle(l10n.operatingActivities),
+          _breakdownTable(operatingByCat, operatingNet, currency, fmt,
+              noDataLabel: l10n.noDataForPeriod,
+              amountHeader: l10n.amountWithCurrency(currency),
+              isSigned: true),
+          pw.SizedBox(height: 8),
+          _subtotalRow(fmt, currency, l10n.netOperatingCashFlow, operatingNet),
+          pw.SizedBox(height: 16),
+
+          _sectionTitle(l10n.investingActivities),
+          _breakdownTable(investingByCat, investingNet, currency, fmt,
+              noDataLabel: l10n.noDataForPeriod,
+              amountHeader: l10n.amountWithCurrency(currency),
+              isSigned: true),
+          pw.SizedBox(height: 8),
+          _subtotalRow(fmt, currency, l10n.netInvestingCashFlow, investingNet),
+          pw.SizedBox(height: 16),
+
+          _sectionTitle(l10n.financingActivities),
+          _breakdownTable(financingByCat, financingNet, currency, fmt,
+              noDataLabel: l10n.noDataForPeriod,
+              amountHeader: l10n.amountWithCurrency(currency),
+              isSigned: true),
+          pw.SizedBox(height: 8),
+          _subtotalRow(fmt, currency, l10n.netFinancingCashFlow, financingNet),
           pw.SizedBox(height: 24),
 
           // Summary
           _summaryTable(fmt, currency, [
-            ( 'Opening Balance', openingBalance),
-            ( 'Total Cash Inflow', totalInflow),
-            ( 'Total Cash Outflow', -totalOutflow),
-            ( 'Net Cash Flow', netCashFlow),
-            ( 'Closing Balance', closingBalance),
+            ( l10n.openingBalance, openingBalance),
+            ( l10n.totalCashInflow, totalInflow),
+            ( l10n.totalCashOutflow, -totalOutflow),
+            ( l10n.netCashFlow, netCashFlow),
+            ( l10n.closingBalance, closingBalance),
           ]),
         ],
       ),
@@ -326,6 +409,7 @@ class ReportService {
   // ═══════════════════════════════════════════════════════
 
   Future<Uint8List> generateMonthlyReportPdf({
+    required AppLocalizations l10n,
     required List<Transaction> transactions,
     required List<Sale> sales,
     required List<Product> products,
@@ -340,7 +424,7 @@ class ReportService {
     final theme = await _loadTheme();
     final pdf = pw.Document(
       theme: theme,
-      title:  'Monthly Financial Report',
+      title:  l10n.monthlyFinancialReport,
       author: businessName ?? 'Masari',
     );
     final fmt = NumberFormat('#,##0.00', 'en');
@@ -374,11 +458,21 @@ class ReportService {
         tx.dateTime.year == month.year &&
         tx.dateTime.month == month.month).toList();
     double totalInflow = 0, totalOutflow = 0;
+    double cfOperating = 0, cfInvesting = 0, cfFinancing = 0;
     for (final tx in cfTx) {
-      if (tx.amount > 0) {
-        totalInflow += tx.amount;
+      if (tx.isIncome) {
+        totalInflow += tx.amount.abs();
       } else {
         totalOutflow += tx.amount.abs();
+      }
+      final signed = tx.isIncome ? tx.amount.abs() : -tx.amount.abs();
+      switch (cashFlowTypeFor(tx.categoryId)) {
+        case CashFlowType.operating:
+          cfOperating += signed;
+        case CashFlowType.investing:
+          cfInvesting += signed;
+        case CashFlowType.financing:
+          cfFinancing += signed;
       }
     }
     final netCash = totalInflow - totalOutflow;
@@ -403,10 +497,11 @@ class ReportService {
         products.where((p) => p.status == StockStatus.outOfStock).length;
 
     // ── Balance sheet ──
+    final bankBalance = openingBalance + netCash;
     final accountsReceivable = sales
         .where((s) => s.orderStatus != OrderStatus.cancelled)
         .fold<double>(0, (sum, s) => sum + s.outstanding);
-    final totalAssets = bs.bankAccounts +
+    final totalAssets = bankBalance +
         bs.cashOnHand +
         bs.unpaidInvoices +
         inventoryValue +
@@ -419,57 +514,63 @@ class ReportService {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         header: (ctx) => _pdfHeader(
-             'Monthly Financial Report', periodLabel, businessName),
+             l10n.monthlyFinancialReport, periodLabel, businessName),
         footer: (ctx) => _pdfFooter(ctx),
         build: (ctx) => [
           // === P&L Summary ===
-          _sectionTitle( 'Profit & Loss'),
+          _sectionTitle( l10n.profitAndLoss),
           _summaryTable(fmt, currency, [
-            ( 'Sales Revenue', salesRevenue),
-            ( 'Cost of Goods Sold', -cogsCost),
-            ( 'Gross Profit', grossProfit),
-            ( 'Other Income', otherIncome),
-            ( 'Operating Expenses', -opex),
-            ( 'Net Profit', netProfit),
+            ( l10n.salesRevenue, salesRevenue),
+            ( l10n.costOfGoodsSold, -cogsCost),
+            ( l10n.grossProfit, grossProfit),
+            ( l10n.otherIncome, otherIncome),
+            ( l10n.operatingExpenses, -opex),
+            ( l10n.netProfit, netProfit),
           ]),
           pw.SizedBox(height: 24),
 
           // === Cash Flow Summary ===
-          _sectionTitle( 'Cash Flow'),
+          _sectionTitle( l10n.cashFlow),
           _summaryTable(fmt, currency, [
-            ( 'Opening Balance', openingBalance),
-            ( 'Cash Inflow', totalInflow),
-            ( 'Cash Outflow', -totalOutflow),
-            ( 'Net Cash Flow', netCash),
-            ( 'Closing Balance', openingBalance + netCash),
+            ( l10n.openingBalance, openingBalance),
+            ( l10n.cashInflowLabel, totalInflow),
+            ( l10n.cashOutflowLabel, -totalOutflow),
+            ( l10n.netCashFlow, netCash),
+            ( l10n.closingBalance, openingBalance + netCash),
+          ]),
+          pw.SizedBox(height: 8),
+          _summaryTable(fmt, currency, [
+            (l10n.netOperatingCashFlow, cfOperating),
+            (l10n.netInvestingCashFlow, cfInvesting),
+            (l10n.netFinancingCashFlow, cfFinancing),
           ]),
           pw.SizedBox(height: 24),
 
           // === Sales Summary ===
-          _sectionTitle( 'Sales Overview'),
+          _sectionTitle( l10n.salesOverview),
           _twoColumnKpis(fmt, currency, [
-            ( 'Total Orders', totalSalesCount.toString()),
-            ( 'Total Sales Value', '$currency ${fmt.format(totalSalesValue)}'),
-            ('Outstanding', '$currency ${fmt.format(totalSalesOutstanding)}'),
+            ( l10n.totalOrders, totalSalesCount.toString()),
+            ( l10n.totalSalesValue, '$currency ${fmt.format(totalSalesValue)}'),
+            (l10n.outstanding, '$currency ${fmt.format(totalSalesOutstanding)}'),
           ]),
           pw.SizedBox(height: 24),
 
           // === Inventory Snapshot ===
-          _sectionTitle( 'Inventory Snapshot'),
+          _sectionTitle( l10n.inventorySnapshot),
           _twoColumnKpis(fmt, currency, [
-            ( 'Total Inventory Value', '$currency ${fmt.format(inventoryValue)}'),
-            ('Products', '${products.length}'),
-            ('Low Stock Filter', '$lowStockCount'),
-            ('Out of Stock Filter', '$outOfStockCount'),
+            ( l10n.totalInventoryValue, '$currency ${fmt.format(inventoryValue)}'),
+            (l10n.inventory, '${products.length}'),
+            (l10n.lowStock, '$lowStockCount'),
+            (l10n.outOfStockStatus, '$outOfStockCount'),
           ]),
           pw.SizedBox(height: 24),
 
           // === Balance Sheet Summary ===
-          _sectionTitle( 'Balance Sheet'),
+          _sectionTitle( l10n.balanceSheet),
           _summaryTable(fmt, currency, [
-            ( 'Total Assets', totalAssets),
-            ( 'Total Liabilities', -totalLiabilities),
-            ( 'Net Equity', totalAssets - totalLiabilities),
+            ( l10n.totalAssets, totalAssets),
+            ( l10n.totalLiabilities, -totalLiabilities),
+            ( l10n.netEquity, totalAssets - totalLiabilities),
           ]),
         ],
       ),
@@ -708,8 +809,12 @@ class ReportService {
     Map<String, double> map,
     double total,
     String currency,
-    NumberFormat fmt,
-  ) {
+    NumberFormat fmt, {
+    String noDataLabel = 'No data for this period',
+    String categoryLabel = 'Category',
+    String amountHeader = 'Amount',
+    bool isSigned = false,
+  }) {
     if (map.isEmpty) {
       return pw.Container(
         padding: const pw.EdgeInsets.all(12),
@@ -717,12 +822,14 @@ class ReportService {
           color: _lightGrey,
           borderRadius: pw.BorderRadius.circular(6),
         ),
-        child: pw.Text( 'No data for this period',
+        child: pw.Text( noDataLabel,
             style: const pw.TextStyle(fontSize: 10, color: _grey)),
       );
     }
     final sorted = map.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+      ..sort((a, b) => b.value.abs().compareTo(a.value.abs()));
+
+    final absTotal = total.abs();
 
     return pw.Table(
       border: pw.TableBorder.all(color: _lightGrey),
@@ -735,16 +842,17 @@ class ReportService {
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: _lightGrey),
           children: [
-            _tableCell('Category', bold: true),
-            _tableCell( 'Amount ($currency)', bold: true, align: pw.TextAlign.right),
+            _tableCell(categoryLabel, bold: true),
+            _tableCell( amountHeader, bold: true, align: pw.TextAlign.right),
             _tableCell('%', bold: true, align: pw.TextAlign.right),
           ],
         ),
         ...sorted.map((e) {
-          final pct = total > 0 ? (e.value / total * 100) : 0;
+          final displayVal = isSigned ? e.value : e.value.abs();
+          final pct = absTotal > 0 ? (e.value.abs() / absTotal * 100) : 0;
           return pw.TableRow(children: [
             _tableCell(CategoryData.findById(e.key).name),
-            _tableCell(fmt.format(e.value), align: pw.TextAlign.right),
+            _tableCell(fmt.format(displayVal), align: pw.TextAlign.right),
             _tableCell('${pct.toStringAsFixed(1)}%',
                 align: pw.TextAlign.right),
           ]);
@@ -753,12 +861,40 @@ class ReportService {
           decoration: const pw.BoxDecoration(color: _lightGrey),
           children: [
             _tableCell('Total', bold: true),
-            _tableCell(fmt.format(total),
+            _tableCell(fmt.format(isSigned ? total : total.abs()),
                 bold: true, align: pw.TextAlign.right),
             _tableCell('100%', bold: true, align: pw.TextAlign.right),
           ],
         ),
       ],
+    );
+  }
+
+  /// A single bold subtotal row used for GAAP section summaries.
+  static pw.Widget _subtotalRow(
+      NumberFormat fmt, String currency, String label, double value) {
+    final color = value >= 0 ? _green : _red;
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: pw.BoxDecoration(
+        color: _lightGrey,
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label,
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+          pw.Text(
+            '$currency ${fmt.format(value)}',
+            style: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 10,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -821,7 +957,7 @@ class ReportService {
   }
 
   static pw.Widget _netEquityRow(
-      NumberFormat fmt, String currency, double equity) {
+      NumberFormat fmt, String currency, double equity, {String label = 'Net Equity'}) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(14),
       decoration: pw.BoxDecoration(
@@ -831,7 +967,7 @@ class ReportService {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text( 'Net Equity',
+          pw.Text( label,
               style: pw.TextStyle(
                   fontSize: 14,
                   fontWeight: pw.FontWeight.bold,

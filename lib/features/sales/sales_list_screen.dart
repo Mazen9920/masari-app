@@ -913,9 +913,7 @@ class _SaleCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    sale.shopifyOrderNumber != null
-                        ? 'Shopify #${sale.shopifyOrderNumber}'
-                        : sale.customerName ?? 'Walk-in Customer',
+                    sale.displayOrderTitle,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,

@@ -145,6 +145,9 @@ class Sale {
   final String? trackingNumber;
   final String? deliveryStatus;
 
+  // Sequential order number for manual orders (e.g. 1001, 1002, ...)
+  final int? orderNumber;
+
   const Sale({
     required this.id,
     required this.userId,
@@ -172,6 +175,7 @@ class Sale {
     this.shippingMethod,
     this.trackingNumber,
     this.deliveryStatus,
+    this.orderNumber,
   });
 
   // ── Computed fields ──────────────────────────────────────
@@ -208,6 +212,16 @@ class Sale {
   /// Whether this is a Shopify-synced order.
   bool get isShopifyOrder => externalSource == 'shopify';
 
+  /// Human-readable order identifier.
+  /// Shopify orders: "#1234 Shopify"
+  /// Manual orders with number: "#O-1001"
+  /// Fallback: customer name or "Walk-in Customer"
+  String get displayOrderTitle {
+    if (shopifyOrderNumber != null) return '#$shopifyOrderNumber Shopify';
+    if (orderNumber != null) return '#O-$orderNumber';
+    return customerName ?? 'Walk-in Customer';
+  }
+
   // ── copyWith ─────────────────────────────────────────────
 
   Sale copyWith({
@@ -237,6 +251,7 @@ class Sale {
     String? shippingMethod,
     String? trackingNumber,
     String? deliveryStatus,
+    int? orderNumber,
   }) {
     return Sale(
       id: id ?? this.id,
@@ -265,6 +280,7 @@ class Sale {
       shippingMethod: shippingMethod ?? this.shippingMethod,
       trackingNumber: trackingNumber ?? this.trackingNumber,
       deliveryStatus: deliveryStatus ?? this.deliveryStatus,
+      orderNumber: orderNumber ?? this.orderNumber,
     );
   }
 
@@ -297,6 +313,7 @@ class Sale {
         if (shippingMethod != null) 'shipping_method': shippingMethod,
         if (trackingNumber != null) 'tracking_number': trackingNumber,
         if (deliveryStatus != null) 'delivery_status': deliveryStatus,
+        if (orderNumber != null) 'order_number': orderNumber,
       };
 
   /// Safely parse a dynamic Firestore field to [DateTime].
@@ -394,6 +411,7 @@ class Sale {
       shippingMethod: json['shipping_method']?.toString(),
       trackingNumber: json['tracking_number']?.toString(),
       deliveryStatus: json['delivery_status']?.toString(),
+      orderNumber: (json['order_number'] as num?)?.toInt(),
     );
   }
 }

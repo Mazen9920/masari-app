@@ -96,7 +96,7 @@ class _ManageCategoriesScreenState
           Expanded(
             child: Center(
               child: Text(
-                'Manage Categories',
+                'Budget & Categories',
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -166,6 +166,8 @@ class _ManageCategoriesScreenState
           },
           onArchive: () {
             HapticFeedback.mediumImpact();
+            // Actually remove the category
+            ref.read(categoriesProvider.notifier).removeCategory(cat.id);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('${cat.name} archived'),
@@ -177,7 +179,8 @@ class _ManageCategoriesScreenState
                   label: 'Undo',
                   textColor: const Color(0xFFE67E22),
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Category restored')));
+                    // Re-add the category to undo
+                    ref.read(categoriesProvider.notifier).addCategory(cat);
                   },
                 ),
               ),
@@ -193,6 +196,9 @@ class _ManageCategoriesScreenState
   }
 
   void _showDeleteDialog(CategoryData cat) {
+    final transactions = ref.read(transactionsProvider).value ?? [];
+    final txCount = transactions.where((tx) => tx.categoryId == cat.id).length;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -206,7 +212,9 @@ class _ManageCategoriesScreenState
           ),
         ),
         content: Text(
-          'This will permanently remove this category. All related transactions will be marked as uncategorized.',
+          txCount > 0
+              ? 'This category has $txCount transaction${txCount == 1 ? '' : 's'}. Deleting it will mark them as uncategorized.'
+              : 'This will permanently remove this category.',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.textSecondary,
             fontSize: 13,
@@ -223,7 +231,7 @@ class _ManageCategoriesScreenState
           TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              ref.read(categoriesProvider.notifier).removeCategory(cat.name);
+              ref.read(categoriesProvider.notifier).removeCategory(cat.id);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('${cat.name} deleted'),

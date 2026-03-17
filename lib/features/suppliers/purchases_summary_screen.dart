@@ -8,6 +8,7 @@ import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/purchase_model.dart';
+import '../../shared/models/supplier_model.dart';
 import '../transactions/transactions_list_screen.dart';
 import '../../shared/models/transaction_model.dart';
 import 'purchase_detail_screen.dart';
@@ -436,14 +437,15 @@ class _TrendsChart extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 //  RECENT PURCHASES LIST
 // ═══════════════════════════════════════════════════════
-class _RecentPurchases extends StatelessWidget {
+class _RecentPurchases extends ConsumerWidget {
   final NumberFormat fmt;
   final String currency;
   final List<Purchase> recent;
   const _RecentPurchases({required this.fmt, required this.currency, required this.recent});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final suppliers = ref.watch(suppliersProvider).value ?? <Supplier>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -520,9 +522,13 @@ class _RecentPurchases extends StatelessWidget {
               return GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();
+                  final supplier = suppliers.cast<Supplier?>().firstWhere(
+                    (s) => s!.id == p.supplierId,
+                    orElse: () => null,
+                  );
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => PurchaseDetailScreen(purchase: p),
+                      builder: (_) => PurchaseDetailScreen(purchase: p, supplier: supplier),
                     ),
                   );
                 },

@@ -91,6 +91,13 @@ class AppLocalizationsAr extends AppLocalizations {
       'الأصول = الالتزامات + حقوق الملكية  ✓';
 
   @override
+  String get accountingEquationUnbalanced =>
+      'الأصول ≠ الالتزامات + حقوق الملكية  ✗';
+
+  @override
+  String get currentPeriodNetIncome => 'صافي دخل الفترة الحالية';
+
+  @override
   String get assets => 'الأصول';
 
   @override
@@ -106,10 +113,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get netEquityPosition => 'مركز حقوق الملكية';
 
   @override
-  String get bankAccounts => 'الحسابات البنكية';
+  String get bankAccounts => 'النقد والبنك';
 
   @override
-  String get cashOnHand => 'النقد في الصندوق';
+  String get cashOnHand => 'تسوية نقدية';
 
   @override
   String get inventory => 'المخزون';
@@ -118,7 +125,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get otherReceivables => 'ذمم مدينة أخرى';
 
   @override
-  String get salesReceivables => 'ذمم المبيعات';
+  String get salesReceivables => 'ذمم مدينة تجارية';
 
   @override
   String get supplierPrepayments => 'دفعات مقدمة للموردين';
@@ -585,4 +592,313 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get createFinancialReports => 'إنشاء تقارير مالية';
+
+  @override
+  String plYouEarned(String currency, String amount) {
+    return 'ربحت $currency $amount!';
+  }
+
+  @override
+  String plProfitMarginBody(String margin) {
+    return 'هامش الربح $margin%. استمر في تتبع المصروفات للحفاظ على الزخم.';
+  }
+
+  @override
+  String get plBreakingEvenBody =>
+      'دخلك يغطي مصروفاتك تماماً. ابحث عن طرق لزيادة الإيرادات أو تقليل التكاليف.';
+
+  @override
+  String plYouLost(String currency, String amount) {
+    return 'خسرت $currency $amount';
+  }
+
+  @override
+  String get plLossBody =>
+      'مصروفاتك تجاوزت دخلك في هذه الفترة. راجع إنفاقك لإيجاد مجالات للتوفير.';
+
+  @override
+  String plUpVsPrevious(String pct) {
+    return '↑ $pct% مقارنة بالفترة السابقة';
+  }
+
+  @override
+  String plDownVsPrevious(String pct) {
+    return '↓ $pct% مقارنة بالفترة السابقة';
+  }
+
+  @override
+  String get noActivityInPreviousPeriod => 'لا يوجد نشاط في الفترة السابقة';
+
+  @override
+  String get failedToLoadTransactions => 'فشل تحميل المعاملات';
+
+  @override
+  String get pullDownToRetry => 'اسحب للأسفل للمحاولة مرة أخرى.';
+
+  @override
+  String get noActivityForThisPeriod => 'لا يوجد نشاط لهذه الفترة';
+
+  @override
+  String get recordSaleOrExpense =>
+      'سجّل عملية بيع أو مصروف لترى\nتقرير الأرباح والخسائر ينبض بالحياة.';
+
+  @override
+  String get addTransaction => 'إضافة معاملة';
+
+  @override
+  String get openingCashHelpText => 'كم كان لديك من نقد قبل استخدام مساري؟';
+
+  @override
+  String get tapToSetStartingCash => 'انقر لتعيين رصيدك الافتتاحي';
+
+  @override
+  String get openingCashDialogDesc =>
+      'أدخل المبلغ النقدي الذي كان لديك قبل بدء تتبع المعاملات في مساري.';
+
+  @override
+  String get lowCashAlertBody =>
+      'رصيدك الحالي منخفض جداً. راجع المصروفات القادمة لتجنب رصيد سالب.';
+
+  @override
+  String forecastPositive(String currency, String amount) {
+    return 'بناءً على أنماط معاملاتك الأخيرة، يجب أن تصل إلى $currency $amount بحلول نهاية الشهر.';
+  }
+
+  @override
+  String forecastNegative(String currency, String amount) {
+    return 'بناءً على إنفاقك الأخير، قد ينخفض رصيدك إلى $currency $amount بنهاية الشهر. فكّر في تقليل المصروفات.';
+  }
+
+  @override
+  String get vsLastMonthLabel => 'مقارنة بالشهر الماضي';
+
+  @override
+  String get dueToday => 'مستحق اليوم';
+
+  @override
+  String get dueTomorrow => 'مستحق غداً';
+
+  @override
+  String dueInDays(int days) {
+    return 'مستحق خلال $days أيام';
+  }
+
+  @override
+  String get addLastMonthTrend => 'أضف بيانات الشهر الماضي لرؤية الاتجاه';
+
+  @override
+  String get shareReport => 'مشاركة التقرير';
+
+  @override
+  String get pnlStatement => 'بيان الأرباح والخسائر';
+
+  @override
+  String get totalRevenue => 'إجمالي الإيرادات';
+
+  @override
+  String get salesRevenue => 'إيرادات المبيعات';
+
+  @override
+  String get cashFlowStatement => 'بيان التدفق النقدي';
+
+  @override
+  String get totalInflow => 'إجمالي التدفقات الواردة';
+
+  @override
+  String get totalOutflow => 'إجمالي التدفقات الصادرة';
+
+  @override
+  String get netCashFlow => 'صافي التدفق النقدي';
+
+  @override
+  String get cashInflows => 'التدفقات النقدية الواردة';
+
+  @override
+  String get cashOutflows => 'التدفقات النقدية الصادرة';
+
+  @override
+  String get openingBalance => 'الرصيد الافتتاحي';
+
+  @override
+  String get closingBalance => 'الرصيد الختامي';
+
+  @override
+  String get totalCashInflow => 'إجمالي التدفق النقدي الوارد';
+
+  @override
+  String get totalCashOutflow => 'إجمالي التدفق النقدي الصادر';
+
+  @override
+  String get monthlyFinancialReport => 'التقرير المالي الشهري';
+
+  @override
+  String get profitAndLoss => 'الأرباح والخسائر';
+
+  @override
+  String get cashInflowLabel => 'تدفق نقدي وارد';
+
+  @override
+  String get cashOutflowLabel => 'تدفق نقدي صادر';
+
+  @override
+  String get salesOverview => 'نظرة عامة على المبيعات';
+
+  @override
+  String get totalOrders => 'إجمالي الطلبات';
+
+  @override
+  String get totalSalesValue => 'إجمالي قيمة المبيعات';
+
+  @override
+  String get inventorySnapshot => 'لقطة المخزون';
+
+  @override
+  String get totalInventoryValue => 'إجمالي قيمة المخزون';
+
+  @override
+  String get netEquity => 'صافي حقوق الملكية';
+
+  @override
+  String get noDataForPeriod => 'لا توجد بيانات لهذه الفترة';
+
+  @override
+  String amountWithCurrency(String currency) {
+    return 'المبلغ ($currency)';
+  }
+
+  @override
+  String get assetsSection => 'الأصول (ما تملكه)';
+
+  @override
+  String get liabilitiesSection => 'الالتزامات (ما عليك)';
+
+  @override
+  String get unpaidInvoices => 'ذمم مدينة أخرى';
+
+  @override
+  String get receivables => 'ذمم مدينة تجارية';
+
+  @override
+  String get lowStock => 'مخزون منخفض';
+
+  @override
+  String asOfDate(String date) {
+    return 'كما في $date';
+  }
+
+  @override
+  String yearPeriod(int year) {
+    return 'سنة $year';
+  }
+
+  @override
+  String get shareSummary => 'مشاركة الملخص';
+
+  @override
+  String editField(String field) {
+    return 'تعديل $field';
+  }
+
+  @override
+  String currentValueLabel(String currency, String value) {
+    return 'القيمة الحالية: $currency $value';
+  }
+
+  @override
+  String get enterAnAmount => 'أدخل مبلغاً';
+
+  @override
+  String get enterAValidNumber => 'أدخل رقماً صحيحاً';
+
+  @override
+  String get amountCannotBeNegative => 'المبلغ لا يمكن أن يكون سالباً';
+
+  @override
+  String get aiAnalysisComingSoon => 'تحليل الذكاء الاصطناعي — قريباً!';
+
+  @override
+  String get bsInsightEmpty =>
+      'ابدأ بإضافة أرصدة البنك والنقد والالتزامات للحصول على لقطة لوضعك المالي.';
+
+  @override
+  String bsInsightHighDebt(String ratio) {
+    return 'نسبة الدين إلى الأصول $ratio%، وهي مرتفعة. فكر في إعطاء الأولوية لسداد الديون لتحسين صحتك المالية.';
+  }
+
+  @override
+  String bsInsightModerateDebt(String ratio) {
+    return 'نسبة الدين إلى الأصول $ratio%. هذا معتدل — فكر في تقليل الالتزامات لبناء مركز ملكية أقوى.';
+  }
+
+  @override
+  String get bsInsightCashExceedsLoan =>
+      'رصيدك النقدي يتجاوز رصيد القرض. فكر في سداد القرض لتقليل تكاليف الفائدة.';
+
+  @override
+  String bsInsightPositiveEquity(String amount) {
+    return 'صافي حقوق الملكية إيجابي عند $amount. واصل مراقبة ميزانيتك للحفاظ على وضع صحي.';
+  }
+
+  @override
+  String get bsInsightNegativeEquity =>
+      'التزاماتك تتجاوز أصولك. ركز على زيادة الإيرادات أو تقليل الديون لتحسين وضع حقوق الملكية.';
+
+  @override
+  String get operatingActivities => 'الأنشطة التشغيلية';
+
+  @override
+  String get investingActivities => 'الأنشطة الاستثمارية';
+
+  @override
+  String get financingActivities => 'الأنشطة التمويلية';
+
+  @override
+  String get netOperatingCashFlow => 'صافي التدفق النقدي التشغيلي';
+
+  @override
+  String get netInvestingCashFlow => 'صافي التدفق النقدي الاستثماري';
+
+  @override
+  String get netFinancingCashFlow => 'صافي التدفق النقدي التمويلي';
+
+  @override
+  String get gaapCashFlowNote =>
+      'تم تصنيف التدفقات النقدية حسب الأنشطة التشغيلية / الاستثمارية / التمويلية.';
+
+  @override
+  String get openingCapital => 'رأس المال الافتتاحي';
+
+  @override
+  String get retainedEarnings => 'الأرباح المحتجزة';
+
+  @override
+  String get openingCapitalHint => 'رأس المال المستثمر في بداية النشاط';
+
+  @override
+  String get autoCalculated => 'محسوب تلقائياً';
+
+  @override
+  String get reconAdjustment => 'تسوية';
+
+  @override
+  String get capitalAutoHint => 'اضغط لتعيين رأس المال المستثمر يدوياً';
+
+  @override
+  String get currentSnapshot => 'حالي';
+
+  @override
+  String get currentSnapshotFootnote =>
+      'العناصر المعلّمة بـ (حالي) تعكس القيم الحالية وليس التاريخ المحدد.';
+
+  @override
+  String get catLoanReceived => 'قرض مستلم';
+
+  @override
+  String get catLoanRepayment => 'سداد قرض';
+
+  @override
+  String get catEquityInjection => 'ضخ رأس مال';
+
+  @override
+  String get catOwnerWithdrawal => 'سحب المالك';
 }

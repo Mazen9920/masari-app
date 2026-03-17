@@ -260,6 +260,18 @@ abstract class AppLocalizations {
   /// **'Assets = Liabilities + Equity  ✓'**
   String get accountingEquationBalanced;
 
+  /// No description provided for @accountingEquationUnbalanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Assets ≠ Liabilities + Equity  ✗'**
+  String get accountingEquationUnbalanced;
+
+  /// No description provided for @currentPeriodNetIncome.
+  ///
+  /// In en, this message translates to:
+  /// **'Current Period Net Income'**
+  String get currentPeriodNetIncome;
+
   /// No description provided for @assets.
   ///
   /// In en, this message translates to:
@@ -293,13 +305,13 @@ abstract class AppLocalizations {
   /// No description provided for @bankAccounts.
   ///
   /// In en, this message translates to:
-  /// **'Bank Accounts'**
+  /// **'Cash & Bank'**
   String get bankAccounts;
 
   /// No description provided for @cashOnHand.
   ///
   /// In en, this message translates to:
-  /// **'Cash on Hand'**
+  /// **'Cash Adjustment'**
   String get cashOnHand;
 
   /// No description provided for @inventory.
@@ -317,7 +329,7 @@ abstract class AppLocalizations {
   /// No description provided for @salesReceivables.
   ///
   /// In en, this message translates to:
-  /// **'Sales Receivables'**
+  /// **'Accounts Receivable'**
   String get salesReceivables;
 
   /// No description provided for @supplierPrepayments.
@@ -1249,6 +1261,540 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Create financial reports'**
   String get createFinancialReports;
+
+  /// No description provided for @plYouEarned.
+  ///
+  /// In en, this message translates to:
+  /// **'You earned {currency} {amount}!'**
+  String plYouEarned(String currency, String amount);
+
+  /// No description provided for @plProfitMarginBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your profit margin is {margin}%. Keep tracking expenses to maintain momentum.'**
+  String plProfitMarginBody(String margin);
+
+  /// No description provided for @plBreakingEvenBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your income exactly covers your expenses. Look for ways to increase revenue or reduce costs.'**
+  String get plBreakingEvenBody;
+
+  /// No description provided for @plYouLost.
+  ///
+  /// In en, this message translates to:
+  /// **'You lost {currency} {amount}'**
+  String plYouLost(String currency, String amount);
+
+  /// No description provided for @plLossBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your expenses exceeded your income this period. Review your spending to find areas to cut back.'**
+  String get plLossBody;
+
+  /// No description provided for @plUpVsPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'↑ {pct}% vs previous period'**
+  String plUpVsPrevious(String pct);
+
+  /// No description provided for @plDownVsPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'↓ {pct}% vs previous period'**
+  String plDownVsPrevious(String pct);
+
+  /// No description provided for @noActivityInPreviousPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'No activity in previous period'**
+  String get noActivityInPreviousPeriod;
+
+  /// No description provided for @failedToLoadTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load transactions'**
+  String get failedToLoadTransactions;
+
+  /// No description provided for @pullDownToRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull down to retry.'**
+  String get pullDownToRetry;
+
+  /// No description provided for @noActivityForThisPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'No activity for this period'**
+  String get noActivityForThisPeriod;
+
+  /// No description provided for @recordSaleOrExpense.
+  ///
+  /// In en, this message translates to:
+  /// **'Record a sale or expense to see your\nprofit & loss report come to life.'**
+  String get recordSaleOrExpense;
+
+  /// No description provided for @addTransaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Transaction'**
+  String get addTransaction;
+
+  /// No description provided for @openingCashHelpText.
+  ///
+  /// In en, this message translates to:
+  /// **'How much cash did you start with before using Masari?'**
+  String get openingCashHelpText;
+
+  /// No description provided for @tapToSetStartingCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to set your starting cash'**
+  String get tapToSetStartingCash;
+
+  /// No description provided for @openingCashDialogDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the cash you had before you started tracking transactions in Masari.'**
+  String get openingCashDialogDesc;
+
+  /// No description provided for @lowCashAlertBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your current balance is critically low. Consider reviewing upcoming expenses to avoid a negative balance.'**
+  String get lowCashAlertBody;
+
+  /// No description provided for @forecastPositive.
+  ///
+  /// In en, this message translates to:
+  /// **'Based on your recent transaction patterns, you should reach a healthy {currency} {amount} by the end of the month.'**
+  String forecastPositive(String currency, String amount);
+
+  /// No description provided for @forecastNegative.
+  ///
+  /// In en, this message translates to:
+  /// **'Based on your recent spending, your balance may dip to {currency} {amount} by month-end. Consider cutting back on expenses.'**
+  String forecastNegative(String currency, String amount);
+
+  /// No description provided for @vsLastMonthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'vs last month'**
+  String get vsLastMonthLabel;
+
+  /// No description provided for @dueToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Due today'**
+  String get dueToday;
+
+  /// No description provided for @dueTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Due tomorrow'**
+  String get dueTomorrow;
+
+  /// No description provided for @dueInDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Due in {days} days'**
+  String dueInDays(int days);
+
+  /// No description provided for @addLastMonthTrend.
+  ///
+  /// In en, this message translates to:
+  /// **'Add last month\'s data to see trend'**
+  String get addLastMonthTrend;
+
+  /// No description provided for @shareReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Share Report'**
+  String get shareReport;
+
+  /// No description provided for @pnlStatement.
+  ///
+  /// In en, this message translates to:
+  /// **'Profit & Loss Statement'**
+  String get pnlStatement;
+
+  /// No description provided for @totalRevenue.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Revenue'**
+  String get totalRevenue;
+
+  /// No description provided for @salesRevenue.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales Revenue'**
+  String get salesRevenue;
+
+  /// No description provided for @cashFlowStatement.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash Flow Statement'**
+  String get cashFlowStatement;
+
+  /// No description provided for @totalInflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Inflow'**
+  String get totalInflow;
+
+  /// No description provided for @totalOutflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Outflow'**
+  String get totalOutflow;
+
+  /// No description provided for @netCashFlow.
+  ///
+  /// In en, this message translates to:
+  /// **'Net Cash Flow'**
+  String get netCashFlow;
+
+  /// No description provided for @cashInflows.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash Inflows'**
+  String get cashInflows;
+
+  /// No description provided for @cashOutflows.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash Outflows'**
+  String get cashOutflows;
+
+  /// No description provided for @openingBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening Balance'**
+  String get openingBalance;
+
+  /// No description provided for @closingBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Closing Balance'**
+  String get closingBalance;
+
+  /// No description provided for @totalCashInflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Cash Inflow'**
+  String get totalCashInflow;
+
+  /// No description provided for @totalCashOutflow.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Cash Outflow'**
+  String get totalCashOutflow;
+
+  /// No description provided for @monthlyFinancialReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly Financial Report'**
+  String get monthlyFinancialReport;
+
+  /// No description provided for @profitAndLoss.
+  ///
+  /// In en, this message translates to:
+  /// **'Profit & Loss'**
+  String get profitAndLoss;
+
+  /// No description provided for @cashInflowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash Inflow'**
+  String get cashInflowLabel;
+
+  /// No description provided for @cashOutflowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash Outflow'**
+  String get cashOutflowLabel;
+
+  /// No description provided for @salesOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales Overview'**
+  String get salesOverview;
+
+  /// No description provided for @totalOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Orders'**
+  String get totalOrders;
+
+  /// No description provided for @totalSalesValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Sales Value'**
+  String get totalSalesValue;
+
+  /// No description provided for @inventorySnapshot.
+  ///
+  /// In en, this message translates to:
+  /// **'Inventory Snapshot'**
+  String get inventorySnapshot;
+
+  /// No description provided for @totalInventoryValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Inventory Value'**
+  String get totalInventoryValue;
+
+  /// No description provided for @netEquity.
+  ///
+  /// In en, this message translates to:
+  /// **'Net Equity'**
+  String get netEquity;
+
+  /// No description provided for @noDataForPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'No data for this period'**
+  String get noDataForPeriod;
+
+  /// No description provided for @amountWithCurrency.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount ({currency})'**
+  String amountWithCurrency(String currency);
+
+  /// No description provided for @assetsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Assets (What You Own)'**
+  String get assetsSection;
+
+  /// No description provided for @liabilitiesSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Liabilities (What You Owe)'**
+  String get liabilitiesSection;
+
+  /// No description provided for @unpaidInvoices.
+  ///
+  /// In en, this message translates to:
+  /// **'Other Receivables'**
+  String get unpaidInvoices;
+
+  /// No description provided for @receivables.
+  ///
+  /// In en, this message translates to:
+  /// **'Accounts Receivable'**
+  String get receivables;
+
+  /// No description provided for @lowStock.
+  ///
+  /// In en, this message translates to:
+  /// **'Low Stock'**
+  String get lowStock;
+
+  /// No description provided for @asOfDate.
+  ///
+  /// In en, this message translates to:
+  /// **'As of {date}'**
+  String asOfDate(String date);
+
+  /// No description provided for @yearPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Year {year}'**
+  String yearPeriod(int year);
+
+  /// No description provided for @shareSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Share Summary'**
+  String get shareSummary;
+
+  /// No description provided for @editField.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit {field}'**
+  String editField(String field);
+
+  /// No description provided for @currentValueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Current value: {currency} {value}'**
+  String currentValueLabel(String currency, String value);
+
+  /// No description provided for @enterAnAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an amount'**
+  String get enterAnAmount;
+
+  /// No description provided for @enterAValidNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid number'**
+  String get enterAValidNumber;
+
+  /// No description provided for @amountCannotBeNegative.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount cannot be negative'**
+  String get amountCannotBeNegative;
+
+  /// No description provided for @aiAnalysisComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'AI analysis — coming soon!'**
+  String get aiAnalysisComingSoon;
+
+  /// No description provided for @bsInsightEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Start by adding your cash & bank balances, cash adjustments, and liabilities to get a snapshot of your financial position.'**
+  String get bsInsightEmpty;
+
+  /// No description provided for @bsInsightHighDebt.
+  ///
+  /// In en, this message translates to:
+  /// **'Your debt-to-asset ratio is {ratio}%, which is high. Consider prioritizing debt repayment to improve your financial health.'**
+  String bsInsightHighDebt(String ratio);
+
+  /// No description provided for @bsInsightModerateDebt.
+  ///
+  /// In en, this message translates to:
+  /// **'Your debt-to-asset ratio is {ratio}%. This is moderate — consider reducing liabilities to build a stronger equity position.'**
+  String bsInsightModerateDebt(String ratio);
+
+  /// No description provided for @bsInsightCashExceedsLoan.
+  ///
+  /// In en, this message translates to:
+  /// **'Your cash adjustment exceeds your loan balance. Consider paying down the loan to reduce interest expenses.'**
+  String get bsInsightCashExceedsLoan;
+
+  /// No description provided for @bsInsightPositiveEquity.
+  ///
+  /// In en, this message translates to:
+  /// **'Your net equity is positive at {amount}. Keep monitoring your balance sheet to maintain a healthy position.'**
+  String bsInsightPositiveEquity(String amount);
+
+  /// No description provided for @bsInsightNegativeEquity.
+  ///
+  /// In en, this message translates to:
+  /// **'Your liabilities exceed your assets. Focus on increasing revenue or reducing debt to improve your equity position.'**
+  String get bsInsightNegativeEquity;
+
+  /// No description provided for @operatingActivities.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating Activities'**
+  String get operatingActivities;
+
+  /// No description provided for @investingActivities.
+  ///
+  /// In en, this message translates to:
+  /// **'Investing Activities'**
+  String get investingActivities;
+
+  /// No description provided for @financingActivities.
+  ///
+  /// In en, this message translates to:
+  /// **'Financing Activities'**
+  String get financingActivities;
+
+  /// No description provided for @netOperatingCashFlow.
+  ///
+  /// In en, this message translates to:
+  /// **'Net Operating Cash Flow'**
+  String get netOperatingCashFlow;
+
+  /// No description provided for @netInvestingCashFlow.
+  ///
+  /// In en, this message translates to:
+  /// **'Net Investing Cash Flow'**
+  String get netInvestingCashFlow;
+
+  /// No description provided for @netFinancingCashFlow.
+  ///
+  /// In en, this message translates to:
+  /// **'Net Financing Cash Flow'**
+  String get netFinancingCashFlow;
+
+  /// No description provided for @gaapCashFlowNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash flows classified per operating / investing / financing activities.'**
+  String get gaapCashFlowNote;
+
+  /// No description provided for @openingCapital.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening Capital'**
+  String get openingCapital;
+
+  /// No description provided for @retainedEarnings.
+  ///
+  /// In en, this message translates to:
+  /// **'Retained Earnings'**
+  String get retainedEarnings;
+
+  /// No description provided for @openingCapitalHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Capital invested into the business at the start'**
+  String get openingCapitalHint;
+
+  /// No description provided for @autoCalculated.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-calculated'**
+  String get autoCalculated;
+
+  /// No description provided for @reconAdjustment.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconciliation Adjustment'**
+  String get reconAdjustment;
+
+  /// No description provided for @capitalAutoHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to override with your actual invested capital'**
+  String get capitalAutoHint;
+
+  /// No description provided for @currentSnapshot.
+  ///
+  /// In en, this message translates to:
+  /// **'current'**
+  String get currentSnapshot;
+
+  /// No description provided for @currentSnapshotFootnote.
+  ///
+  /// In en, this message translates to:
+  /// **'Items marked (current) reflect present-day values, not the historical date selected.'**
+  String get currentSnapshotFootnote;
+
+  /// No description provided for @catLoanReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Loan Received'**
+  String get catLoanReceived;
+
+  /// No description provided for @catLoanRepayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Loan Repayment'**
+  String get catLoanRepayment;
+
+  /// No description provided for @catEquityInjection.
+  ///
+  /// In en, this message translates to:
+  /// **'Capital Injection'**
+  String get catEquityInjection;
+
+  /// No description provided for @catOwnerWithdrawal.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner Withdrawal'**
+  String get catOwnerWithdrawal;
 }
 
 class _AppLocalizationsDelegate

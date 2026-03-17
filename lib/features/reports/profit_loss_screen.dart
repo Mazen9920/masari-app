@@ -15,8 +15,7 @@ import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/export_providers.dart';
 import '../../l10n/app_localizations.dart';
-import '../dashboard/providers/dashboard_state_provider.dart';
-import '../dashboard/widgets/custom_date_range_picker.dart';
+import 'widgets/financial_period_sheet.dart';
 import 'widgets/report_card.dart';
 import 'widgets/chart_toggle.dart';
 
@@ -29,8 +28,14 @@ class ProfitLossScreen extends ConsumerStatefulWidget {
 
 class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
   // State
-  DashboardPeriod _selectedPeriod = DashboardPeriod.monthToDate;
-  DateTimeRange? _customRange;
+  FinancialPeriodResult _period = FinancialPeriodResult(
+    type: FinancialPeriodType.monthEnd,
+    range: DateTimeRange(
+      start: DateTime(DateTime.now().year, DateTime.now().month, 1),
+      end: DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day, 23, 59, 59),
+    ),
+    label: DateFormat('MMMM yyyy').format(DateTime.now()),
+  );
   bool _showTrend = false;
 
   @override
@@ -42,64 +47,12 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     });
   }
 
-  /// Returns the date range for the selected period.
-  DateTimeRange _getDateRange() {
-    if (_customRange != null && _selectedPeriod == DashboardPeriod.custom) {
-      return _customRange!;
-    }
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day, 23, 59, 59);
-    switch (_selectedPeriod) {
-      case DashboardPeriod.today:
-        return DateTimeRange(start: DateTime(now.year, now.month, now.day), end: today);
-      case DashboardPeriod.yesterday:
-        final y = now.subtract(const Duration(days: 1));
-        return DateTimeRange(start: DateTime(y.year, y.month, y.day), end: DateTime(y.year, y.month, y.day, 23, 59, 59));
-      case DashboardPeriod.last7Days:
-        return DateTimeRange(start: now.subtract(const Duration(days: 7)), end: today);
-      case DashboardPeriod.last30Days:
-        return DateTimeRange(start: now.subtract(const Duration(days: 30)), end: today);
-      case DashboardPeriod.last90Days:
-        return DateTimeRange(start: now.subtract(const Duration(days: 90)), end: today);
-      case DashboardPeriod.last365Days:
-        return DateTimeRange(start: now.subtract(const Duration(days: 365)), end: today);
-      case DashboardPeriod.lastMonth:
-        final lastMonth = DateTime(now.year, now.month - 1);
-        return DateTimeRange(start: lastMonth, end: DateTime(now.year, now.month, 0, 23, 59, 59));
-      case DashboardPeriod.last12Months:
-        return DateTimeRange(start: DateTime(now.year - 1, now.month, now.day), end: today);
-      case DashboardPeriod.lastYear:
-        return DateTimeRange(start: DateTime(now.year - 1, 1, 1), end: DateTime(now.year - 1, 12, 31, 23, 59, 59));
-      case DashboardPeriod.weekToDate:
-        final weekday = now.weekday;
-        return DateTimeRange(start: now.subtract(Duration(days: weekday - 1)), end: today);
-      case DashboardPeriod.monthToDate:
-        return DateTimeRange(start: DateTime(now.year, now.month, 1), end: today);
-      case DashboardPeriod.quarterToDate:
-        final qStart = DateTime(now.year, ((now.month - 1) ~/ 3) * 3 + 1, 1);
-        return DateTimeRange(start: qStart, end: today);
-      case DashboardPeriod.yearToDate:
-        return DateTimeRange(start: DateTime(now.year, 1, 1), end: today);
-      case DashboardPeriod.custom:
-        return DateTimeRange(start: DateTime(now.year, now.month, 1), end: today);
-    }
-  }
+  DateTimeRange _getDateRange() => _period.range;
 
   Future<void> _openDatePicker() async {
-    final result = await showDateRangeSheet(
-      context,
-      currentPeriod: _selectedPeriod,
-    );
+    final result = await showFinancialPeriodSheet(context, current: _period);
     if (result == null) return;
-    setState(() {
-      if (result.period != null) {
-        _selectedPeriod = result.period!;
-        _customRange = null;
-      } else if (result.customRange != null) {
-        _selectedPeriod = DashboardPeriod.custom;
-        _customRange = result.customRange;
-      }
-    });
+    setState(() => _period = result);
   }
 
   @override
@@ -118,7 +71,13 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     final dateRange = _getDateRange();
 
     // Categories excluded from P&L (CF investing activities / BS only)
-    const plExcludedCats = {'cat_investments'};
+    const plExcludedCats = {
+      'cat_investments',
+      'cat_loan_received',
+      'cat_loan_repayment',
+      'cat_equity_injection',
+      'cat_owner_withdrawal',
+    };
 
     // Filter transactions (exclude P&L-excluded items like supplier payments)
     final filteredTransactions = transactions.where((tx) {
@@ -160,8 +119,8 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
         salesRevenue += tx.amount;
         revenueByCategory[tx.categoryId] = (revenueByCategory[tx.categoryId] ?? 0) + tx.amount;
       } else if (tx.categoryId == 'cat_cogs') {
-        cogs += tx.amount;
-        cogsByCategory[tx.categoryId] = (cogsByCategory[tx.categoryId] ?? 0) + tx.amount;
+        cogs += amt;
+        cogsByCategory[tx.categoryId] = (cogsByCategory[tx.categoryId] ?? 0) + amt;
       } else if (tx.isIncome) {
         otherIncome += amt;
         revenueByCategory[tx.categoryId] = (revenueByCategory[tx.categoryId] ?? 0) + amt;
@@ -196,7 +155,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
       if (entries.length > 5) {
         final otherTotal = entries.skip(5).fold(0.0, (sum, e) => sum + e.value);
         items.add(_BreakdownItem(
-          label: 'Other',
+          label: l10n.other,
           amount: otherTotal,
           color: const Color(0xFF6B7280),
           percentage: total > 0 ? otherTotal / total : 0,
@@ -343,9 +302,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
                 size: 15, color: AppColors.textSecondary),
             const SizedBox(width: 8),
             Text(
-              _selectedPeriod == DashboardPeriod.custom && _customRange != null
-                  ? '${DateFormat('MMM d').format(_customRange!.start)} – ${DateFormat('MMM d').format(_customRange!.end)}'
-                  : _selectedPeriod.shortLabel,
+              _period.label,
               style: AppTypography.labelMedium.copyWith(color: AppColors.textPrimary),
             ),
             const SizedBox(width: 6),
@@ -370,6 +327,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
   }
 
   Widget _buildErrorState(Object error) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 60),
       child: Column(
@@ -384,12 +342,12 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Failed to load transactions',
+            l10n.failedToLoadTransactions,
             style: AppTypography.labelLarge.copyWith(color: AppColors.textPrimary),
           ),
           const SizedBox(height: 6),
           Text(
-            'Pull down to retry.',
+            l10n.pullDownToRetry,
             textAlign: TextAlign.center,
             style: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary, height: 1.5),
           ),
@@ -478,7 +436,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
         ),
         const SizedBox(height: 14),
         Text(
-          'No activity for this period',
+          l10n.noActivityForThisPeriod,
           style: AppTypography.labelLarge.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -486,7 +444,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Record a sale or expense to see your\nprofit & loss report come to life.',
+          l10n.recordSaleOrExpense,
           textAlign: TextAlign.center,
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.textTertiary,
@@ -497,7 +455,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
         FilledButton.icon(
           onPressed: () => context.push(AppRoutes.addTransaction),
           icon: const Icon(Icons.add_rounded, size: 18),
-          label: const Text('Add Transaction'),
+          label: Text(l10n.addTransaction),
           style: FilledButton.styleFrom(
             backgroundColor: const Color(0xFF7C3AED),
             foregroundColor: Colors.white,
@@ -546,20 +504,21 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
 
   Widget _buildInsightBanner(double revenue, double expenses, double netProfit, String currency, NumberFormat fmt, {double? prevNetProfit}) {
     final isProfit = netProfit >= 0;
+    final l10n = AppLocalizations.of(context)!;
 
     String headline;
     String body;
 
     if (isProfit && netProfit > 0) {
-      final margin = revenue > 0 ? (netProfit / revenue * 100).toStringAsFixed(0) : '0';
-      headline = 'You earned $currency ${fmt.format(netProfit)}!';
-      body = 'Your profit margin is $margin%. ${expenses > 0 ? 'Keep tracking expenses to maintain momentum.' : ''}';
+      final margin = revenue > 0 ? (netProfit / revenue * 100).toStringAsFixed(1) : '0';
+      headline = l10n.plYouEarned(currency, fmt.format(netProfit));
+      body = l10n.plProfitMarginBody(margin);
     } else if (netProfit == 0) {
-      headline = 'Breaking even';
-      body = 'Your income exactly covers your expenses. Look for ways to increase revenue or reduce costs.';
+      headline = l10n.breakingEven;
+      body = l10n.plBreakingEvenBody;
     } else {
-      headline = 'You lost $currency ${fmt.format(netProfit.abs())}';
-      body = 'Your expenses exceeded your income this period. Review your spending to find areas to cut back.';
+      headline = l10n.plYouLost(currency, fmt.format(netProfit.abs()));
+      body = l10n.plLossBody;
     }
 
     // Period-over-period comparison
@@ -568,12 +527,12 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
       final change = netProfit - prevNetProfit;
       final pct = (change / prevNetProfit.abs() * 100).toStringAsFixed(0);
       if (change > 0) {
-        comparison = '↑ $pct% vs previous period';
+        comparison = l10n.plUpVsPrevious(pct);
       } else if (change < 0) {
-        comparison = '↓ ${pct.replaceFirst('-', '')}% vs previous period';
+        comparison = l10n.plDownVsPrevious(pct.replaceFirst('-', ''));
       }
     } else if (prevNetProfit != null && prevNetProfit == 0 && netProfit != 0) {
-      comparison = 'No activity in previous period';
+      comparison = l10n.noActivityInPreviousPeriod;
     }
 
     return Container(
@@ -687,7 +646,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
             children: [
               Expanded(
                 child: _buildRatioCard(
-                  label: 'Gross Margin',
+                  label: l10n.grossMargin,
                   value: grossMargin,
                   accentColor: AppColors.chartBlue,
                 ),
@@ -695,7 +654,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: _buildRatioCard(
-                  label: 'Net Margin',
+                  label: l10n.netMargin,
                   value: netMargin,
                   accentColor: AppColors.accentOrange,
                 ),
@@ -826,7 +785,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                _showTrend ? '6-Month Trend' : 'Income Statement',
+                _showTrend ? AppLocalizations.of(context)!.sixMonthTrend : AppLocalizations.of(context)!.incomeStatement,
                 style: AppTypography.sectionTitle,
               ),
               ChartToggle(
@@ -871,7 +830,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
           icon: Icons.inventory_2_rounded,
           iconColor: AppColors.chartOrange,
           iconBg: AppColors.chartOrangeLight,
-          label: l10n.costOfSales,
+          label: l10n.costOfGoodsSold,
           amount: -cogsAmt,
           barColor: AppColors.chartOrange,
           barWidthFactor: (cogsAmt / maxVal).clamp(0.0, 1.0),
@@ -1203,7 +1162,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Net Profit',
+                  AppLocalizations.of(context)!.netProfit,
                   style: AppTypography.badge.copyWith(
                     fontSize: 11,
                     color: isPositive ? AppColors.badgeTextPositive : AppColors.badgeTextNegative,
@@ -1238,6 +1197,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
         onPressed: () async {
           HapticFeedback.lightImpact();
           final origin = ShareService.originFrom(context);
+          final l10n = AppLocalizations.of(context)!;
           final reportSvc = ref.read(reportServiceProvider);
           final shareSvc = ref.read(shareServiceProvider);
           final settings = ref.read(appSettingsProvider);
@@ -1245,11 +1205,11 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
           final range = _getDateRange();
           try {
             final bytes = await reportSvc.generatePnlPdf(
+              l10n: l10n,
               transactions: txs,
               currency: settings.currency,
               periodStart: range.start,
-              isMonthly: _selectedPeriod == DashboardPeriod.monthToDate ||
-                  _selectedPeriod == DashboardPeriod.lastMonth,
+              isMonthly: _period.type == FinancialPeriodType.monthEnd,
             );
             final label = '${range.start.day}_${range.start.month}_${range.start.year}'
                 '_to_${range.end.day}_${range.end.month}_${range.end.year}';
@@ -1259,8 +1219,8 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
             debugPrint('P&L share error: $e');
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Something went wrong. Please try again.'),
+                SnackBar(
+                  content: Text(AppLocalizations.of(context)!.somethingWentWrong),
                   backgroundColor: Colors.red,
                 ),
               );
@@ -1268,7 +1228,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
           }
         },
         icon: const Icon(Icons.ios_share_rounded, size: 16),
-        label: const Text('Share Report', style: TextStyle(fontSize: 13)),
+        label: Text(AppLocalizations.of(context)!.shareReport, style: const TextStyle(fontSize: 13)),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primaryNavy,
           foregroundColor: Colors.white,

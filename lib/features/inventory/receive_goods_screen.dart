@@ -34,6 +34,8 @@ class ReceiveGoodsScreen extends ConsumerStatefulWidget {
 }
 
 class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
+  static const List<String> _variantNameSeparators = [' \u2014 ', ' \u2013 ', ' - '];
+
   final _notesCtrl = TextEditingController();
   DateTime _receiptDate = DateTime.now();
   String? _selectedSupplierId;
@@ -41,6 +43,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
   String? _selectedPurchaseId;
   final List<_ReceiptLine> _items = [];
   bool _syncToInventory = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -243,7 +246,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: AppColors.surfaceSubtle,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                   color: AppColors.borderLight.withValues(alpha: 0.7)),
@@ -280,7 +283,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: AppColors.surfaceSubtle,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                     color: AppColors.borderLight.withValues(alpha: 0.7)),
@@ -420,8 +423,8 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                 trailing: _selectedPurchaseId == p.id
                     ? const Icon(Icons.check_rounded, color: AppColors.success)
                     : null,
-                onTap: () {
-                  _populateFromPurchase(p);
+                onTap: () async {
+                  await _populateFromPurchase(p);
                   Navigator.pop(ctx);
                 },
               ),
@@ -432,7 +435,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
   }
 
   /// Populate receipt lines from a purchase order's items.
-  void _populateFromPurchase(Purchase purchase) {
+  Future<void> _populateFromPurchase(Purchase purchase) async {
     // Dispose old controllers
     for (final li in _items) {
       li.nameCtrl.dispose();
@@ -442,7 +445,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
     }
 
     // Load all products (async) so we have full list for matching
-    ref.read(inventoryProvider.notifier).loadAll();
+    await ref.read(inventoryProvider.notifier).loadAll();
     final products = ref.read(inventoryProvider).value ?? [];
 
     setState(() {
@@ -459,7 +462,8 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
           productId: match?.$1.id,
           nameCtrl: TextEditingController(text: pi.name),
           orderedCtrl: TextEditingController(text: remaining.toString()),
-          receivedCtrl: TextEditingController(text: remaining.toString()),
+          receivedCtrl:
+              TextEditingController(text: remaining.round().toString()),
           costCtrl: TextEditingController(text: pi.unitPrice.toStringAsFixed(2)),
         )..variantId = match?.$2);
       }
@@ -483,7 +487,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
     // 2. Try splitting on " — " (em dash) or " – " (en dash) or " - " (hyphen)
     //    Purchase items for multi-variant products are stored as "ProductName — VariantDisplayName"
-    for (final sep in [' \u2014 ', ' \u2013 ', ' - ']) {
+    for (final sep in _variantNameSeparators) {
       final idx = nameLower.indexOf(sep);
       if (idx > 0) {
         final baseName = nameLower.substring(0, idx).trim();
@@ -529,7 +533,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
         padding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: AppColors.surfaceSubtle,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
               color: AppColors.borderLight.withValues(alpha: 0.7)),
@@ -654,8 +658,8 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
               child: _compactField(
                 controller: li.receivedCtrl,
                 label: 'Received',
-                keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -796,11 +800,14 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
         ),
       ),
       child: GestureDetector(
-        onTap: _save,
-        child: Container(
+        onTap: _isSaving ? null : _save,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: AppColors.accentOrange,
+            color: _isSaving
+                ? AppColors.accentOrange.withValues(alpha: 0.6)
+                : AppColors.accentOrange,
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
@@ -810,15 +817,37 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
               ),
             ],
           ),
-          child: Text(
-            'Confirm Receipt · $currency ${fmt.format(_totalCost)}',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-            ),
-          ),
+          child: _isSaving
+              ? const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                    SizedBox(width: 10),
+                    Text(
+                      'Saving...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                )
+              : Text(
+                  'Confirm Receipt · $currency ${fmt.format(_totalCost)}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
+                ),
         ),
       ),
     );
@@ -827,6 +856,17 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
   // ── Save ─────────────────────────────────────────────────
 
   Future<void> _save() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+
+    try {
+      await _doSave();
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _doSave() async {
     if (_selectedSupplierId == null) {
       _showError('Please select a supplier');
       return;
@@ -835,7 +875,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
     bool hasValid = false;
     for (final li in _items) {
       if (li.nameCtrl.text.trim().isNotEmpty &&
-          (double.tryParse(li.receivedCtrl.text) ?? 0) > 0) {
+          (int.tryParse(li.receivedCtrl.text) ?? 0) > 0) {
         hasValid = true;
         break;
       }
@@ -849,10 +889,10 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
     // Validate received qty does not exceed ordered qty (when linked to a purchase)
     if (_selectedPurchaseId != null) {
       for (final li in _items) {
-        final received = double.tryParse(li.receivedCtrl.text) ?? 0;
+        final received = int.tryParse(li.receivedCtrl.text) ?? 0;
         final ordered = double.tryParse(li.orderedCtrl.text) ?? 0;
         if (received <= 0) continue;
-        if (ordered > 0 && received > ordered) {
+        if (ordered > 0 && received.toDouble() > ordered) {
           _showError(
             '${li.nameCtrl.text.trim()}: received qty ($received) exceeds ordered qty ($ordered)',
           );
@@ -868,15 +908,15 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
     for (final li in _items) {
       final name = li.nameCtrl.text.trim();
-      final received = double.tryParse(li.receivedCtrl.text) ?? 0;
+      final received = int.tryParse(li.receivedCtrl.text) ?? 0;
       if (name.isEmpty || received <= 0) continue;
 
       receiptItems.add(ReceiptItem(
         productId: li.productId,
         variantId: li.variantId,
         productName: name,
-        orderedQty: double.tryParse(li.orderedCtrl.text) ?? received,
-        receivedQty: received,
+        orderedQty: double.tryParse(li.orderedCtrl.text) ?? received.toDouble(),
+        receivedQty: received.toDouble(),
         unitCost: double.tryParse(li.costCtrl.text) ?? 0,
       ));
     }
@@ -896,7 +936,12 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
       createdAt: DateTime.now(),
     );
 
-    ref.read(goodsReceiptsProvider.notifier).addReceipt(receipt);
+    final receiptResult =
+        await ref.read(goodsReceiptsProvider.notifier).addReceipt(receipt);
+    if (!receiptResult.isSuccess) {
+      _showError(receiptResult.error ?? 'Failed to save goods receipt');
+      return;
+    }
 
     // Sync received quantities to inventory stock
     if (_syncToInventory) {
@@ -920,29 +965,39 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
         if (pid != null && item.receivedQty > 0) {
           // Resolve variant ID from the actual product if still missing
+          Product? matchedProduct;
           if (variantId == null || variantId.isEmpty) {
-            final prod = products.cast<dynamic>().firstWhere(
-              (p) => p.id == pid,
-              orElse: () => null,
-            );
-            if (prod != null) {
-              final product = prod as Product;
-              variantId = product.variants.isNotEmpty
-                  ? product.variants.first.id
+            matchedProduct = products
+                .whereType<Product>()
+                .where((p) => p.id == pid)
+                .firstOrNull;
+            if (matchedProduct != null) {
+              variantId = matchedProduct.variants.isNotEmpty
+                  ? matchedProduct.variants.first.id
                   : null;
             }
+          } else {
+            matchedProduct = products
+                .whereType<Product>()
+                .where((p) => p.id == pid)
+                .firstOrNull;
           }
 
+          // Skip cost layer creation for manufactured products
+          final skipCost = matchedProduct?.isManufactured ?? false;
+
           if (variantId != null) {
-            await ref.read(inventoryProvider.notifier).adjustStock(
+            final result = await ref.read(inventoryProvider.notifier).adjustStock(
                   pid,
                   variantId,
-                  item.receivedQty.toInt(),
+              item.receivedQty.round(),
                   'Restock \u2013 goods receipt',
                   unitCost: item.unitCost,
                   valuationMethod: ref.read(appSettingsProvider).valuationMethod,
                   supplierName: _selectedSupplierName,
+                  skipCostLayer: skipCost,
                 );
+            if (!result.isSuccess) syncErrors++;
           } else {
             syncErrors++;
           }
@@ -970,7 +1025,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
           final matched = receiptItems.where((ri) =>
               ri.productName.toLowerCase() == pi.name.toLowerCase());
           if (matched.isNotEmpty) {
-            final addedQty = matched.first.receivedQty.toInt();
+            final addedQty = matched.first.receivedQty.round();
             return pi.copyWith(receivedQty: pi.receivedQty + addedQty);
           }
           return pi;
@@ -990,10 +1045,10 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
     final priceAlerts = <String>[];
     for (final item in receiptItems) {
       if (item.unitCost <= 0 || item.productId == null) continue;
-      final product = allProducts.cast<Product?>().firstWhere(
-            (p) => p!.id == item.productId,
-            orElse: () => null,
-          );
+      final product = allProducts
+          .whereType<Product>()
+          .where((p) => p.id == item.productId)
+          .firstOrNull;
       if (product == null) continue;
       final variant = item.variantId != null
           ? product.variantById(item.variantId!)
@@ -1090,6 +1145,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
   }
 
   void _showError(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
       backgroundColor: AppColors.danger,
@@ -1130,7 +1186,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
         prefixIconConstraints:
             const BoxConstraints(minWidth: 44, minHeight: 0),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: AppColors.surfaceSubtle,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -1158,11 +1214,13 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
     required String label,
     String? prefix,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     ValueChanged<String>? onChanged,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       onChanged: onChanged,
       style: AppTypography.bodyMedium.copyWith(
         color: AppColors.textPrimary,
@@ -1181,7 +1239,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
           fontWeight: FontWeight.w600,
         ),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: AppColors.surfaceSubtle,
         isDense: true,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -1350,7 +1408,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
             prefixIconConstraints:
                 const BoxConstraints(minWidth: 44, minHeight: 0),
             filled: true,
-            fillColor: const Color(0xFFF8FAFC),
+            fillColor: AppColors.surfaceSubtle,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,

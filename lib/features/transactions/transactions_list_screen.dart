@@ -390,10 +390,10 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
 
-    // Hide COGS and shipping from the main list — they appear as
-    // expandable children under their revenue transaction.
+    // Hide sale-linked transactions from the list — they appear in the Sales tab.
+    // Also hide COGS and shipping (they appear as expandable children).
     final displayList = _filteredTransactions
-        .where((t) => t.categoryId != 'cat_cogs' && t.categoryId != 'cat_shipping')
+        .where((t) => t.saleId == null)
         .toList();
 
     for (final tx in displayList) {
@@ -2542,209 +2542,263 @@ class _SaleTileWithExpand extends StatelessWidget {
       cardColor = Colors.white;
     }
 
+    // Build subtitle parts: customer • items • time
+    final subtitleParts = <String>[];
+    if ((sale.shopifyOrderNumber != null || sale.orderNumber != null) &&
+        sale.customerName != null) {
+      subtitleParts.add(sale.customerName!);
+    }
+    final itemCount = sale.items.length;
+    subtitleParts.add('$itemCount ${itemCount == 1 ? 'item' : 'items'}');
+    subtitleParts.add(DateFormat('h:mm a').format(sale.date));
+
+    // Title text
+    final titleText = sale.displayOrderTitle;
+
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: borderColor, width: isSelected ? 2 : 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 8,
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
               offset: const Offset(0, 2),
             ),
           ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Checkbox / Icon
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: selectionMode
-                  ? SizedBox(
-                      key: const ValueKey('cb'),
-                      width: 48,
-                      height: 48,
-                      child: Center(
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          width: 26,
-                          height: 26,
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primaryNavy : Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.primaryNavy
-                                  : AppColors.borderLight,
-                              width: 2,
-                            ),
-                          ),
-                          child: isSelected
-                              ? const Icon(Icons.check_rounded,
-                                  size: 16, color: Colors.white)
-                              : null,
-                        ),
-                      ),
-                    )
-                  : Container(
-                      key: const ValueKey('ic'),
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: isCancelled
-                            ? AppColors.danger.withValues(alpha: 0.08)
-                            : const Color(0xFFECFDF5),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        isCancelled
-                            ? Icons.cancel_rounded
-                            : Icons.shopping_bag_rounded,
-                        size: 22,
-                        color: isCancelled
-                            ? AppColors.danger
-                            : const Color(0xFF10B981),
-                      ),
+            // Selection checkbox
+            if (selectionMode) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 2, right: 12),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.primaryNavy : Colors.white,
+                    borderRadius: BorderRadius.circular(7),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primaryNavy
+                          : AppColors.borderLight,
+                      width: 2,
                     ),
-            ),
-            const SizedBox(width: 14),
-            // Info
+                  ),
+                  child: isSelected
+                      ? const Icon(Icons.check_rounded,
+                          size: 15, color: Colors.white)
+                      : null,
+                ),
+              ),
+            ],
+            // Main content — vertical Shopify-style layout
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Row 1: Title + Amount + Chevron
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          titleText,
+                          style: AppTypography.labelLarge.copyWith(
+                            color: isCancelled
+                                ? AppColors.textTertiary
+                                : AppColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$currency ${fmt.format(sale.total)}',
+                        style: AppTypography.labelLarge.copyWith(
+                          color: isCancelled
+                              ? AppColors.textTertiary
+                              : AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15.5,
+                          decoration:
+                              isCancelled ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
+                      // Chevron next to amount
+                      if (hasChildren && !selectionMode) ...[
+                        const SizedBox(width: 2),
+                        GestureDetector(
+                          onTap: onToggleExpand,
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 2),
+                            child: AnimatedRotation(
+                              turns: isExpanded ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 200),
+                              child: Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 20,
+                                color: AppColors.textTertiary.withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  // Row 2: Subtitle — customer • items • time
                   Text(
-                    sale.shopifyOrderNumber != null
-                        ? 'Shopify #${sale.shopifyOrderNumber}'
-                        : sale.customerName ?? 'Walk-in Customer',
-                    style: AppTypography.labelLarge.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
+                    subtitleParts.join(' \u2022 '),
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      height: 1.3,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 10),
+                  // Row 3: Status badges
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (sale.isCompleted)
+                              _StatusBadge(
+                                label: 'Completed',
+                                variant: _BadgeVariant.success,
+                              )
+                            else ...[
+                              if (isCancelled)
+                                _StatusBadge(
+                                  label: 'Cancelled',
+                                  variant: _BadgeVariant.critical,
+                                )
+                              else ...[
+                                // Fulfillment badge
+                                _StatusBadge(
+                                  label: _fulfillmentLabel(sale.fulfillmentStatus),
+                                  variant: sale.fulfillmentStatus == FulfillmentStatus.fulfilled
+                                      ? _BadgeVariant.neutral
+                                      : sale.fulfillmentStatus == FulfillmentStatus.partial
+                                          ? _BadgeVariant.attention
+                                          : _BadgeVariant.info,
+                                ),
+                                // Payment badge
+                                _StatusBadge(
+                                  label: sale.paymentStatus == PaymentStatus.unpaid
+                                      ? 'Payment pending'
+                                      : sale.paymentStatus == PaymentStatus.refunded
+                                          ? 'Refunded'
+                                          : statusLabel,
+                                  variant: sale.paymentStatus == PaymentStatus.paid
+                                      ? _BadgeVariant.success
+                                      : sale.paymentStatus == PaymentStatus.unpaid
+                                          ? _BadgeVariant.warning
+                                          : sale.paymentStatus == PaymentStatus.refunded
+                                              ? _BadgeVariant.critical
+                                              : _BadgeVariant.attention,
+                                ),
+                              ],
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            // Amount + status
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '+$currency ${fmt.format(sale.total)}',
-                  style: AppTypography.labelLarge.copyWith(
-                    color: isCancelled
-                        ? AppColors.textTertiary
-                        : AppColors.success,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    decoration:
-                        isCancelled ? TextDecoration.lineThrough : null,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                // Status tags row — wrap for Shopify dual tags
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: [
-                    if (sale.isCompleted)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'Completed ✓',
-                          style: AppTypography.captionSmall.copyWith(
-                            color: AppColors.success,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 9,
-                          ),
-                        ),
-                      )
-                    else ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isCancelled
-                              ? AppColors.danger.withValues(alpha: 0.1)
-                              : statusColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          isCancelled ? 'Cancelled' : statusLabel,
-                          style: AppTypography.captionSmall.copyWith(
-                            color: isCancelled ? AppColors.danger : statusColor,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 9,
-                          ),
-                        ),
-                      ),
-                      if (sale.isShopifyOrder && !isCancelled)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: _fulfillmentColor(sale.fulfillmentStatus)
-                                .withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            _fulfillmentLabel(sale.fulfillmentStatus),
-                            style: AppTypography.captionSmall.copyWith(
-                              color: _fulfillmentColor(sale.fulfillmentStatus),
-                              fontWeight: FontWeight.w700,
-                              fontSize: 9,
-                            ),
-                          ),
-                        ),
-                    ],
-                    Text(
-                      DateFormat('h:mm a').format(sale.date),
-                      style: AppTypography.captionSmall.copyWith(
-                        color: AppColors.textTertiary,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            // Expand chevron
-            if (hasChildren && !selectionMode) ...[
-              const SizedBox(width: 4),
-              GestureDetector(
-                onTap: onToggleExpand,
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: AnimatedRotation(
-                    turns: isExpanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 22,
-                      color: AppColors.textTertiary,
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Badge visual variants matching Shopify's Polaris badge system.
+enum _BadgeVariant { neutral, info, success, attention, warning, critical }
+
+/// Shopify Polaris-style status badge.
+class _StatusBadge extends StatelessWidget {
+  final String label;
+  final _BadgeVariant variant;
+
+  const _StatusBadge({
+    required this.label,
+    required this.variant,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Color bgColor;
+    Color textColor;
+    switch (variant) {
+      case _BadgeVariant.neutral:
+        // Shopify "Fulfilled" — dark text on light grey
+        bgColor = const Color(0xFFE4E5E7);
+        textColor = const Color(0xFF303030);
+        break;
+      case _BadgeVariant.info:
+        // "Unfulfilled" — muted outline-style
+        bgColor = const Color(0xFFEAF0F6);
+        textColor = const Color(0xFF5C6AC4);
+        break;
+      case _BadgeVariant.success:
+        // "Paid" / "Completed" — green tint
+        bgColor = const Color(0xFFD4EDDA);
+        textColor = const Color(0xFF1B7A3D);
+        break;
+      case _BadgeVariant.attention:
+        // "Partial" — amber/gold
+        bgColor = const Color(0xFFFFF3CD);
+        textColor = const Color(0xFF856404);
+        break;
+      case _BadgeVariant.warning:
+        // "Payment pending" — warm peach/orange
+        bgColor = const Color(0xFFFFE8D4);
+        textColor = const Color(0xFFB44C00);
+        break;
+      case _BadgeVariant.critical:
+        // "Cancelled" / "Refunded" — red
+        bgColor = const Color(0xFFFED3D1);
+        textColor = const Color(0xFFCC2200);
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: textColor,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+          height: 1.2,
         ),
       ),
     );

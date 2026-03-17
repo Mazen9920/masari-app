@@ -61,7 +61,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
     _nameController = TextEditingController(text: widget.category.name);
     _isExpense = widget.category.isExpense;
     _hasBudget = widget.category.budgetLimit != null;
-    _budgetController = TextEditingController(text: widget.category.budgetLimit?.toStringAsFixed(0) ?? '6000');
+    _budgetController = TextEditingController(text: widget.category.budgetLimit?.toStringAsFixed(0) ?? '');
 
     // match current icon/color to available palette
     _selectedIconIndex = _icons.indexWhere((i) => i == widget.category.iconData);
@@ -86,6 +86,28 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
       return;
     }
 
+    double? budgetLimit;
+    if (_hasBudget) {
+      final budgetText = _budgetController.text.trim().replaceAll(',', '');
+      if (budgetText.isNotEmpty) {
+        budgetLimit = double.tryParse(budgetText);
+        if (budgetLimit == null || budgetLimit <= 0) {
+          HapticFeedback.heavyImpact();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enter a valid budget amount')),
+          );
+          return;
+        }
+        if (budgetLimit > 10000000) {
+          HapticFeedback.heavyImpact();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Budget limit cannot exceed 10,000,000')),
+          );
+          return;
+        }
+      }
+    }
+
     final color = _colors[_selectedColorIndex];
     final selectedIcon = _icons[_selectedIconIndex];
     final updated = CategoryData(
@@ -96,14 +118,14 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
       colorValue: color.toARGB32(),
       bgColorValue: color.withValues(alpha: 0.1).toARGB32(),
       isExpense: _isExpense,
-      budgetLimit: _hasBudget ? double.tryParse(_budgetController.text.replaceAll(',', '')) : null,
+      budgetLimit: budgetLimit,
       createdAt: widget.category.createdAt,
       updatedAt: DateTime.now(),
     );
 
     ref
         .read(categoriesProvider.notifier)
-        .updateCategory(widget.category.name, updated);
+        .updateCategory(updated);
     HapticFeedback.mediumImpact();
     context.pop(updated);
   }
@@ -136,7 +158,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
             onPressed: () {
               ref
                   .read(categoriesProvider.notifier)
-                  .removeCategory(widget.category.name);
+                  .removeCategory(widget.category.id);
               HapticFeedback.mediumImpact();
               Navigator.pop(ctx); // dialog
               // Navigate safely back to categories list
@@ -356,7 +378,8 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
             showBorder: true,
           ),
 
-          // ── Monthly Limit ──
+          // ── Monthly Limit (expense only) ──
+          if (_isExpense)
           _field(
             label: 'MONTHLY LIMIT',
             child: Column(
@@ -590,13 +613,29 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
   }
 
   // Type tab
+  void _onTypeChanged(bool newIsExpense) {
+    if (_isExpense && !newIsExpense && _hasBudget) {
+      // Clear budget when switching from expense to income
+      setState(() {
+        _isExpense = newIsExpense;
+        _hasBudget = false;
+        _budgetController.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Budget removed — income categories don\'t have budgets')),
+      );
+    } else {
+      setState(() => _isExpense = newIsExpense);
+    }
+  }
+
   Widget _typeTab(String label, bool isExpenseTab) {
     final isSelected = _isExpense == isExpenseTab;
     return Expanded(
       child: GestureDetector(
         onTap: () {
           HapticFeedback.lightImpact();
-          setState(() => _isExpense = isExpenseTab);
+          _onTypeChanged(isExpenseTab);
         },
         child: AnimatedContainer(
           duration: 200.ms,

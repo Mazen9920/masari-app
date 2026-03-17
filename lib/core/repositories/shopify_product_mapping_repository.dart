@@ -36,6 +36,9 @@ abstract class ShopifyProductMappingRepository {
   /// Deletes a mapping by ID.
   Future<Result<void>> deleteMapping(String id);
 
+  /// Deletes all mappings for a given Masari product ID.
+  Future<Result<void>> deleteMappingsByMasariProductId(String masariProductId);
+
   /// Deletes all mappings for the current user (on Shopify disconnect).
   Future<Result<void>> deleteAllMappings();
 }

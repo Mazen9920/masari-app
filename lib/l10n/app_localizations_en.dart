@@ -90,6 +90,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accountingEquationBalanced => 'Assets = Liabilities + Equity  ✓';
 
   @override
+  String get accountingEquationUnbalanced => 'Assets ≠ Liabilities + Equity  ✗';
+
+  @override
+  String get currentPeriodNetIncome => 'Current Period Net Income';
+
+  @override
   String get assets => 'Assets';
 
   @override
@@ -105,10 +111,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get netEquityPosition => 'NET EQUITY POSITION';
 
   @override
-  String get bankAccounts => 'Bank Accounts';
+  String get bankAccounts => 'Cash & Bank';
 
   @override
-  String get cashOnHand => 'Cash on Hand';
+  String get cashOnHand => 'Cash Adjustment';
 
   @override
   String get inventory => 'Inventory';
@@ -117,7 +123,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get otherReceivables => 'Other Receivables';
 
   @override
-  String get salesReceivables => 'Sales Receivables';
+  String get salesReceivables => 'Accounts Receivable';
 
   @override
   String get supplierPrepayments => 'Supplier Prepayments';
@@ -584,4 +590,316 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get createFinancialReports => 'Create financial reports';
+
+  @override
+  String plYouEarned(String currency, String amount) {
+    return 'You earned $currency $amount!';
+  }
+
+  @override
+  String plProfitMarginBody(String margin) {
+    return 'Your profit margin is $margin%. Keep tracking expenses to maintain momentum.';
+  }
+
+  @override
+  String get plBreakingEvenBody =>
+      'Your income exactly covers your expenses. Look for ways to increase revenue or reduce costs.';
+
+  @override
+  String plYouLost(String currency, String amount) {
+    return 'You lost $currency $amount';
+  }
+
+  @override
+  String get plLossBody =>
+      'Your expenses exceeded your income this period. Review your spending to find areas to cut back.';
+
+  @override
+  String plUpVsPrevious(String pct) {
+    return '↑ $pct% vs previous period';
+  }
+
+  @override
+  String plDownVsPrevious(String pct) {
+    return '↓ $pct% vs previous period';
+  }
+
+  @override
+  String get noActivityInPreviousPeriod => 'No activity in previous period';
+
+  @override
+  String get failedToLoadTransactions => 'Failed to load transactions';
+
+  @override
+  String get pullDownToRetry => 'Pull down to retry.';
+
+  @override
+  String get noActivityForThisPeriod => 'No activity for this period';
+
+  @override
+  String get recordSaleOrExpense =>
+      'Record a sale or expense to see your\nprofit & loss report come to life.';
+
+  @override
+  String get addTransaction => 'Add Transaction';
+
+  @override
+  String get openingCashHelpText =>
+      'How much cash did you start with before using Masari?';
+
+  @override
+  String get tapToSetStartingCash => 'Tap to set your starting cash';
+
+  @override
+  String get openingCashDialogDesc =>
+      'Enter the cash you had before you started tracking transactions in Masari.';
+
+  @override
+  String get lowCashAlertBody =>
+      'Your current balance is critically low. Consider reviewing upcoming expenses to avoid a negative balance.';
+
+  @override
+  String forecastPositive(String currency, String amount) {
+    return 'Based on your recent transaction patterns, you should reach a healthy $currency $amount by the end of the month.';
+  }
+
+  @override
+  String forecastNegative(String currency, String amount) {
+    return 'Based on your recent spending, your balance may dip to $currency $amount by month-end. Consider cutting back on expenses.';
+  }
+
+  @override
+  String get vsLastMonthLabel => 'vs last month';
+
+  @override
+  String get dueToday => 'Due today';
+
+  @override
+  String get dueTomorrow => 'Due tomorrow';
+
+  @override
+  String dueInDays(int days) {
+    return 'Due in $days days';
+  }
+
+  @override
+  String get addLastMonthTrend => 'Add last month\'s data to see trend';
+
+  @override
+  String get shareReport => 'Share Report';
+
+  @override
+  String get pnlStatement => 'Profit & Loss Statement';
+
+  @override
+  String get totalRevenue => 'Total Revenue';
+
+  @override
+  String get salesRevenue => 'Sales Revenue';
+
+  @override
+  String get cashFlowStatement => 'Cash Flow Statement';
+
+  @override
+  String get totalInflow => 'Total Inflow';
+
+  @override
+  String get totalOutflow => 'Total Outflow';
+
+  @override
+  String get netCashFlow => 'Net Cash Flow';
+
+  @override
+  String get cashInflows => 'Cash Inflows';
+
+  @override
+  String get cashOutflows => 'Cash Outflows';
+
+  @override
+  String get openingBalance => 'Opening Balance';
+
+  @override
+  String get closingBalance => 'Closing Balance';
+
+  @override
+  String get totalCashInflow => 'Total Cash Inflow';
+
+  @override
+  String get totalCashOutflow => 'Total Cash Outflow';
+
+  @override
+  String get monthlyFinancialReport => 'Monthly Financial Report';
+
+  @override
+  String get profitAndLoss => 'Profit & Loss';
+
+  @override
+  String get cashInflowLabel => 'Cash Inflow';
+
+  @override
+  String get cashOutflowLabel => 'Cash Outflow';
+
+  @override
+  String get salesOverview => 'Sales Overview';
+
+  @override
+  String get totalOrders => 'Total Orders';
+
+  @override
+  String get totalSalesValue => 'Total Sales Value';
+
+  @override
+  String get inventorySnapshot => 'Inventory Snapshot';
+
+  @override
+  String get totalInventoryValue => 'Total Inventory Value';
+
+  @override
+  String get netEquity => 'Net Equity';
+
+  @override
+  String get noDataForPeriod => 'No data for this period';
+
+  @override
+  String amountWithCurrency(String currency) {
+    return 'Amount ($currency)';
+  }
+
+  @override
+  String get assetsSection => 'Assets (What You Own)';
+
+  @override
+  String get liabilitiesSection => 'Liabilities (What You Owe)';
+
+  @override
+  String get unpaidInvoices => 'Other Receivables';
+
+  @override
+  String get receivables => 'Accounts Receivable';
+
+  @override
+  String get lowStock => 'Low Stock';
+
+  @override
+  String asOfDate(String date) {
+    return 'As of $date';
+  }
+
+  @override
+  String yearPeriod(int year) {
+    return 'Year $year';
+  }
+
+  @override
+  String get shareSummary => 'Share Summary';
+
+  @override
+  String editField(String field) {
+    return 'Edit $field';
+  }
+
+  @override
+  String currentValueLabel(String currency, String value) {
+    return 'Current value: $currency $value';
+  }
+
+  @override
+  String get enterAnAmount => 'Enter an amount';
+
+  @override
+  String get enterAValidNumber => 'Enter a valid number';
+
+  @override
+  String get amountCannotBeNegative => 'Amount cannot be negative';
+
+  @override
+  String get aiAnalysisComingSoon => 'AI analysis — coming soon!';
+
+  @override
+  String get bsInsightEmpty =>
+      'Start by adding your cash & bank balances, cash adjustments, and liabilities to get a snapshot of your financial position.';
+
+  @override
+  String bsInsightHighDebt(String ratio) {
+    return 'Your debt-to-asset ratio is $ratio%, which is high. Consider prioritizing debt repayment to improve your financial health.';
+  }
+
+  @override
+  String bsInsightModerateDebt(String ratio) {
+    return 'Your debt-to-asset ratio is $ratio%. This is moderate — consider reducing liabilities to build a stronger equity position.';
+  }
+
+  @override
+  String get bsInsightCashExceedsLoan =>
+      'Your cash adjustment exceeds your loan balance. Consider paying down the loan to reduce interest expenses.';
+
+  @override
+  String bsInsightPositiveEquity(String amount) {
+    return 'Your net equity is positive at $amount. Keep monitoring your balance sheet to maintain a healthy position.';
+  }
+
+  @override
+  String get bsInsightNegativeEquity =>
+      'Your liabilities exceed your assets. Focus on increasing revenue or reducing debt to improve your equity position.';
+
+  @override
+  String get operatingActivities => 'Operating Activities';
+
+  @override
+  String get investingActivities => 'Investing Activities';
+
+  @override
+  String get financingActivities => 'Financing Activities';
+
+  @override
+  String get netOperatingCashFlow => 'Net Operating Cash Flow';
+
+  @override
+  String get netInvestingCashFlow => 'Net Investing Cash Flow';
+
+  @override
+  String get netFinancingCashFlow => 'Net Financing Cash Flow';
+
+  @override
+  String get gaapCashFlowNote =>
+      'Cash flows classified per operating / investing / financing activities.';
+
+  @override
+  String get openingCapital => 'Opening Capital';
+
+  @override
+  String get retainedEarnings => 'Retained Earnings';
+
+  @override
+  String get openingCapitalHint =>
+      'Capital invested into the business at the start';
+
+  @override
+  String get autoCalculated => 'Auto-calculated';
+
+  @override
+  String get reconAdjustment => 'Reconciliation Adjustment';
+
+  @override
+  String get capitalAutoHint =>
+      'Tap to override with your actual invested capital';
+
+  @override
+  String get currentSnapshot => 'current';
+
+  @override
+  String get currentSnapshotFootnote =>
+      'Items marked (current) reflect present-day values, not the historical date selected.';
+
+  @override
+  String get catLoanReceived => 'Loan Received';
+
+  @override
+  String get catLoanRepayment => 'Loan Repayment';
+
+  @override
+  String get catEquityInjection => 'Capital Injection';
+
+  @override
+  String get catOwnerWithdrawal => 'Owner Withdrawal';
 }

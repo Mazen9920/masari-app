@@ -1447,6 +1447,16 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       if (!mounted) return;
     }
 
+    // Generate sequential order number for new manual orders
+    int? orderNumber;
+    if (!_isEditing) {
+      final existingSales = ref.read(salesProvider).value ?? [];
+      final maxExisting = existingSales
+          .where((s) => s.orderNumber != null)
+          .fold<int>(0, (max, s) => s.orderNumber! > max ? s.orderNumber! : max);
+      orderNumber = maxExisting < 1000 ? 1001 : maxExisting + 1;
+    }
+
     final sale = Sale(
       id: _isEditing ? widget.existingSale!.id : const Uuid().v4(),
       userId: uid,
@@ -1475,6 +1485,11 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       deliveryStatus: _deliveryStatusIdx == 0
           ? null
           : ['Pending', 'Shipped', 'Delivered'][_deliveryStatusIdx],
+      fulfillmentStatus: _deliveryStatusIdx == 2
+          ? FulfillmentStatus.fulfilled
+          : _deliveryStatusIdx == 1
+              ? FulfillmentStatus.partial
+              : FulfillmentStatus.unfulfilled,
       paymentMethod: _methods[_methodIdx].label,
       paymentStatus: PaymentStatus.values[_statusIdx],
       amountPaid: _statusIdx == 2
@@ -1484,6 +1499,9 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
               : 0,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       createdAt: _isEditing ? widget.existingSale!.createdAt : DateTime.now(),
+      orderNumber: _isEditing
+          ? widget.existingSale!.orderNumber
+          : orderNumber,
     );
 
     // ── Shopify line-item change warning (edit only) ──────
@@ -1719,6 +1737,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
   }
 
   void _showError(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
       backgroundColor: AppColors.danger,

@@ -134,7 +134,7 @@ class FirestoreProductRepository implements ProductRepository {
   @override
   Future<Result<Product>> adjustStock(
       String id, String variantId, int delta, String reason,
-      {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false}) async {
+      {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
     try {
       final result = await _firestore.runTransaction<Product>((txn) async {
         final docRef = _collection.doc(id);
@@ -169,7 +169,10 @@ class FirestoreProductRepository implements ProductRepository {
             : List<CostLayer>.from(variant.effectiveCostLayers);
         double movementUnitCost = variant.costPrice;
 
-        if (delta > 0 && unitCost != null) {
+        if (skipCostLayer && delta > 0) {
+          // ── MANUFACTURED RESTOCK: adjust qty only, no cost layer ──
+          movementUnitCost = unitCost ?? variant.costPrice;
+        } else if (delta > 0 && unitCost != null) {
           // ── RESTOCK: add a new cost layer ──
           layers.add(CostLayer(
             date: DateTime.now(),
@@ -251,8 +254,11 @@ class FirestoreProductRepository implements ProductRepository {
           }
         }
 
-        // Recalculate WAC from remaining layers
+        // Recalculate WAC from remaining layers (skip for manufactured products)
         double newCostPrice;
+        if (skipCostLayer && delta > 0) {
+          newCostPrice = variant.costPrice; // preserve existing cost
+        } else {
         final totalLayerStock =
             layers.fold<int>(0, (s, l) => s + l.remainingQty);
         if (totalLayerStock > 0) {
@@ -263,6 +269,7 @@ class FirestoreProductRepository implements ProductRepository {
           newCostPrice = unitCost;
         } else {
           newCostPrice = variant.costPrice;
+        }
         }
 
         final movement = StockMovement(
@@ -307,6 +314,185 @@ class FirestoreProductRepository implements ProductRepository {
       return Result.success(result);
     } catch (e) {
       return Result.failure( 'Failed to adjust stock: $e');
+    }
+  }
+
+  @override
+  Future<Result<Product>> breakdownStock({
+    required String productId,
+    required String sourceVariantId,
+    required int qty,
+    required String valuationMethod,
+    required Map<String, ({int quantity, double unitCost})> outputAllocations,
+  }) async {
+    try {
+      final result = await _firestore.runTransaction<Product>((txn) async {
+        final docRef = _collection.doc(productId);
+        final snapshot = await txn.get(docRef);
+
+        if (!snapshot.exists) throw Exception('Product not found');
+
+        final data = snapshot.data()!;
+        data['id'] = snapshot.id;
+        var product = Product.fromJson(data);
+
+        // ── 1. Deduct source variant ──────────────────────────
+        final srcIdx = product.variants.indexWhere((v) => v.id == sourceVariantId);
+        if (srcIdx == -1) throw Exception('Source variant not found');
+        final srcVariant = product.variants[srcIdx];
+
+        if (srcVariant.currentStock < qty) {
+          throw Exception(
+            'Insufficient stock: ${product.name} / ${srcVariant.displayName} '
+            'has ${srcVariant.currentStock} units, cannot deduct $qty',
+          );
+        }
+
+        // Consume cost layers from source
+        var srcLayers = List<CostLayer>.from(srcVariant.effectiveCostLayers);
+        double movementUnitCost = srcVariant.costPrice;
+
+        if (valuationMethod == 'average' || srcLayers.isEmpty) {
+          movementUnitCost = srcVariant.costPrice;
+          if (srcLayers.isNotEmpty) {
+            var remaining = qty;
+            final totalLayerQty = srcLayers.fold<int>(0, (s, l) => s + l.remainingQty);
+            if (totalLayerQty > 0) {
+              final updated = <CostLayer>[];
+              for (final layer in srcLayers) {
+                final take = (layer.remainingQty * qty / totalLayerQty).floor().clamp(0, layer.remainingQty);
+                final newQty = layer.remainingQty - take;
+                remaining -= take;
+                if (newQty > 0) updated.add(layer.copyWith(remainingQty: newQty));
+              }
+              for (var i = 0; i < updated.length && remaining > 0; i++) {
+                final take = remaining.clamp(0, updated[i].remainingQty);
+                final newQty = updated[i].remainingQty - take;
+                remaining -= take;
+                if (newQty > 0) {
+                  updated[i] = updated[i].copyWith(remainingQty: newQty);
+                } else {
+                  updated.removeAt(i);
+                  i--;
+                }
+              }
+              srcLayers = updated;
+            }
+          }
+        } else {
+          if (valuationMethod == 'lifo') {
+            srcLayers.sort((a, b) => b.date.compareTo(a.date));
+          } else {
+            srcLayers.sort((a, b) => a.date.compareTo(b.date));
+          }
+          var remaining = qty;
+          var totalCost = 0.0;
+          final updated = <CostLayer>[];
+          for (final layer in srcLayers) {
+            if (remaining <= 0) { updated.add(layer); continue; }
+            final take = remaining < layer.remainingQty ? remaining : layer.remainingQty;
+            totalCost += take * layer.unitCost;
+            remaining -= take;
+            final newQty = layer.remainingQty - take;
+            if (newQty > 0) updated.add(layer.copyWith(remainingQty: newQty));
+          }
+          movementUnitCost = qty > 0 ? (totalCost / qty * 100).roundToDouble() / 100 : srcVariant.costPrice;
+          srcLayers = updated;
+        }
+
+        // Recalculate source WAC
+        final srcTotalLayerStock = srcLayers.fold<int>(0, (s, l) => s + l.remainingQty);
+        double srcNewCost;
+        if (srcTotalLayerStock > 0) {
+          final totalValue = srcLayers.fold<double>(0, (s, l) => s + l.remainingQty * l.unitCost);
+          srcNewCost = (totalValue / srcTotalLayerStock * 100).roundToDouble() / 100;
+        } else {
+          srcNewCost = srcVariant.costPrice;
+        }
+
+        final srcMovement = StockMovement(
+          type: 'Breakdown',
+          quantity: -qty,
+          dateTime: DateTime.now(),
+          variantId: sourceVariantId,
+          unitCost: movementUnitCost,
+        );
+
+        final updatedSrc = srcVariant.copyWith(
+          currentStock: srcVariant.currentStock - qty,
+          costPrice: srcNewCost,
+          costLayers: srcLayers,
+          movements: [...srcVariant.movements, srcMovement],
+        );
+
+        var variants = List<ProductVariant>.from(product.variants);
+        variants[srcIdx] = updatedSrc;
+
+        // ── 2. Add each output variant ────────────────────────
+        for (final entry in outputAllocations.entries) {
+          final outVarId = entry.key;
+          final outQty = entry.value.quantity;
+          final outUnitCost = entry.value.unitCost;
+
+          final outIdx = variants.indexWhere((v) => v.id == outVarId);
+          if (outIdx == -1) throw Exception('Output variant not found: $outVarId');
+          final outVariant = variants[outIdx];
+
+          // Use clearLegacyLayers logic: skip synthetic legacy migration
+          final outLayers = (outVariant.costLayers.isEmpty)
+              ? <CostLayer>[]
+              : List<CostLayer>.from(outVariant.effectiveCostLayers);
+
+          outLayers.add(CostLayer(
+            date: DateTime.now(),
+            unitCost: outUnitCost,
+            remainingQty: outQty,
+          ));
+
+          // Recalculate WAC for output
+          final outTotalStock = outLayers.fold<int>(0, (s, l) => s + l.remainingQty);
+          double outNewCost;
+          if (outTotalStock > 0) {
+            final outTotalValue = outLayers.fold<double>(0, (s, l) => s + l.remainingQty * l.unitCost);
+            outNewCost = (outTotalValue / outTotalStock * 100).roundToDouble() / 100;
+          } else {
+            outNewCost = outUnitCost;
+          }
+
+          final outMovement = StockMovement(
+            type: 'Breakdown',
+            quantity: outQty,
+            dateTime: DateTime.now(),
+            variantId: outVarId,
+            unitCost: outUnitCost,
+          );
+
+          variants[outIdx] = outVariant.copyWith(
+            currentStock: outVariant.currentStock + outQty,
+            costPrice: outNewCost,
+            costLayers: outLayers,
+            movements: [...outVariant.movements, outMovement],
+          );
+        }
+
+        // ── 3. Write updated product ──────────────────────────
+        final updatedProduct = product.copyWith(
+          variants: variants,
+          updatedAt: DateTime.now(),
+        );
+
+        final json = updatedProduct.toJson();
+        json.remove('id');
+        json['updated_at'] = DateTime.now().toIso8601String();
+        json['_last_modified_by'] = 'masari';
+
+        txn.update(docRef, json);
+        return updatedProduct;
+      });
+
+      return Result.success(result);
+    } catch (e) {
+      return Result.failure('Failed to breakdown stock: $e');
     }
   }
 }

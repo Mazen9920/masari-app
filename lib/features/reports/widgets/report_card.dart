@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
-import '../../../l10n/app_localizations.dart';
 
 /// Shared white card wrapper used across all report screens.
 class ReportCard extends StatelessWidget {
@@ -12,7 +11,6 @@ class ReportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(

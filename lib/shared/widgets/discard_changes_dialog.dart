@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 import '../../l10n/app_localizations.dart';
 
 /// Shows a confirmation dialog when the user tries to leave a form with
@@ -19,7 +20,7 @@ Future<bool> showDiscardChangesDialog(BuildContext context) async {
         ),
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(true),
-          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          style: TextButton.styleFrom(foregroundColor: AppColors.danger),
           child: Text(l10n.discard),
         ),
       ],

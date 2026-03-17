@@ -68,7 +68,7 @@ class LocalProductRepository implements ProductRepository {
   @override
   Future<Result<Product>> adjustStock(
       String id, String variantId, int delta, String reason,
-      {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false}) async {
+      {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
     final index = _products.indexWhere((p) => p.id == id);
     if (index == -1) return Result.failure('Product not found');
 
@@ -84,7 +84,10 @@ class LocalProductRepository implements ProductRepository {
         : List<CostLayer>.from(variant.effectiveCostLayers);
     double movementUnitCost = variant.costPrice;
 
-    if (delta > 0 && unitCost != null) {
+    if (skipCostLayer && delta > 0) {
+      // ── MANUFACTURED RESTOCK: adjust qty only, no cost layer ──
+      movementUnitCost = unitCost ?? variant.costPrice;
+    } else if (delta > 0 && unitCost != null) {
       layers.add(CostLayer(
         date: DateTime.now(),
         unitCost: unitCost,
@@ -113,10 +116,12 @@ class LocalProductRepository implements ProductRepository {
       }
     }
 
-    // Recalculate WAC from remaining layers
+    // Recalculate WAC from remaining layers (skip for manufactured products)
     final totalLayerStock = layers.fold<int>(0, (s, l) => s + l.remainingQty);
     double newCostPrice;
-    if (totalLayerStock > 0) {
+    if (skipCostLayer && delta > 0) {
+      newCostPrice = variant.costPrice; // preserve existing cost
+    } else if (totalLayerStock > 0) {
       final totalValue = layers.fold<double>(0, (s, l) => s + l.remainingQty * l.unitCost);
       newCostPrice = (totalValue / totalLayerStock * 100).roundToDouble() / 100;
     } else {
@@ -144,6 +149,53 @@ class LocalProductRepository implements ProductRepository {
     updatedVariants[variantIndex] = updatedVariant;
 
     final updated = product.copyWith(variants: updatedVariants);
+    _products[index] = updated;
+    return Result.success(updated);
+  }
+
+  @override
+  Future<Result<Product>> breakdownStock({
+    required String productId,
+    required String sourceVariantId,
+    required int qty,
+    required String valuationMethod,
+    required Map<String, ({int quantity, double unitCost})> outputAllocations,
+  }) async {
+    final index = _products.indexWhere((p) => p.id == productId);
+    if (index == -1) return Result.failure('Product not found');
+
+    var product = _products[index];
+
+    // Deduct source
+    final srcIdx = product.variants.indexWhere((v) => v.id == sourceVariantId);
+    if (srcIdx == -1) return Result.failure('Source variant not found');
+    final srcVariant = product.variants[srcIdx];
+    if (srcVariant.currentStock < qty) return Result.failure('Insufficient stock');
+
+    var variants = List<ProductVariant>.from(product.variants);
+    variants[srcIdx] = srcVariant.copyWith(
+      currentStock: srcVariant.currentStock - qty,
+      movements: [
+        StockMovement(type: 'Breakdown', quantity: -qty, dateTime: DateTime.now(), variantId: sourceVariantId, unitCost: srcVariant.costPrice),
+        ...srcVariant.movements,
+      ],
+    );
+
+    // Add outputs
+    for (final entry in outputAllocations.entries) {
+      final outIdx = variants.indexWhere((v) => v.id == entry.key);
+      if (outIdx == -1) return Result.failure('Output variant not found');
+      final outVariant = variants[outIdx];
+      variants[outIdx] = outVariant.copyWith(
+        currentStock: outVariant.currentStock + entry.value.quantity,
+        movements: [
+          StockMovement(type: 'Breakdown', quantity: entry.value.quantity, dateTime: DateTime.now(), variantId: entry.key, unitCost: entry.value.unitCost),
+          ...outVariant.movements,
+        ],
+      );
+    }
+
+    final updated = product.copyWith(variants: variants);
     _products[index] = updated;
     return Result.success(updated);
   }

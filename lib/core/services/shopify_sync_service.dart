@@ -766,7 +766,18 @@ class ShopifySyncService {
       // ── Existing product: sync details ─────────────────
       final masariProductId = productMappings.first.masariProductId;
       final prodResult = await _productRepo.getProductById(masariProductId);
-      if (!prodResult.isSuccess || prodResult.data == null) continue;
+      if (!prodResult.isSuccess || prodResult.data == null) {
+        // Orphaned mappings — product was deleted but mappings remain.
+        // Clean up stale mappings and re-import the product.
+        for (final m in productMappings) {
+          if (m.id.isNotEmpty) {
+            await _mappingRepo.deleteMapping(m.id);
+          }
+        }
+        final reimported = await _autoImportShopifyProduct(sp);
+        if (reimported) changed++;
+        continue;
+      }
 
       final product = prodResult.data!;
       final shopifyTitle = sp['title']?.toString();
@@ -797,6 +808,14 @@ class ShopifySyncService {
       if (shopifyTitle != null &&
           shopifyTitle.isNotEmpty &&
           product.name != shopifyTitle) {
+        productChanged = true;
+      }
+
+      // Sync product status (active / draft / archived)
+      final shopifyStatus = sp['status']?.toString();
+      if (shopifyStatus != null &&
+          shopifyStatus.isNotEmpty &&
+          product.shopifyStatus != shopifyStatus) {
         productChanged = true;
       }
 
@@ -967,6 +986,7 @@ class ShopifySyncService {
         imageUrl: (shopifyImageUrl != null && shopifyImageUrl.isNotEmpty)
             ? shopifyImageUrl
             : product.imageUrl,
+        shopifyStatus: shopifyStatus ?? product.shopifyStatus,
         options: newOptions.isNotEmpty ? newOptions : product.options,
         variants: finalVariants,
       );
@@ -1155,6 +1175,7 @@ class ShopifySyncService {
       unitOfMeasure: 'pcs',
       isMaterial: false,
       shopifyProductId: shopifyProdId,
+      shopifyStatus: sp['status']?.toString(),
       imageUrl: imageUrl,
       options: masariOptions,
       variants: masariVariants,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../l10n/app_localizations.dart';
 
 /// A shared toggle widget for switching between chart and table views.
 class ChartToggle extends StatelessWidget {
@@ -21,7 +20,6 @@ class ChartToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(

@@ -234,7 +234,7 @@ class CategoriesNotifier extends AsyncNotifier<List<CategoryData>> {
       // Swap optimistic item with the one carrying the real Firestore ID
       final updatedList = <CategoryData>[
         for (final c in state.value ?? [])
-          if (c.name == category.name) result.data! else c,
+          if (c.id == category.id) result.data! else c,
       ];
       CategoryData.customCategories = updatedList;
       state = AsyncValue.data(updatedList);
@@ -244,31 +244,42 @@ class CategoriesNotifier extends AsyncNotifier<List<CategoryData>> {
     }
   }
 
-  Future<void> removeCategory(String name) async {
+  Future<void> removeCategory(String id) async {
     final current = state.value ?? [];
-    final newList = current.where((c) => c.name != name).toList();
+    final newList = current.where((c) => c.id != id).toList();
     CategoryData.customCategories = newList;
     state = AsyncValue.data(newList);
 
+    // Reassign orphaned transactions to Uncategorized
+    final txNotifier = ref.read(transactionsProvider.notifier);
+    final transactions = ref.read(transactionsProvider).value ?? [];
+    for (final tx in transactions) {
+      if (tx.categoryId == id) {
+        await txNotifier.updateTransaction(
+          tx.copyWith(categoryId: 'cat_uncategorized'),
+        );
+      }
+    }
+
     final repo = ref.read(categoryRepositoryProvider);
-    final result = await repo.deleteCategory(name);
+    final result = await repo.deleteCategory(id);
     if (!result.isSuccess) {
       CategoryData.customCategories = current;
       state = AsyncValue.data(current);
     }
   }
 
-  Future<void> updateCategory(String oldName, CategoryData updated) async {
+  Future<void> updateCategory(CategoryData updated) async {
     final current = state.value ?? [];
     final newList = [
       for (final c in current)
-        if (c.id == updated.id || c.name == oldName) updated else c,
+        if (c.id == updated.id) updated else c,
     ];
     CategoryData.customCategories = newList;
     state = AsyncValue.data(newList);
 
     final repo = ref.read(categoryRepositoryProvider);
-    final result = await repo.updateCategory(oldName, updated);
+    final result = await repo.updateCategory(updated);
     if (!result.isSuccess) {
       CategoryData.customCategories = current;
       state = AsyncValue.data(current);
@@ -364,7 +375,7 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     }
   }
 
-  Future<void> addProduct(Product product) async {
+  Future<Result<Product>> addProduct(Product product) async {
     // Optimistic: update state immediately
     final previous = state.value ?? [];
     state = AsyncValue.data([...previous, product]);
@@ -377,9 +388,12 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
         for (final p in current)
           if (p.id == product.id) result.data! else p,
       ]);
+      return result;
     } else if (!result.isSuccess) {
       state = AsyncValue.data(previous);
+      return result;
     }
+    return Result.failure('Failed to add product');
   }
 
   Future<void> removeProduct(String id) async {
@@ -391,10 +405,14 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     final result = await repo.deleteProduct(id);
     if (!result.isSuccess) {
       state = AsyncValue.data(previous);
+    } else {
+      // Clean up any Shopify product mappings for this product
+      final mappingRepo = ref.read(shopifyProductMappingRepositoryProvider);
+      mappingRepo.deleteMappingsByMasariProductId(id);
     }
   }
 
-  Future<void> updateProduct(String id, Product updated) async {
+  Future<Result<Product>> updateProduct(String id, Product updated) async {
     // Optimistic: update state immediately
     final previous = state.value ?? [];
     state = AsyncValue.data([
@@ -404,17 +422,24 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
 
     final repo = ref.read(productRepositoryProvider);
     final result = await repo.updateProduct(id, updated);
-    if (result.isSuccess) {
+    if (result.isSuccess && result.data != null) {
+      final current = state.value ?? [];
+      state = AsyncValue.data([
+        for (final p in current)
+          if (p.id == id) result.data! else p,
+      ]);
       // Auto-push product details to Shopify (fire-and-forget)
-      _autoPushProductToShopify(id, updated);
+      _autoPushProductToShopify(id, result.data!);
+      return result;
     } else {
       state = AsyncValue.data(previous);
+      return result;
     }
   }
 
-  Future<void> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName}) async {
+  Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool skipCostLayer = false}) async {
     final repo = ref.read(productRepositoryProvider);
-    final result = await repo.adjustStock(id, variantId, delta, reason, unitCost: unitCost, valuationMethod: valuationMethod, supplierName: supplierName);
+    final result = await repo.adjustStock(id, variantId, delta, reason, unitCost: unitCost, valuationMethod: valuationMethod, supplierName: supplierName, skipCostLayer: skipCostLayer);
     if (result.isSuccess && result.data != null) {
       final current = state.value ?? [];
       state = AsyncValue.data([
@@ -426,6 +451,7 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
       // Fire-and-forget — errors are logged but don't block the UI.
       _autoPushToShopify(id, variantId, result.data!);
     }
+    return result;
   }
 
   /// Pushes updated stock to Shopify when always-on inventory sync is active.
@@ -509,57 +535,64 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     final cogsPerUnit = sourceVariant.cogsPerUnit(qty, valuationMethod);
     final totalCost = cogsPerUnit * qty;
 
-    // Allocate cost to outputs by selling price ratio
-    final outputAllocations = <String, double>{}; // variantId → allocatedUnitCost
+    // Allocate cost to outputs by selling price ratio.
+    // Fallback: if all selling prices are zero, allocate by output quantity.
+    final outputAllocations = <String, ({int quantity, double unitCost})>{};
     double totalSellingValue = 0;
+    int totalOutputQty = 0;
     for (final output in recipe.outputs) {
       final variant = product.variantById(output.variantId);
+      totalOutputQty += (output.quantityPerUnit * qty).round();
       if (variant != null) {
         totalSellingValue += output.quantityPerUnit * variant.sellingPrice;
       }
     }
     for (final output in recipe.outputs) {
       final variant = product.variantById(output.variantId);
+      final outputQty = (output.quantityPerUnit * qty).round();
+      if (outputQty <= 0) continue;
+
+      double unitCost;
       if (variant != null && totalSellingValue > 0) {
         final outputSelling = output.quantityPerUnit * variant.sellingPrice;
         final allocatedTotal = totalCost * (outputSelling / totalSellingValue);
-        outputAllocations[output.variantId] =
-            (allocatedTotal / output.quantityPerUnit * 100).roundToDouble() / 100;
+        unitCost = (allocatedTotal / outputQty * 100).roundToDouble() / 100;
+      } else {
+        unitCost = totalOutputQty > 0
+            ? (totalCost / totalOutputQty * 100).roundToDouble() / 100
+            : 0.0;
       }
-    }
 
-    // 1. Deduct source
-    final deductResult = await ref.read(productRepositoryProvider).adjustStock(
-      productId, sourceVariantId, -qty, 'Breakdown',
-      valuationMethod: valuationMethod,
-    );
-    if (!deductResult.isSuccess) return deductResult.error ?? 'Failed to deduct source';
-
-    // 2. Add each output variant
-    Product? lastProduct = deductResult.data;
-    for (final output in recipe.outputs) {
-      final outputQty = (output.quantityPerUnit * qty).round();
-      final unitCost = outputAllocations[output.variantId] ?? 0;
-      final addResult = await ref.read(productRepositoryProvider).adjustStock(
-        productId, output.variantId, outputQty, 'Breakdown',
+      outputAllocations[output.variantId] = (
+        quantity: outputQty,
         unitCost: unitCost,
-        valuationMethod: valuationMethod,
-        clearLegacyLayers: true,
       );
-      if (!addResult.isSuccess) return addResult.error ?? 'Failed to add output';
-      lastProduct = addResult.data;
     }
 
-    // 3. Save conversion order for audit trail
+    // 1. Perform atomic breakdown (source deduction + output additions in a single transaction)
+    final result = await ref.read(productRepositoryProvider).breakdownStock(
+      productId: productId,
+      sourceVariantId: sourceVariantId,
+      qty: qty,
+      valuationMethod: valuationMethod,
+      outputAllocations: outputAllocations,
+    );
+    if (!result.isSuccess || result.data == null) {
+      return result.error ?? 'Breakdown failed';
+    }
+
+    // 2. Save conversion order for audit trail
     final outputLines = recipe.outputs.map((output) {
       final variant = product.variantById(output.variantId);
+      final alloc = outputAllocations[output.variantId];
+      final outputQty = alloc?.quantity ?? (output.quantityPerUnit * qty).round();
+      final unitCost = alloc?.unitCost ?? 0.0;
       return ConversionOutputLine(
         variantId: output.variantId,
         variantName: variant?.displayName ?? output.variantId,
-        quantity: output.quantityPerUnit * qty,
-        unitCost: outputAllocations[output.variantId] ?? 0,
-        totalCost: (outputAllocations[output.variantId] ?? 0) *
-            output.quantityPerUnit * qty,
+        quantity: outputQty.toDouble(),
+        unitCost: unitCost,
+        totalCost: unitCost * outputQty,
       );
     }).toList();
 
@@ -576,14 +609,13 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     );
     await ref.read(conversionOrderRepositoryProvider).createOrder(order);
 
-    // 4. Update local state
-    if (lastProduct != null) {
-      final current = state.value ?? [];
-      state = AsyncValue.data([
-        for (final p in current)
-          if (p.id == productId) lastProduct! else p,
-      ]);
-    }
+    // 3. Update local state
+    final updatedProduct = result.data!;
+    final current = state.value ?? [];
+    state = AsyncValue.data([
+      for (final p in current)
+        if (p.id == productId) updatedProduct else p,
+    ]);
     return null; // success
   }
 
@@ -616,7 +648,9 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
         totalSellingValue += output.quantityPerUnit * v.sellingPrice;
       }
     }
-    if (totalSellingValue <= 0) return 'Output selling prices are zero';
+    final totalOutputQtyPerUnit = recipe.outputs
+      .map((o) => o.quantityPerUnit)
+      .fold<double>(0.0, (s, q) => s + q);
 
     // Build corrected variants
     final updatedVariants = product.variants.map((v) {
@@ -624,10 +658,19 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
       if (output.isEmpty) return v; // source or unrelated variant
 
       final outDef = output.first;
-      final outputSelling = outDef.quantityPerUnit * v.sellingPrice;
-      final allocatedTotal = sourceCost * (outputSelling / totalSellingValue);
-      final correctUnitCost =
-          (allocatedTotal / outDef.quantityPerUnit * 100).roundToDouble() / 100;
+        final correctUnitCost = totalSellingValue > 0
+          ? (((sourceCost *
+                  ((outDef.quantityPerUnit * v.sellingPrice) /
+                    totalSellingValue)) /
+                outDef.quantityPerUnit) *
+              100)
+            .roundToDouble() /
+            100
+          : (totalOutputQtyPerUnit > 0
+            ? (sourceCost / totalOutputQtyPerUnit * 100)
+                .roundToDouble() /
+              100
+            : sourceCost);
 
       if (v.currentStock <= 0) {
         return v.copyWith(costPrice: correctUnitCost, costLayers: []);
@@ -1140,29 +1183,37 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
     final current = state.value ?? [];
     final sale = current.where((s) => s.id == id).firstOrNull;
 
-    // 1. Delete linked revenue & COGS transactions
-    final txns = ref.read(transactionsProvider).value ?? [];
-    final linked = txns.where((t) => t.saleId == id).toList();
-    final transNotifier = ref.read(transactionsProvider.notifier);
-    for (final tx in linked) {
-      await transNotifier.removeTransaction(tx.id);
-    }
-
-    // 2. Restore stock for each sale item
+    // 1. Restore stock for each sale item first.
+    // If this fails, we stop before deleting transactions/sale to avoid data loss.
     if (sale != null) {
       final invNotifier = ref.read(inventoryProvider.notifier);
       final valMethod = ref.read(appSettingsProvider).valuationMethod;
       for (final item in sale.items) {
         if (item.productId != null && item.quantity > 0) {
-          await invNotifier.adjustStock(
+          final stockResult = await invNotifier.adjustStock(
             item.productId!,
             item.variantId ?? '${item.productId}_v0',
             item.quantity.toInt(), // positive delta restores stock
             'Sale deleted – stock restored',
             valuationMethod: valMethod,
           );
+          if (!stockResult.isSuccess) {
+            developer.log(
+              'Failed to restore stock while deleting sale $id: ${stockResult.error}',
+              name: 'SalesNotifier',
+            );
+            return;
+          }
         }
       }
+    }
+
+    // 2. Delete linked revenue & COGS transactions
+    final txns = ref.read(transactionsProvider).value ?? [];
+    final linked = txns.where((t) => t.saleId == id).toList();
+    final transNotifier = ref.read(transactionsProvider.notifier);
+    for (final tx in linked) {
+      await transNotifier.removeTransaction(tx.id);
     }
 
     // 3. Delete the sale itself — optimistic
@@ -1328,12 +1379,12 @@ class GoodsReceiptsNotifier extends Notifier<List<GoodsReceipt>> {
     }
   }
 
-  void addReceipt(GoodsReceipt receipt) {
+  Future<Result<GoodsReceipt>> addReceipt(GoodsReceipt receipt) async {
     state = [receipt, ...state];
-    _createReceipt(receipt);
+    return _createReceipt(receipt);
   }
 
-  Future<void> _createReceipt(GoodsReceipt receipt) async {
+  Future<Result<GoodsReceipt>> _createReceipt(GoodsReceipt receipt) async {
     final repo = ref.read(goodsReceiptRepositoryProvider);
     final result = await repo.createReceipt(receipt);
     if (result.isSuccess && result.data != null) {
@@ -1341,9 +1392,12 @@ class GoodsReceiptsNotifier extends Notifier<List<GoodsReceipt>> {
         for (final r in state)
           if (r.id == receipt.id) result.data! else r,
       ];
+      return result;
     } else if (!result.isSuccess) {
       state = state.where((r) => r.id != receipt.id).toList();
+      return result;
     }
+    return Result.failure('Failed to create receipt');
   }
 
   void removeReceipt(String id) {

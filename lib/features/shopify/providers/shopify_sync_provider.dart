@@ -63,20 +63,49 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
 
   /// Starts a 30-second periodic timer that runs [performAutoSync].
   /// Safe to call multiple times — only one timer is active at a time.
+  /// Always syncs product details; inventory sync only runs in 'always' mode.
   void startAlwaysSyncTimer() {
     if (_alwaysSyncTimer != null && _alwaysSyncTimer!.isActive) return;
 
-    // Check if always-on mode is actually enabled
     final conn = ref.read(shopifyConnectionProvider).value;
     if (conn == null || !conn.isActive) return;
-    if (conn.syncInventoryEnabled != true) return;
-    if (conn.inventorySyncMode != 'always') return;
 
+    // Always start the timer when Shopify is connected — product details
+    // must always stay in sync. Inventory sync is gated by mode inside
+    // the tick handler.
     developer.log( 'Starting always-on sync timer (30s)', name: 'ShopifySyncNotifier');
     _alwaysSyncTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => _timerTick(),
     );
+
+    // Also run an immediate product detail sync on startup
+    _runStartupSync();
+  }
+
+  /// Runs once on startup: syncs product details and optionally inventory.
+  Future<void> _runStartupSync() async {
+    if (_isSyncing) return;
+    _isSyncing = true;
+    try {
+      developer.log('Running startup Shopify sync', name: 'ShopifySyncNotifier');
+      // Pull product details first (titles, variants, new products)
+      await _syncService.pullProductDetailsFromShopify();
+
+      // Also pull inventory if sync is enabled
+      final conn = ref.read(shopifyConnectionProvider).value;
+      if (conn?.syncInventoryEnabled == true) {
+        await _syncService.pullInventoryFromShopify();
+      }
+
+      // Always refresh inventory to pick up webhook-created products
+      // and any Firestore-side changes not yet reflected locally.
+      ref.read(inventoryProvider.notifier).refresh();
+    } catch (e) {
+      developer.log('Startup sync error: $e', name: 'ShopifySyncNotifier');
+    } finally {
+      _isSyncing = false;
+    }
   }
 
   /// Stops the background sync timer.
@@ -105,41 +134,45 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
 
   /// Silent background reconciliation — pulls then pushes without
   /// updating the UI state (no banners / spinners).
-  /// Respects the configured inventory sync direction.
+  /// Always syncs product details. Inventory sync respects mode/direction.
   Future<void> _runBackgroundReconciliation() async {
     if (_isSyncing) return;
     final conn = ref.read(shopifyConnectionProvider).value;
     if (conn == null || !conn.isActive) return;
     _isSyncing = true;
     try {
+      final inventorySyncEnabled = conn.syncInventoryEnabled == true;
+      final isAlwaysMode = conn.inventorySyncMode == 'always';
       final direction = conn.inventorySyncDirection ?? 'shopify_to_masari';
 
-      // Always pull first so newly-imported products get correct stock
-      // before any push compares against them.
-      await _syncService.pullInventoryFromShopify();
+      // ── Inventory sync (only in 'always' mode with sync enabled) ──
+      if (inventorySyncEnabled && isAlwaysMode) {
+        // Pull first so newly-imported products get correct stock
+        // before any push compares against them.
+        await _syncService.pullInventoryFromShopify();
 
-      // Only push if direction allows masari → shopify
-      if (direction == 'masari_to_shopify' || direction == 'both') {
-        final pushPreview = await _syncService.previewPushInventory();
-        if (pushPreview.isSuccess && pushPreview.data != null) {
-          final changed = pushPreview.data!
-              .where((i) => i.masariStock != i.shopifyStock)
-              .toList();
-          if (changed.isNotEmpty) {
-            await _syncService.pushInventoryBatch(changed);
+        // Only push if direction allows masari → shopify
+        if (direction == 'masari_to_shopify' || direction == 'both') {
+          final pushPreview = await _syncService.previewPushInventory();
+          if (pushPreview.isSuccess && pushPreview.data != null) {
+            final changed = pushPreview.data!
+                .where((i) => i.masariStock != i.shopifyStock)
+                .toList();
+            if (changed.isNotEmpty) {
+              await _syncService.pushInventoryBatch(changed);
+            }
           }
         }
       }
 
-      // Also pull product details (titles, variants, options, new products)
-      final detailsResult =
-          await _syncService.pullProductDetailsFromShopify();
-      // Refresh the in-memory inventory state if anything changed
-      final detailsChanged = detailsResult.isSuccess &&
-          (detailsResult.data ?? 0) > 0;
-      if (detailsChanged) {
-        ref.read(inventoryProvider.notifier).refresh();
-      }
+      // ── Product details sync (ALWAYS runs when Shopify connected) ──
+      // Keeps product titles, variants, options, prices, SKUs, images
+      // in sync, and auto-imports new Shopify products.
+      await _syncService.pullProductDetailsFromShopify();
+
+      // Always refresh inventory to pick up webhook-created products
+      // and any Firestore-side changes not yet reflected locally.
+      ref.read(inventoryProvider.notifier).refresh();
     } catch (e) {
       developer.log( 'Background sync error: $e', name: 'ShopifySyncNotifier');
     } finally {
