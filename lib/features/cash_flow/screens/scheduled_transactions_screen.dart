@@ -158,8 +158,7 @@ class ScheduledTransactionsScreen extends ConsumerWidget {
                       child: Switch.adaptive(
                         value: t.isActive,
                         onChanged: (_) {
-                          // Toggle active state
-                          // ref.read(scheduledTransactionsProvider.notifier).toggleActive(t.id);
+                          ref.read(scheduledTransactionsProvider.notifier).toggleActive(t.id);
                         },
                         activeTrackColor: AppColors.primaryNavy,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, // Reduces padding

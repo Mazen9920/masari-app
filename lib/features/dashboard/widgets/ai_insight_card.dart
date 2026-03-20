@@ -76,17 +76,25 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
         .toList();
 
     // Revenue (accrual basis — operating income only)
+    // Refund transactions (negative cat_sales_revenue) reduce revenue, not add to expenses.
     final curRevenue = curTxns
         .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount.abs());
+        .fold<double>(0, (sum, t) => sum + t.amount.abs())
+      + curTxns
+        .where((t) => !t.isIncome && (t.categoryId == 'cat_sales_revenue'))
+        .fold<double>(0, (sum, t) => sum - t.amount.abs());
     final prevRevenue = prevTxns
         .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount.abs());
+        .fold<double>(0, (sum, t) => sum + t.amount.abs())
+      + prevTxns
+        .where((t) => !t.isIncome && (t.categoryId == 'cat_sales_revenue'))
+        .fold<double>(0, (sum, t) => sum - t.amount.abs());
+    // Expenses: exclude refund txns (cat_sales_revenue) which reduce revenue instead
     final curExpenses = curTxns
-        .where((t) => !t.isIncome)
+        .where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')
         .fold<double>(0, (sum, t) => sum + t.amount.abs());
     final prevExpenses = prevTxns
-        .where((t) => !t.isIncome)
+        .where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')
         .fold<double>(0, (sum, t) => sum + t.amount.abs());
 
     final vsLabel = ds.period.vsLabel;
@@ -95,11 +103,11 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
     if (curTxns.isNotEmpty && prevTxns.isNotEmpty) {
       final curByCategory = <String, double>{};
       final prevByCategory = <String, double>{};
-      for (final t in curTxns.where((t) => !t.isIncome)) {
+      for (final t in curTxns.where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')) {
         curByCategory[t.categoryId] =
             (curByCategory[t.categoryId] ?? 0) + t.amount.abs();
       }
-      for (final t in prevTxns.where((t) => !t.isIncome)) {
+      for (final t in prevTxns.where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')) {
         prevByCategory[t.categoryId] =
             (prevByCategory[t.categoryId] ?? 0) + t.amount.abs();
       }
@@ -231,7 +239,7 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
           colors: [
             AppColors.primaryNavy,
             AppColors.secondaryBlue,
-            Color(0xFF7C3AED), // subtle purple accent
+            AppColors.shopifyPurple, // subtle purple accent
           ],
         ),
         boxShadow: [

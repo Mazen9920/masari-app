@@ -945,6 +945,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
   }
 
   // ── Dropdown row ─────────────────────────────
+  // ignore: unused_element
   Widget _dropdownRow({
     required String title,
     required String value,

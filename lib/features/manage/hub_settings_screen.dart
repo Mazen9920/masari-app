@@ -545,7 +545,7 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
               HapticFeedback.lightImpact();
               onChanged(v);
             },
-            activeColor: const Color(0xFFE67E22),
+            activeThumbColor: const Color(0xFFE67E22),
             activeTrackColor: const Color(0xFFE67E22).withValues(alpha: 0.3),
             inactiveThumbColor: Colors.white,
             inactiveTrackColor: const Color(0xFFCBD5E1),

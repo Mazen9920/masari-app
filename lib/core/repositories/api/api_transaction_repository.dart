@@ -141,4 +141,12 @@ class ApiTransactionRepository implements TransactionRepository {
       return Result.failure( 'An unexpected error occurred: $e');
     }
   }
+
+  @override
+  Future<Result<void>> reassignCategory(
+      String oldCategoryId, String newCategoryId) async {
+    // API implementation would call a dedicated endpoint.
+    // For now, this is a no-op as the Firestore repo is used in production.
+    return Result.success(null);
+  }
 }

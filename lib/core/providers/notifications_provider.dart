@@ -4,8 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../shared/models/product_model.dart';
 import '../../shared/models/sale_model.dart';
-import '../../features/cash_flow/models/recurring_transaction_model.dart';
-import '../navigation/app_router.dart';
 import 'app_providers.dart';
 import 'app_settings_provider.dart';
 import 'notification_settings_provider.dart';
@@ -93,7 +91,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
 
   // ─── 2. Purchase payment reminders ──────────────────
   if (settings.paymentReminders) {
-    final purchases = ref.watch(purchasesProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
     final suppliers = ref.watch(suppliersProvider).value ?? [];
     for (final p in purchases) {
       if (p.paymentStatus == 2) continue; // fully paid
@@ -119,7 +117,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
           createdAt: p.dueDate!,
           type: NotificationType.alert,
           routeName: 'PurchaseDetailScreen',
-          routeExtra: {'purchase': p, if (supplier != null) 'supplier': supplier},
+          routeExtra: {'purchase': p, 'supplier': ?supplier},
         ));
       } else if (dueSoon) {
         final daysLeft = p.dueDate!.difference(now).inDays;
@@ -134,7 +132,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
           createdAt: now,
           type: NotificationType.alert,
           routeName: 'PurchaseDetailScreen',
-          routeExtra: {'purchase': p, if (supplier != null) 'supplier': supplier},
+          routeExtra: {'purchase': p, 'supplier': ?supplier},
         ));
       }
     }

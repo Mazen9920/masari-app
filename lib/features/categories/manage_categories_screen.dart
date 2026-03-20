@@ -54,7 +54,7 @@ class _ManageCategoriesScreenState
                       left: 16,
                       right: 16,
                       child: _AiSuggestionBanner(
-                        categoryA: categories.length > 0 ? categories[0].name : '',
+                        categoryA: categories.isNotEmpty ? categories[0].name : '',
                         categoryB: categories.length > 3 ? categories[3].name : (categories.length > 1 ? categories[1].name : ''),
                         onDismiss: () =>
                             setState(() => _showAiSuggestion = false),
@@ -145,6 +145,7 @@ class _ManageCategoriesScreenState
         final item = list.removeAt(oldIndex);
         list.insert(newIndex, item);
         // Update state
+        // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
         cats.state = AsyncValue.data(list);
       },
       itemBuilder: (context, index) {
@@ -303,6 +304,7 @@ class _CategoryTile extends StatefulWidget {
 class _CategoryTileState extends State<_CategoryTile>
     with SingleTickerProviderStateMixin {
   late AnimationController _slideController;
+  // ignore: unused_field
   late Animation<Offset> _slideAnimation;
   double _dragExtent = 0;
 

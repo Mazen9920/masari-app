@@ -52,7 +52,7 @@ class _TrackIllustrationState extends State<TrackIllustration>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      AppColors.accentOrange.withOpacity(0.08),
+                      AppColors.accentOrange.withValues(alpha: 0.08),
                       Colors.transparent,
                     ],
                   ),
@@ -115,7 +115,7 @@ class _TrackIllustrationState extends State<TrackIllustration>
         border: Border.all(color: AppColors.borderLight, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 30,
             offset: const Offset(0, 10),
           ),
@@ -130,7 +130,7 @@ class _TrackIllustrationState extends State<TrackIllustration>
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textTertiary.withOpacity(0.3),
+                color: AppColors.textTertiary.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -142,7 +142,7 @@ class _TrackIllustrationState extends State<TrackIllustration>
                 width: 80,
                 height: 6,
                 decoration: BoxDecoration(
-                  color: AppColors.textTertiary.withOpacity(0.2),
+                  color: AppColors.textTertiary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
@@ -177,11 +177,11 @@ class _TrackIllustrationState extends State<TrackIllustration>
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                _miniBar(0.4, AppColors.secondaryBlue.withOpacity(0.4)),
-                _miniBar(0.6, AppColors.secondaryBlue.withOpacity(0.5)),
-                _miniBar(0.45, AppColors.secondaryBlue.withOpacity(0.4)),
-                _miniBar(0.7, AppColors.secondaryBlue.withOpacity(0.6)),
-                _miniBar(0.55, AppColors.secondaryBlue.withOpacity(0.5)),
+                _miniBar(0.4, AppColors.secondaryBlue.withValues(alpha: 0.4)),
+                _miniBar(0.6, AppColors.secondaryBlue.withValues(alpha: 0.5)),
+                _miniBar(0.45, AppColors.secondaryBlue.withValues(alpha: 0.4)),
+                _miniBar(0.7, AppColors.secondaryBlue.withValues(alpha: 0.6)),
+                _miniBar(0.55, AppColors.secondaryBlue.withValues(alpha: 0.5)),
                 _miniBar(0.85, AppColors.secondaryBlue),
               ],
             ),
@@ -195,14 +195,14 @@ class _TrackIllustrationState extends State<TrackIllustration>
                     width: 8, height: 8,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppColors.textTertiary.withOpacity(0.3),
+                      color: AppColors.textTertiary.withValues(alpha: 0.3),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Container(
                     width: 60 * w, height: 4,
                     decoration: BoxDecoration(
-                      color: AppColors.textTertiary.withOpacity(0.15),
+                      color: AppColors.textTertiary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -234,7 +234,7 @@ class _TrackIllustrationState extends State<TrackIllustration>
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -247,7 +247,7 @@ class _TrackIllustrationState extends State<TrackIllustration>
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.1),
+              color: AppColors.success.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
@@ -292,7 +292,7 @@ class _TrackIllustrationState extends State<TrackIllustration>
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -371,7 +371,7 @@ class _AIInsightIllustrationState extends State<AIInsightIllustration>
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 30,
               offset: const Offset(0, 8),
             ),
@@ -385,7 +385,7 @@ class _AIInsightIllustrationState extends State<AIInsightIllustration>
                 borderRadius: BorderRadius.circular(24),
                 child: CustomPaint(
                   painter: _DotGridPainter(
-                    color: AppColors.accentOrange.withOpacity(0.04),
+                    color: AppColors.accentOrange.withValues(alpha: 0.04),
                   ),
                 ),
               ),
@@ -471,8 +471,8 @@ class _AIInsightIllustrationState extends State<AIInsightIllustration>
         size: const Size(24, 2),
         painter: _DashedLinePainter(
           color: isLeft
-              ? AppColors.textTertiary.withOpacity(0.3)
-              : AppColors.accentOrange.withOpacity(0.5),
+              ? AppColors.textTertiary.withValues(alpha: 0.3)
+              : AppColors.accentOrange.withValues(alpha: 0.5),
         ),
       ),
     );
@@ -496,7 +496,7 @@ class _AIInsightIllustrationState extends State<AIInsightIllustration>
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: AppColors.accentOrange.withOpacity(0.35),
+              color: AppColors.accentOrange.withValues(alpha: 0.35),
               blurRadius: 20,
               offset: const Offset(0, 6),
             ),
@@ -524,7 +524,7 @@ class _AIInsightIllustrationState extends State<AIInsightIllustration>
           border: Border.all(color: AppColors.borderLight),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -537,9 +537,9 @@ class _AIInsightIllustrationState extends State<AIInsightIllustration>
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  _cleanBar(0.35, AppColors.accentOrange.withOpacity(0.4)),
-                  _cleanBar(0.6, AppColors.accentOrange.withOpacity(0.6)),
-                  _cleanBar(0.45, AppColors.accentOrange.withOpacity(0.5)),
+                  _cleanBar(0.35, AppColors.accentOrange.withValues(alpha: 0.4)),
+                  _cleanBar(0.6, AppColors.accentOrange.withValues(alpha: 0.6)),
+                  _cleanBar(0.45, AppColors.accentOrange.withValues(alpha: 0.5)),
                   _cleanBar(0.85, AppColors.accentOrange),
                 ],
               ),
@@ -676,7 +676,7 @@ class _GrowIllustrationState extends State<GrowIllustration>
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppColors.accentOrange.withOpacity(0.08),
+                    AppColors.accentOrange.withValues(alpha: 0.08),
                     Colors.transparent,
                   ],
                 ),
@@ -719,7 +719,7 @@ class _GrowIllustrationState extends State<GrowIllustration>
         border: Border.all(color: AppColors.borderLight, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 30,
             offset: const Offset(0, 10),
           ),
@@ -733,7 +733,7 @@ class _GrowIllustrationState extends State<GrowIllustration>
             Container(
               width: 36, height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textTertiary.withOpacity(0.3),
+                color: AppColors.textTertiary.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -743,7 +743,7 @@ class _GrowIllustrationState extends State<GrowIllustration>
             Container(
               width: 48, height: 48,
               decoration: BoxDecoration(
-                color: AppColors.accentOrange.withOpacity(0.1),
+                color: AppColors.accentOrange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(
@@ -758,7 +758,7 @@ class _GrowIllustrationState extends State<GrowIllustration>
             Container(
               width: 100, height: 5,
               decoration: BoxDecoration(
-                color: AppColors.textTertiary.withOpacity(0.15),
+                color: AppColors.textTertiary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
@@ -766,7 +766,7 @@ class _GrowIllustrationState extends State<GrowIllustration>
             Container(
               width: 70, height: 5,
               decoration: BoxDecoration(
-                color: AppColors.textTertiary.withOpacity(0.1),
+                color: AppColors.textTertiary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
@@ -798,11 +798,11 @@ class _GrowIllustrationState extends State<GrowIllustration>
       width: 16,
       height: 80 * factor,
       decoration: BoxDecoration(
-        color: AppColors.accentOrange.withOpacity(opacity),
+        color: AppColors.accentOrange.withValues(alpha: opacity),
         borderRadius: BorderRadius.circular(5),
         boxShadow: isLast ? [
           BoxShadow(
-            color: AppColors.accentOrange.withOpacity(0.4),
+            color: AppColors.accentOrange.withValues(alpha: 0.4),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -826,8 +826,8 @@ class _GrowIllustrationState extends State<GrowIllustration>
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                AppColors.accentOrange.withOpacity(0.6),
-                AppColors.accentOrange.withOpacity(0),
+                AppColors.accentOrange.withValues(alpha: 0.6),
+                AppColors.accentOrange.withValues(alpha: 0),
               ],
             ),
             borderRadius: BorderRadius.circular(2),
@@ -873,7 +873,7 @@ class _GrowIllustrationState extends State<GrowIllustration>
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFFD700).withOpacity(0.3),
+              color: const Color(0xFFFFD700).withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -922,7 +922,7 @@ class _MessyChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.textTertiary.withOpacity(0.4)
+      ..color = AppColors.textTertiary.withValues(alpha: 0.4)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -938,7 +938,7 @@ class _MessyChartPainter extends CustomPainter {
     canvas.drawPath(path, paint);
 
     // Red dots for "errors"
-    final dotPaint = Paint()..color = AppColors.danger.withOpacity(0.5);
+    final dotPaint = Paint()..color = AppColors.danger.withValues(alpha: 0.5);
     canvas.drawCircle(Offset(size.width * 0.2, size.height * 0.2), 2, dotPaint);
     canvas.drawCircle(Offset(size.width * 0.7, size.height * 0.5), 2, dotPaint);
   }

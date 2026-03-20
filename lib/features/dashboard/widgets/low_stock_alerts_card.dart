@@ -139,7 +139,7 @@ class LowStockAlertsCard extends ConsumerWidget {
                         color: AppColors.success.withValues(alpha: 0.5)),
                     const SizedBox(height: 8),
                     Text(
-                       'All products are well stocked',
+                       l10n.allProductsWellStocked,
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.textTertiary,
                       ),

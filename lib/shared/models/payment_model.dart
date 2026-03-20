@@ -10,6 +10,7 @@ class Payment {
   final String notes;
   final List<String> appliedToPurchaseIds;
   final String? receiptUrl;
+  final String? transactionId;
   final DateTime createdAt;
 
   const Payment({
@@ -23,6 +24,7 @@ class Payment {
     this.notes = '',
     this.appliedToPurchaseIds = const [],
     this.receiptUrl,
+    this.transactionId,
     required this.createdAt,
   });
 
@@ -37,6 +39,7 @@ class Payment {
     String? notes,
     List<String>? appliedToPurchaseIds,
     String? receiptUrl,
+    String? transactionId,
     DateTime? createdAt,
   }) {
     return Payment(
@@ -50,6 +53,7 @@ class Payment {
       notes: notes ?? this.notes,
       appliedToPurchaseIds: appliedToPurchaseIds ?? this.appliedToPurchaseIds,
       receiptUrl: receiptUrl ?? this.receiptUrl,
+      transactionId: transactionId ?? this.transactionId,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -66,6 +70,7 @@ class Payment {
       'notes': notes,
       'applied_to_purchase_ids': appliedToPurchaseIds,
       if (receiptUrl != null) 'receipt_url': receiptUrl,
+      if (transactionId != null) 'transaction_id': transactionId,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -82,6 +87,7 @@ class Payment {
       notes: json['notes'] as String? ?? '',
       appliedToPurchaseIds: (json['applied_to_purchase_ids'] as List<dynamic>?)?.cast<String>() ?? [],
       receiptUrl: json['receipt_url'] as String?,
+      transactionId: json['transaction_id'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }

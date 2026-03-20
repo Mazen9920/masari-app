@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
@@ -16,6 +17,7 @@ import 'widgets/transaction_search_delegate.dart';
 import '../../shared/widgets/async_value_widget.dart';
 import 'package:go_router/go_router.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../shared/utils/money_utils.dart';
 import '../../core/services/shopify_sync_service.dart';
 import '../../core/navigation/app_router.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
@@ -37,7 +39,16 @@ class TransactionsListScreen extends ConsumerStatefulWidget {
 }
 
 class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen> {
-  int _selectedPeriodIndex = 2; // "This Month" default
+  int _allTabPeriodIndex = 2; // "This Month" default
+  int _salesTabPeriodIndex = 2;
+  int get _selectedPeriodIndex => _tabIndex == 0 ? _allTabPeriodIndex : _salesTabPeriodIndex;
+  set _selectedPeriodIndex(int value) {
+    if (_tabIndex == 0) {
+      _allTabPeriodIndex = value;
+    } else {
+      _salesTabPeriodIndex = value;
+    }
+  }
   TransactionFilter _filter = TransactionFilter.empty;
   SaleFilter _salesFilter = SaleFilter.empty;
   DateTimeRange? _customRange;
@@ -170,10 +181,10 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       // 1) Restore stock for each sale item
       for (final item in sale.items) {
         if (item.productId != null && item.quantity > 0) {
-          inventoryNotifier.adjustStock(
+          await inventoryNotifier.adjustStock(
             item.productId!,
             item.variantId ?? '${item.productId}_v0',
-            item.quantity.toInt(),
+            item.quantity.round(),
             'Order cancelled',
             valuationMethod: valMethod,
           );
@@ -183,14 +194,13 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       // 2) Create reversal entries for linked transactions
       for (final tx in transactions) {
         if (tx.saleId == sale.id && tx.amount != 0) {
-          // Mark original as cancelled (audit trail — keep original amount)
+          // Mark original with [Cancelled] prefix but keep in P&L for historical accuracy
           transNotifier.updateTransaction(tx.copyWith(
             title: '[Cancelled] ${tx.title}',
-            excludeFromPL: true,
             updatedAt: now,
           ));
 
-          // Create reversal entry with negated amount
+          // Create reversal entry with negated amount — visible in P&L
           final reversalId = '${tx.id}_reversal_${now.millisecondsSinceEpoch}';
           transNotifier.addTransaction(tx.copyWith(
             id: reversalId,
@@ -198,7 +208,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
             amount: -tx.amount,
             dateTime: now,
             note: 'Auto-reversal for cancelled order ${sale.id}',
-            excludeFromPL: true,
+            excludeFromPL: false,
             createdAt: now,
             updatedAt: now,
           ));
@@ -404,32 +414,34 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       } else if (txDate == yesterday) {
         label = 'Yesterday — ${_formatMonthDay(tx.dateTime)}';
       } else {
-        label = _formatMonthDay(tx.dateTime);
+        label = _formatMonthDay(tx.dateTime, includeYear: tx.dateTime.year != today.year);
       }
       map.putIfAbsent(label, () => []).add(tx);
     }
     return map;
   }
 
-  String _formatMonthDay(DateTime dt) {
+  String _formatMonthDay(DateTime dt, {bool includeYear = false}) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
-    return '${months[dt.month - 1]} ${dt.day}';
+    return includeYear
+        ? '${months[dt.month - 1]} ${dt.day}, ${dt.year}'
+        : '${months[dt.month - 1]} ${dt.day}';
   }
 
-  double get _totalIncome =>
-      _filteredTransactions.where((t) => t.isIncome && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount);
+  double get _totalIncome => roundMoney(
+      _filteredTransactions.where((t) => t.isIncome && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount));
 
-  double get _totalExpenses =>
-      _filteredTransactions.where((t) => !t.isIncome && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount.abs());
+  double get _totalExpenses => roundMoney(
+      _filteredTransactions.where((t) => !t.isIncome && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount.abs()));
 
-  double get _salesTotalRevenue =>
-      _filteredTransactions.where((t) => t.categoryId == 'cat_sales_revenue' && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount.abs());
+  double get _salesTotalRevenue => roundMoney(
+      _filteredTransactions.where((t) => t.categoryId == 'cat_sales_revenue' && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount));
 
-  double get _salesTotalCogs =>
-      _filteredTransactions.where((t) => t.categoryId == 'cat_cogs' && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount.abs());
+  double get _salesTotalCogs => roundMoney(
+      _filteredTransactions.where((t) => t.categoryId == 'cat_cogs' && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount.abs()));
 
   // ─── Sales tab: render Sale objects directly ─────────
   List<Sale> get _filteredSales {
@@ -487,7 +499,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (_) => SaleFilterSheet(initialFilter: _salesFilter),
+        builder: (_) => SaleFilterSheet(initialFilter: _salesFilter, currency: ref.read(appSettingsProvider).currency),
       );
       if (result != null) {
         setState(() => _salesFilter = result);
@@ -498,7 +510,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (_) => TransactionFilterSheet(initialFilter: _filter),
+        builder: (_) => TransactionFilterSheet(initialFilter: _filter, currency: ref.read(appSettingsProvider).currency),
       );
       if (result != null) {
         setState(() => _filter = result);
@@ -526,7 +538,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
   void _duplicateTransaction(Transaction tx) {
     HapticFeedback.lightImpact();
     final dup = tx.copyWith(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: const Uuid().v4(),
       dateTime: DateTime.now(),
       createdAt: DateTime.now(),
       saleId: null,
@@ -630,30 +642,6 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       if (extractedId != null) {
         for (final s in sales) {
           if (s.id == extractedId) {
-            context.pushNamed('SaleDetailScreen', extra: {'sale': s});
-            return true;
-          }
-        }
-      }
-
-      // 2b) Fallback: match by amount + date
-      if (tx.categoryId == 'cat_sales_revenue') {
-        for (final s in sales) {
-          if (s.total == tx.amount &&
-              s.date.year == tx.dateTime.year &&
-              s.date.month == tx.dateTime.month &&
-              s.date.day == tx.dateTime.day) {
-            context.pushNamed('SaleDetailScreen', extra: {'sale': s});
-            return true;
-          }
-        }
-      }
-      if (tx.categoryId == 'cat_cogs') {
-        for (final s in sales) {
-          if (-s.totalCogs == tx.amount &&
-              s.date.year == tx.dateTime.year &&
-              s.date.month == tx.dateTime.month &&
-              s.date.day == tx.dateTime.day) {
             context.pushNamed('SaleDetailScreen', extra: {'sale': s});
             return true;
           }
@@ -784,7 +772,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     final currency = ref.watch(appSettingsProvider).currency;
     final revenue = _salesTotalRevenue;
     final cogs = _salesTotalCogs;
-    final grossProfit = revenue - cogs;
+    final grossProfit = roundMoney(revenue - cogs);
     final fmtNum = NumberFormat('#,##0.00', 'en');
 
     return Padding(
@@ -2451,6 +2439,7 @@ class _SaleChildRow extends StatelessWidget {
 //  Fulfillment status helpers
 // ═══════════════════════════════════════════════════════════
 
+// ignore: unused_element
 Color _fulfillmentColor(FulfillmentStatus s) {
   switch (s) {
     case FulfillmentStatus.fulfilled:
@@ -2508,23 +2497,18 @@ class _SaleTileWithExpand extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCancelled = sale.orderStatus == OrderStatus.cancelled;
 
-    Color statusColor;
     String statusLabel;
     switch (sale.paymentStatus) {
       case PaymentStatus.paid:
-        statusColor = AppColors.success;
         statusLabel = 'Paid';
         break;
       case PaymentStatus.refunded:
-        statusColor = AppColors.danger;
         statusLabel = 'Refunded';
         break;
       case PaymentStatus.partial:
-        statusColor = AppColors.warning;
         statusLabel = 'Partial';
         break;
       case PaymentStatus.unpaid:
-        statusColor = AppColors.danger;
         statusLabel = 'Unpaid';
         break;
     }

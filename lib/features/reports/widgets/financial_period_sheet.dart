@@ -170,7 +170,7 @@ class _FinancialPeriodSheetState extends State<_FinancialPeriodSheet> {
             child: ListView.separated(
               padding: EdgeInsets.only(bottom: bottomPad + 16),
               itemCount: items.length,
-              separatorBuilder: (_, __) => const Divider(
+              separatorBuilder: (_, _) => const Divider(
                 height: 1,
                 indent: 20,
                 endIndent: 20,

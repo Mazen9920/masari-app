@@ -307,10 +307,46 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           GestureDetector(
             onTap: () async {
               HapticFeedback.lightImpact();
-              final error = await ref
+              var error = await ref
                   .read(inventoryProvider.notifier)
                   .recalculateBreakdownCosts(productId: product.id);
               if (!context.mounted) return;
+
+              // If existing layers would be overwritten, ask for confirmation
+              if (error == 'CONFIRM_REQUIRED') {
+                if (!mounted) return;
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Replace cost layers?'),
+                    content: const Text(
+                      'Output variants already have cost layers. '
+                      'Recalculating will replace them with a single '
+                      'layer at the current breakdown cost.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: const Text('Recalculate'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true || !context.mounted) return;
+                error = await ref
+                    .read(inventoryProvider.notifier)
+                    .recalculateBreakdownCosts(
+                      productId: product.id,
+                      confirmed: true,
+                    );
+                if (!context.mounted) return;
+              }
+              if (!mounted) return;
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(error ?? 'Output costs recalculated'),
@@ -545,9 +581,35 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             child: ElevatedButton(
               onPressed: _adjustQuantity != 0
                   ? () async {
+                      // Warn if adjustment would make stock negative
+                      final variantId = _adjustVariantId ?? product.defaultVariant.id;
+                      final variant = product.variantById(variantId);
+                      if (variant != null && variant.currentStock + _adjustQuantity < 0) {
+                        final proceed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Negative stock'),
+                            content: Text(
+                              'This adjustment will bring stock to '
+                              '${variant.currentStock + _adjustQuantity}. Continue?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                child: const Text('Continue'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (proceed != true || !mounted) return;
+                      }
                       final result = await ref.read(inventoryProvider.notifier).adjustStock(
                             widget.productId,
-                            _adjustVariantId ?? product.defaultVariant.id,
+                            variantId,
                             _adjustQuantity,
                             _adjustReason,
                             valuationMethod: ref.read(appSettingsProvider).valuationMethod,
@@ -875,6 +937,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                             valuationMethod: valMethod,
                           );
                       HapticFeedback.mediumImpact();
+                      if (!ctx.mounted) return;
                       Navigator.pop(ctx);
                       if (!result.isSuccess && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -960,8 +1023,8 @@ class _ProductHeader extends StatelessWidget {
                     fit: BoxFit.cover,
                     width: 80,
                     height: 80,
-                    placeholder: (_, __) => Icon(product.icon, size: 36, color: product.color),
-                    errorWidget: (_, __, ___) => Icon(product.icon, size: 36, color: product.color),
+                    placeholder: (_, _) => Icon(product.icon, size: 36, color: product.color),
+                    errorWidget: (_, _, _) => Icon(product.icon, size: 36, color: product.color),
                   ),
                 )
               : Icon(product.icon, size: 36, color: product.color),
@@ -2036,7 +2099,7 @@ class _ConversionHistorySection extends ConsumerWidget {
 
     return async.when(
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       data: (orders) {
         if (orders.isEmpty) return const SizedBox.shrink();
 

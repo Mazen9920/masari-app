@@ -9,10 +9,12 @@ import '../../../shared/models/category_data.dart';
 /// Returns a [TransactionFilter] when "Apply Filters" is tapped.
 class TransactionFilterSheet extends StatefulWidget {
   final TransactionFilter initialFilter;
+  final String currency;
 
   const TransactionFilterSheet({
     super.key,
     required this.initialFilter,
+    this.currency = '\$',
   });
 
   @override
@@ -99,7 +101,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textTertiary.withOpacity(0.3),
+                color: AppColors.textTertiary.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -134,7 +136,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
           ),
 
           // Divider
-          Container(height: 1, color: AppColors.borderLight.withOpacity(0.5)),
+          Container(height: 1, color: AppColors.borderLight.withValues(alpha: 0.5)),
 
           // Scrollable content
           Expanded(
@@ -157,11 +159,11 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border(
-                top: BorderSide(color: AppColors.borderLight.withOpacity(0.5)),
+                top: BorderSide(color: AppColors.borderLight.withValues(alpha: 0.5)),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, -4),
                 ),
@@ -179,7 +181,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  shadowColor: AppColors.accentOrange.withOpacity(0.3),
+                  shadowColor: AppColors.accentOrange.withValues(alpha: 0.3),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -200,7 +202,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -262,7 +264,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.06),
+                                color: Colors.black.withValues(alpha: 0.06),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -304,7 +306,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
           children: [
             _sectionLabel('Amount Range'),
             Text(
-              '\$${_amountRange.start.toInt()} - \$${_amountRange.end.toInt() >= 10000 ? '10k+' : _amountRange.end.toInt().toString()}',
+              '${widget.currency}${_amountRange.start.toInt()} - ${widget.currency}${_amountRange.end.toInt() >= 10000 ? '10k+' : _amountRange.end.toInt().toString()}',
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.accentOrange,
                 fontWeight: FontWeight.w800,
@@ -319,7 +321,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
             activeTrackColor: AppColors.accentOrange,
             inactiveTrackColor: AppColors.borderLight,
             thumbColor: Colors.white,
-            overlayColor: AppColors.accentOrange.withOpacity(0.1),
+            overlayColor: AppColors.accentOrange.withValues(alpha: 0.1),
             thumbShape: _CustomThumbShape(),
             trackHeight: 4,
             rangeThumbShape: _CustomRangeThumbShape(),
@@ -340,14 +342,14 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '\$0',
+                '${widget.currency}0',
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               Text(
-                '\$10k+',
+                '${widget.currency}10k+',
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontWeight: FontWeight.w500,
@@ -390,12 +392,12 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: isChecked
-                      ? AppColors.accentOrange.withOpacity(0.04)
+                      ? AppColors.accentOrange.withValues(alpha: 0.04)
                       : Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: isChecked
-                        ? AppColors.accentOrange.withOpacity(0.25)
+                        ? AppColors.accentOrange.withValues(alpha: 0.25)
                         : AppColors.borderLight,
                     width: isChecked ? 1.5 : 1,
                   ),
@@ -412,7 +414,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                         boxShadow: isChecked
                             ? [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
+                                  color: Colors.black.withValues(alpha: 0.04),
                                   blurRadius: 4,
                                 ),
                               ]
@@ -456,7 +458,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                         border: Border.all(
                           color: isChecked
                               ? AppColors.accentOrange
-                              : AppColors.textTertiary.withOpacity(0.4),
+                              : AppColors.textTertiary.withValues(alpha: 0.4),
                           width: 2,
                         ),
                       ),
@@ -519,7 +521,7 @@ class _CustomRangeThumbShape extends RangeSliderThumbShape {
       center + const Offset(0, 1),
       12,
       Paint()
-        ..color = Colors.black.withOpacity(0.12)
+        ..color = Colors.black.withValues(alpha: 0.12)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
     );
 
@@ -570,7 +572,7 @@ class _CustomThumbShape extends SliderComponentShape {
       center + const Offset(0, 1),
       12,
       Paint()
-        ..color = Colors.black.withOpacity(0.12)
+        ..color = Colors.black.withValues(alpha: 0.12)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
     );
 

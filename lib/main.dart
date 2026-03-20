@@ -6,13 +6,19 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/intl.dart' show Intl;
 import 'package:masari_app/l10n/app_localizations.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/navigation/app_router.dart';
+import 'core/providers/app_settings_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Force Western (English) numerals for all intl formatting (NumberFormat, DateFormat)
+  // even when the UI locale is Arabic. The Flutter UI locale is set separately in MaterialApp.
+  Intl.defaultLocale = 'en';
   
   // Initialize Firebase with the generated options
   try {
@@ -53,6 +59,7 @@ class MasariApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    final locale = ref.watch(localeProvider);
 
     return MaterialApp.router(
       title: 'Masari',
@@ -67,6 +74,7 @@ class MasariApp extends ConsumerWidget {
       routerConfig: router,
 
       // ─── Localization ───
+      locale: locale,
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

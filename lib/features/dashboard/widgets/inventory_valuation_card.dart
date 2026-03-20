@@ -84,7 +84,7 @@ class InventoryValuationCard extends ConsumerWidget {
                   color: AppColors.danger,
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: _ValuationTile(
                   label: l10n.retailValue,
@@ -95,7 +95,7 @@ class InventoryValuationCard extends ConsumerWidget {
               ),
             ],
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -106,7 +106,7 @@ class InventoryValuationCard extends ConsumerWidget {
                   color: AppColors.accentOrange,
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: _ValuationTile(
                   label: l10n.totalSkus,
@@ -138,7 +138,6 @@ class _ValuationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(

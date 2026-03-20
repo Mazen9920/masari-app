@@ -601,8 +601,8 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                       fit: BoxFit.cover,
                       width: double.infinity,
                       height: 180,
-                      placeholder: (_, __) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                      errorWidget: (_, __, ___) => const Center(child: Icon(Icons.broken_image_rounded, size: 48, color: AppColors.textTertiary)),
+                      placeholder: (_, _) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      errorWidget: (_, _, _) => const Center(child: Icon(Icons.broken_image_rounded, size: 48, color: AppColors.textTertiary)),
                     ),
                   )
                 else
@@ -998,7 +998,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
             ),
             Switch.adaptive(
               value: _hasBreakdownRecipe,
-              activeColor: AppColors.primaryNavy,
+              activeTrackColor: AppColors.primaryNavy,
               onChanged: (val) {
                 setState(() {
                   _hasBreakdownRecipe = val;
@@ -1335,7 +1335,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                           ),
                           Switch.adaptive(
                             value: _isManufactured,
-                            activeColor: const Color(0xFF8B5CF6),
+                            activeTrackColor: const Color(0xFF8B5CF6),
                             onChanged: (val) {
                               setState(() => _isManufactured = val);
                               _markChanged();

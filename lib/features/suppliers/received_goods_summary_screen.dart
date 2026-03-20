@@ -14,17 +14,32 @@ import '../../shared/utils/safe_pop.dart';
 import '../../l10n/app_localizations.dart';
 
 /// Received Goods Summary — overview of goods receipts grouped by purchase.
-class ReceivedGoodsSummaryScreen extends ConsumerWidget {
+class ReceivedGoodsSummaryScreen extends ConsumerStatefulWidget {
   const ReceivedGoodsSummaryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
+  ConsumerState<ReceivedGoodsSummaryScreen> createState() =>
+      _ReceivedGoodsSummaryScreenState();
+}
+
+class _ReceivedGoodsSummaryScreenState
+    extends ConsumerState<ReceivedGoodsSummaryScreen> {
+  DateTimeRange? _dateRange;
+
+  @override
+  Widget build(BuildContext context) {
     final fmt = NumberFormat('#,##0');
     final dateFmt = DateFormat('dd MMM');
     final currency = ref.watch(currencyProvider);
-    final receipts = ref.watch(goodsReceiptsProvider);
-    final purchases = ref.watch(purchasesProvider);
+    final allReceipts = ref.watch(goodsReceiptsProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
+
+    // Apply date range filter
+    final receipts = _dateRange == null
+        ? allReceipts
+        : allReceipts.where((r) =>
+            !r.date.isBefore(_dateRange!.start) &&
+            r.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -33,6 +48,7 @@ class ReceivedGoodsSummaryScreen extends ConsumerWidget {
         child: Column(
           children: [
             _buildHeader(context),
+            _buildDateRangeChip(context, dateFmt),
             Expanded(
               child: receipts.isEmpty && purchases.isEmpty
                   ? _buildEmpty(context)
@@ -48,6 +64,44 @@ class ReceivedGoodsSummaryScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDateRangeChip(BuildContext context, DateFormat dateFmt) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          ActionChip(
+            avatar: const Icon(Icons.date_range_rounded, size: 16),
+            label: Text(
+              _dateRange == null
+                  ? 'All dates'
+                  : '${dateFmt.format(_dateRange!.start)} – ${dateFmt.format(_dateRange!.end)}',
+              style: AppTypography.captionSmall.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onPressed: () async {
+              final picked = await showDateRangePicker(
+                context: context,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now(),
+                initialDateRange: _dateRange,
+              );
+              if (picked != null) setState(() => _dateRange = picked);
+            },
+          ),
+          if (_dateRange != null) ...[
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: () => setState(() => _dateRange = null),
+              child: const Icon(Icons.close_rounded,
+                  size: 18, color: AppColors.textTertiary),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -272,7 +326,7 @@ class _HeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    const accentColor = Color(0xFF8B5CF6);
+    const accentColor = AppColors.chartPurple;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -383,7 +437,6 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         Expanded(
@@ -391,7 +444,7 @@ class _StatsRow extends StatelessWidget {
            'Confirmed',
           '$confirmedCount',
            'Receipts verified',
-          const Color(0xFF27AE60),
+          AppColors.success,
           Icons.check_circle_rounded,
         )),
         const SizedBox(width: 12),
@@ -401,8 +454,8 @@ class _StatsRow extends StatelessWidget {
           '$pendingCount',
           pendingCount == 0 ? 'All confirmed ✓' :  'Awaiting review',
           pendingCount > 0
-              ? const Color(0xFFE67E22)
-              : const Color(0xFF27AE60),
+              ? AppColors.accentOrange
+              : AppColors.success,
           pendingCount > 0
               ? Icons.pending_rounded
               : Icons.check_circle_rounded,
@@ -492,7 +545,7 @@ class _PurchaseReceiptCard extends StatelessWidget {
         totalOrdered > 0 ? (totalReceived / totalOrdered * 100) : 0.0;
     final isComplete = fulfilmentPct >= 100;
     final barColor =
-        isComplete ? const Color(0xFF27AE60) : const Color(0xFF8B5CF6);
+        isComplete ? AppColors.success : AppColors.chartPurple;
 
     return Container(
       decoration: BoxDecoration(
@@ -536,12 +589,12 @@ class _PurchaseReceiptCard extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF5F3FF),
+                    color: AppColors.chartPurpleLight,
                     shape: BoxShape.circle,
                   ),
                   child: const Center(
                       child: Icon(Icons.shopping_cart_rounded,
-                          color: Color(0xFF8B5CF6), size: 20)),
+                          color: AppColors.chartPurple, size: 20)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -739,12 +792,12 @@ class _PurchaseReceiptCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.add_rounded,
-                        size: 16, color: const Color(0xFF8B5CF6)),
+                        size: 16, color: AppColors.chartPurple),
                     const SizedBox(width: 6),
                     Text(
                        'Receive Items',
                       style: TextStyle(
-                          color: const Color(0xFF8B5CF6),
+                          color: AppColors.chartPurple,
                           fontWeight: FontWeight.w600,
                           fontSize: 13),
                     ),
@@ -763,11 +816,11 @@ class _PurchaseReceiptCard extends StatelessWidget {
   Color _receiptStatusColor(ReceiptStatus status) {
     switch (status) {
       case ReceiptStatus.confirmed:
-        return const Color(0xFF27AE60);
+        return AppColors.success;
       case ReceiptStatus.pending:
-        return const Color(0xFFE67E22);
+        return AppColors.accentOrange;
       case ReceiptStatus.rejected:
-        return const Color(0xFFE74C3C);
+        return AppColors.danger;
     }
   }
 }
@@ -822,7 +875,7 @@ void _showReceivedItemsSheet(
               child: Row(
                 children: [
                   const Icon(Icons.inventory_2_rounded,
-                      color: Color(0xFF7C3AED), size: 22),
+                      color: AppColors.shopifyPurple, size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -907,8 +960,8 @@ void _showReceivedItemsSheet(
                         ? (item.receivedQty / item.qty * 100)
                         : 0.0;
                     final c = pct >= 100
-                        ? const Color(0xFF27AE60)
-                        : const Color(0xFF8B5CF6);
+                        ? AppColors.success
+                        : AppColors.chartPurple;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 14),
                       child: Column(
@@ -1054,12 +1107,12 @@ void _showReceivedItemsSheet(
                                         children: [
                                           Icon(Icons.visibility_rounded,
                                               size: 14,
-                                              color: Color(0xFF7C3AED)),
+                                              color: AppColors.shopifyPurple),
                                           SizedBox(width: 5),
                                           Text(
                                             l10n.viewDetails,
                                             style: TextStyle(
-                                              color: Color(0xFF7C3AED),
+                                              color: AppColors.shopifyPurple,
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -1129,7 +1182,7 @@ void _showReceivedItemsSheet(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF8B5CF6),
+                          color: AppColors.chartPurple,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Row(
@@ -1164,11 +1217,11 @@ void _showReceivedItemsSheet(
 Color _sheetReceiptColor(ReceiptStatus status) {
   switch (status) {
     case ReceiptStatus.confirmed:
-      return const Color(0xFF27AE60);
+      return AppColors.success;
     case ReceiptStatus.pending:
-      return const Color(0xFFE67E22);
+      return AppColors.accentOrange;
     case ReceiptStatus.rejected:
-      return const Color(0xFFE74C3C);
+      return AppColors.danger;
   }
 }
 
@@ -1310,11 +1363,11 @@ class _ReceiptRow extends StatelessWidget {
   Color _receiptStatusColor(ReceiptStatus status) {
     switch (status) {
       case ReceiptStatus.confirmed:
-        return const Color(0xFF27AE60);
+        return AppColors.success;
       case ReceiptStatus.pending:
-        return const Color(0xFFE67E22);
+        return AppColors.accentOrange;
       case ReceiptStatus.rejected:
-        return const Color(0xFFE74C3C);
+        return AppColors.danger;
     }
   }
 }

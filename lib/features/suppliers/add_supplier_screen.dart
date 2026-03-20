@@ -52,8 +52,37 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
     super.dispose();
   }
 
+  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
   void _save() {
     if (!_canSave) return;
+
+    final email = _emailCtrl.text.trim();
+    if (email.isNotEmpty && !_emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please enter a valid email address'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    final phone = _phoneCtrl.text.trim();
+    if (phone.isNotEmpty && phone.replaceAll(RegExp(r'[^0-9]'), '').length < 7) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Phone number must have at least 7 digits'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
     HapticFeedback.mediumImpact();
     final supplier = Supplier(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -155,13 +184,13 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
               color: _canSave
-                  ? const Color(0xFFE67E22)
-                  : const Color(0xFFE67E22).withValues(alpha: 0.4),
+                  ? AppColors.accentOrange
+                  : AppColors.accentOrange.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(14),
               boxShadow: _canSave
                   ? [
                       BoxShadow(
-                        color: const Color(0xFFE67E22)
+                        color: AppColors.accentOrange
                             .withValues(alpha: 0.3),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
@@ -451,7 +480,7 @@ class _ContactInfoSection extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color: AppColors.surfaceSubtle,
                   borderRadius: const BorderRadius.horizontal(
                       left: Radius.circular(10)),
                   border: Border.all(
@@ -582,7 +611,7 @@ class _ContactInfoSection extends StatelessWidget {
                 HapticFeedback.selectionClick();
                 onWhatsappChanged(v);
               },
-              activeColor: const Color(0xFFE67E22),
+              activeTrackColor: AppColors.accentOrange,
             ),
           ],
         ),
@@ -857,7 +886,7 @@ class _FormField extends StatelessWidget {
             ),
             if (required)
               const Text(' *',
-                  style: TextStyle(color: Color(0xFFDC2626), fontSize: 13)),
+                  style: TextStyle(color: AppColors.badgeTextNegative, fontSize: 13)),
             if (optional)
               Text(
                 ' (Optional)',

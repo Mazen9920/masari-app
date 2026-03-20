@@ -24,7 +24,7 @@ class PaymentDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(currencyProvider);
     final fmt = NumberFormat('#,##0');
-    final purchases = ref.watch(purchasesProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -157,12 +157,12 @@ class PaymentDetailScreen extends ConsumerWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: const Color(0xFF27AE60).withValues(alpha: 0.1),
+              color: AppColors.success.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.check_rounded,
-              color: Color(0xFF27AE60),
+              color: AppColors.success,
               size: 36,
             ),
           ),
@@ -170,7 +170,7 @@ class PaymentDetailScreen extends ConsumerWidget {
           const Text(
             'Payment Successful',
             style: TextStyle(
-              color: Color(0xFF27AE60),
+              color: AppColors.success,
               fontWeight: FontWeight.w600,
               fontSize: 16,
             ),
@@ -365,7 +365,7 @@ class PaymentDetailScreen extends ConsumerWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: AppColors.surfaceSubtle,
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(16)),
             ),
@@ -434,7 +434,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: p.paymentStatus == 2
-                              ? const Color(0xFFF0FDF4)
+                              ? AppColors.chartGreenLight
                               : const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(6),
                         ),
@@ -442,7 +442,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                           p.statusLabel,
                           style: TextStyle(
                             color: p.paymentStatus == 2
-                                ? const Color(0xFF27AE60)
+                                ? AppColors.success
                                 : const Color(0xFFD97706),
                             fontWeight: FontWeight.w600,
                             fontSize: 11,

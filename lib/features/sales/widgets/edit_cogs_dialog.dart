@@ -55,7 +55,8 @@ class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
   }
 
   double _parsedCost(int index) {
-    return double.tryParse(_controllers[index].text) ?? 0;
+    final v = double.tryParse(_controllers[index].text) ?? 0;
+    return v < 0 ? 0 : v;
   }
 
   double get _newTotalCogs {
@@ -207,7 +208,7 @@ class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: sale.items.length,
-                separatorBuilder: (_, __) => Divider(
+                separatorBuilder: (_, _) => Divider(
                   color: AppColors.borderLight.withValues(alpha: 0.5),
                   height: 20,
                 ),

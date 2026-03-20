@@ -63,8 +63,37 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
     super.dispose();
   }
 
+  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
   void _save() {
     if (!_canSave) return;
+
+    final email = _emailCtrl.text.trim();
+    if (email.isNotEmpty && !_emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please enter a valid email address'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    final phone = _phoneCtrl.text.trim();
+    if (phone.isNotEmpty && phone.replaceAll(RegExp(r'[^0-9]'), '').length < 7) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Phone number must have at least 7 digits'),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
     HapticFeedback.mediumImpact();
 
     final updated = widget.supplier.copyWith(
@@ -116,7 +145,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
             },
             child: const Text('Delete',
                 style: TextStyle(
-                    color: Color(0xFFEF4444), fontWeight: FontWeight.w600)),
+                    color: AppColors.chartRed, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -178,7 +207,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
                         child: Text(
                           'Delete Supplier',
                           style: TextStyle(
-                            color: Color(0xFFEF4444),
+                            color: AppColors.chartRed,
                             fontWeight: FontWeight.w600,
                             fontSize: 15,
                           ),
@@ -238,7 +267,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
               'Save',
               style: TextStyle(
                 color:
-                    _canSave ? const Color(0xFFE67E22) : AppColors.textTertiary,
+                    _canSave ? AppColors.accentOrange : AppColors.textTertiary,
                 fontWeight: FontWeight.w600,
                 fontSize: 15,
               ),
@@ -287,7 +316,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: const Color(0xFFE67E22),
+              color: AppColors.accentOrange,
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2),
             ),
@@ -404,7 +433,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
                   HapticFeedback.selectionClick();
                   setState(() => _whatsapp = v);
                 },
-                activeColor: AppColors.primaryNavy,
+                activeTrackColor: AppColors.primaryNavy,
               ),
             ],
           ),
@@ -474,7 +503,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
                   HapticFeedback.selectionClick();
                   setState(() => _trackPayables = v);
                 },
-                activeColor: AppColors.primaryNavy,
+                activeTrackColor: AppColors.primaryNavy,
               ),
             ],
           ),
@@ -623,7 +652,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
                   title: Text(e.value),
                   trailing: e.key == current
                       ? const Icon(Icons.check_rounded,
-                          color: Color(0xFFE67E22))
+                          color: AppColors.accentOrange)
                       : null,
                   onTap: () {
                     onSelect(e.key);

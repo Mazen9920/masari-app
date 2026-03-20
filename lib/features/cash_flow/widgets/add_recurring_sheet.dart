@@ -120,7 +120,7 @@ class _AddRecurringSheetState extends ConsumerState<AddRecurringSheet> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<RecurrenceFrequency>(
-                    value: _frequency,
+                    initialValue: _frequency,
                     decoration: InputDecoration(
                       labelText: 'Frequency',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 
 import '../utils/money_utils.dart';
@@ -218,8 +220,11 @@ class ProductVariant {
   bool get isDefault => optionValues.isEmpty;
 
   /// Returns the effective cost layers, auto-migrating from legacy data.
-  /// If costLayers is empty but stock/cost exist, creates a single layer
-  /// dated to epoch so it sorts as the oldest (FIFO consumes it first).
+  /// If costLayers is empty but stock/cost exist, creates a single synthetic
+  /// layer dated 2000-01-01 so it sorts as the oldest entry: FIFO will
+  /// consume it first, ensuring legacy stock is used up before newer layers.
+  /// This is intentional — new restocks will create properly-dated layers
+  /// that sit after this synthetic one in FIFO order.
   List<CostLayer> get effectiveCostLayers {
     if (costLayers.isNotEmpty) return costLayers;
     if (currentStock > 0 && costPrice > 0) {
@@ -251,7 +256,13 @@ class ProductVariant {
       remaining -= take;
     }
     // If remaining > 0 (shouldn't happen with valid stock), use last known cost
-    if (remaining > 0) totalCost += remaining * costPrice;
+    if (remaining > 0) {
+      developer.log(
+        'cogsPerUnit: cost layers exhausted with $remaining of $qty units unaccounted — padding with costPrice ($costPrice)',
+        name: 'ProductVariant',
+      );
+      totalCost += remaining * costPrice;
+    }
 
     return (totalCost / qty * 100).roundToDouble() / 100;
   }

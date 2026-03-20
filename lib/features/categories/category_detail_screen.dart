@@ -534,7 +534,7 @@ class _SpendCard extends StatelessWidget {
               tween: Tween(begin: 0, end: usedPercent / 100),
               duration: const Duration(milliseconds: 800),
               curve: Curves.easeOutCubic,
-              builder: (_, value, __) {
+              builder: (_, value, _) {
                 return SizedBox(
                   height: 8,
                   child: LinearProgressIndicator(
@@ -672,7 +672,7 @@ class _TrendChart extends StatelessWidget {
                             tween: Tween(begin: 0, end: d.heightFraction),
                             duration: Duration(milliseconds: 600 + i * 150),
                             curve: Curves.easeOutCubic,
-                            builder: (_, value, __) {
+                            builder: (_, value, _) {
                               return FractionallySizedBox(
                                 heightFactor: value,
                                 alignment: Alignment.bottomCenter,

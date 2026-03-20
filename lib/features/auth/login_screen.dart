@@ -146,10 +146,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           width: 64,
           height: 64,
           decoration: BoxDecoration(
-            color: AppColors.accentOrange.withOpacity(0.1),
+            color: AppColors.accentOrange.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: AppColors.accentOrange.withOpacity(0.2),
+              color: AppColors.accentOrange.withValues(alpha: 0.2),
             ),
           ),
           child: const Icon(
@@ -224,7 +224,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ));
             return;
           }
-          final repo = ref.read(authProvider.notifier);
           // Access the repo through the notifier's mechanism
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Sending password reset link…'),

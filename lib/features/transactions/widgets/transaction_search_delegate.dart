@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../shared/models/transaction_model.dart';
 import '../../../shared/models/category_data.dart';
-import '../../dashboard/widgets/recent_transactions.dart';
-import '../transaction_detail_screen.dart';
 
 /// Search delegate for transactions.
 /// Provides real-time filtering with a clean search UI.
@@ -78,7 +77,10 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
       final q = query.toLowerCase();
       final cat = CategoryData.findById(tx.categoryId);
       return tx.title.toLowerCase().contains(q) ||
-          cat.name.toLowerCase().contains(q);
+          cat.name.toLowerCase().contains(q) ||
+          (tx.note ?? '').toLowerCase().contains(q) ||
+          tx.amount.abs().toStringAsFixed(2).contains(q) ||
+          tx.paymentMethod.toLowerCase().contains(q);
     }).toList();
 
     if (results.isEmpty) {
@@ -93,17 +95,10 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
         itemCount: results.length,
         itemBuilder: (context, index) {
           final tx = results[index];
-          final cat = CategoryData.findById(tx.categoryId);
           return _SearchResultTile(
             transaction: tx,
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => TransactionDetailScreen(
-                    transaction: tx,
-                  ),
-                ),
-              );
+              context.pushNamed('TransactionDetailScreen', extra: {'transaction': tx});
             },
           );
         },
@@ -192,12 +187,12 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
               height: 72,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.textTertiary.withOpacity(0.08),
+                color: AppColors.textTertiary.withValues(alpha: 0.08),
               ),
               child: Icon(
                 Icons.search_off_rounded,
                 size: 32,
-                color: AppColors.textTertiary.withOpacity(0.5),
+                color: AppColors.textTertiary.withValues(alpha: 0.5),
               ),
             ),
             const SizedBox(height: 16),

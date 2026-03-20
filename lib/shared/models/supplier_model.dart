@@ -81,7 +81,7 @@ class Supplier {
     String? notes,
     String? supplierId,
     DateTime? lastTransaction,
-    DateTime? dueDate,
+    Object? dueDate = const _Sentinel(),
     Color? avatarBg,
     Color? avatarTextColor,
   }) {
@@ -98,7 +98,7 @@ class Supplier {
       notes: notes ?? this.notes,
       supplierId: supplierId ?? this.supplierId,
       lastTransaction: lastTransaction ?? this.lastTransaction,
-      dueDate: dueDate ?? this.dueDate,
+      dueDate: dueDate is _Sentinel ? this.dueDate : dueDate as DateTime?,
       avatarBg: avatarBg ?? this.avatarBg,
       avatarTextColor: avatarTextColor ?? this.avatarTextColor,
     );
@@ -209,3 +209,9 @@ final sampleSuppliers = <Supplier>[
     avatarTextColor: const Color(0xFF4F46E5),
   ),
 ];
+
+/// Sentinel value used by [Supplier.copyWith] to distinguish
+/// "not provided" from an explicit null (to clear dueDate).
+class _Sentinel {
+  const _Sentinel();
+}

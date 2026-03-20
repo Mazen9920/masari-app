@@ -179,7 +179,7 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppColors.accentOrange.withOpacity(0.1)
+                  ? AppColors.accentOrange.withValues(alpha: 0.1)
                   : AppColors.surfaceLight,
               borderRadius: AppRadius.pillRadius,
               border: Border.all(
@@ -226,7 +226,7 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
-            color: AppColors.textPrimary.withOpacity(0.04),
+            color: AppColors.textPrimary.withValues(alpha: 0.04),
             borderRadius: AppRadius.cardRadius,
           ),
           child: Row(

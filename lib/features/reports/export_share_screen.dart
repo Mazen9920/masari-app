@@ -9,7 +9,6 @@ import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/export_providers.dart';
 import '../../core/services/share_service.dart';
-import '../../shared/models/sale_model.dart';
 import '../../shared/utils/money_utils.dart';
 
 const _plExcludedCats = {
@@ -75,7 +74,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
     final sales = ref.read(salesProvider).value ?? [];
     final products = ref.read(inventoryProvider).value ?? [];
     final bs = ref.read(balanceSheetEntriesProvider);
-    final purchases = ref.read(purchasesProvider);
+    final purchases = ref.read(purchasesProvider).value ?? [];
     final settings = ref.read(appSettingsProvider);
     final currency = settings.currency;
     final openingCash = settings.openingCashBalance;

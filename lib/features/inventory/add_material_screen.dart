@@ -154,7 +154,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
       unitOfMeasure: _resolvedUom,
       isMaterial: true,
       baseMaterialType: _baseMaterialType.isEmpty ? null : _baseMaterialType,
-      scrapPercentage: double.tryParse(_wasteController.text),
+      scrapPercentage: (double.tryParse(_wasteController.text) ?? 0).clamp(0, 100).toDouble(),
       variants: [defaultVariant],
     );
 
@@ -172,6 +172,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
     }
 
     HapticFeedback.mediumImpact();
+    if (!mounted) return;
     context.safePop();
   }
 

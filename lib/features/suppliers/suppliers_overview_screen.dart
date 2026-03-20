@@ -48,8 +48,8 @@ class _SuppliersOverviewScreenState
   Widget build(BuildContext context) {
     final suppliers = ref.watch(suppliersProvider).value ?? [];
     final currency = ref.watch(currencyProvider);
-    final purchases = ref.watch(purchasesProvider);
-    final payments = ref.watch(paymentsProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
+    final payments = ref.watch(paymentsProvider).value ?? [];
     final receipts = ref.watch(goodsReceiptsProvider);
 
     // Filtered list
@@ -63,7 +63,7 @@ class _SuppliersOverviewScreenState
     final totalPayments =
         payments.fold<double>(0, (sum, p) => sum + p.amount);
     final totalOutstanding =
-        (totalPurchases - totalPayments).clamp(0.0, double.infinity);
+        suppliers.fold<double>(0, (sum, s) => sum + (s.balance > 0 ? s.balance : 0));
     final totalReceived =
         receipts.fold<double>(0, (sum, r) => sum + r.totalCost);
 
@@ -322,7 +322,7 @@ class _SuppliersOverviewScreenState
                                         shape: BoxShape.circle,
                                         border: Border.all(
                                           color: selected
-                                              ? const Color(0xFFE67E22)
+                                              ? AppColors.accentOrange
                                               : AppColors.borderLight,
                                           width: 2,
                                         ),
@@ -335,7 +335,7 @@ class _SuppliersOverviewScreenState
                                                 decoration:
                                                     const BoxDecoration(
                                                   color:
-                                                      Color(0xFFE67E22),
+                                                      AppColors.accentOrange,
                                                   shape: BoxShape.circle,
                                                 ),
                                               ),
@@ -439,7 +439,7 @@ class _SuppliersOverviewScreenState
                                   decoration: BoxDecoration(
                                     color: selected
                                         ? const Color(0xFFFFF7ED)
-                                        : const Color(0xFFF8FAFC),
+                                        : AppColors.surfaceSubtle,
                                     borderRadius:
                                         BorderRadius.circular(10),
                                     border: Border.all(
@@ -455,7 +455,7 @@ class _SuppliersOverviewScreenState
                                         cat,
                                         style: TextStyle(
                                           color: selected
-                                              ? const Color(0xFFE67E22)
+                                              ? AppColors.accentOrange
                                               : AppColors.textSecondary,
                                           fontSize: 13,
                                           fontWeight: selected
@@ -516,7 +516,7 @@ class _SuppliersOverviewScreenState
                                       fontSize: 14,
                                     ),
                                     filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
+                                    fillColor: AppColors.surfaceSubtle,
                                     border: OutlineInputBorder(
                                       borderRadius:
                                           BorderRadius.circular(12),
@@ -533,7 +533,7 @@ class _SuppliersOverviewScreenState
                                       borderRadius:
                                           BorderRadius.circular(12),
                                       borderSide: BorderSide(
-                                          color: const Color(0xFFE67E22)),
+                                          color: AppColors.accentOrange),
                                     ),
                                     contentPadding:
                                         const EdgeInsets.symmetric(
@@ -564,7 +564,7 @@ class _SuppliersOverviewScreenState
                                       fontSize: 14,
                                     ),
                                     filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
+                                    fillColor: AppColors.surfaceSubtle,
                                     border: OutlineInputBorder(
                                       borderRadius:
                                           BorderRadius.circular(12),
@@ -581,7 +581,7 @@ class _SuppliersOverviewScreenState
                                       borderRadius:
                                           BorderRadius.circular(12),
                                       borderSide: BorderSide(
-                                          color: const Color(0xFFE67E22)),
+                                          color: AppColors.accentOrange),
                                     ),
                                     contentPadding:
                                         const EdgeInsets.symmetric(
@@ -635,11 +635,11 @@ class _SuppliersOverviewScreenState
                             padding:
                                 const EdgeInsets.symmetric(vertical: 15),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE67E22),
+                              color: AppColors.accentOrange,
                               borderRadius: BorderRadius.circular(14),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFE67E22)
+                                  color: AppColors.accentOrange
                                       .withValues(alpha: 0.25),
                                   blurRadius: 16,
                                   offset: const Offset(0, 4),
@@ -810,7 +810,7 @@ class _SuppliersOverviewScreenState
                   title: 'Purchases',
                   subtitle: _compactAmount(currency, totalPurchases),
                   icon: Icons.shopping_bag_rounded,
-                  color: const Color(0xFFE67E22),
+                  color: AppColors.accentOrange,
                   onTap: () {
                     HapticFeedback.lightImpact();
                     Navigator.of(context).push(
@@ -985,7 +985,7 @@ class _SuppliersOverviewScreenState
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         decoration: BoxDecoration(
-          color: filled ? const Color(0xFFE67E22) : Colors.transparent,
+          color: filled ? AppColors.accentOrange : Colors.transparent,
           borderRadius: BorderRadius.circular(30),
           border: filled
               ? null
@@ -994,7 +994,7 @@ class _SuppliersOverviewScreenState
               ? [
                   BoxShadow(
                     color:
-                        const Color(0xFFE67E22).withValues(alpha: 0.3),
+                        AppColors.accentOrange.withValues(alpha: 0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -1061,7 +1061,7 @@ class _SuppliersOverviewScreenState
                   borderRadius: BorderRadius.circular(20),
                   border: isOverdue && !selected
                       ? Border.all(
-                          color: const Color(0xFFDC2626)
+                          color: AppColors.badgeTextNegative
                               .withValues(alpha: 0.3))
                       : null,
                   boxShadow: selected
@@ -1081,7 +1081,7 @@ class _SuppliersOverviewScreenState
                     color: selected
                         ? Colors.white
                         : isOverdue
-                            ? const Color(0xFFDC2626)
+                            ? AppColors.badgeTextNegative
                             : AppColors.textSecondary,
                     fontWeight:
                         selected ? FontWeight.w700 : FontWeight.w500,
@@ -1145,7 +1145,7 @@ class _SummaryStrip extends StatelessWidget {
                   width: 1),
               _stat('Overdue', '$overdueCount', null,
                   valueColor: overdueCount > 0
-                      ? const Color(0xFFDC2626)
+                      ? AppColors.badgeTextNegative
                       : null),
             ],
           ),
@@ -1337,7 +1337,7 @@ class _SupplierCard extends StatelessWidget {
                     Text(
                       'Overdue ${supplier.daysOverdue}d',
                       style: const TextStyle(
-                        color: Color(0xFFDC2626),
+                        color: AppColors.badgeTextNegative,
                         fontSize: 9,
                         fontWeight: FontWeight.w600,
                       ),

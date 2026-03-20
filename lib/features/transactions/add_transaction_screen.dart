@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
@@ -31,7 +32,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   late bool _isExpense = widget.initialIsExpense;
   String _amount = '0';
   int _selectedPaymentIndex = 0;
-  bool _isRecurring = false;
   final _noteController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now();
@@ -127,7 +127,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     return parsed.toStringAsFixed(parsed == parsed.roundToDouble() ? 0 : 2);
   }
 
-  Future<void> _onSave() async {
+  /// Builds and saves the transaction. Returns true on success.
+  Future<bool> _saveTransaction() async {
     HapticFeedback.mediumImpact();
     
     // Create transaction object
@@ -136,7 +137,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid amount')),
       );
-      return;
+      return false;
     }
     
     // Get payee name if selected or custom
@@ -169,7 +170,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final noteText = _noteController.text.trim();
     
     final transaction = Transaction(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: const Uuid().v4(),
       userId: ref.read(authProvider).user?.id ?? '',
       title: finalTitle,
       amount: _isExpense ? -amount : amount,
@@ -181,9 +182,33 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     
     // Save to provider
     await ref.read(transactionsProvider.notifier).addTransaction(transaction);
-    
-    if (!mounted) return;
+    return true;
+  }
+
+  Future<void> _onSave() async {
+    final saved = await _saveTransaction();
+    if (!saved || !mounted) return;
     context.safePop();
+  }
+
+  Future<void> _onSaveAndAnother() async {
+    final saved = await _saveTransaction();
+    if (!saved || !mounted) return;
+
+    // Reset form for next entry
+    setState(() {
+      _amount = '0';
+      _selectedSupplierId = null;
+      _isCustomCategory = false;
+      _selectedDate = DateTime.now();
+    });
+    _noteController.clear();
+    _payeeController.clear();
+    _customCategoryController.clear();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Saved! Ready for next transaction.')),
+    );
   }
 
   @override
@@ -553,7 +578,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       if (_amount.endsWith('.0')) _amount = _amount.replaceAll('.0', '');
                       _selectedCategoryId = tx.categoryId;
                       if (tx.title != cat.name) {
-                        _noteController.text = tx.title; // if it was a custom payee/title, set note
+                        _payeeController.text = tx.title; // if it was a custom payee/title, set payee
                       }
                     });
                   },
@@ -637,9 +662,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           _buildNoteField(),
 
           const SizedBox(height: 14),
-
-          // ─── Recurring Toggle ───
-          _buildRecurringToggle(),
 
           const SizedBox(height: 80),
         ],
@@ -1058,57 +1080,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     );
   }
 
-  Widget _buildRecurringToggle() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFF3E8FF), // purple-50
-            ),
-            child: const Icon(Icons.loop_rounded,
-                size: 20, color: Color(0xFF8B5CF6)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Recurring',
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                if (_isRecurring)
-                  Text(
-                    'Monthly',
-                    style: AppTypography.captionSmall.copyWith(
-                      color: const Color(0xFF8B5CF6),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Switch(
-            value: _isRecurring,
-            onChanged: (v) => setState(() => _isRecurring = v),
-            activeThumbColor: const Color(0xFF8B5CF6),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ═══════════════════════════════════════════════════
   //  BOTTOM BAR: summary + save button
   // ═══════════════════════════════════════════════════
@@ -1188,10 +1159,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   const SizedBox(height: 8),
                   TextButton(
                     onPressed: _amount != '0'
-                        ? () {
-                            _onSave();
-                            // TODO: reset form and stay on screen
-                          }
+                        ? _onSaveAndAnother
                         : null,
                     child: Text(
                       'Save & Add Another',

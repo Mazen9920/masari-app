@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/providers/app_settings_provider.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Side-by-side Accounts Receivable and Accounts Payable summary.
@@ -13,10 +14,11 @@ class AccountsSummaryCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final fmt = NumberFormat('#,##0.00');
+    final currency = ref.watch(appSettingsProvider).currency;
+    final fmt = NumberFormat.compactCurrency(symbol: '$currency ');
 
     final sales = ref.watch(salesProvider);
-    final purchases = ref.watch(purchasesProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
 
     double receivable = 0;
     int receivableCount = 0;
@@ -66,7 +68,7 @@ class AccountsSummaryCard extends ConsumerWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                 'Accounts',
+                 l10n.accounts,
                 style: AppTypography.h3.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w800,
@@ -74,7 +76,7 @@ class AccountsSummaryCard extends ConsumerWidget {
               ),
             ],
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -86,7 +88,7 @@ class AccountsSummaryCard extends ConsumerWidget {
                   icon: Icons.arrow_downward_rounded,
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: _AccountTile(
                   title: l10n.payable,
@@ -121,7 +123,6 @@ class _AccountTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -155,7 +156,7 @@ class _AccountTile extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            '$count outstanding',
+            AppLocalizations.of(context)!.countOutstanding(count),
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textTertiary,
             ),

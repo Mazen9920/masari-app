@@ -145,7 +145,7 @@ class ApiProductRepository implements ProductRepository {
   }
 
   @override
-  Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false}) async {
+  Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
     try {
       final body = <String, dynamic>{'delta': delta, 'reason': reason, 'variant_id': variantId};
       if (unitCost != null) body['unitCost'] = unitCost;
@@ -168,5 +168,16 @@ class ApiProductRepository implements ProductRepository {
     } catch (e) {
       return Result.failure('An unexpected error occurred: $e');
     }
+  }
+
+  @override
+  Future<Result<Product>> breakdownStock({
+    required String productId,
+    required String sourceVariantId,
+    required int qty,
+    required String valuationMethod,
+    required Map<String, ({int quantity, double unitCost})> outputAllocations,
+  }) async {
+    return Result.failure('breakdownStock is not supported via the API repository');
   }
 }

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../core/services/shopify_sync_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../shared/models/sale_model.dart';
@@ -108,9 +109,14 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
       ));
     }
     if (mounted) {
+      final shopifyCount = toUpdate.where((s) =>
+          s.externalOrderId != null || s.shopifyOrderNumber != null).length;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${toUpdate.length} sale${toUpdate.length != 1 ? 's' : ''} marked as paid'),
-        backgroundColor: AppColors.success,
+        content: Text(
+          '${toUpdate.length} sale${toUpdate.length != 1 ? 's' : ''} marked as paid'
+          '${shopifyCount > 0 ? ' ($shopifyCount Shopify — local only, not synced to Shopify)' : ''}',
+        ),
+        backgroundColor: shopifyCount > 0 ? Colors.orange.shade700 : AppColors.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ));
@@ -134,7 +140,8 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Cancel Orders'),
         content: Text(
-          'Cancel ${toUpdate.length} selected order${toUpdate.length != 1 ? 's' : ''}? This cannot be undone.',
+          'Cancel ${toUpdate.length} selected order${toUpdate.length != 1 ? 's' : ''}?\n\n'
+          'This will restore stock and create reversal accounting entries. This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -152,15 +159,76 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
     if (confirm != true) return;
 
     _exitSelectionMode();
+
+    final now = DateTime.now();
     final notifier = ref.read(salesProvider.notifier);
+    final transNotifier = ref.read(transactionsProvider.notifier);
+    final inventoryNotifier = ref.read(inventoryProvider.notifier);
+    final shopifyApi = ref.read(shopifyApiServiceProvider);
+    final transactions = ref.read(transactionsProvider).value ?? [];
+    final valMethod = ref.read(appSettingsProvider).valuationMethod;
+
     for (final sale in toUpdate) {
+      // 1) Restore stock for each sale item
+      for (final item in sale.items) {
+        if (item.productId != null && item.quantity > 0) {
+          await inventoryNotifier.adjustStock(
+            item.productId!,
+            item.variantId ?? '${item.productId}_v0',
+            item.quantity.toInt(),
+            'Order cancelled',
+            valuationMethod: valMethod,
+          );
+        }
+      }
+
+      // 2) Create reversal entries for linked transactions (visible in P&L)
+      for (final tx in transactions) {
+        if (tx.saleId == sale.id && tx.amount != 0) {
+          transNotifier.updateTransaction(tx.copyWith(
+            title: '[Cancelled] ${tx.title}',
+            updatedAt: now,
+          ));
+
+          final reversalId = '${tx.id}_reversal_${now.millisecondsSinceEpoch}';
+          transNotifier.addTransaction(tx.copyWith(
+            id: reversalId,
+            title: '[Reversal] ${tx.title}',
+            amount: -tx.amount,
+            dateTime: now,
+            note: 'Auto-reversal for cancelled order ${sale.id}',
+            excludeFromPL: false,
+            createdAt: now,
+            updatedAt: now,
+          ));
+        }
+      }
+
+      // 3) Mark order as cancelled
       await notifier.updateSale(sale.copyWith(
         orderStatus: OrderStatus.cancelled,
+        updatedAt: now,
       ));
+
+      // 4) Cancel on Shopify if linked (fire-and-forget)
+      if (sale.externalSource == 'shopify' && sale.externalOrderId != null) {
+        shopifyApi.cancelOrder(orderId: sale.externalOrderId!).then((result) {
+          if (!mounted) return;
+          if (!result.isSuccess && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Shopify cancel failed for order: ${result.error}'),
+              backgroundColor: AppColors.danger,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ));
+          }
+        });
+      }
     }
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${toUpdate.length} order${toUpdate.length != 1 ? 's' : ''} cancelled'),
+        content: Text('${toUpdate.length} order${toUpdate.length != 1 ? 's' : ''} cancelled — stock & accounting reverted'),
         backgroundColor: AppColors.danger,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -194,6 +262,9 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
       list = list
           .where((s) =>
               (s.customerName ?? '').toLowerCase().contains(q) ||
+              s.displayOrderTitle.toLowerCase().contains(q) ||
+              (s.customerPhone ?? '').toLowerCase().contains(q) ||
+              (s.customerEmail ?? '').toLowerCase().contains(q) ||
               s.items.any(
                   (i) => i.productName.toLowerCase().contains(q)))
           .toList();
@@ -450,7 +521,7 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
     final asyncConn = ref.watch(shopifyConnectionProvider);
     return asyncConn.when(
       loading: () => const SizedBox.shrink(),
-      error: (_, _e) => const SizedBox.shrink(),
+      error: (_, e) => const SizedBox.shrink(),
       data: (conn) {
         if (conn == null || !conn.isActive) return const SizedBox.shrink();
         final lastSync = conn.lastOrderSyncAt;
@@ -546,6 +617,8 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
                 _filterChip(1, 'Partial'),
                 const SizedBox(width: 6),
                 _filterChip(0, 'Unpaid'),
+                const SizedBox(width: 6),
+                _filterChip(3, 'Refunded'),
               ],
             ),
           ),

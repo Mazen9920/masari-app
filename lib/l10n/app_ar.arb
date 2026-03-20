@@ -305,5 +305,20 @@
   "catLoanReceived": "قرض مستلم",
   "catLoanRepayment": "سداد قرض",
   "catEquityInjection": "ضخ رأس مال",
-  "catOwnerWithdrawal": "سحب المالك"
+  "catOwnerWithdrawal": "سحب المالك",
+
+  "accounts": "الحسابات",
+  "countOutstanding": "{count} مستحق",
+  "analytics": "التحليلات",
+  "compareLabel": "مقارنة",
+  "salesMetric": "المبيعات",
+  "profitMetric": "الربح",
+  "ordersMetric": "الطلبات",
+  "recentTransactions": "المعاملات الأخيرة",
+  "customizeDashboard": "تخصيص لوحة التحكم",
+  "done": "تم",
+  "toggleSectionsHint": "تبديل الأقسام وسحبها لإعادة الترتيب.",
+  "totalIncomeLabel": "إجمالي الدخل: {amount}",
+  "noSalesInPeriod": "لا توجد مبيعات في هذه الفترة",
+  "allProductsWellStocked": "جميع المنتجات متوفرة بكميات كافية"
 }

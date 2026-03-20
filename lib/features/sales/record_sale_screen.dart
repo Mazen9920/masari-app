@@ -94,6 +94,8 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       for (final item in s.items) {
         _items.add(_LineItem(
           productId: item.productId,
+          variantId: item.variantId,
+          variantName: item.variantName,
           nameCtrl: TextEditingController(text: item.productName),
           qtyCtrl: TextEditingController(text: _cleanNumber(item.quantity)),
           priceCtrl: TextEditingController(text: _cleanNumber(item.unitPrice)),
@@ -841,12 +843,12 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                                                   fit: BoxFit.cover,
                                                   width: 42,
                                                   height: 42,
-                                                  placeholder: (_, __) => Icon(
+                                                  placeholder: (_, _) => Icon(
                                                     product.icon,
                                                     color: product.color,
                                                     size: 20,
                                                   ),
-                                                  errorWidget: (_, __, ___) => Icon(
+                                                  errorWidget: (_, _, _) => Icon(
                                                     product.icon,
                                                     color: product.color,
                                                     size: 20,
@@ -956,7 +958,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: product.variants.length,
-                separatorBuilder: (_, __) =>
+                separatorBuilder: (_, _) =>
                     const Divider(height: 1, indent: 16, endIndent: 16),
                 itemBuilder: (_, i) {
                   final v = product.variants[i];
@@ -1291,18 +1293,19 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
   // ── Save ─────────────────────────────────────────────────
 
   Future<void> _save() async {
-    // Validate at least one item with name + price
+    // Validate at least one item with name, price, AND quantity
     bool hasValidItem = false;
     for (final li in _items) {
       if (li.nameCtrl.text.trim().isNotEmpty &&
-          (double.tryParse(li.priceCtrl.text) ?? 0) > 0) {
+          (double.tryParse(li.priceCtrl.text) ?? 0) > 0 &&
+          (double.tryParse(li.qtyCtrl.text) ?? 0) > 0) {
         hasValidItem = true;
         break;
       }
     }
 
     if (!hasValidItem) {
-      _showError('Add at least one item with a name and price');
+      _showError('Add at least one item with a name, quantity, and price');
       return;
     }
 
@@ -1365,6 +1368,11 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       ));
     }
 
+    if (saleItems.isEmpty) {
+      _showError('No valid items — each item needs a name, quantity, and price');
+      return;
+    }
+
     // ── Stock validation ──────────────────────────────────
     final stockWarnings = <String>[];
     final costWarnings = <String>[];
@@ -1377,19 +1385,23 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           );
       if (product == null) continue;
 
-      // Check insufficient stock
-      if (si.quantity > product.currentStock) {
+      // Check insufficient stock (use variant-level stock when available)
+      final variantStock = (si.variantId != null)
+          ? (product.variantById(si.variantId!)?.currentStock ?? product.currentStock)
+          : product.currentStock;
+      if (si.quantity > variantStock) {
         stockWarnings.add(
           '${si.productName}: need ${si.quantity.toStringAsFixed(0)}, '
-          'have ${product.currentStock}',
+          'have $variantStock',
         );
       }
 
-      // Check below-cost selling price
-      if (product.costPrice > 0 && si.unitPrice < product.costPrice) {
+      // Check below-cost selling price (use item-level costPrice which reflects FIFO/average)
+      final effectiveCostForWarning = si.costPrice > 0 ? si.costPrice : product.costPrice;
+      if (effectiveCostForWarning > 0 && si.unitPrice < effectiveCostForWarning) {
         costWarnings.add(
           '${si.productName}: selling at ${si.unitPrice.toStringAsFixed(2)} '
-          'below cost ${product.costPrice.toStringAsFixed(2)}',
+          'below cost ${effectiveCostForWarning.toStringAsFixed(2)}',
         );
       }
     }
@@ -1482,9 +1494,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           : _shippingMethodCtrl.text.trim(),
       trackingNumber:
           _trackingCtrl.text.trim().isEmpty ? null : _trackingCtrl.text.trim(),
-      deliveryStatus: _deliveryStatusIdx == 0
-          ? null
-          : ['Pending', 'Shipped', 'Delivered'][_deliveryStatusIdx],
+      deliveryStatus: ['Pending', 'Shipped', 'Delivered'][_deliveryStatusIdx],
       fulfillmentStatus: _deliveryStatusIdx == 2
           ? FulfillmentStatus.fulfilled
           : _deliveryStatusIdx == 1
@@ -1581,7 +1591,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           ref.read(inventoryProvider.notifier).adjustStock(
                 productMap[key]!,
                 variantMap[key]!,
-                delta.toInt(),
+                delta.round(),
                 'Sale edit adjustment',
                 valuationMethod: valMethod,
               );
@@ -1846,6 +1856,8 @@ class _LineItem {
 
   _LineItem({
     this.productId,
+    this.variantId,
+    this.variantName,
     required this.nameCtrl,
     required this.qtyCtrl,
     required this.priceCtrl,

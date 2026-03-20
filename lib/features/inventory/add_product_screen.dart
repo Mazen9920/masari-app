@@ -183,6 +183,79 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       }
     }
 
+    // M2: Warn if cost exceeds selling price
+    bool hasCostWarning = false;
+    if (_variantRows.isEmpty) {
+      final cost = double.tryParse(_costController.text) ?? 0;
+      final price = double.tryParse(_priceController.text) ?? 0;
+      if (cost > 0 && price > 0 && cost > price) hasCostWarning = true;
+    } else {
+      for (final row in _variantRows) {
+        final cost = double.tryParse(row.costCtrl.text) ?? 0;
+        final price = double.tryParse(row.priceCtrl.text) ?? 0;
+        if (cost > 0 && price > 0 && cost > price) {
+          hasCostWarning = true;
+          break;
+        }
+      }
+    }
+    if (hasCostWarning) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cost exceeds selling price'),
+          content: const Text(
+            'One or more variants have a cost price higher than '
+            'the selling price. This means you would sell at a loss. '
+            'Continue anyway?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.orange),
+              child: const Text('Save Anyway'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+      if (!mounted) return;
+    }
+
+    // M3: Check SKU uniqueness against loaded products
+    final skuToCheck = _skuController.text.trim();
+    if (skuToCheck.isNotEmpty) {
+      final existingProducts = ref.read(inventoryProvider).value ?? [];
+      final skuExists = existingProducts.any((p) =>
+        p.variants.any((v) => v.sku.toLowerCase() == skuToCheck.toLowerCase()),
+      );
+      if (skuExists) {
+        final proceed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Duplicate SKU'),
+            content: Text('SKU "$skuToCheck" is already used by another product. Save anyway?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Save Anyway'),
+              ),
+            ],
+          ),
+        );
+        if (proceed != true) return;
+        if (!mounted) return;
+      }
+    }
+
     setState(() => _isSaving = true);
 
     final sku = _skuController.text.trim().isEmpty

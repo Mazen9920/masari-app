@@ -27,6 +27,7 @@ class ShopifySyncService {
   final ShopifyConnectionRepository _connRepo;
   final ShopifyProductMappingRepository _mappingRepo;
   final ShopifySyncLogRepository _logRepo;
+  // ignore: unused_field
   final TransactionRepository _transactionRepo;
   String valuationMethod;
 
@@ -1308,7 +1309,9 @@ class ShopifySyncService {
     for (final order in orders) {
       final shopifyOrderId = order['id']?.toString();
       if (shopifyOrderId == null ||
-          existingOrderIds.contains(shopifyOrderId)) continue;
+          existingOrderIds.contains(shopifyOrderId)) {
+        continue;
+      }
       final lineItems = order['line_items'] as List<dynamic>? ?? [];
       for (final li in lineItems) {
         final lineItem = Map<String, dynamic>.from(li as Map);
@@ -1316,7 +1319,9 @@ class ShopifySyncService {
             (lineItem['variant_id'] ?? lineItem['product_id']).toString();
         variantIdsToFetch.add(svId);
         final pid = lineItem['product_id']?.toString();
-        if (pid != null && pid != 'null') productIdsFromOrders.add(pid);
+        if (pid != null && pid != 'null') {
+          productIdsFromOrders.add(pid);
+        }
       }
     }
 

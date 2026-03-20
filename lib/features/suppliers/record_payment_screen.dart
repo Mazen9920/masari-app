@@ -11,6 +11,7 @@ import '../../shared/models/supplier_model.dart';
 import '../../shared/models/payment_model.dart';
 import '../../shared/models/purchase_model.dart';
 import '../../shared/models/transaction_model.dart';
+import 'package:uuid/uuid.dart';
 import 'add_supplier_screen.dart';
 
 /// Record Payment form — supplier info, amount, method, invoice allocation, notes.
@@ -62,14 +63,110 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
     if (_selectedSupplierId == null) return;
     final suppliers = ref.read(suppliersProvider).value ?? [];
     final supplierId = _selectedSupplierId!;
+    final supplier = suppliers.cast<Supplier?>().firstWhere(
+      (s) => s!.id == supplierId,
+      orElse: () => null,
+    );
+    if (supplierId.isEmpty) return;
+
+    // H4: Warn if payment exceeds total outstanding on selected purchases
+    if (_selectedPurchaseIds.isNotEmpty) {
+      final allPurchases = ref.read(purchasesProvider).value ?? [];
+      final totalOutstanding = _selectedPurchaseIds.fold<double>(0, (sum, pid) {
+        final p = allPurchases.cast<Purchase?>().firstWhere(
+          (p) => p!.id == pid,
+          orElse: () => null,
+        );
+        return sum + (p?.outstanding ?? 0);
+      });
+      if (_payAmount > totalOutstanding && totalOutstanding > 0) {
+        _showOverpaymentDialog(totalOutstanding);
+        return;
+      }
+    }
+
+    // H6: Warn if payment would make supplier balance negative
+    if (supplier != null && _payAmount > supplier.balance && supplier.balance > 0) {
+      _showNegativeBalanceDialog(supplier.balance);
+      return;
+    }
+
+    _performSave();
+  }
+
+  void _showOverpaymentDialog(double totalOutstanding) {
+    final fmt = NumberFormat('#,##0', 'en');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Payment Exceeds Outstanding'),
+        content: Text(
+          'The payment amount exceeds the total outstanding '
+          '(${fmt.format(totalOutstanding)}) on the selected purchases. '
+          'The excess will be applied to the supplier balance.\n\n'
+          'Do you want to proceed?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _performSave();
+            },
+            child: Text('Proceed', style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showNegativeBalanceDialog(double balance) {
+    final fmt = NumberFormat('#,##0', 'en');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Payment Exceeds Balance'),
+        content: Text(
+          'This payment exceeds the supplier\'s current balance '
+          '(${fmt.format(balance)}). The balance will become negative '
+          '(advance/credit).\n\n'
+          'Do you want to proceed?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _performSave();
+            },
+            child: Text('Proceed', style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _performSave() {
+    final suppliers = ref.read(suppliersProvider).value ?? [];
+    final supplierId = _selectedSupplierId!;
     final supplierName = suppliers
         .cast<Supplier?>()
         .firstWhere((s) => s!.id == supplierId, orElse: () => null)
         ?.name ?? '';
-    if (supplierId.isEmpty) return;
+
+    final settings = ref.read(appSettingsProvider);
+    final txId = const Uuid().v4();
 
     final payment = Payment(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: const Uuid().v4(),
       supplierId: supplierId,
       supplierName: supplierName,
       amount: _payAmount,
@@ -77,6 +174,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
       method: _methods[_methodIdx].label,
       notes: _notesCtrl.text.trim(),
       appliedToPurchaseIds: _selectedPurchaseIds.toList(),
+      transactionId: settings.autoCreateTransactionOnSupplierPayment ? txId : null,
       createdAt: DateTime.now(),
     );
 
@@ -88,7 +186,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
     // Update purchase payment status for applied purchases
     if (_selectedPurchaseIds.isNotEmpty) {
       final purchasesNotifier = ref.read(purchasesProvider.notifier);
-      final allPurchases = ref.read(purchasesProvider);
+      final allPurchases = ref.read(purchasesProvider).value ?? [];
       var remaining = _payAmount;
 
       for (final pid in _selectedPurchaseIds) {
@@ -118,15 +216,36 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
           remaining = 0;
         }
       }
+
+      // C6: Recalculate supplier dueDate from earliest unpaid purchase
+      final updatedPurchases = ref.read(purchasesProvider).value ?? [];
+      final unpaid = updatedPurchases
+          .where((p) =>
+              p.supplierId == supplierId &&
+              p.paymentStatus != 2 &&
+              p.dueDate != null)
+          .toList();
+      DateTime? earliest;
+      for (final p in unpaid) {
+        if (earliest == null || p.dueDate!.isBefore(earliest)) {
+          earliest = p.dueDate;
+        }
+      }
+      final currentSupplier = (ref.read(suppliersProvider).value ?? [])
+          .cast<Supplier?>()
+          .firstWhere((s) => s!.id == supplierId, orElse: () => null);
+      if (currentSupplier != null && currentSupplier.dueDate != earliest) {
+        ref.read(suppliersProvider.notifier).updateSupplier(
+          currentSupplier.id,
+          currentSupplier.copyWith(dueDate: earliest),
+        );
+      }
     }
 
     HapticFeedback.mediumImpact();
 
     // Auto-create a transaction entry (visible but excluded from P&L)
-    final settings = ref.read(appSettingsProvider);
     if (settings.autoCreateTransactionOnSupplierPayment) {
-      final now = DateTime.now();
-      final txId = 'sp_${now.millisecondsSinceEpoch}';
       ref.read(transactionsProvider.notifier).addTransaction(
         Transaction(
           id: txId,
@@ -139,8 +258,8 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
           note: _notesCtrl.text.trim(),
           supplierId: supplierId,
           excludeFromPL: true,
-          createdAt: now,
-          updatedAt: now,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
         ),
       );
     }
@@ -197,7 +316,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                         Text(
                           '${ref.read(currencyProvider)} ${NumberFormat('#,##0').format(s.balance)} due',
                           style: const TextStyle(
-                            color: Color(0xFFE67E22),
+                            color: AppColors.accentOrange,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -207,7 +326,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                   ),
                   trailing: _selectedSupplierId == s.id
                       ? const Icon(Icons.check_rounded,
-                          color: Color(0xFFE67E22))
+                          color: AppColors.accentOrange)
                       : null,
                   onTap: () {
                     setState(() => _selectedSupplierId = s.id);
@@ -217,13 +336,13 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
             // Add new supplier option
             ListTile(
               leading: CircleAvatar(
-                backgroundColor: const Color(0xFFE67E22).withValues(alpha: 0.1),
+                backgroundColor: AppColors.accentOrange.withValues(alpha: 0.1),
                 child: const Icon(Icons.add_rounded,
-                    color: Color(0xFFE67E22), size: 20),
+                    color: AppColors.accentOrange, size: 20),
               ),
               title: const Text('+ Add New Supplier',
                   style: TextStyle(
-                      color: Color(0xFFE67E22),
+                      color: AppColors.accentOrange,
                       fontWeight: FontWeight.w600)),
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -242,7 +361,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
   @override
   Widget build(BuildContext context) {
     final suppliers = ref.watch(suppliersProvider).value ?? [];
-    final purchases = ref.watch(purchasesProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
     final currency = ref.watch(currencyProvider);
     final supplier = _selectedSupplierId != null
         ? suppliers.cast<Supplier?>().firstWhere(
@@ -312,11 +431,11 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFFE67E22),
+              color: AppColors.accentOrange,
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFE67E22).withValues(alpha: 0.3),
+                  color: AppColors.accentOrange.withValues(alpha: 0.3),
                   blurRadius: 16,
                   offset: const Offset(0, 4),
                 ),
@@ -462,7 +581,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                       Text(
                         '$currency ${fmt.format(supplier.balance)}',
                         style: const TextStyle(
-                          color: Color(0xFFE67E22),
+                          color: AppColors.accentOrange,
                           fontSize: 24,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
@@ -595,7 +714,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
             prefixIconConstraints:
                 const BoxConstraints(minWidth: 0, minHeight: 0),
             filled: true,
-            fillColor: const Color(0xFFF8FAFC),
+            fillColor: AppColors.surfaceSubtle,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
@@ -644,7 +763,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color: AppColors.surfaceSubtle,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: AppColors.borderLight.withValues(alpha: 0.7),
@@ -876,7 +995,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                                     decoration: BoxDecoration(
                                       color: isUnpaid
                                           ? const Color(0xFFFFF7ED)
-                                          : const Color(0xFFF8FAFC),
+                                          : AppColors.surfaceSubtle,
                                       borderRadius:
                                           BorderRadius.circular(4),
                                     ),
@@ -929,7 +1048,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
             hintStyle:
                 TextStyle(color: AppColors.textTertiary, fontSize: 14),
             filled: true,
-            fillColor: const Color(0xFFF8FAFC),
+            fillColor: AppColors.surfaceSubtle,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
@@ -1029,7 +1148,7 @@ class _Card extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC).withValues(alpha: 0.5),
+                color: AppColors.surfaceSubtle.withValues(alpha: 0.5),
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(14)),
                 border: Border(
@@ -1049,7 +1168,7 @@ class _Card extends StatelessWidget {
                       fontSize: 14,
                     ),
                   ),
-                  if (headerTrailing != null) headerTrailing!,
+                  ?headerTrailing,
                 ],
               ),
             ),

@@ -20,7 +20,7 @@ class PurchasesSummaryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(currencyProvider);
-    final purchases = ref.watch(purchasesProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
     final fmt = NumberFormat('#,##0');
 
     // Compute stats from real data
@@ -127,11 +127,11 @@ class _HeroCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFFE67E22), // Orange for Purchases
+        color: AppColors.accentOrange, // Orange for Purchases
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFE67E22).withValues(alpha: 0.25),
+            color: AppColors.accentOrange.withValues(alpha: 0.25),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -243,7 +243,7 @@ class _StatsRow extends StatelessWidget {
             AppColors.primaryNavy, Icons.inventory_2_rounded, fmt, isCurrency: false)),
         const SizedBox(width: 12),
         Expanded(child: _statCard('Avg. Order', avgOrder, '',
-            const Color(0xFF27AE60), Icons.receipt_rounded, fmt, isCurrency: true)),
+            AppColors.success, Icons.receipt_rounded, fmt, isCurrency: true)),
       ],
     );
   }
@@ -304,7 +304,7 @@ class _StatsRow extends StatelessWidget {
             Text(
               sub,
               style: TextStyle(
-                color: sub.startsWith('+') ? const Color(0xFF27AE60) : const Color(0xFFC0392B),
+                color: sub.startsWith('+') ? AppColors.success : const Color(0xFFC0392B),
                 fontWeight: FontWeight.w500,
                 fontSize: 12,
               ),
@@ -400,7 +400,7 @@ class _TrendsChart extends StatelessWidget {
                               child: Container(
                                 width: double.infinity,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFE67E22),
+                                  color: AppColors.accentOrange,
                                   borderRadius: const BorderRadius.vertical(
                                       top: Radius.circular(4)),
                                 ),

@@ -87,7 +87,7 @@ class ProfileScreen extends ConsumerWidget {
                       iconBg: const Color(0xFFFEF2F2),
                       iconColor: const Color(0xFFEF4444),
                       title: 'Manage Subscription',
-                      subtitle: 'Current plan: Free',
+                      subtitle: 'Current plan: ${appSettings.tier.label}',
                       onTap: () => context.pushNamed('ManageSubscriptionScreen'),
                     ),
                   ],
@@ -248,10 +248,10 @@ class ProfileScreen extends ConsumerWidget {
                       fit: BoxFit.cover,
                       width: 64,
                       height: 64,
-                      placeholder: (_, __) => Center(
+                      placeholder: (_, _) => Center(
                         child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
                       ),
-                      errorWidget: (_, __, ___) => Center(
+                      errorWidget: (_, _, _) => Center(
                         child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
                       ),
                     )

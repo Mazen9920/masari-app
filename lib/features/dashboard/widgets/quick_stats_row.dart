@@ -47,23 +47,30 @@ class QuickStatsRow extends ConsumerWidget {
             !t.dateTime.isAfter(range.previousEnd))
         .toList();
 
-    // Revenue (accrual basis — operating income only)
+    // Revenue: sum of positive amounts from income transactions.
+    // Refund transactions (negative cat_sales_revenue) reduce revenue, not add to expenses.
     final curRevenue = curTxns
         .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount.abs());
+        .fold<double>(0, (sum, t) => sum + t.amount.abs())
+      + curTxns
+        .where((t) => !t.isIncome && (t.categoryId == 'cat_sales_revenue'))
+        .fold<double>(0, (sum, t) => sum - t.amount.abs());
     final prevRevenue = prevTxns
         .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount.abs());
-    final revenuePct = prevRevenue > 0
-        ? ((curRevenue - prevRevenue) / prevRevenue * 100)
+        .fold<double>(0, (sum, t) => sum + t.amount.abs())
+      + prevTxns
+        .where((t) => !t.isIncome && (t.categoryId == 'cat_sales_revenue'))
+        .fold<double>(0, (sum, t) => sum - t.amount.abs());
+    final revenuePct = prevRevenue.abs() > 0
+        ? ((curRevenue - prevRevenue) / prevRevenue.abs() * 100)
         : (curRevenue > 0 ? 100.0 : 0.0);
 
-    // Expenses (negative amounts = expenses)
+    // Expenses (negative amounts = expenses, excluding refunds which reduce revenue)
     final curExpenses = curTxns
-        .where((t) => !t.isIncome)
+        .where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')
         .fold<double>(0, (sum, t) => sum + t.amount.abs());
     final prevExpenses = prevTxns
-        .where((t) => !t.isIncome)
+        .where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')
         .fold<double>(0, (sum, t) => sum + t.amount.abs());
     final expensesPct = prevExpenses > 0
         ? ((curExpenses - prevExpenses) / prevExpenses * 100)

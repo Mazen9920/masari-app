@@ -182,7 +182,7 @@ class Sale {
 
   /// Sum of all line items before tax/discount.
   double get subtotal =>
-      roundMoney(items.fold(0.0, (sum, item) => sum + item.lineTotal));
+      roundMoney(items.fold(0.0, (s, item) => s + item.lineTotal));
 
   /// Final total after tax, discount, and shipping.
   double get total =>
@@ -194,7 +194,7 @@ class Sale {
 
   /// Total cost of goods sold for this sale.
   double get totalCogs =>
-      roundMoney(items.fold(0.0, (sum, item) => sum + item.lineCogs));
+      roundMoney(items.fold(0.0, (s, item) => s + item.lineCogs));
 
   /// Gross profit = net revenue – COGS.
   double get grossProfit => roundMoney(netRevenue - totalCogs);

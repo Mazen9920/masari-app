@@ -9,6 +9,7 @@ import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/supplier_model.dart';
 import '../../shared/models/product_model.dart';
+import 'package:uuid/uuid.dart';
 import '../../shared/models/purchase_model.dart';
 import '../../features/suppliers/widgets/item_selection_sheet.dart';
 import 'add_supplier_screen.dart';
@@ -68,7 +69,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
     if (supplierId.isEmpty) return;
 
     final purchase = Purchase(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: const Uuid().v4(),
       supplierId: supplierId,
       supplierName: supplierName,
       date: _purchaseDate,
@@ -84,7 +85,9 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
       )).toList(),
       tax: _tax,
       paymentStatus: _paymentStatus,
-      amountPaid: _paymentStatus == 2 ? (_subtotal + _tax) : (double.tryParse(_paidAmountCtrl.text) ?? 0),
+      amountPaid: _paymentStatus == 2
+          ? (_subtotal + _tax)
+          : (double.tryParse(_paidAmountCtrl.text) ?? 0).clamp(0, _subtotal + _tax).toDouble(),
       dueDate: _dueDate,
       createdAt: DateTime.now(),
     );
@@ -179,11 +182,11 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFFE67E22),
+              color: AppColors.accentOrange,
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFE67E22).withValues(alpha: 0.3),
+                  color: AppColors.accentOrange.withValues(alpha: 0.3),
                   blurRadius: 16,
                   offset: const Offset(0, 4),
                 ),
@@ -280,7 +283,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: AppColors.surfaceSubtle,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: AppColors.borderLight.withValues(alpha: 0.7),
@@ -333,7 +336,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: AppColors.surfaceSubtle,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color:
@@ -364,7 +367,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                       hintStyle: TextStyle(
                           color: AppColors.textTertiary, fontSize: 14),
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: AppColors.surfaceSubtle,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(
@@ -435,7 +438,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                           color: AppColors.textTertiary, fontSize: 12)),
                   trailing: _selectedSupplierId == s.id
                       ? const Icon(Icons.check_rounded,
-                          color: Color(0xFFE67E22))
+                          color: AppColors.accentOrange)
                       : null,
                   onTap: () {
                     setState(() => _selectedSupplierId = s.id);
@@ -445,13 +448,13 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
             // Add new supplier option
             ListTile(
               leading: CircleAvatar(
-                backgroundColor: const Color(0xFFE67E22).withValues(alpha: 0.1),
+                backgroundColor: AppColors.accentOrange.withValues(alpha: 0.1),
                 child: const Icon(Icons.add_rounded,
-                    color: Color(0xFFE67E22), size: 20),
+                    color: AppColors.accentOrange, size: 20),
               ),
               title: const Text('+ Add New Supplier',
                   style: TextStyle(
-                      color: Color(0xFFE67E22),
+                      color: AppColors.accentOrange,
                       fontWeight: FontWeight.w600)),
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -722,7 +725,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                                     hintText: 'e.g. Stitching fee, Printing...',
                                     hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
                                     filled: true,
-                                    fillColor: const Color(0xFFF8FAFC),
+                                    fillColor: AppColors.surfaceSubtle,
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(6),
                                       borderSide: BorderSide(color: AppColors.borderLight.withValues(alpha: 0.5)),
@@ -748,7 +751,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                             height: 32,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
+                              color: AppColors.surfaceSubtle,
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
                             ),
@@ -842,7 +845,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                           },
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
+                            fillColor: AppColors.surfaceSubtle,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
                               borderSide: BorderSide(
@@ -904,7 +907,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                           },
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
+                            fillColor: AppColors.surfaceSubtle,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
                               borderSide: BorderSide(
@@ -951,7 +954,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: const Color(0xFFE67E22).withValues(alpha: 0.3),
+                color: AppColors.accentOrange.withValues(alpha: 0.3),
                 style: BorderStyle.solid,
               ),
             ),
@@ -959,12 +962,12 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.add_circle_outline_rounded,
-                    color: const Color(0xFFE67E22), size: 20),
+                    color: AppColors.accentOrange, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   'Add Item',
                   style: TextStyle(
-                    color: const Color(0xFFE67E22),
+                    color: AppColors.accentOrange,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),
@@ -1026,7 +1029,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                       hintStyle: TextStyle(
                           color: AppColors.textTertiary, fontSize: 13),
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: AppColors.surfaceSubtle,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
                         borderSide: BorderSide(
@@ -1188,7 +1191,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: AppColors.surfaceSubtle,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: AppColors.borderLight.withValues(alpha: 0.7),
@@ -1249,7 +1252,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               prefixIconConstraints:
                   const BoxConstraints(minWidth: 0, minHeight: 0),
               filled: true,
-              fillColor: const Color(0xFFF8FAFC),
+              fillColor: AppColors.surfaceSubtle,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide(
@@ -1292,7 +1295,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: AppColors.surfaceSubtle,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: AppColors.borderLight.withValues(alpha: 0.7),
@@ -1318,7 +1321,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFDCFCE7),
+              color: AppColors.badgeBgPositive,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
@@ -1387,7 +1390,7 @@ class _Card extends StatelessWidget {
                     letterSpacing: 0.8,
                   ),
                 ),
-                if (trailing != null) trailing!,
+                ?trailing,
               ],
             ),
             const SizedBox(height: 14),

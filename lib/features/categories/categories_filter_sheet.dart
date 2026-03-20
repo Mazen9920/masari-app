@@ -201,7 +201,7 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: isSelected ? AppColors.accentOrange : const Color(0xFFCCC),
+                        color: isSelected ? AppColors.accentOrange : const Color(0xFFCCCCCC),
                         width: 2,
                       ),
                       color: isSelected ? AppColors.accentOrange : Colors.transparent,
@@ -334,7 +334,7 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
             HapticFeedback.lightImpact();
             onChanged(v);
           },
-          activeColor: AppColors.accentOrange,
+          activeTrackColor: AppColors.accentOrange,
         ),
       ],
     );

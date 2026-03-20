@@ -29,8 +29,11 @@ class FirestoreTransactionRepository implements TransactionRepository {
       Query<Map<String, dynamic>> query =
           _collection.where('user_id', isEqualTo: _uid);
 
-      // Apply type filter
-      if (filter != null && filter.type != TransactionType.all) {
+      // Apply type filter (server-side only when supplier filter is off,
+      // because Firestore disallows two inequality filters on different fields)
+      final hasTypeFilter = filter != null && filter.type != TransactionType.all;
+      final hasSupplierFilter = filter != null && filter.onlySuppliers;
+      if (hasTypeFilter && !hasSupplierFilter) {
         if (filter.type == TransactionType.income) {
           query = query.where('amount', isGreaterThan: 0);
         } else {
@@ -38,8 +41,8 @@ class FirestoreTransactionRepository implements TransactionRepository {
         }
       }
 
-      // Apply supplier filter
-      if (filter != null && filter.onlySuppliers) {
+      // Apply supplier filter (server-side only when type filter is off)
+      if (hasSupplierFilter && !hasTypeFilter) {
         query = query.where('supplier_id', isNull: false);
       }
 
@@ -54,9 +57,19 @@ class FirestoreTransactionRepository implements TransactionRepository {
         }
       }
 
+      // Determine if client-side filters will be applied
+      final hasClientSideFilter = filter != null &&
+          (filter.selectedCategories.isNotEmpty ||
+              filter.amountRange.start > 0 ||
+              filter.amountRange.end < double.infinity);
+
+      // Over-fetch when client-side filters are active to compensate for
+      // items that will be filtered out after the Firestore query.
+      final fetchLimit = (limit != null && hasClientSideFilter) ? limit * 3 : limit;
+
       // Apply limit
-      if (limit != null) {
-        query = query.limit(limit);
+      if (fetchLimit != null) {
+        query = query.limit(fetchLimit);
       }
 
       QuerySnapshot<Map<String, dynamic>> snapshot;
@@ -66,7 +79,7 @@ class FirestoreTransactionRepository implements TransactionRepository {
         // Index may not be ready — fall back to unordered query
         Query<Map<String, dynamic>> fallback =
             _collection.where('user_id', isEqualTo: _uid);
-        if (limit != null) fallback = fallback.limit(limit);
+        if (fetchLimit != null) fallback = fallback.limit(fetchLimit);
         snapshot = await fallback.get();
       }
       List<Transaction> transactions = <Transaction>[];
@@ -84,6 +97,20 @@ class FirestoreTransactionRepository implements TransactionRepository {
 
       // Apply client-side filters that can't be combined as Firestore queries
       if (filter != null) {
+        // Type filter applied client-side when supplier filter was server-side
+        if (hasTypeFilter && hasSupplierFilter) {
+          if (filter.type == TransactionType.income) {
+            transactions = transactions.where((t) => t.amount > 0).toList();
+          } else {
+            transactions = transactions.where((t) => t.amount < 0).toList();
+          }
+        }
+
+        // Supplier filter applied client-side when type filter was server-side
+        if (hasSupplierFilter && hasTypeFilter) {
+          transactions = transactions.where((t) => t.supplierId != null).toList();
+        }
+
         // Category filter
         if (filter.selectedCategories.isNotEmpty) {
           transactions = transactions
@@ -104,6 +131,11 @@ class FirestoreTransactionRepository implements TransactionRepository {
 
       // Client-side sort ensures correct order even with fallback query
       transactions.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+      // Trim to originally requested limit after client-side filtering
+      if (limit != null && transactions.length > limit) {
+        transactions = transactions.sublist(0, limit);
+      }
 
       return Result.success(transactions);
     } catch (e) {
@@ -166,6 +198,46 @@ class FirestoreTransactionRepository implements TransactionRepository {
       return Result.success(null);
     } catch (e) {
       return Result.failure( 'Failed to delete transaction: $e');
+    }
+  }
+
+  @override
+  Future<Result<void>> reassignCategory(
+      String oldCategoryId, String newCategoryId) async {
+    try {
+      // Query ALL transactions with the old category for this user
+      QuerySnapshot<Map<String, dynamic>> snapshot = await _collection
+          .where('user_id', isEqualTo: _uid)
+          .where('category_id', isEqualTo: oldCategoryId)
+          .get();
+
+      if (snapshot.docs.isEmpty) return Result.success(null);
+
+      // Batch update in groups of 500 (Firestore batch limit)
+      final batches = <WriteBatch>[];
+      var currentBatch = _firestore.batch();
+      var count = 0;
+
+      for (final doc in snapshot.docs) {
+        currentBatch.update(doc.reference, {
+          'category_id': newCategoryId,
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+        count++;
+        if (count % 500 == 0) {
+          batches.add(currentBatch);
+          currentBatch = _firestore.batch();
+        }
+      }
+      batches.add(currentBatch);
+
+      for (final batch in batches) {
+        await batch.commit();
+      }
+
+      return Result.success(null);
+    } catch (e) {
+      return Result.failure('Failed to reassign transactions: $e');
     }
   }
 }

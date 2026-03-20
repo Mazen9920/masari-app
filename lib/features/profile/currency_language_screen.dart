@@ -18,7 +18,7 @@ class CurrencyLanguageScreen extends ConsumerWidget {
     {'code': 'GBP', 'name': 'British Pound',    'symbol': '£'},
   ];
 
-  static const _languages = ['English', 'العربية', 'Français'];
+  static const _languages = ['English', 'العربية'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../core/providers/app_settings_provider.dart';
+import '../../../shared/models/sale_model.dart';
 import '../providers/dashboard_state_provider.dart';
 
 enum _Metric { sales, expenses, profit, orders }
@@ -68,9 +70,10 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
         .toList();
 
     // Build time buckets
-    final buckets = _buildBuckets(range.start, range.end, ds.period);
+    final strategy = ds.period.effectiveBucketStrategy(range);
+    final buckets = _buildBuckets(range.start, range.end, strategy);
     final prevBuckets =
-        _buildBuckets(range.previousStart, range.previousEnd, ds.period);
+        _buildBuckets(range.previousStart, range.previousEnd, strategy);
 
     final curData =
         _aggregate(buckets, curSales, curTxns, range.start, _selected);
@@ -80,8 +83,8 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
     // Summary value
     final totalCur = curData.fold<double>(0, (a, b) => a + b);
     final totalPrev = prevData.fold<double>(0, (a, b) => a + b);
-    final changePct = totalPrev > 0
-        ? ((totalCur - totalPrev) / totalPrev * 100)
+    final changePct = totalPrev.abs() > 0
+        ? ((totalCur - totalPrev) / totalPrev.abs() * 100)
         : (totalCur > 0 ? 100.0 : 0.0);
 
     final fmt = _selected == _Metric.orders
@@ -113,7 +116,7 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Analytics',
+                    AppLocalizations.of(context)!.analytics,
                     style: AppTypography.h3.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w800,
@@ -165,7 +168,7 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Compare',
+                        AppLocalizations.of(context)!.compareLabel,
                         style: AppTypography.captionSmall.copyWith(
                           color: _showComparison
                               ? AppColors.primaryNavy
@@ -220,7 +223,7 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
           // ─── Chart ───
           SizedBox(
             height: 200,
-            child: _buildChart(curData, prevData, buckets, ds.period),
+            child: _buildChart(curData, prevData, buckets, strategy),
           ),
         ],
       ),
@@ -228,11 +231,11 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
   }
 
   Widget _buildChart(List<double> curData, List<double> prevData,
-      List<DateTime> buckets, DashboardPeriod period) {
+      List<DateTime> buckets, BucketStrategy strategy) {
     if (curData.isEmpty) {
       return Center(
         child: Text(
-          'No data for this period',
+          AppLocalizations.of(context)!.noDataForPeriod,
           style: AppTypography.bodySmall
               .copyWith(color: AppColors.textTertiary),
         ),
@@ -301,7 +304,7 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
                 return Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    _bucketLabel(buckets[i], period),
+                    _bucketLabel(buckets[i], strategy),
                     style: const TextStyle(
                       fontSize: 10,
                       color: AppColors.textTertiary,
@@ -399,16 +402,17 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
     }
   }
 
-  static String _metricLabel(_Metric m) {
+  String _metricLabel(_Metric m) {
+    final l10n = AppLocalizations.of(context)!;
     switch (m) {
       case _Metric.sales:
-        return 'Sales';
+        return l10n.salesMetric;
       case _Metric.expenses:
-        return 'Expenses';
+        return l10n.expenses;
       case _Metric.profit:
-        return 'Profit';
+        return l10n.profitMetric;
       case _Metric.orders:
-        return 'Orders';
+        return l10n.ordersMetric;
     }
   }
 
@@ -425,8 +429,8 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
     return (count / 6).ceilToDouble();
   }
 
-  static String _bucketLabel(DateTime d, DashboardPeriod period) {
-    switch (period.bucketStrategy) {
+  static String _bucketLabel(DateTime d, BucketStrategy strategy) {
+    switch (strategy) {
       case BucketStrategy.hourly:
         return DateFormat('HH:mm').format(d);
       case BucketStrategy.daily:
@@ -441,9 +445,9 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
 // ─── Time bucketing ───
 
 List<DateTime> _buildBuckets(
-    DateTime start, DateTime end, DashboardPeriod period) {
+    DateTime start, DateTime end, BucketStrategy strategy) {
   final buckets = <DateTime>[];
-  switch (period.bucketStrategy) {
+  switch (strategy) {
     case BucketStrategy.hourly:
       var cursor = DateTime(start.year, start.month, start.day);
       while (!cursor.isAfter(end)) {
@@ -486,35 +490,49 @@ List<double> _aggregate(
 
   switch (metric) {
     case _Metric.sales:
-      // Revenue — investments already excluded at the pre-filter stage
+      // Revenue — investments already excluded at the pre-filter stage.
+      // Refund transactions (negative cat_sales_revenue) reduce revenue.
       for (final t in txns) {
-        if ((t as dynamic).isIncome as bool) {
-          final idx = bucketIndex((t as dynamic).dateTime as DateTime);
-          if (idx >= 0 && idx < values.length) {
-            values[idx] += ((t as dynamic).amount as double).abs();
+        final amount = (t as dynamic).amount as double;
+        final catId = (t as dynamic).categoryId as String;
+        final idx = bucketIndex((t as dynamic).dateTime as DateTime);
+        if (idx >= 0 && idx < values.length) {
+          if (amount > 0) {
+            if ((t as dynamic).isIncome as bool) {
+              values[idx] += amount.abs();
+            }
+          } else if (catId == 'cat_sales_revenue') {
+            // Refund: reduce revenue
+            values[idx] -= amount.abs();
           }
         }
       }
       break;
     case _Metric.expenses:
       for (final t in txns) {
-        if ((t as dynamic).amount < 0) {
+        final amount = (t as dynamic).amount as double;
+        final catId = (t as dynamic).categoryId as String;
+        if (amount < 0 && catId != 'cat_sales_revenue') {
           final idx = bucketIndex((t as dynamic).dateTime as DateTime);
           if (idx >= 0 && idx < values.length) {
-            values[idx] += ((t as dynamic).amount as double).abs();
+            values[idx] += amount.abs();
           }
         }
       }
       break;
     case _Metric.profit:
       // Revenue (income txns) minus expenses (negative txns)
+      // Refund txns (negative cat_sales_revenue) reduce revenue, not increase expenses
       for (final t in txns) {
         final amount = (t as dynamic).amount as double;
         final isIncome = (t as dynamic).isIncome as bool;
+        final catId = (t as dynamic).categoryId as String;
         final idx = bucketIndex((t as dynamic).dateTime as DateTime);
         if (idx >= 0 && idx < values.length) {
           if (isIncome) {
             values[idx] += amount.abs(); // add revenue
+          } else if (catId == 'cat_sales_revenue') {
+            values[idx] -= amount.abs(); // refund reduces revenue (profit)
           } else {
             values[idx] -= amount.abs(); // subtract expense
           }
@@ -523,7 +541,8 @@ List<double> _aggregate(
       break;
     case _Metric.orders:
       for (final s in sales) {
-        final idx = bucketIndex((s as dynamic).date as DateTime);
+        if ((s as Sale).orderStatus == OrderStatus.cancelled) continue;
+        final idx = bucketIndex(s.date);
         if (idx >= 0 && idx < values.length) {
           values[idx] += 1;
         }

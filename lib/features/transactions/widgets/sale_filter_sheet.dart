@@ -53,8 +53,9 @@ class SaleFilter {
 
 class SaleFilterSheet extends StatefulWidget {
   final SaleFilter initialFilter;
+  final String currency;
 
-  const SaleFilterSheet({super.key, required this.initialFilter});
+  const SaleFilterSheet({super.key, required this.initialFilter, this.currency = '\$'});
 
   @override
   State<SaleFilterSheet> createState() => _SaleFilterSheetState();
@@ -129,7 +130,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textTertiary.withOpacity(0.3),
+                color: AppColors.textTertiary.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -163,7 +164,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
             ),
           ),
 
-          Container(height: 1, color: AppColors.borderLight.withOpacity(0.5)),
+          Container(height: 1, color: AppColors.borderLight.withValues(alpha: 0.5)),
 
           // Scrollable content
           Expanded(
@@ -186,11 +187,11 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border(
-                top: BorderSide(color: AppColors.borderLight.withOpacity(0.5)),
+                top: BorderSide(color: AppColors.borderLight.withValues(alpha: 0.5)),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, -4),
                 ),
@@ -228,7 +229,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -288,7 +289,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isSelected ? color.withOpacity(0.1) : Colors.white,
+                  color: isSelected ? color.withValues(alpha: 0.1) : Colors.white,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: isSelected ? color : AppColors.borderLight,
@@ -341,7 +342,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? AppColors.primaryNavy.withOpacity(0.08)
+                      ? AppColors.primaryNavy.withValues(alpha: 0.08)
                       : Colors.white,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
@@ -379,7 +380,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
           children: [
             _sectionLabel('Amount Range'),
             Text(
-              '\$${_amountRange.start.toInt()} - \$${_amountRange.end.toInt() >= 10000 ? '10k+' : _amountRange.end.toInt().toString()}',
+              '${widget.currency}${_amountRange.start.toInt()} - ${widget.currency}${_amountRange.end.toInt() >= 10000 ? '10k+' : _amountRange.end.toInt().toString()}',
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.accentOrange,
                 fontWeight: FontWeight.w800,
@@ -394,7 +395,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
             activeTrackColor: AppColors.accentOrange,
             inactiveTrackColor: AppColors.borderLight,
             thumbColor: Colors.white,
-            overlayColor: AppColors.accentOrange.withOpacity(0.1),
+            overlayColor: AppColors.accentOrange.withValues(alpha: 0.1),
             trackHeight: 4,
             rangeThumbShape: _CustomRangeThumbShape(),
           ),
@@ -413,10 +414,10 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('\$0',
+              Text('${widget.currency}0',
                   style: AppTypography.captionSmall
                       .copyWith(color: AppColors.textTertiary, fontWeight: FontWeight.w500)),
-              Text('\$10k+',
+              Text('${widget.currency}10k+',
                   style: AppTypography.captionSmall
                       .copyWith(color: AppColors.textTertiary, fontWeight: FontWeight.w500)),
             ],
@@ -466,7 +467,7 @@ class _CustomRangeThumbShape extends RangeSliderThumbShape {
       center + const Offset(0, 1),
       12,
       Paint()
-        ..color = Colors.black.withOpacity(0.12)
+        ..color = Colors.black.withValues(alpha: 0.12)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
     );
     canvas.drawCircle(center, 12, Paint()..color = Colors.white);

@@ -162,7 +162,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
                   itemCount: _suggestions.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
                     final suggestion = _suggestions[index];
                     return ActionChip(

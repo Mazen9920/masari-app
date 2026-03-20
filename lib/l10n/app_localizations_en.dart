@@ -902,4 +902,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get catOwnerWithdrawal => 'Owner Withdrawal';
+
+  @override
+  String get accounts => 'Accounts';
+
+  @override
+  String countOutstanding(int count) {
+    return '$count outstanding';
+  }
+
+  @override
+  String get analytics => 'Analytics';
+
+  @override
+  String get compareLabel => 'Compare';
+
+  @override
+  String get salesMetric => 'Sales';
+
+  @override
+  String get profitMetric => 'Profit';
+
+  @override
+  String get ordersMetric => 'Orders';
+
+  @override
+  String get recentTransactions => 'Recent Transactions';
+
+  @override
+  String get customizeDashboard => 'Customize Dashboard';
+
+  @override
+  String get done => 'Done';
+
+  @override
+  String get toggleSectionsHint =>
+      'Toggle sections on/off and drag to reorder.';
+
+  @override
+  String totalIncomeLabel(String amount) {
+    return 'Total Income: $amount';
+  }
+
+  @override
+  String get noSalesInPeriod => 'No sales in this period';
+
+  @override
+  String get allProductsWellStocked => 'All products are well stocked';
 }

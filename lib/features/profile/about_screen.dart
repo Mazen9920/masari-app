@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../shared/utils/safe_pop.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -13,7 +15,7 @@ class AboutScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
         title: Text('About Masari', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
@@ -52,17 +54,25 @@ class AboutScreen extends StatelessWidget {
               style: TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.backgroundLight,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.borderLight),
-              ),
-              child: Text(
-                'Version 1.0.0 (Build 42)',
-                style: TextStyle(fontSize: 12, color: AppColors.textTertiary, fontWeight: FontWeight.w600),
-              ),
+            FutureBuilder<PackageInfo>(
+              future: PackageInfo.fromPlatform(),
+              builder: (context, snapshot) {
+                final version = snapshot.hasData
+                    ? 'Version ${snapshot.data!.version} (Build ${snapshot.data!.buildNumber})'
+                    : 'Loading...';
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundLight,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Text(
+                    version,
+                    style: TextStyle(fontSize: 12, color: AppColors.textTertiary, fontWeight: FontWeight.w600),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 32),
             // Links
@@ -83,11 +93,13 @@ class AboutScreen extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Opening Privacy Policy...')));
                   }),
                   _divider(),
-                  _buildLink(icon: Icons.gavel_rounded, title: 'Open Source Licenses', onTap: () {
+                  _buildLink(icon: Icons.gavel_rounded, title: 'Open Source Licenses', onTap: () async {
+                    final info = await PackageInfo.fromPlatform();
+                    if (!context.mounted) return;
                     showLicensePage(
                       context: context,
                       applicationName: 'Masari',
-                      applicationVersion: '1.0.0',
+                      applicationVersion: info.version,
                     );
                   }),
                   _divider(),

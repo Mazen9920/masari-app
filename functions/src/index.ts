@@ -96,7 +96,7 @@ export const processRecurringTransactions = onSchedule(
         amount: data.is_income ?
           Math.abs(data.amount) :
           -Math.abs(data.amount),
-        category_id: data.category || "recurring",
+        category_id: data.category || (data.is_income ? "cat_income" : "cat_other"),
         date_time: now.toISOString(),
         note: `Auto-created from recurring: ${data.title}`,
         created_at: FieldValue.serverTimestamp(),

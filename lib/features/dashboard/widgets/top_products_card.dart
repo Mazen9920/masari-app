@@ -8,6 +8,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/app_settings_provider.dart';
 import '../../../core/navigation/app_router.dart';
 import '../providers/dashboard_state_provider.dart';
+import '../../../shared/models/sale_model.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Shows top 5 products by revenue in the selected period.
@@ -33,6 +34,7 @@ class TopProductsCard extends ConsumerWidget {
       if (sale.date.isBefore(range.start) || sale.date.isAfter(range.end)) {
         continue;
       }
+      if (sale.orderStatus == OrderStatus.cancelled) continue;
       for (final item in sale.items) {
         final key = item.productId ?? item.productName;
         revenueByProduct[key] =
@@ -108,7 +110,7 @@ class TopProductsCard extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
-                   'No sales in this period',
+                   l10n.noSalesInPeriod,
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textTertiary,
                   ),

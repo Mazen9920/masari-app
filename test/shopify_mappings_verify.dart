@@ -1,2 +1,2 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+// ignore_for_file: avoid_print
 void main() { print("We need to check Firestore for mapping accuracy."); }

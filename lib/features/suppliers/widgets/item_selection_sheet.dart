@@ -125,7 +125,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                     shrinkWrap: true,
                     physics: const BouncingScrollPhysics(),
                     itemCount: _filteredInventory.length,
-                    separatorBuilder: (_, __) => Divider(
+                    separatorBuilder: (_, _) => Divider(
                       height: 1,
                       color: AppColors.borderLight.withValues(alpha: 0.3),
                     ),
@@ -156,8 +156,8 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                                     fit: BoxFit.cover,
                                     width: 40,
                                     height: 40,
-                                    placeholder: (_, __) => Icon(product.icon, color: product.color, size: 20),
-                                    errorWidget: (_, __, ___) => Icon(product.icon, color: product.color, size: 20),
+                                    placeholder: (_, _) => Icon(product.icon, color: product.color, size: 20),
+                                    errorWidget: (_, _, _) => Icon(product.icon, color: product.color, size: 20),
                                   ),
                                 )
                               : Icon(product.icon, color: product.color, size: 20),
@@ -277,7 +277,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                 shrinkWrap: true,
                 physics: const BouncingScrollPhysics(),
                 itemCount: product.variants.length,
-                separatorBuilder: (_, __) => Divider(
+                separatorBuilder: (_, _) => Divider(
                   height: 1,
                   color: AppColors.borderLight.withValues(alpha: 0.3),
                 ),
@@ -307,8 +307,8 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                                     fit: BoxFit.cover,
                                     width: 36,
                                     height: 36,
-                                    placeholder: (_, __) => const Icon(Icons.style_rounded, color: AppColors.primaryNavy, size: 18),
-                                    errorWidget: (_, __, ___) => const Icon(Icons.style_rounded, color: AppColors.primaryNavy, size: 18),
+                                    placeholder: (_, _) => const Icon(Icons.style_rounded, color: AppColors.primaryNavy, size: 18),
+                                    errorWidget: (_, _, _) => const Icon(Icons.style_rounded, color: AppColors.primaryNavy, size: 18),
                                   ),
                                 )
                               : const Icon(Icons.style_rounded, color: AppColors.primaryNavy, size: 18),

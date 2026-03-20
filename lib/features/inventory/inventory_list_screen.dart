@@ -23,6 +23,29 @@ import '../shopify/providers/shopify_sync_provider.dart';
 import '../../core/navigation/app_router.dart';
 import '../../shared/utils/safe_pop.dart';
 
+// Persistent filter state — survives navigation via Notifier providers
+class _TabNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+  void set(int v) => state = v;
+}
+
+class _MaterialsViewNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool v) => state = v;
+}
+
+class _FilterNotifier extends Notifier<InventoryFilterResult> {
+  @override
+  InventoryFilterResult build() => const InventoryFilterResult();
+  void set(InventoryFilterResult v) => state = v;
+}
+
+final _inventoryTabProvider = NotifierProvider<_TabNotifier, int>(_TabNotifier.new);
+final _inventoryMaterialsViewProvider = NotifierProvider<_MaterialsViewNotifier, bool>(_MaterialsViewNotifier.new);
+final _inventoryFilterProvider = NotifierProvider<_FilterNotifier, InventoryFilterResult>(_FilterNotifier.new);
+
 class InventoryListScreen extends ConsumerStatefulWidget {
   const InventoryListScreen({super.key});
 
@@ -33,12 +56,20 @@ class InventoryListScreen extends ConsumerStatefulWidget {
 
 class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
     with WidgetsBindingObserver {
-  int _selectedFilter = 0; // 0=All, 1=LowStock, 2=OutOfStock
-  bool _isMaterialsView = false; // Toggle state
+  // Filter state persisted via providers (survives navigation)
+  int get _selectedFilter => ref.read(_inventoryTabProvider);
+  set _selectedFilter(int v) => ref.read(_inventoryTabProvider.notifier).set(v);
+
+  bool get _isMaterialsView => ref.read(_inventoryMaterialsViewProvider);
+  set _isMaterialsView(bool v) => ref.read(_inventoryMaterialsViewProvider.notifier).set(v);
+
+  InventoryFilterResult get _filterResult => ref.read(_inventoryFilterProvider);
+  set _filterResult(InventoryFilterResult v) => ref.read(_inventoryFilterProvider.notifier).set(v);
+
+  // Transient UI state (local)
   bool _isSearchVisible = false;
-  bool _isAutoSyncing = false; // For "always on" Shopify sync spinner
+  bool _isAutoSyncing = false;
   String _searchQuery = '';
-  InventoryFilterResult _filterResult = const InventoryFilterResult();
   final _searchController = TextEditingController();
   final _searchFocus = FocusNode();
   final _scrollController = ScrollController();
@@ -237,6 +268,10 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
   @override
   Widget build(BuildContext context) {
     final productsAsync = ref.watch(inventoryProvider);
+    // Watch filter providers so UI rebuilds when they change
+    ref.watch(_inventoryTabProvider);
+    ref.watch(_inventoryMaterialsViewProvider);
+    ref.watch(_inventoryFilterProvider);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -432,7 +467,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
     final asyncConn = ref.watch(shopifyConnectionProvider);
     return asyncConn.when(
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       data: (conn) {
         if (conn == null || !conn.isActive) return const SizedBox.shrink();
         // Only show persistent sync bar in on-demand mode
@@ -2003,14 +2038,14 @@ class _ProductCard extends ConsumerWidget {
                         fit: BoxFit.cover,
                         width: 56,
                         height: 56,
-                        placeholder: (_, __) => Icon(
+                        placeholder: (_, _) => Icon(
                           product.icon,
                           size: 26,
                           color: isOutOfStock
                               ? AppColors.textTertiary
                               : product.color,
                         ),
-                        errorWidget: (_, __, ___) => Icon(
+                        errorWidget: (_, _, _) => Icon(
                           product.icon,
                           size: 26,
                           color: isOutOfStock

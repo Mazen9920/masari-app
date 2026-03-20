@@ -1,19 +1,39 @@
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/services/image_upload_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/user_profile_provider.dart';
+import '../../shared/utils/safe_pop.dart';
 
-class EditProfileScreen extends StatefulWidget {
+class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
 
   @override
-  State<EditProfileScreen> createState() => _EditProfileScreenState();
+  ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
-class _EditProfileScreenState extends State<EditProfileScreen> {
-  final _nameController = TextEditingController(text: 'Mazen');
-  final _emailController = TextEditingController(text: 'mazen@techstyle.eg');
-  final _phoneController = TextEditingController(text: '+20 100 123 4567');
+class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _phoneController;
+  bool _saving = false;
+  File? _pickedImage;
+
+  @override
+  void initState() {
+    super.initState();
+    final profile = ref.read(userProfileProvider);
+    _nameController  = TextEditingController(text: profile.name);
+    _emailController = TextEditingController(text: profile.email);
+    _phoneController = TextEditingController(text: profile.phone);
+  }
 
   @override
   void dispose() {
@@ -23,29 +43,111 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
+  void _showImageSourcePicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Change Profile Photo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded, color: AppColors.accentOrange),
+                title: const Text('Take a Photo'),
+                onTap: () { Navigator.pop(ctx); _pickImage(ImageSource.camera); },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded, color: AppColors.secondaryBlue),
+                title: const Text('Choose from Gallery'),
+                onTap: () { Navigator.pop(ctx); _pickImage(ImageSource.gallery); },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final xFile = await ImageUploadService.pickImage(source: source);
+    if (xFile != null && mounted) {
+      setState(() => _pickedImage = File(xFile.path));
+    }
+  }
+
+  Future<void> _save() async {
+    final name  = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Name cannot be empty')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    HapticFeedback.mediumImpact();
+
+    String? avatarUrl;
+    if (_pickedImage != null) {
+      final uid = ref.read(authProvider).user?.id;
+      if (uid != null) {
+        avatarUrl = await ImageUploadService.uploadFile(
+          file: _pickedImage!,
+          storagePath: 'users/$uid/profile.jpg',
+        );
+      }
+    }
+
+    await ref.read(userProfileProvider.notifier).update(
+      name: name,
+      email: email,
+      phone: phone,
+      avatarUrl: avatarUrl,
+    );
+    if (mounted) {
+      setState(() => _saving = false);
+      context.safePop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final profile = ref.watch(userProfileProvider);
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
         title: Text('Edit Profile', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
         actions: [
           TextButton(
-            onPressed: () {
-              HapticFeedback.mediumImpact();
-              Navigator.pop(context);
-            },
-            child: Text(
-              'Save',
-              style: TextStyle(color: AppColors.accentOrange, fontWeight: FontWeight.bold, fontSize: 15),
-            ),
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : Text(
+                    'Save',
+                    style: TextStyle(color: AppColors.accentOrange, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
           ),
         ],
       ),
@@ -56,49 +158,69 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           children: [
             const SizedBox(height: 8),
             // Avatar
-            Center(
-              child: Stack(
-                children: [
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.primaryNavy.withValues(alpha: 0.1),
-                      border: Border.all(color: AppColors.primaryNavy.withValues(alpha: 0.2), width: 3),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'M',
-                        style: TextStyle(
-                          fontSize: 40,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryNavy,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      width: 34,
-                      height: 34,
+            GestureDetector(
+              onTap: _showImageSourcePicker,
+              child: Center(
+                child: Stack(
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
                       decoration: BoxDecoration(
-                        color: AppColors.accentOrange,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 3),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.accentOrange.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                          ),
-                        ],
+                        color: AppColors.primaryNavy.withValues(alpha: 0.1),
+                        border: Border.all(color: AppColors.primaryNavy.withValues(alpha: 0.2), width: 3),
                       ),
-                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                      child: ClipOval(
+                        child: _pickedImage != null
+                            ? Image.file(_pickedImage!, width: 100, height: 100, fit: BoxFit.cover)
+                            : (profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty)
+                                ? CachedNetworkImage(
+                                    imageUrl: profile.avatarUrl!,
+                                    width: 100,
+                                    height: 100,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, _) => Center(
+                                      child: Text(profile.initials, style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: AppColors.primaryNavy)),
+                                    ),
+                                    errorWidget: (_, _, _) => Center(
+                                      child: Text(profile.initials, style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: AppColors.primaryNavy)),
+                                    ),
+                                  )
+                                : Center(
+                                    child: Text(
+                                      profile.initials,
+                                      style: const TextStyle(
+                                        fontSize: 40,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primaryNavy,
+                                      ),
+                                    ),
+                                  ),
+                      ),
                     ),
-                  ),
-                ],
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppColors.accentOrange,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.accentOrange.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 32),

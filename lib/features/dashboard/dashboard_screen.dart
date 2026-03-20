@@ -84,7 +84,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 parent: BouncingScrollPhysics()),
             slivers: [
               // ─── Header: greeting + notification + avatar ───
-              SliverToBoxAdapter(child: _buildHeader(profile.name, ref)),
+              SliverToBoxAdapter(child: _buildHeader(profile.name)),
 
               // ─── AI Insight Card (dynamic) ───
               const SliverToBoxAdapter(
@@ -95,7 +95,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
 
               // ─── Period Selector (above stats) ───
-              SliverToBoxAdapter(child: _buildPeriodSelector(ref)),
+              SliverToBoxAdapter(child: _buildPeriodSelector()),
 
               // ─── Quick Stats (horizontal scroll) ───
               const SliverToBoxAdapter(
@@ -114,7 +114,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
 
               // ─── Dynamic sections (user-configurable) ───
-              ..._buildConfigurableSections(ref),
+              ..._buildConfigurableSections(),
 
               // ─── Bottom padding for nav bar ───
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
@@ -125,7 +125,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildHeader(String userName, WidgetRef ref) {
+  Widget _buildHeader(String userName) {
     return Builder(
       builder: (context) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
@@ -239,10 +239,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                   fit: BoxFit.cover,
                                   width: 42,
                                   height: 42,
-                                  placeholder: (_, __) => Center(
+                                  placeholder: (_, _) => Center(
                                     child: Text(initials, style: AppTypography.labelLarge.copyWith(color: AppColors.primaryNavy, fontSize: 17)),
                                   ),
-                                  errorWidget: (_, __, ___) => Center(
+                                  errorWidget: (_, _, _) => Center(
                                     child: Text(initials, style: AppTypography.labelLarge.copyWith(color: AppColors.primaryNavy, fontSize: 17)),
                                   ),
                                 )
@@ -269,7 +269,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildPeriodSelector(WidgetRef ref) {
+  Widget _buildPeriodSelector() {
     final ds = ref.watch(dashboardStateProvider);
     final period = ds.period;
 
@@ -284,7 +284,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: GestureDetector(
-        onTap: () => _showDateRangeSheet(context, ref),
+        onTap: () => _showDateRangeSheet(context),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
@@ -312,7 +312,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Future<void> _showDateRangeSheet(BuildContext context, WidgetRef ref) async {
+  Future<void> _showDateRangeSheet(BuildContext context) async {
     final ds = ref.read(dashboardStateProvider);
     final result = await showDateRangeSheet(
       context,
@@ -331,7 +331,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
-  List<Widget> _buildConfigurableSections(WidgetRef ref) {
+  List<Widget> _buildConfigurableSections() {
     final config = ref.watch(dashboardConfigProvider);
     final slivers = <Widget>[];
 
@@ -354,9 +354,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
         child: Center(
           child: TextButton.icon(
-            onPressed: () => _showEditDashboardSheet(context, ref),
+            onPressed: () => _showEditDashboardSheet(context),
             icon: const Icon(Icons.tune_rounded, size: 18),
-            label: const Text('Customize Dashboard'),
+            label: Text(AppLocalizations.of(context)!.customizeDashboard),
             style: TextButton.styleFrom(
               foregroundColor: AppColors.textTertiary,
               textStyle: AppTypography.labelMedium.copyWith(
@@ -390,20 +390,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
-  void _showEditDashboardSheet(BuildContext context, WidgetRef ref) {
+  void _showEditDashboardSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _DashboardEditSheet(ref: ref),
+      builder: (_) => const _DashboardEditSheet(),
     );
   }
 }
 
 // ─── Dashboard Edit Bottom Sheet ───
 class _DashboardEditSheet extends ConsumerStatefulWidget {
-  final WidgetRef ref;
-  const _DashboardEditSheet({required this.ref});
+  const _DashboardEditSheet();
 
   @override
   ConsumerState<_DashboardEditSheet> createState() =>
@@ -417,7 +416,7 @@ class _DashboardEditSheetState extends ConsumerState<_DashboardEditSheet> {
   void initState() {
     super.initState();
     _sections =
-        widget.ref.read(dashboardConfigProvider).sections.map((s) => s.copy()).toList();
+        ref.read(dashboardConfigProvider).sections.map((s) => s.copy()).toList();
   }
 
   @override
@@ -450,7 +449,7 @@ class _DashboardEditSheetState extends ConsumerState<_DashboardEditSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Customize Dashboard',
+                  AppLocalizations.of(context)!.customizeDashboard,
                   style: AppTypography.h3.copyWith(
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
@@ -458,13 +457,13 @@ class _DashboardEditSheetState extends ConsumerState<_DashboardEditSheet> {
                 ),
                 TextButton(
                   onPressed: () {
-                    widget.ref
+                    ref
                         .read(dashboardConfigProvider.notifier)
                         .updateSections(_sections);
                     Navigator.pop(context);
                   },
                   child: Text(
-                    'Done',
+                    AppLocalizations.of(context)!.done,
                     style: AppTypography.labelLarge.copyWith(
                       color: AppColors.accentOrange,
                       fontWeight: FontWeight.w700,
@@ -477,7 +476,7 @@ class _DashboardEditSheetState extends ConsumerState<_DashboardEditSheet> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(
-              'Toggle sections on/off and drag to reorder.',
+              AppLocalizations.of(context)!.toggleSectionsHint,
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textTertiary,
               ),
@@ -488,7 +487,9 @@ class _DashboardEditSheetState extends ConsumerState<_DashboardEditSheet> {
           Flexible(
             child: ReorderableListView.builder(
               shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              buildDefaultDragHandles: false,
+              padding: EdgeInsets.fromLTRB(
+                20, 0, 20, 20 + MediaQuery.of(context).padding.bottom),
               itemCount: _sections.length,
               onReorder: (oldIndex, newIndex) {
                 setState(() {
@@ -536,8 +537,11 @@ class _DashboardEditSheetState extends ConsumerState<_DashboardEditSheet> {
                             setState(() => section.visible = val);
                           },
                         ),
-                        const Icon(Icons.drag_handle_rounded,
-                            color: AppColors.textTertiary, size: 20),
+                        ReorderableDragStartListener(
+                          index: index,
+                          child: const Icon(Icons.drag_handle_rounded,
+                              color: AppColors.textTertiary, size: 20),
+                        ),
                       ],
                     ),
                     contentPadding:

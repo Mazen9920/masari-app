@@ -93,4 +93,16 @@ class LocalTransactionRepository implements TransactionRepository {
     _transactions.removeWhere((t) => t.id == id);
     return Result.success(null);
   }
+
+  @override
+  Future<Result<void>> reassignCategory(
+      String oldCategoryId, String newCategoryId) async {
+    for (var i = 0; i < _transactions.length; i++) {
+      if (_transactions[i].categoryId == oldCategoryId) {
+        _transactions[i] =
+            _transactions[i].copyWith(categoryId: newCategoryId);
+      }
+    }
+    return Result.success(null);
+  }
 }

@@ -81,10 +81,7 @@ class LocalSupplierRepository implements SupplierRepository {
     final updated = supplier.copyWith(
       balance: supplier.balance + amount,
       lastTransaction: DateTime.now(),
-      dueDate: dueDate != null &&
-              (supplier.dueDate == null || dueDate.isAfter(supplier.dueDate!))
-          ? dueDate
-          : supplier.dueDate,
+      dueDate: dueDate ?? supplier.dueDate,
     );
     _suppliers[index] = updated;
     return Result.success(updated);

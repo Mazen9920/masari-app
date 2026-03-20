@@ -1,28 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/security_settings_provider.dart';
+import '../../shared/utils/safe_pop.dart';
 
-class SecurityScreen extends StatefulWidget {
+class SecurityScreen extends ConsumerWidget {
   const SecurityScreen({super.key});
 
   @override
-  State<SecurityScreen> createState() => _SecurityScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(securitySettingsProvider);
+    final notifier = ref.read(securitySettingsProvider.notifier);
 
-class _SecurityScreenState extends State<SecurityScreen> {
-  bool _appLock = false;
-  bool _biometrics = false;
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
         title: Text('Security', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
@@ -69,17 +67,17 @@ class _SecurityScreenState extends State<SecurityScreen> {
                             Container(
                               width: 8, height: 8,
                               decoration: BoxDecoration(
-                                color: _appLock ? AppColors.success : AppColors.warning,
+                                color: settings.appLock ? AppColors.success : AppColors.warning,
                                 shape: BoxShape.circle,
                               ),
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              _appLock ? 'Protected' : 'Basic',
+                              settings.appLock ? 'Protected' : 'Basic',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: _appLock ? AppColors.success : AppColors.warning,
+                                color: settings.appLock ? AppColors.success : AppColors.warning,
                               ),
                             ),
                           ],
@@ -99,8 +97,11 @@ class _SecurityScreenState extends State<SecurityScreen> {
                 iconColor: const Color(0xFF3B82F6),
                 title: 'App Lock (PIN)',
                 subtitle: 'Require PIN to open app',
-                value: _appLock,
-                onChanged: (v) => setState(() => _appLock = v),
+                value: settings.appLock,
+                onChanged: (v) {
+                  HapticFeedback.lightImpact();
+                  notifier.setAppLock(v);
+                },
               ),
               _divider(),
               _buildToggleRow(
@@ -108,8 +109,11 @@ class _SecurityScreenState extends State<SecurityScreen> {
                 iconColor: const Color(0xFF22C55E),
                 title: 'Biometric Login',
                 subtitle: 'Face ID / Touch ID',
-                value: _biometrics,
-                onChanged: (v) => setState(() => _biometrics = v),
+                value: settings.biometrics,
+                onChanged: (v) {
+                  HapticFeedback.lightImpact();
+                  notifier.setBiometrics(v);
+                },
               ),
             ]),
             const SizedBox(height: 24),
@@ -225,7 +229,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
           Switch(
             value: value,
             onChanged: (v) { HapticFeedback.lightImpact(); onChanged(v); },
-            activeColor: AppColors.accentOrange,
+            activeThumbColor: AppColors.accentOrange,
             activeTrackColor: AppColors.accentOrange.withValues(alpha: 0.3),
             inactiveThumbColor: Colors.white,
             inactiveTrackColor: const Color(0xFFCBD5E1),

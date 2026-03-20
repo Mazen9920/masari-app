@@ -159,10 +159,7 @@ class FirestoreSupplierRepository implements SupplierRepository {
           'updated_at': DateTime.now().toIso8601String(),
         };
         if (dueDate != null) {
-          // Only update dueDate if the new one is later than the current one
-          if (supplier.dueDate == null || dueDate.isAfter(supplier.dueDate!)) {
-            updates['due_date'] = dueDate.toIso8601String();
-          }
+          updates['due_date'] = dueDate.toIso8601String();
         }
 
         txn.update(docRef, updates);
@@ -170,10 +167,7 @@ class FirestoreSupplierRepository implements SupplierRepository {
         return supplier.copyWith(
           balance: newBalance,
           lastTransaction: DateTime.now(),
-          dueDate: dueDate != null &&
-                  (supplier.dueDate == null || dueDate.isAfter(supplier.dueDate!))
-              ? dueDate
-              : supplier.dueDate,
+          dueDate: dueDate ?? supplier.dueDate,
         );
       });
 

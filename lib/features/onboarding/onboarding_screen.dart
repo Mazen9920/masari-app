@@ -191,11 +191,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             borderRadius: BorderRadius.circular(4),
             color: isActive
                 ? AppColors.accentOrange
-                : AppColors.textTertiary.withOpacity(0.3),
+                : AppColors.textTertiary.withValues(alpha: 0.3),
             boxShadow: isActive
                 ? [
                     BoxShadow(
-                      color: AppColors.accentOrange.withOpacity(0.3),
+                      color: AppColors.accentOrange.withValues(alpha: 0.3),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),

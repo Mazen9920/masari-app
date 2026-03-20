@@ -348,7 +348,6 @@ class _DatePickerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final fmt = DateFormat( 'MMM dd, yyyy');
 
     return GestureDetector(
@@ -412,7 +411,6 @@ class _RangeInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final days = to.difference(from).inDays;
 
     return Container(

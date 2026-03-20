@@ -413,6 +413,15 @@ final currencyProvider = Provider<String>((ref) {
   return ref.watch(appSettingsProvider).currency;
 });
 
+/// Maps the stored language name to a [Locale] for MaterialApp.
+final localeProvider = Provider<Locale>((ref) {
+  final lang = ref.watch(appSettingsProvider).language;
+  return switch (lang) {
+    'العربية' => const Locale('ar'),
+    _         => const Locale('en'),
+  };
+});
+
 /// Convenience provider that exposes the current subscription tier.
 final tierProvider = Provider<SubscriptionTier>((ref) {
   return ref.watch(appSettingsProvider).tier;

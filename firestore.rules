@@ -12,15 +12,97 @@ service cloud.firestore {
     // All data docs have a 'user_id' field that must match the caller's UID.
     // On update, user_id must not change (immutable).
 
+    // ─── Helper: validate required transaction fields ───────────────
+    function validTransactionFields() {
+      let d = request.resource.data;
+      return d.title is string && d.title.size() > 0
+        && d.amount is number
+        && d.date_time is string
+        && d.category_id is string
+        && d.payment_method is string
+        && d.user_id is string;
+    }
+
+    // ─── Helper: validate required supplier fields ───────────────────
+    function validSupplierFields() {
+      let d = request.resource.data;
+      return d.name is string && d.name.size() > 0
+        && d.category is string
+        && d.balance is number
+        && d.user_id is string;
+    }
+
+    // ─── Helper: validate required purchase fields ──────────────────
+    function validPurchaseFields() {
+      let d = request.resource.data;
+      return d.supplier_id is string && d.supplier_id.size() > 0
+        && d.supplier_name is string
+        && d.date is string
+        && d.payment_status is int && d.payment_status >= 0 && d.payment_status <= 2
+        && d.amount_paid is number && d.amount_paid >= 0
+        && d.user_id is string;
+    }
+
+    // ─── Helper: validate required payment fields ───────────────────
+    function validPaymentFields() {
+      let d = request.resource.data;
+      return d.supplier_id is string && d.supplier_id.size() > 0
+        && d.supplier_name is string
+        && d.amount is number && d.amount > 0
+        && d.date is string
+        && d.method is string
+        && d.user_id is string;
+    }
+
+    // ─── Helper: validate required product fields ───────────────────
+    function validProductFields() {
+      let d = request.resource.data;
+      return d.name is string && d.name.size() > 0
+        && d.variants is list
+        && d.user_id is string;
+    }
+
+    // ─── Helper: validate required sale fields ──────────────────────
+    function validSaleFields() {
+      let d = request.resource.data;
+      return d.items is list
+        && d.payment_method is string
+        && d.payment_status is int && d.payment_status >= 0 && d.payment_status <= 3
+        && d.order_status is int && d.order_status >= 0 && d.order_status <= 4
+        && d.user_id is string;
+    }
+
+    // ─── Helper: validate required goods receipt fields ─────────────
+    function validGoodsReceiptFields() {
+      let d = request.resource.data;
+      return d.supplier_id is string && d.supplier_id.size() > 0
+        && d.date is string
+        && d.items is list
+        && d.status is int && d.status >= 0 && d.status <= 2
+        && d.user_id is string;
+    }
+
+    // ─── Helper: validate required conversion order fields ──────────
+    function validConversionOrderFields() {
+      let d = request.resource.data;
+      return d.product_id is string && d.product_id.size() > 0
+        && d.source_variant_id is string
+        && d.source_quantity is number && d.source_quantity > 0
+        && d.outputs is list
+        && d.user_id is string;
+    }
+
     // Transactions
     match /transactions/{docId} {
       allow read, delete: if request.auth != null
         && resource.data.user_id == request.auth.uid;
       allow update: if request.auth != null
         && resource.data.user_id == request.auth.uid
-        && request.resource.data.user_id == resource.data.user_id;
+        && request.resource.data.user_id == resource.data.user_id
+        && validTransactionFields();
       allow create: if request.auth != null
-        && request.resource.data.user_id == request.auth.uid;
+        && request.resource.data.user_id == request.auth.uid
+        && validTransactionFields();
     }
 
     // Categories
@@ -40,9 +122,11 @@ service cloud.firestore {
         && resource.data.user_id == request.auth.uid;
       allow update: if request.auth != null
         && resource.data.user_id == request.auth.uid
-        && request.resource.data.user_id == resource.data.user_id;
+        && request.resource.data.user_id == resource.data.user_id
+        && validProductFields();
       allow create: if request.auth != null
-        && request.resource.data.user_id == request.auth.uid;
+        && request.resource.data.user_id == request.auth.uid
+        && validProductFields();
     }
 
     // Suppliers
@@ -51,9 +135,11 @@ service cloud.firestore {
         && resource.data.user_id == request.auth.uid;
       allow update: if request.auth != null
         && resource.data.user_id == request.auth.uid
-        && request.resource.data.user_id == resource.data.user_id;
+        && request.resource.data.user_id == resource.data.user_id
+        && validSupplierFields();
       allow create: if request.auth != null
-        && request.resource.data.user_id == request.auth.uid;
+        && request.resource.data.user_id == request.auth.uid
+        && validSupplierFields();
     }
 
     // Purchases
@@ -62,9 +148,11 @@ service cloud.firestore {
         && resource.data.user_id == request.auth.uid;
       allow update: if request.auth != null
         && resource.data.user_id == request.auth.uid
-        && request.resource.data.user_id == resource.data.user_id;
+        && request.resource.data.user_id == resource.data.user_id
+        && validPurchaseFields();
       allow create: if request.auth != null
-        && request.resource.data.user_id == request.auth.uid;
+        && request.resource.data.user_id == request.auth.uid
+        && validPurchaseFields();
     }
 
     // Payments
@@ -73,9 +161,11 @@ service cloud.firestore {
         && resource.data.user_id == request.auth.uid;
       allow update: if request.auth != null
         && resource.data.user_id == request.auth.uid
-        && request.resource.data.user_id == resource.data.user_id;
+        && request.resource.data.user_id == resource.data.user_id
+        && validPaymentFields();
       allow create: if request.auth != null
-        && request.resource.data.user_id == request.auth.uid;
+        && request.resource.data.user_id == request.auth.uid
+        && validPaymentFields();
     }
 
     // Recurring Transactions
@@ -95,9 +185,11 @@ service cloud.firestore {
         && resource.data.user_id == request.auth.uid;
       allow update: if request.auth != null
         && resource.data.user_id == request.auth.uid
-        && request.resource.data.user_id == resource.data.user_id;
+        && request.resource.data.user_id == resource.data.user_id
+        && validGoodsReceiptFields();
       allow create: if request.auth != null
-        && request.resource.data.user_id == request.auth.uid;
+        && request.resource.data.user_id == request.auth.uid
+        && validGoodsReceiptFields();
     }
 
     // Sales
@@ -106,9 +198,11 @@ service cloud.firestore {
         && resource.data.user_id == request.auth.uid;
       allow update: if request.auth != null
         && resource.data.user_id == request.auth.uid
-        && request.resource.data.user_id == resource.data.user_id;
+        && request.resource.data.user_id == resource.data.user_id
+        && validSaleFields();
       allow create: if request.auth != null
-        && request.resource.data.user_id == request.auth.uid;
+        && request.resource.data.user_id == request.auth.uid
+        && validSaleFields();
     }
 
     // Balance Sheet (user-scoped document)
@@ -134,7 +228,14 @@ service cloud.firestore {
                == resource.data.access_token)
         && (!('webhook_ids' in request.resource.data)
             || request.resource.data.webhook_ids
-               == resource.data.webhook_ids);
+               == resource.data.webhook_ids)
+        // Prevent SSRF via shop_domain tampering + status spoofing
+        && (!('shop_domain' in request.resource.data)
+            || request.resource.data.shop_domain
+               == resource.data.shop_domain)
+        && (!('status' in request.resource.data)
+            || request.resource.data.status
+               == resource.data.status);
       allow create: if request.auth != null
         && request.resource.data.user_id == request.auth.uid
         // Client-created docs must NOT include an access_token
@@ -169,6 +270,19 @@ service cloud.firestore {
       allow read: if request.auth != null
         && resource.data.user_id == request.auth.uid;
       // No client-side write — only Cloud Functions (Admin SDK) write here
+    }
+
+    // Conversion Orders (breakdown audit trail)
+    match /conversion_orders/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id
+        && validConversionOrderFields();
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid
+        && validConversionOrderFields();
     }
 
     // Deny everything else by default (Firestore's implicit behavior)

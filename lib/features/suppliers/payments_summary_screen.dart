@@ -20,8 +20,8 @@ class PaymentsSummaryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(currencyProvider);
-    final payments = ref.watch(paymentsProvider);
-    final purchases = ref.watch(purchasesProvider);
+    final payments = ref.watch(paymentsProvider).value ?? [];
+    final purchases = ref.watch(purchasesProvider).value ?? [];
     final fmt = NumberFormat('#,##0');
 
     // Compute stats from real data
@@ -253,10 +253,10 @@ class _StatsRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(child: _statCard('Paid', paid,
-            const Color(0xFF27AE60), Icons.check_circle_rounded, fmt)),
+            AppColors.success, Icons.check_circle_rounded, fmt)),
         const SizedBox(width: 12),
         Expanded(child: _statCard('Outstanding', outstanding,
-            const Color(0xFFE67E22), Icons.pending_rounded, fmt)),
+            AppColors.accentOrange, Icons.pending_rounded, fmt)),
       ],
     );
   }
@@ -454,7 +454,7 @@ class _PaymentMethods extends StatelessWidget {
   }
 
   Color _colorFor(int index) {
-    const colors = [Color(0xFF2563EB), Color(0xFF7C3AED), Color(0xFF059669), Color(0xFFE67E22)];
+    const colors = [Color(0xFF2563EB), AppColors.shopifyPurple, Color(0xFF059669), AppColors.accentOrange];
     return colors[index % colors.length];
   }
 

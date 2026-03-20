@@ -185,7 +185,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           width: 56,
           height: 56,
           decoration: BoxDecoration(
-            color: AppColors.accentOrange.withOpacity(0.1),
+            color: AppColors.accentOrange.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(16),
           ),
           child: const Icon(
@@ -342,7 +342,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.textTertiary.withOpacity(0.3),
+                    color: AppColors.textTertiary.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

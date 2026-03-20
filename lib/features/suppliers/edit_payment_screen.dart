@@ -9,6 +9,7 @@ import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/supplier_model.dart';
 import '../../shared/models/payment_model.dart';
+import '../../shared/models/purchase_model.dart';
 
 /// Edit Payment — pre-filled form for modifying an existing payment.
 class EditPaymentScreen extends ConsumerStatefulWidget {
@@ -37,7 +38,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
   void initState() {
     super.initState();
     final p = widget.payment;
-    _amountCtrl = TextEditingController(text: p != null ? p.amount.toStringAsFixed(0) : '');
+    _amountCtrl = TextEditingController(text: p != null ? (p.amount == p.amount.truncateToDouble() ? p.amount.toStringAsFixed(0) : p.amount.toStringAsFixed(2)) : '');
     _notesCtrl = TextEditingController(text: p?.notes ?? '');
     if (p != null) {
       _paymentDate = p.date;
@@ -58,7 +59,11 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
     if (amount <= 0 || widget.payment == null) return;
     HapticFeedback.mediumImpact();
 
-    final updated = widget.payment!.copyWith(
+    final oldPayment = widget.payment!;
+    final oldAmount = oldPayment.amount;
+    final delta = amount - oldAmount;
+
+    final updated = oldPayment.copyWith(
       amount: amount,
       date: _paymentDate,
       method: _methods[_methodIdx].label,
@@ -66,6 +71,24 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
     );
 
     ref.read(paymentsProvider.notifier).updatePayment(updated);
+
+    // C1: Adjust supplier balance by the delta
+    if (delta > 0) {
+      // Paid more → reduce supplier balance
+      ref.read(suppliersProvider.notifier).recordPayment(widget.supplierId!, delta);
+    } else if (delta < 0) {
+      // Paid less → increase supplier balance
+      ref.read(suppliersProvider.notifier).recordPurchase(widget.supplierId!, -delta);
+    }
+
+    // C3: Reverse old purchase allocations and reapply with new amount
+    if (oldPayment.appliedToPurchaseIds.isNotEmpty) {
+      _reversePurchaseAllocations(oldPayment);
+      _applyPurchaseAllocations(oldPayment.appliedToPurchaseIds, amount);
+    }
+
+    // C6: Recalculate supplier dueDate from earliest unpaid purchase
+    _recalcSupplierDueDate();
 
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -76,6 +99,116 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
+  }
+
+  /// Reverse payment allocations on affected purchases (set them back to
+  /// the state before this payment was applied).
+  void _reversePurchaseAllocations(Payment payment) {
+    final purchasesNotifier = ref.read(purchasesProvider.notifier);
+    final allPurchases = ref.read(purchasesProvider).value ?? [];
+    var remaining = payment.amount;
+
+    for (final pid in payment.appliedToPurchaseIds) {
+      if (remaining <= 0) break;
+      final purchase = allPurchases.cast<Purchase?>().firstWhere(
+        (p) => p!.id == pid,
+        orElse: () => null,
+      );
+      if (purchase == null) continue;
+
+      // How much of this payment was allocated to this purchase?
+      // Mirror the original allocation logic from record_payment_screen:
+      final purchaseTotal = purchase.total;
+      final wasFullyPaidByThis = purchase.paymentStatus == 2;
+
+      double allocated;
+      if (wasFullyPaidByThis) {
+        // This payment may have topped it off
+        allocated = (purchaseTotal - (purchase.amountPaid - remaining).clamp(0, purchaseTotal))
+            .clamp(0, remaining);
+        // Simpler: undo to the extent of remaining
+        allocated = remaining.clamp(0, purchase.amountPaid);
+      } else {
+        allocated = remaining.clamp(0, purchase.amountPaid);
+      }
+
+      final newPaid = (purchase.amountPaid - allocated).clamp(0.0, purchaseTotal);
+      final newStatus = newPaid <= 0 ? 0 : (newPaid >= purchaseTotal ? 2 : 1);
+
+      purchasesNotifier.updatePurchase(purchase.copyWith(
+        paymentStatus: newStatus,
+        amountPaid: newPaid,
+      ));
+
+      remaining -= allocated;
+    }
+  }
+
+  /// Apply a payment amount across the given purchase IDs (same logic as
+  /// record_payment_screen._save).
+  void _applyPurchaseAllocations(List<String> purchaseIds, double amount) {
+    final purchasesNotifier = ref.read(purchasesProvider.notifier);
+    final allPurchases = ref.read(purchasesProvider).value ?? [];
+    var remaining = amount;
+
+    for (final pid in purchaseIds) {
+      if (remaining <= 0) break;
+      final purchase = allPurchases.cast<Purchase?>().firstWhere(
+        (p) => p!.id == pid,
+        orElse: () => null,
+      );
+      if (purchase == null) continue;
+
+      final newPaid = purchase.amountPaid + remaining;
+      final purchaseTotal = purchase.total;
+
+      if (newPaid >= purchaseTotal) {
+        purchasesNotifier.updatePurchase(purchase.copyWith(
+          paymentStatus: 2,
+          amountPaid: purchaseTotal,
+        ));
+        remaining -= (purchaseTotal - purchase.amountPaid);
+      } else {
+        purchasesNotifier.updatePurchase(purchase.copyWith(
+          paymentStatus: 1,
+          amountPaid: newPaid,
+        ));
+        remaining = 0;
+      }
+    }
+  }
+
+  /// C6: Recalculate the supplier's dueDate as the earliest due date among
+  /// all unpaid/partial purchases for this supplier. Clears dueDate if none.
+  void _recalcSupplierDueDate() {
+    if (widget.supplierId == null) return;
+    final allPurchases = ref.read(purchasesProvider).value ?? [];
+    final unpaid = allPurchases
+        .where((p) =>
+            p.supplierId == widget.supplierId &&
+            p.paymentStatus != 2 &&
+            p.dueDate != null)
+        .toList();
+
+    DateTime? earliest;
+    for (final p in unpaid) {
+      if (earliest == null || p.dueDate!.isBefore(earliest)) {
+        earliest = p.dueDate;
+      }
+    }
+
+    // Update supplier with the earliest unpaid due date (or null if none)
+    final suppliers = ref.read(suppliersProvider).value ?? [];
+    final supplier = suppliers.cast<Supplier?>().firstWhere(
+      (s) => s!.id == widget.supplierId,
+      orElse: () => null,
+    );
+    if (supplier != null && supplier.dueDate != earliest) {
+      ref.read(suppliersProvider.notifier).updateSupplier(
+        supplier.id,
+        supplier.copyWith(dueDate: earliest),
+      );
+    }
   }
 
   void _confirmDelete() {
@@ -98,13 +231,31 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
             onPressed: () {
               Navigator.of(ctx).pop();
               if (widget.payment != null) {
-                ref.read(paymentsProvider.notifier).removePayment(widget.payment!.id);
+                final payment = widget.payment!;
+
+                // C2: Reverse supplier balance (add back the payment amount)
+                if (widget.supplierId != null) {
+                  ref.read(suppliersProvider.notifier).recordPurchase(
+                    widget.supplierId!,
+                    payment.amount,
+                  );
+                }
+
+                // C3: Reverse purchase payment allocations
+                if (payment.appliedToPurchaseIds.isNotEmpty) {
+                  _reversePurchaseAllocations(payment);
+                }
+
+                // C6: Recalculate supplier dueDate from earliest unpaid purchase
+                _recalcSupplierDueDate();
+
+                ref.read(paymentsProvider.notifier).removePayment(payment.id);
               }
               Navigator.of(context).pop();
             },
             child: const Text('Delete',
                 style: TextStyle(
-                    color: Color(0xFFEF4444), fontWeight: FontWeight.w600)),
+                    color: AppColors.chartRed, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -176,7 +327,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                           child: Text(
                             'Delete Payment',
                             style: TextStyle(
-                              color: Color(0xFFEF4444),
+                              color: AppColors.chartRed,
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
                             ),
@@ -237,7 +388,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
             child: Text(
               'Save',
               style: TextStyle(
-                color: const Color(0xFFE67E22),
+                color: AppColors.accentOrange,
                 fontWeight: FontWeight.w600,
                 fontSize: 15,
               ),
@@ -512,7 +663,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
   // ═══════════════════════════════════════════════════════
   Widget _buildInvoices(NumberFormat fmt) {
     final currency = ref.watch(currencyProvider);
-    final allPurchases = ref.watch(purchasesProvider);
+    final allPurchases = ref.watch(purchasesProvider).value ?? [];
     final appliedIds = widget.payment?.appliedToPurchaseIds ?? [];
     final appliedPurchases = allPurchases.where((p) => appliedIds.contains(p.id)).toList();
 
@@ -617,7 +768,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: purchase.paymentStatus == 2
-                                ? const Color(0xFFF0FDF4)
+                                ? AppColors.chartGreenLight
                                 : const Color(0xFFFFF7ED),
                             borderRadius: BorderRadius.circular(4),
                           ),
@@ -625,8 +776,8 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                             purchase.statusLabel,
                             style: TextStyle(
                               color: purchase.paymentStatus == 2
-                                  ? const Color(0xFF27AE60)
-                                  : const Color(0xFFE67E22),
+                                  ? AppColors.success
+                                  : AppColors.accentOrange,
                               fontWeight: FontWeight.w600,
                               fontSize: 10,
                             ),
@@ -703,11 +854,11 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFFE67E22),
+            color: AppColors.accentOrange,
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFE67E22).withValues(alpha: 0.3),
+                color: AppColors.accentOrange.withValues(alpha: 0.3),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),

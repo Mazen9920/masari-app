@@ -256,7 +256,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
                 ],
               ),
             ),
-            if (trailing != null) trailing,
+            ?trailing,
           ],
         ),
       ),

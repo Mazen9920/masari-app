@@ -11,6 +11,7 @@ import '../../shared/models/category_data.dart';
 import '../../shared/models/payment_model.dart';
 import '../auth/widgets/form_components.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../shared/widgets/discard_changes_dialog.dart';
 
 class EditTransactionScreen extends ConsumerStatefulWidget {
   final Transaction transaction;
@@ -24,6 +25,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   bool _isExpense = true;
   String _amount = '0';
   String? _selectedCategoryId;
+  String? _expenseCategoryId;
+  String? _incomeCategoryId;
   int _selectedPaymentIndex = 0;
   final _noteController = TextEditingController();
   late DateTime _selectedDate;
@@ -45,9 +48,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     // Prepopulate data
     final t = widget.transaction;
     _amount = t.amount.abs().toString();
+    if (_amount.endsWith('.0')) _amount = _amount.substring(0, _amount.length - 2);
     _isExpense = t.amount < 0;
     
     _selectedCategoryId = t.categoryId;
+    if (_isExpense) {
+      _expenseCategoryId = t.categoryId;
+    } else {
+      _incomeCategoryId = t.categoryId;
+    }
 
     // Find payment method index
     final payIndex = _paymentMethods.indexWhere((p) => p.name == t.paymentMethod);
@@ -68,8 +77,24 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   List<CategoryData> get _displayCategories {
     final categories = ref.watch(categoriesProvider).value ?? [];
     if (categories.isEmpty) return [];
-    
-    return categories.where((c) => c.isExpense == _isExpense).toList();
+
+    final filtered = categories.where((c) => c.isExpense == _isExpense).toList();
+
+    // Sort by most used, but push COGS and Shipping to the end
+    const pinToEnd = {'cat_cogs', 'cat_shipping', 'cat_sales_revenue'};
+    final transactions = ref.read(transactionsProvider).value ?? [];
+    final usageCount = <String, int>{};
+    for (final t in transactions) {
+      usageCount[t.categoryId] = (usageCount[t.categoryId] ?? 0) + 1;
+    }
+    filtered.sort((a, b) {
+      final aPinned = pinToEnd.contains(a.id) ? 1 : 0;
+      final bPinned = pinToEnd.contains(b.id) ? 1 : 0;
+      if (aPinned != bPinned) return aPinned - bPinned;
+      return (usageCount[b.id] ?? 0).compareTo(usageCount[a.id] ?? 0);
+    });
+
+    return filtered;
   }
 
   @override
@@ -112,7 +137,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     return parsed.toStringAsFixed(parsed == parsed.roundToDouble() ? 0 : 2);
   }
 
-  void _onSave() {
+  Future<void> _onSave() async {
     HapticFeedback.mediumImpact();
     
     // Create transaction object
@@ -167,7 +192,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     // Optimistic update — state changes immediately before Firestore write
-    transNotifier.updateTransaction(updatedTransaction);
+    await transNotifier.updateTransaction(updatedTransaction);
 
     // ── Sync supplier payment if this is a supplier-payment transaction ──
     if (widget.transaction.categoryId == 'cat_supplier_payment' &&
@@ -179,6 +204,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       );
     }
 
+    if (!mounted) return;
     context.safePop();
     
     // Show success feedback
@@ -198,9 +224,12 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final newAmount = updatedTransaction.amount.abs();
     final amountDiff = newAmount - oldAmount;
 
-    // Find the linked Payment by matching supplier + original amount + date
-    final payments = ref.read(paymentsProvider);
+    // Find the linked Payment by transactionId first, then fallback to matching
+    final payments = ref.read(paymentsProvider).value ?? [];
     final linkedPayment = payments.cast<Payment?>().firstWhere(
+      (p) => p!.transactionId == originalTransaction.id,
+      orElse: () => null,
+    ) ?? payments.cast<Payment?>().firstWhere(
       (p) =>
           p!.supplierId == originalTransaction.supplierId &&
           p.amount == oldAmount &&
@@ -236,8 +265,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   /// Recalculate purchase payment statuses for a supplier based on all
   /// Payment records that reference those purchases.
   void _recalcPurchaseStatuses(WidgetRef ref, String supplierId) {
-    final allPayments = ref.read(paymentsProvider);
-    final allPurchases = ref.read(purchasesProvider);
+    final allPayments = ref.read(paymentsProvider).value ?? [];
+    final allPurchases = ref.read(purchasesProvider).value ?? [];
     final supplierPurchases =
         allPurchases.where((p) => p.supplierId == supplierId).toList();
 
@@ -271,7 +300,14 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final shouldPop = await showDiscardChangesDialog(context);
+        if (shouldPop && context.mounted) context.safePop();
+      },
+      child: Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
@@ -310,6 +346,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -388,9 +425,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                     onTap: () {
                       HapticFeedback.lightImpact();
                       setState(() {
+                        _incomeCategoryId = _selectedCategoryId;
                         _isExpense = true;
-                        final cats = _displayCategories;
-                        _selectedCategoryId = cats.isNotEmpty ? cats.first.id : null;
+                        _selectedCategoryId = _expenseCategoryId ?? (_displayCategories.isNotEmpty ? _displayCategories.first.id : null);
                       });
                     },
                     child: Center(
@@ -409,9 +446,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                     onTap: () {
                       HapticFeedback.lightImpact();
                       setState(() {
+                        _expenseCategoryId = _selectedCategoryId;
                         _isExpense = false;
-                        final cats = _displayCategories;
-                        _selectedCategoryId = cats.isNotEmpty ? cats.first.id : null;
+                        _selectedCategoryId = _incomeCategoryId ?? (_displayCategories.isNotEmpty ? _displayCategories.first.id : null);
                       });
                     },
                     child: Center(

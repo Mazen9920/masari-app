@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
+import '../../../core/navigation/app_router.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/app_settings_provider.dart';
 import '../../../shared/models/category_data.dart';
 import '../../../shared/models/transaction_model.dart';
-import '../../transactions/transaction_detail_screen.dart';
-import '../../transactions/transactions_list_screen.dart';
 
 /// Recent transactions section with "View All" header and transaction cards.
 class RecentTransactions extends ConsumerWidget {
@@ -19,8 +20,9 @@ class RecentTransactions extends ConsumerWidget {
     final currency = ref.watch(appSettingsProvider).currency;
     final recentTransactions = allTransactions
         .where((t) => t.saleId == null)
-        .take(5)
-        .toList();
+        .toList()
+      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    final display = recentTransactions.take(5).toList();
     return Column(
       children: [
         // Header
@@ -28,22 +30,16 @@ class RecentTransactions extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Recent Transactions',
+              AppLocalizations.of(context)!.recentTransactions,
               style: AppTypography.h3.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w800,
               ),
             ),
             GestureDetector(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const TransactionsListScreen(showBackButton: true),
-                  ),
-                );
-              },
+              onTap: () => context.go(AppRoutes.transactions),
               child: Text(
-                'View All',
+                AppLocalizations.of(context)!.viewAll,
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.accentOrange,
                   fontWeight: FontWeight.w700,
@@ -57,9 +53,9 @@ class RecentTransactions extends ConsumerWidget {
 
         // Transaction cards - Convert provider transactions to UI format
         ...List.generate(
-          recentTransactions.length > 5 ? 5 : recentTransactions.length,
+          display.length,
           (index) {
-            final tx = recentTransactions[index];
+            final tx = display[index];
             final cat = CategoryData.findById(tx.categoryId);
             final item = TransactionItem(
               title: tx.title,
@@ -72,7 +68,7 @@ class RecentTransactions extends ConsumerWidget {
             );
             return Padding(
               padding: EdgeInsets.only(
-                bottom: index < recentTransactions.length - 1 ? 10 : 0,
+                bottom: index < display.length - 1 ? 10 : 0,
               ),
               child: _TransactionCard(item: item, transaction: tx, currency: currency),
             );
@@ -97,10 +93,9 @@ class _TransactionCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => TransactionDetailScreen(transaction: transaction),
-          ),
+        context.push(
+          AppRoutes.transactionDetail,
+          extra: {'transaction': transaction},
         );
       },
       child: Container(
@@ -108,10 +103,10 @@ class _TransactionCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.borderLight.withOpacity(0.6)),
+          border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.6)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.015),
+              color: Colors.black.withValues(alpha: 0.015),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -127,7 +122,7 @@ class _TransactionCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: item.iconBgColor,
                 border: Border.all(
-                  color: item.iconColor.withOpacity(0.15),
+                  color: item.iconColor.withValues(alpha: 0.15),
                 ),
               ),
               child: Icon(item.icon, color: item.iconColor, size: 22),

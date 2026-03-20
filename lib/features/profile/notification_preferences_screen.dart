@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/notification_settings_provider.dart';
+import '../../shared/utils/safe_pop.dart';
 
 class NotificationPreferencesScreen extends ConsumerWidget {
   const NotificationPreferencesScreen({super.key});
@@ -19,7 +20,7 @@ class NotificationPreferencesScreen extends ConsumerWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
         title: Text('Notifications', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
@@ -162,7 +163,7 @@ class NotificationPreferencesScreen extends ConsumerWidget {
           Switch(
             value: value,
             onChanged: (v) { HapticFeedback.lightImpact(); onChanged(v); },
-            activeColor: AppColors.accentOrange,
+            activeThumbColor: AppColors.accentOrange,
             activeTrackColor: AppColors.accentOrange.withValues(alpha: 0.3),
             inactiveThumbColor: Colors.white,
             inactiveTrackColor: const Color(0xFFCBD5E1),

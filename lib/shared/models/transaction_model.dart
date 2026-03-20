@@ -42,13 +42,13 @@ class Transaction {
     double? amount,
     DateTime? dateTime,
     String? categoryId,
-    String? note,
+    Object? note = const _Sentinel(),
     String? paymentMethod,
-    String? supplierId,
-    String? saleId,
+    Object? supplierId = const _Sentinel(),
+    Object? saleId = const _Sentinel(),
     bool? excludeFromPL,
-    DateTime? createdAt,
-    DateTime? updatedAt,
+    Object? createdAt = const _Sentinel(),
+    Object? updatedAt = const _Sentinel(),
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -57,13 +57,13 @@ class Transaction {
       amount: amount ?? this.amount,
       dateTime: dateTime ?? this.dateTime,
       categoryId: categoryId ?? this.categoryId,
-      note: note ?? this.note,
+      note: note is _Sentinel ? this.note : note as String?,
       paymentMethod: paymentMethod ?? this.paymentMethod,
-      supplierId: supplierId ?? this.supplierId,
-      saleId: saleId ?? this.saleId,
+      supplierId: supplierId is _Sentinel ? this.supplierId : supplierId as String?,
+      saleId: saleId is _Sentinel ? this.saleId : saleId as String?,
       excludeFromPL: excludeFromPL ?? this.excludeFromPL,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      createdAt: createdAt is _Sentinel ? this.createdAt : createdAt as DateTime?,
+      updatedAt: updatedAt is _Sentinel ? this.updatedAt : updatedAt as DateTime?,
     );
   }
 
@@ -99,10 +99,10 @@ class Transaction {
       'amount': amount,
       'date_time': Timestamp.fromDate(dateTime),
       'category_id': categoryId,
-      if (note != null) 'note': note,
+      'note': note,
       'payment_method': paymentMethod,
-      if (supplierId != null) 'supplier_id': supplierId,
-      if (saleId != null) 'sale_id': saleId,
+      'supplier_id': supplierId,
+      'sale_id': saleId,
       'exclude_from_pl': excludeFromPL,
       if (createdAt != null) 'created_at': Timestamp.fromDate(createdAt!),
       if (updatedAt != null) 'updated_at': Timestamp.fromDate(updatedAt!),
@@ -223,4 +223,10 @@ class SampleTransactions {
   SampleTransactions._();
 
   static List<Transaction> get all => [];
+}
+
+/// Sentinel value used by [Transaction.copyWith] to distinguish
+/// "not provided" from an explicit null (to clear nullable fields).
+class _Sentinel {
+  const _Sentinel();
 }

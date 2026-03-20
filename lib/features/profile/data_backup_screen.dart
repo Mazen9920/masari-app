@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../shared/utils/safe_pop.dart';
 
 class DataBackupScreen extends StatefulWidget {
   const DataBackupScreen({super.key});
@@ -21,7 +22,7 @@ class _DataBackupScreenState extends State<DataBackupScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
         title: Text('Data & Backup', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
@@ -63,9 +64,9 @@ class _DataBackupScreenState extends State<DataBackupScreen> {
                       children: [
                         const Text('Last Backup', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
                         const SizedBox(height: 4),
-                        const Text('Today, 10:30 AM', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                        const Text('No backups yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                         const SizedBox(height: 2),
-                        Text('Size: 12.4 MB', style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                        Text('Coming Soon', style: TextStyle(fontSize: 12, color: AppColors.textTertiary, fontStyle: FontStyle.italic)),
                       ],
                     ),
                   ),
@@ -89,11 +90,11 @@ class _DataBackupScreenState extends State<DataBackupScreen> {
                 icon: Icons.cloud_upload_outlined,
                 iconColor: const Color(0xFF3B82F6),
                 title: 'Backup Now',
-                subtitle: 'Create a manual backup',
+                subtitle: 'Coming Soon',
                 onTap: () {
                   HapticFeedback.mediumImpact();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Backup started...')),
+                    const SnackBar(content: Text('Backup feature coming soon')),
                   );
                 },
               ),
@@ -102,7 +103,7 @@ class _DataBackupScreenState extends State<DataBackupScreen> {
                 icon: Icons.cloud_download_outlined,
                 iconColor: const Color(0xFF8B5CF6),
                 title: 'Restore Data',
-                subtitle: 'Restore from a previous backup',
+                subtitle: 'Coming Soon',
                 onTap: () {
                   showDialog(
                     context: context,
@@ -133,10 +134,10 @@ class _DataBackupScreenState extends State<DataBackupScreen> {
                 icon: Icons.download_rounded,
                 iconColor: const Color(0xFFF59E0B),
                 title: 'Export All Data',
-                subtitle: 'Download as CSV or Excel',
+                subtitle: 'Coming Soon',
                 onTap: () {
                   HapticFeedback.lightImpact();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Exporting data as CSV...')));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Export feature coming soon')));
                 },
               ),
             ]),
@@ -219,7 +220,7 @@ class _DataBackupScreenState extends State<DataBackupScreen> {
             Text(subtitle, style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
           ])),
           Switch(value: value, onChanged: (v) { HapticFeedback.lightImpact(); onChanged(v); },
-            activeColor: AppColors.accentOrange, activeTrackColor: AppColors.accentOrange.withValues(alpha: 0.3),
+            activeThumbColor: AppColors.accentOrange, activeTrackColor: AppColors.accentOrange.withValues(alpha: 0.3),
             inactiveThumbColor: Colors.white, inactiveTrackColor: const Color(0xFFCBD5E1)),
         ],
       ),

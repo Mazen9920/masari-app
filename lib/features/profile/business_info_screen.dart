@@ -1,20 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../core/providers/business_profile_provider.dart';
+import '../../shared/utils/safe_pop.dart';
 
-class BusinessInfoScreen extends StatefulWidget {
+class BusinessInfoScreen extends ConsumerStatefulWidget {
   const BusinessInfoScreen({super.key});
 
   @override
-  State<BusinessInfoScreen> createState() => _BusinessInfoScreenState();
+  ConsumerState<BusinessInfoScreen> createState() => _BusinessInfoScreenState();
 }
 
-class _BusinessInfoScreenState extends State<BusinessInfoScreen> {
-  final _businessNameController = TextEditingController(text: 'TechStyle Egypt');
-  final _businessTypeController = TextEditingController(text: 'Retail & E-Commerce');
-  final _addressController = TextEditingController(text: 'Cairo, Egypt');
-  final _taxIdController = TextEditingController(text: '123-456-789');
+class _BusinessInfoScreenState extends ConsumerState<BusinessInfoScreen> {
+  late final TextEditingController _businessNameController;
+  late final TextEditingController _businessTypeController;
+  late final TextEditingController _addressController;
+  late final TextEditingController _taxIdController;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final bp = ref.read(businessProfileProvider);
+    _businessNameController = TextEditingController(text: bp.businessName);
+    _businessTypeController = TextEditingController(text: bp.businessType);
+    _addressController      = TextEditingController(text: bp.address);
+    _taxIdController        = TextEditingController(text: bp.taxId);
+  }
 
   @override
   void dispose() {
@@ -25,6 +39,21 @@ class _BusinessInfoScreenState extends State<BusinessInfoScreen> {
     super.dispose();
   }
 
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    HapticFeedback.mediumImpact();
+    await ref.read(businessProfileProvider.notifier).update(
+      businessName: _businessNameController.text.trim(),
+      businessType: _businessTypeController.text.trim(),
+      address:      _addressController.text.trim(),
+      taxId:        _taxIdController.text.trim(),
+    );
+    if (mounted) {
+      setState(() => _saving = false);
+      context.safePop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -33,21 +62,20 @@ class _BusinessInfoScreenState extends State<BusinessInfoScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
         title: Text('Business Info', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
         actions: [
           TextButton(
-            onPressed: () {
-              HapticFeedback.mediumImpact();
-              Navigator.pop(context);
-            },
-            child: Text(
-              'Save',
-              style: TextStyle(color: AppColors.accentOrange, fontWeight: FontWeight.bold, fontSize: 15),
-            ),
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : Text(
+                    'Save',
+                    style: TextStyle(color: AppColors.accentOrange, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
           ),
         ],
       ),

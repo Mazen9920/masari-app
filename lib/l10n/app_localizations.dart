@@ -1795,6 +1795,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Owner Withdrawal'**
   String get catOwnerWithdrawal;
+
+  /// No description provided for @accounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Accounts'**
+  String get accounts;
+
+  /// No description provided for @countOutstanding.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} outstanding'**
+  String countOutstanding(int count);
+
+  /// No description provided for @analytics.
+  ///
+  /// In en, this message translates to:
+  /// **'Analytics'**
+  String get analytics;
+
+  /// No description provided for @compareLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare'**
+  String get compareLabel;
+
+  /// No description provided for @salesMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales'**
+  String get salesMetric;
+
+  /// No description provided for @profitMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Profit'**
+  String get profitMetric;
+
+  /// No description provided for @ordersMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders'**
+  String get ordersMetric;
+
+  /// No description provided for @recentTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent Transactions'**
+  String get recentTransactions;
+
+  /// No description provided for @customizeDashboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Customize Dashboard'**
+  String get customizeDashboard;
+
+  /// No description provided for @done.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get done;
+
+  /// No description provided for @toggleSectionsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Toggle sections on/off and drag to reorder.'**
+  String get toggleSectionsHint;
+
+  /// No description provided for @totalIncomeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Income: {amount}'**
+  String totalIncomeLabel(String amount);
+
+  /// No description provided for @noSalesInPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'No sales in this period'**
+  String get noSalesInPeriod;
+
+  /// No description provided for @allProductsWellStocked.
+  ///
+  /// In en, this message translates to:
+  /// **'All products are well stocked'**
+  String get allProductsWellStocked;
 }
 
 class _AppLocalizationsDelegate

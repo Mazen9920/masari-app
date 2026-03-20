@@ -81,7 +81,6 @@ class _SourceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     return Material(
       color: color.withValues(alpha: 0.06),
       borderRadius: BorderRadius.circular(14),

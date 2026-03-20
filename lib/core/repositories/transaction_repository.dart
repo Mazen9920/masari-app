@@ -22,4 +22,8 @@ abstract class TransactionRepository {
 
   /// Deletes a transaction by ID.
   Future<Result<void>> deleteTransaction(String id);
+
+  /// Reassigns all transactions with [oldCategoryId] to [newCategoryId].
+  /// Used when a category is deleted to prevent orphaned references.
+  Future<Result<void>> reassignCategory(String oldCategoryId, String newCategoryId);
 }

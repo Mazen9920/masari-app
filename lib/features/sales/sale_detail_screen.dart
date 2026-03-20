@@ -110,7 +110,7 @@ class SaleDetailScreen extends ConsumerWidget {
                     if (live.shippingAddress != null &&
                         live.shippingAddress!.isNotEmpty) ...[
                       const SizedBox(height: 14),
-                      _buildShippingCard(live)
+                      _buildShippingCard(live, currency)
                           .animate()
                           .fadeIn(duration: 250.ms, delay: 260.ms),
                     ],
@@ -551,7 +551,8 @@ class SaleDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _changeStatus(WidgetRef ref, Sale live, OrderStatus newStatus) {
+  // ignore: unused_element
+  void _changeStatus(BuildContext context, WidgetRef ref, Sale live, OrderStatus newStatus) {
     final updated = live.copyWith(
       orderStatus: newStatus,
       updatedAt: DateTime.now(),
@@ -570,6 +571,20 @@ class SaleDetailScreen extends ConsumerWidget {
           updatedAt: DateTime.now(),
         ));
       }
+    }
+
+    // Warn that Shopify-linked orders won't sync status back
+    if (live.externalOrderId != null || live.shopifyOrderNumber != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Status updated locally only. Shopify order status is not affected.',
+          ),
+          backgroundColor: Colors.orange.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
     }
   }
 
@@ -862,7 +877,7 @@ class SaleDetailScreen extends ConsumerWidget {
         ref.read(inventoryProvider.notifier).adjustStock(
               item.productId!,
               item.variantId ?? '${item.productId}_v0',
-              item.quantity.toInt(),
+              item.quantity.round(),
               'Order cancelled',
               valuationMethod: valMethod,
             );
@@ -870,19 +885,19 @@ class SaleDetailScreen extends ConsumerWidget {
     }
 
     // 2) Create reversal entries for linked transactions (proper accounting)
-    //    Original transactions are kept intact for audit trail.
+    //    Original transactions stay in P&L for historical accuracy.
+    //    Reversals appear in P&L at the cancellation date.
     final transactions = ref.read(transactionsProvider).value ?? [];
     final transNotifier = ref.read(transactionsProvider.notifier);
     for (final tx in transactions) {
       if (tx.saleId == live.id && tx.amount != 0) {
-        // Mark original as cancelled (audit trail — keep original amount)
+        // Mark original with [Cancelled] prefix but keep in P&L for historical accuracy
         transNotifier.updateTransaction(tx.copyWith(
           title: '[Cancelled] ${tx.title}',
-          excludeFromPL: true,
           updatedAt: now,
         ));
 
-        // Create reversal entry with negated amount
+        // Create reversal entry with negated amount — visible in P&L
         final reversalId =
             '${tx.id}_reversal_${now.millisecondsSinceEpoch}';
         transNotifier.addTransaction(tx.copyWith(
@@ -891,7 +906,7 @@ class SaleDetailScreen extends ConsumerWidget {
           amount: -tx.amount,
           dateTime: now,
           note: 'Auto-reversal for cancelled order ${live.id}',
-          excludeFromPL: true,
+          excludeFromPL: false,
           createdAt: now,
           updatedAt: now,
         ));
@@ -908,6 +923,65 @@ class SaleDetailScreen extends ConsumerWidget {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: const Text(
           'Order cancelled — stock restored, reversal entries created'),
+      backgroundColor: AppColors.primaryNavy,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+  }
+
+  void _handleRefund(BuildContext context, WidgetRef ref, Sale live) {
+    final now = DateTime.now();
+    final valMethod = ref.read(appSettingsProvider).valuationMethod;
+
+    // 1) Restore stock for each sale item
+    for (final item in live.items) {
+      if (item.productId != null && item.quantity > 0) {
+        ref.read(inventoryProvider.notifier).adjustStock(
+              item.productId!,
+              item.variantId ?? '${item.productId}_v0',
+              item.quantity.toInt(),
+              'Order refunded',
+              valuationMethod: valMethod,
+            );
+      }
+    }
+
+    // 2) Create reversal entries for linked transactions (visible in P&L)
+    final transactions = ref.read(transactionsProvider).value ?? [];
+    final transNotifier = ref.read(transactionsProvider.notifier);
+    for (final tx in transactions) {
+      if (tx.saleId == live.id && tx.amount != 0) {
+        transNotifier.updateTransaction(tx.copyWith(
+          title: '[Refunded] ${tx.title}',
+          updatedAt: now,
+        ));
+
+        final reversalId =
+            '${tx.id}_refund_${now.millisecondsSinceEpoch}';
+        transNotifier.addTransaction(tx.copyWith(
+          id: reversalId,
+          title: '[Refund] ${tx.title}',
+          amount: -tx.amount,
+          dateTime: now,
+          note: 'Auto-refund reversal for order ${live.id}',
+          excludeFromPL: false,
+          createdAt: now,
+          updatedAt: now,
+        ));
+      }
+    }
+
+    // 3) Update sale payment status to refunded
+    final refunded = live.copyWith(
+      paymentStatus: PaymentStatus.refunded,
+      amountPaid: 0,
+      updatedAt: now,
+    );
+    ref.read(salesProvider.notifier).updateSale(refunded);
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: const Text(
+          'Order refunded — stock restored, reversal entries created'),
       backgroundColor: AppColors.primaryNavy,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1262,14 +1336,14 @@ class SaleDetailScreen extends ConsumerWidget {
               width: size,
               height: size,
               fit: BoxFit.cover,
-              placeholder: (_, __) => Container(
+              placeholder: (_, _) => Container(
                 width: size,
                 height: size,
                 color: const Color(0xFFF1F5F9),
                 child: Icon(Icons.shopping_bag_rounded,
                     size: size * 0.45, color: AppColors.textTertiary),
               ),
-              errorWidget: (_, __, ___) => Container(
+              errorWidget: (_, _, _) => Container(
                 width: size,
                 height: size,
                 color: const Color(0xFFF1F5F9),
@@ -1399,9 +1473,7 @@ class SaleDetailScreen extends ConsumerWidget {
                   style: AppTypography.captionSmall
                       .copyWith(color: AppColors.textSecondary)),
               Text(
-                ref.watch(currencyProvider) +
-                    ' ' +
-                    NumberFormat('#,##0.00', 'en').format(live.amountPaid),
+                '${ref.watch(currencyProvider)} ${NumberFormat('#,##0.00', 'en').format(live.amountPaid)}',
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w600,
@@ -1462,6 +1534,14 @@ class SaleDetailScreen extends ConsumerWidget {
                       onTap: () {
                         Navigator.pop(ctx);
                         HapticFeedback.mediumImpact();
+
+                        // Refund requires stock restoration + reversal entries
+                        if (status == PaymentStatus.refunded &&
+                            live.paymentStatus != PaymentStatus.refunded) {
+                          _handleRefund(context, ref, live);
+                          return;
+                        }
+
                         final updated = live.copyWith(
                           paymentStatus: status,
                           amountPaid: status == PaymentStatus.paid
@@ -1522,26 +1602,27 @@ class SaleDetailScreen extends ConsumerWidget {
     // Build a tracking URL based on common carriers or use raw number
     String? trackingUrl;
     final tracking = live.trackingNumber!;
+    final encoded = Uri.encodeComponent(tracking);
     final method = (live.shippingMethod ?? '').toLowerCase();
 
     if (tracking.startsWith('http://') || tracking.startsWith('https://')) {
       trackingUrl = tracking;
     } else if (method.contains('aramex')) {
       trackingUrl =
-          'https://www.aramex.com/track/results?ShipmentNumber=$tracking';
+          'https://www.aramex.com/track/results?ShipmentNumber=$encoded';
     } else if (method.contains('fedex')) {
       trackingUrl =
-          'https://www.fedex.com/fedextrack/?trknbr=$tracking';
+          'https://www.fedex.com/fedextrack/?trknbr=$encoded';
     } else if (method.contains('dhl')) {
       trackingUrl =
-          'https://www.dhl.com/en/express/tracking.html?AWB=$tracking';
+          'https://www.dhl.com/en/express/tracking.html?AWB=$encoded';
     } else if (method.contains('ups')) {
       trackingUrl =
-          'https://www.ups.com/track?tracknum=$tracking';
+          'https://www.ups.com/track?tracknum=$encoded';
     } else {
       // Generic Google search for tracking
       trackingUrl =
-          'https://www.google.com/search?q=track+$tracking';
+          'https://www.google.com/search?q=track+$encoded';
     }
 
     return _Card(
@@ -1639,7 +1720,7 @@ class SaleDetailScreen extends ConsumerWidget {
 
   // ── Shipping Info ───────────────────────────────────────
 
-  Widget _buildShippingCard(Sale live) {
+  Widget _buildShippingCard(Sale live, String currency) {
     return _Card(
       title: 'Shipping',
       children: [
@@ -1669,7 +1750,7 @@ class SaleDetailScreen extends ConsumerWidget {
                   style: AppTypography.captionSmall
                       .copyWith(color: AppColors.textSecondary)),
               Text(
-                'EGP ${NumberFormat('#,##0.00', 'en').format(live.shippingCost)}',
+                '$currency ${NumberFormat('#,##0.00', 'en').format(live.shippingCost)}',
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w600,

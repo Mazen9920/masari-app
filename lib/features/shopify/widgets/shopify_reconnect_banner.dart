@@ -23,7 +23,7 @@ class ShopifyReconnectBanner extends ConsumerWidget {
     final asyncConn = ref.watch(shopifyConnectionProvider);
     return asyncConn.when(
       loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       data: (conn) {
         if (conn == null) {
           // Has Growth tier but never connected → show setup CTA

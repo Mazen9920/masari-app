@@ -196,29 +196,24 @@ class FirestoreSaleRepository implements SaleRepository {
           if (deduction.valuationMethod == 'average' || layers.isEmpty) {
             movementUnitCost = variant.costPrice;
             if (layers.isNotEmpty) {
-              var remaining = absQty;
               final totalLayerQty =
                   layers.fold<int>(0, (s, l) => s + l.remainingQty);
               if (totalLayerQty > 0) {
                 final updated = <CostLayer>[];
-                for (final layer in layers) {
-                  final take = (layer.remainingQty * absQty / totalLayerQty)
-                      .floor()
-                      .clamp(0, layer.remainingQty);
+                // Accumulator pattern: track cumulative assigned count
+                // to guarantee the sum of all takes == absQty exactly.
+                int cumulativeAssigned = 0;
+                for (var idx = 0; idx < layers.length; idx++) {
+                  final layer = layers[idx];
+                  final idealCumulative = ((idx + 1) == layers.length)
+                      ? absQty
+                      : (layer.remainingQty * absQty / totalLayerQty).round();
+                  final take = ((idx + 1) == layers.length)
+                      ? (absQty - cumulativeAssigned).clamp(0, layer.remainingQty)
+                      : (idealCumulative).clamp(0, layer.remainingQty);
+                  cumulativeAssigned += take;
                   final newQty = layer.remainingQty - take;
-                  remaining -= take;
                   if (newQty > 0) updated.add(layer.copyWith(remainingQty: newQty));
-                }
-                for (var i = 0; i < updated.length && remaining > 0; i++) {
-                  final take = remaining.clamp(0, updated[i].remainingQty);
-                  final newQty = updated[i].remainingQty - take;
-                  remaining -= take;
-                  if (newQty > 0) {
-                    updated[i] = updated[i].copyWith(remainingQty: newQty);
-                  } else {
-                    updated.removeAt(i);
-                    i--;
-                  }
                 }
                 layers = updated;
               }

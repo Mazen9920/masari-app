@@ -61,7 +61,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
 
     // Real Data from Providers
     final inventoryProducts = ref.watch(inventoryProvider).value ?? [];
-    final purchases = ref.watch(purchasesProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
     final sales = ref.watch(salesProvider).value ?? [];
     final allTransactions = ref.watch(transactionsProvider).value ?? [];
 
@@ -468,7 +468,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
     
     // Get inventory value and purchase-based supplier payable
     final inventoryProducts = ref.watch(inventoryProvider).value ?? [];
-    final purchases = ref.watch(purchasesProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
     final sales = ref.watch(salesProvider).value ?? [];
     
     final double inventoryValue = inventoryProducts.fold(0.0, (sum, p) => sum + p.totalCostValue);
@@ -496,10 +496,18 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
       final monthEnd = DateTime(now.year, now.month - i + 1, 1);
       final monthStart = DateTime(now.year, now.month - i, 1);
       
-      // Calculate net flow for that month
+      // Calculate net flow for that month (P&L items only)
+      const plExcludedCats = {
+        'cat_investments',
+        'cat_loan_received',
+        'cat_loan_repayment',
+        'cat_equity_injection',
+        'cat_owner_withdrawal',
+      };
       double monthlyFlow = 0;
       for (final tx in transactions) {
         if (tx.excludeFromPL) continue;
+        if (plExcludedCats.contains(tx.categoryId)) continue;
         if (!tx.dateTime.isBefore(monthStart) && tx.dateTime.isBefore(monthEnd)) {
           monthlyFlow += tx.isIncome ? tx.amount.abs() : -tx.amount.abs();
         }
@@ -1143,7 +1151,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
           final bsManual = ref.read(balanceSheetEntriesProvider);
           final allTxns = ref.read(transactionsProvider).value ?? [];
           final products = await ref.read(inventoryProvider.future);
-          final purchases = ref.read(purchasesProvider);
+          final purchases = ref.read(purchasesProvider).value ?? [];
           final sales = await ref.read(salesProvider.future);
 
           // Compute bank balance from opening cash + transactions up to now (consistent with screen)

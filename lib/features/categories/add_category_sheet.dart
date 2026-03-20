@@ -172,7 +172,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDDD),
+                  color: const Color(0xFFDDDDDD),
                   borderRadius: BorderRadius.circular(50),
                 ),
               ),
@@ -360,7 +360,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
                 HapticFeedback.lightImpact();
                 setState(() => _hasLimit = v);
               },
-              activeColor: AppColors.primaryNavy,
+              activeTrackColor: AppColors.primaryNavy,
             ),
           ],
         ),

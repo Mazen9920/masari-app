@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_settings_provider.dart';
@@ -98,7 +99,21 @@ class PurchaseDetailScreen extends ConsumerWidget {
             ),
           ),
           IconButton(
-            onPressed: () => HapticFeedback.lightImpact(),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              if (purchase == null) return;
+              final p = purchase!;
+              final dateFmt = DateFormat('dd MMM yyyy');
+              final items = p.items.map((i) => '  • ${i.name} ×${i.qty}').join('\n');
+              final status = p.paymentStatus == 2 ? 'Paid' : (p.paymentStatus == 1 ? 'Partial' : 'Unpaid');
+              final text = 'Purchase #${p.referenceNo}\n'
+                  'Date: ${dateFmt.format(p.date)}\n'
+                  '${supplier != null ? 'Supplier: ${supplier!.name}\n' : ''}'
+                  'Status: $status\n'
+                  'Total: ${p.total.toStringAsFixed(2)}\n'
+                  '${p.items.isNotEmpty ? '\nItems:\n$items' : ''}';
+              Share.share(text, subject: 'Purchase #${p.referenceNo}');
+            },
             icon: const Icon(Icons.ios_share_rounded),
             color: AppColors.primaryNavy,
           ),
@@ -145,7 +160,7 @@ class _StatusHero extends StatelessWidget {
             right: -20,
             child: Container(
               height: 4,
-              color: const Color(0xFFE67E22),
+              color: AppColors.accentOrange,
             ),
           ),
           Column(
@@ -155,12 +170,12 @@ class _StatusHero extends StatelessWidget {
                 final status = purchase?.paymentStatus ?? 0;
                 final label = purchase?.statusLabel.toUpperCase() ?? 'UNPAID';
                 final color = status == 2
-                    ? const Color(0xFF27AE60)
+                    ? AppColors.success
                     : status == 1
                         ? const Color(0xFFD97706)
                         : const Color(0xFFD97706);
                 final bgColor = status == 2
-                    ? const Color(0xFFF0FDF4)
+                    ? AppColors.chartGreenLight
                     : const Color(0xFFFEF3C7);
                 return Container(
                   padding:
@@ -219,7 +234,7 @@ class _StatusHero extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color: AppColors.surfaceSubtle,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -460,7 +475,7 @@ class _ItemsBreakdown extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: AppColors.surfaceSubtle,
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(14)),
               border: Border(
@@ -523,7 +538,7 @@ class _ItemsBreakdown extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC).withValues(alpha: 0.5),
+              color: AppColors.surfaceSubtle.withValues(alpha: 0.5),
               border: Border(
                 top: BorderSide(
                   color: AppColors.borderLight.withValues(alpha: 0.3),
@@ -747,7 +762,7 @@ class _BottomActions extends StatelessWidget {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: const Color(0xFFE67E22),
+                    color: AppColors.accentOrange,
                     width: 2,
                   ),
                 ),
@@ -755,12 +770,12 @@ class _BottomActions extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
                     Icon(Icons.payments_rounded,
-                        color: Color(0xFFE67E22), size: 20),
+                        color: AppColors.accentOrange, size: 20),
                     SizedBox(width: 8),
                     Text(
                       'Record Payment',
                       style: TextStyle(
-                        color: Color(0xFFE67E22),
+                        color: AppColors.accentOrange,
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
                       ),

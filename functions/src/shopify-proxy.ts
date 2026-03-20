@@ -138,6 +138,15 @@ export const shopifyProxy = onCall(
       );
     }
     const shopDomain = conn.shop_domain as string;
+
+    // Validate shop_domain format to prevent SSRF
+    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shopDomain)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Invalid Shopify shop domain"
+      );
+    }
+
     const encryptedToken = conn.access_token as string;
     const accessToken = decrypt(
       encryptedToken, tokenEncryptionKey.value().trim()

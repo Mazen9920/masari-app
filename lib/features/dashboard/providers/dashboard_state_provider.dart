@@ -83,6 +83,15 @@ extension DashboardPeriodX on DashboardPeriod {
           BucketStrategy.monthly,
         _ => BucketStrategy.daily,
       };
+
+  /// For custom periods, compute bucket strategy based on actual range duration.
+  BucketStrategy effectiveBucketStrategy(DashboardDateRange range) {
+    if (this != DashboardPeriod.custom) return bucketStrategy;
+    final days = range.end.difference(range.start).inDays;
+    if (days <= 2) return BucketStrategy.hourly;
+    if (days <= 90) return BucketStrategy.daily;
+    return BucketStrategy.monthly;
+  }
 }
 
 enum BucketStrategy { hourly, daily, monthly }

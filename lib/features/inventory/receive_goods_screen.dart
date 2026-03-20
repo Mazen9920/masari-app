@@ -54,7 +54,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
     // Auto-populate from preselected purchase
     if (widget.preselectedPurchaseId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final purchases = ref.read(purchasesProvider);
+        final purchases = ref.read(purchasesProvider).value ?? [];
         final match = purchases
             .where((p) => p.id == widget.preselectedPurchaseId)
             .toList();
@@ -230,8 +230,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
   // ── Supplier ─────────────────────────────────────────────
 
   Widget _buildSupplierSection(List<Supplier> suppliers) {
-    final purchases = ref.watch(purchasesProvider);
-    // Show unfulfilled purchases for the selected supplier
+    final purchases = ref.watch(purchasesProvider).value ?? [];
     final supplierPurchases = _selectedSupplierId != null
         ? purchases.where((p) =>
             p.supplierId == _selectedSupplierId && !p.isFullyReceived).toList()
@@ -425,6 +424,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                     : null,
                 onTap: () async {
                   await _populateFromPurchase(p);
+                  if (!ctx.mounted) return;
                   Navigator.pop(ctx);
                 },
               ),
@@ -1016,7 +1016,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
     // Update linked purchase's receivedQty per item (Step 8)
     if (_selectedPurchaseId != null) {
-      final purchases = ref.read(purchasesProvider);
+      final purchases = ref.read(purchasesProvider).value ?? [];
       final matchIdx = purchases.indexWhere((p) => p.id == _selectedPurchaseId);
       if (matchIdx >= 0) {
         final purchase = purchases[matchIdx];
@@ -1036,6 +1036,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
       }
     }
 
+    if (!mounted) return;
     final currency = ref.read(currencyProvider);
     final fmt = NumberFormat('#,##0.00', 'en');
     final messenger = ScaffoldMessenger.of(context);
@@ -1303,7 +1304,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: product.variants.length,
-                separatorBuilder: (_, __) => Divider(
+                separatorBuilder: (_, _) => Divider(
                     height: 1,
                     color: AppColors.borderLight.withValues(alpha: 0.3)),
                 itemBuilder: (_, i) {
@@ -1447,7 +1448,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                 padding: EdgeInsets.zero,
                 shrinkWrap: true,
                 itemCount: options.length,
-                separatorBuilder: (_, __) => Divider(
+                separatorBuilder: (_, _) => Divider(
                     height: 1,
                     color: AppColors.borderLight.withValues(alpha: 0.3)),
                 itemBuilder: (_, i) {
@@ -1463,7 +1464,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                               width: 32,
                               height: 32,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Icon(
+                              errorBuilder: (_, _, _) => Icon(
                                 product.isMaterial
                                     ? Icons.science_rounded
                                     : Icons.inventory_2_rounded,

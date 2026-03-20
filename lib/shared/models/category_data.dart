@@ -88,21 +88,25 @@ class CategoryData {
   }
 
   factory CategoryData.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(dynamic value) {
+      if (value == null) return null;
+      if (value is String) return DateTime.tryParse(value);
+      // Firestore Timestamp
+      try { return (value as dynamic).toDate() as DateTime; } catch (_) { return null; }
+    }
+
+    final id = json['id']?.toString() ?? '';
     return CategoryData(
-      id: json['id'] as String,
+      id: id,
       userId: json['user_id'] as String? ?? 'system',
-      name: json['name'] as String,
+      name: (json['name'] as String?) ?? '',
       iconName: json['icon_name'] as String? ?? 'grid_view',
       colorValue: json['color_value'] as int? ?? 0xFF9E9E9E,
       bgColorValue: json['bg_color_value'] as int? ?? 0xFFF5F5F5,
-      isExpense: json['is_expense'] as bool? ?? (json['id'] != 'cat_income' && json['id'] != 'cat_investments' && json['id'] != 'cat_loan_received' && json['id'] != 'cat_equity_injection'),
+      isExpense: json['is_expense'] as bool? ?? (id != 'cat_income' && id != 'cat_investments' && id != 'cat_loan_received' && id != 'cat_equity_injection'),
       budgetLimit: (json['budget_limit'] as num?)?.toDouble(),
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : null,
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      createdAt: parseDate(json['created_at']),
+      updatedAt: parseDate(json['updated_at']),
     );
   }
 
@@ -355,6 +359,9 @@ class CategoryData {
     ),
   ];
 
+  // NOTE: Updated exclusively by CategoriesNotifier. Kept as static for
+  // convenient lookup via findById() without a BuildContext. Safe because
+  // writes are serialised through the single notifier instance.
   static List<CategoryData> customCategories = [];
 
   /// Find category by ID. Falls back to the system Uncategorized category.
@@ -364,7 +371,7 @@ class CategoryData {
     }
     return all.firstWhere(
       (c) => c.id == id,
-      orElse: () => all.firstWhere((c) => c.id == 'cat_uncategorized'),
+      orElse: () => all.firstWhere((c) => c.id == 'cat_other'),
     );
   }
 }
@@ -413,6 +420,10 @@ extension CategoryDataUIExt on CategoryData {
       case 'inventory_2': return Icons.inventory_2_rounded;
       case 'local_shipping': return Icons.local_shipping_rounded;
       case 'help_outline': return Icons.help_outline_rounded;
+      case 'account_balance': return Icons.account_balance_rounded;
+      case 'money_off': return Icons.money_off_rounded;
+      case 'savings': return Icons.savings_rounded;
+      case 'output': return Icons.output_rounded;
       case 'grid_view':
       default:
         return Icons.grid_view_rounded;
@@ -451,6 +462,10 @@ extension CategoryDataUIExt on CategoryData {
     if (icon == Icons.inventory_2_rounded) return 'inventory_2';
     if (icon == Icons.local_shipping_rounded) return 'local_shipping';
     if (icon == Icons.help_outline_rounded) return 'help_outline';
+    if (icon == Icons.account_balance_rounded) return 'account_balance';
+    if (icon == Icons.money_off_rounded) return 'money_off';
+    if (icon == Icons.savings_rounded) return 'savings';
+    if (icon == Icons.output_rounded) return 'output';
     return 'grid_view';
   }
 }

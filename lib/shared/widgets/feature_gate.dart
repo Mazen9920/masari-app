@@ -7,7 +7,6 @@ import '../../core/providers/app_settings_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../shared/utils/safe_pop.dart';
-import '../../l10n/app_localizations.dart';
 
 // ─── FeatureGate Widget ──────────────────────────────────────────────────────
 /// Wraps a child widget and only renders it if the user's subscription tier
@@ -48,7 +47,6 @@ class FeatureGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
     final tier = ref.watch(tierProvider);
     final required = _effectiveTier;
     if (tier.hasAccess(required)) return child;

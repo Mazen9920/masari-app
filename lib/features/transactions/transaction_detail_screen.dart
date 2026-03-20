@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../shared/models/transaction_model.dart';
@@ -61,30 +63,6 @@ class TransactionDetailScreen extends ConsumerWidget {
         }
       }
 
-      // 2b) Fallback: match by amount + date for revenue transactions
-      if (liveTx.categoryId == 'cat_sales_revenue') {
-        for (final s in sales) {
-          if (s.total == liveTx.amount &&
-              s.date.year == liveTx.dateTime.year &&
-              s.date.month == liveTx.dateTime.month &&
-              s.date.day == liveTx.dateTime.day) {
-            return SaleDetailScreen(sale: s);
-          }
-        }
-      }
-
-      // 2c) Fallback: match by COGS amount + date
-      if (liveTx.categoryId == 'cat_cogs') {
-        for (final s in sales) {
-          if (-s.totalCogs == liveTx.amount &&
-              s.date.year == liveTx.dateTime.year &&
-              s.date.month == liveTx.dateTime.month &&
-              s.date.day == liveTx.dateTime.day) {
-            return SaleDetailScreen(sale: s);
-          }
-        }
-      }
-
       // If this is a sale-related transaction but sales are still loading,
       // show a loading indicator instead of the generic detail screen.
       if (salesAsync is AsyncLoading || (effectiveSaleId != null && sales.isEmpty)) {
@@ -117,7 +95,7 @@ class TransactionDetailScreen extends ConsumerWidget {
     final isIncome = displayTransaction.amount > 0;
     final currency = ref.watch(appSettingsProvider).currency;
     final formattedAmount =
-        '${isIncome ? '+' : '-'}$currency ${displayTransaction.amount.abs().toStringAsFixed(0)}';
+        '${isIncome ? '+' : '-'}$currency ${NumberFormat('#,##0.00', 'en').format(displayTransaction.amount.abs())}';
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -148,7 +126,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                 case 'duplicate':
                   HapticFeedback.lightImpact();
                   final dup = displayTransaction.copyWith(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    id: const Uuid().v4(),
                     dateTime: DateTime.now(),
                     createdAt: DateTime.now(),
                     saleId: null,
@@ -242,30 +220,37 @@ class TransactionDetailScreen extends ConsumerWidget {
         const SizedBox(height: 10),
 
         // Status badge
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF0FDF4), // green-50
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFBBF7D0)), // green-200
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.check_circle_rounded,
-                  size: 14, color: AppColors.success),
-              const SizedBox(width: 5),
-              Text(
-                'COMPLETED',
-                style: AppTypography.captionSmall.copyWith(
-                  color: AppColors.success,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+        Builder(builder: (context) {
+          final isCancelled = currentTx.excludeFromPL || currentTx.title.startsWith('[Cancelled]');
+          final badgeColor = isCancelled ? AppColors.danger : AppColors.success;
+          final bgColor = isCancelled ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4);
+          final borderColor = isCancelled ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0);
+          final label = isCancelled ? 'CANCELLED' : 'COMPLETED';
+          final icon = isCancelled ? Icons.cancel_rounded : Icons.check_circle_rounded;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: badgeColor),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: AppTypography.captionSmall.copyWith(
+                    color: badgeColor,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
+              ],
+            ),
+          );
+        }),
       ],
     );
   }
@@ -437,7 +422,7 @@ class TransactionDetailScreen extends ConsumerWidget {
             onPressed: () {
               HapticFeedback.lightImpact();
               final dup = currentTx.copyWith(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                id: const Uuid().v4(),
                 dateTime: DateTime.now(),
                 createdAt: DateTime.now(),
                 saleId: null,

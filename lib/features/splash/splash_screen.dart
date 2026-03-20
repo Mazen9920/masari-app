@@ -211,7 +211,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             height: 250,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.secondaryBlue.withOpacity(0.15),
+              color: AppColors.secondaryBlue.withValues(alpha: 0.15),
             ),
           ),
         ),
@@ -224,7 +224,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             height: 300,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.primaryNavy.withOpacity(0.3),
+              color: AppColors.primaryNavy.withValues(alpha: 0.3),
             ),
           ),
         ),
@@ -269,7 +269,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           boxShadow: [
                             BoxShadow(
                               color: AppColors.accentOrange
-                                  .withOpacity(_pulseAnim.value * 0.6),
+                                  .withValues(alpha: _pulseAnim.value * 0.6),
                               blurRadius: 12,
                               spreadRadius: 2,
                             ),
@@ -290,7 +290,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               child: Text(
                 'Your Business, Simplified',
                 style: AppTypography.bodyLarge.copyWith(
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.white.withValues(alpha: 0.8),
                   fontWeight: FontWeight.w500,
                   letterSpacing: 0.5,
                 ),
@@ -308,14 +308,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
+          color: Colors.white.withValues(alpha: 0.1),
           borderRadius: AppRadius.pillRadius,
           border: Border.all(
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withValues(alpha: 0.15),
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.accentOrange.withOpacity(0.1),
+              color: AppColors.accentOrange.withValues(alpha: 0.1),
               blurRadius: 20,
             ),
           ],
@@ -332,7 +332,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             Text(
               'POWERED BY AI',
               style: AppTypography.captionSmall.copyWith(
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 letterSpacing: 2,
                 fontWeight: FontWeight.w600,
               ),
@@ -353,7 +353,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             height: 2,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(1),
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
             ),
             child: FractionallySizedBox(
               alignment: Alignment.centerLeft,

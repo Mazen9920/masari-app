@@ -1,4 +1,4 @@
-/// Purchase model — one recorded purchase from a supplier.
+// Purchase model — one recorded purchase from a supplier.
 
 import '../utils/money_utils.dart';
 
@@ -111,7 +111,7 @@ class Purchase {
     double? tax,
     int? paymentStatus,
     double? amountPaid,
-    DateTime? dueDate,
+    Object? dueDate = const _Sentinel(),
     DateTime? createdAt,
   }) {
     return Purchase(
@@ -125,10 +125,16 @@ class Purchase {
       tax: tax ?? this.tax,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       amountPaid: amountPaid ?? this.amountPaid,
-      dueDate: dueDate ?? this.dueDate,
+      dueDate: dueDate is _Sentinel ? this.dueDate : dueDate as DateTime?,
       createdAt: createdAt ?? this.createdAt,
     );
   }
+}
+
+/// Sentinel value used by [Purchase.copyWith] to distinguish
+/// "not provided" from an explicit null (to clear dueDate).
+class _Sentinel {
+  const _Sentinel();
 }
 
 /// One line-item inside a purchase.

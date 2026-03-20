@@ -324,5 +324,22 @@
   "catLoanReceived": "Loan Received",
   "catLoanRepayment": "Loan Repayment",
   "catEquityInjection": "Capital Injection",
-  "catOwnerWithdrawal": "Owner Withdrawal"
+  "catOwnerWithdrawal": "Owner Withdrawal",
+
+  "accounts": "Accounts",
+  "countOutstanding": "{count} outstanding",
+  "@countOutstanding": { "placeholders": { "count": { "type": "int" } } },
+  "analytics": "Analytics",
+  "compareLabel": "Compare",
+  "salesMetric": "Sales",
+  "profitMetric": "Profit",
+  "ordersMetric": "Orders",
+  "recentTransactions": "Recent Transactions",
+  "customizeDashboard": "Customize Dashboard",
+  "done": "Done",
+  "toggleSectionsHint": "Toggle sections on/off and drag to reorder.",
+  "totalIncomeLabel": "Total Income: {amount}",
+  "@totalIncomeLabel": { "placeholders": { "amount": { "type": "String" } } },
+  "noSalesInPeriod": "No sales in this period",
+  "allProductsWellStocked": "All products are well stocked"
 }

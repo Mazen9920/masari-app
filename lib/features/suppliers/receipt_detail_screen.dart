@@ -34,7 +34,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
     );
 
     // Look up linked purchase
-    final purchases = ref.watch(purchasesProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
     final linkedPurchase = live.purchaseId != null
         ? purchases.cast<Purchase?>().firstWhere(
               (p) => p!.id == live.purchaseId,
@@ -153,10 +153,10 @@ class ReceiptDetailScreen extends ConsumerWidget {
                   value: 'delete',
                   child: Row(children: [
                     Icon(Icons.delete_rounded,
-                        size: 18, color: Color(0xFFDC2626)),
+                        size: 18, color: AppColors.badgeTextNegative),
                     SizedBox(width: 8),
                     Text('Delete Receipt',
-                        style: TextStyle(color: Color(0xFFDC2626))),
+                        style: TextStyle(color: AppColors.badgeTextNegative)),
                   ])),
             ],
           ),
@@ -205,7 +205,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.inventory_2_rounded,
-                    color: Color(0xFF7C3AED), size: 22),
+                    color: AppColors.shopifyPurple, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -256,7 +256,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
               color: const Color(0xFFF3E8FF).withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
+                color: AppColors.shopifyPurple.withValues(alpha: 0.2),
               ),
             ),
             child: Row(
@@ -271,7 +271,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                       Text(
                         '$currency ${fmt.format(r.totalCost)}',
                         style: const TextStyle(
-                          color: Color(0xFF7C3AED),
+                          color: AppColors.shopifyPurple,
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
                         ),
@@ -282,7 +282,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                 Container(
                   width: 1,
                   height: 36,
-                  color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
+                  color: AppColors.shopifyPurple.withValues(alpha: 0.2),
                 ),
                 Expanded(
                   child: Column(
@@ -294,7 +294,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                       Text(
                         r.totalReceived.toStringAsFixed(0),
                         style: const TextStyle(
-                          color: Color(0xFF7C3AED),
+                          color: AppColors.shopifyPurple,
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
                         ),
@@ -305,7 +305,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                 Container(
                   width: 1,
                   height: 36,
-                  color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
+                  color: AppColors.shopifyPurple.withValues(alpha: 0.2),
                 ),
                 Expanded(
                   child: Column(
@@ -317,7 +317,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                       Text(
                         '${r.fulfilmentPct.toStringAsFixed(0)}%',
                         style: const TextStyle(
-                          color: Color(0xFF7C3AED),
+                          color: AppColors.shopifyPurple,
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
                         ),
@@ -353,7 +353,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
               orElse: () => null,
             );
         context.pushNamed('PurchaseDetailScreen',
-            extra: {if (supplier != null) 'supplier': supplier, 'purchase': purchase});
+            extra: {'supplier': ?supplier, 'purchase': purchase});
       },
       child: Container(
         padding: const EdgeInsets.all(14),
@@ -369,11 +369,11 @@ class ReceiptDetailScreen extends ConsumerWidget {
               width: 36,
               height: 36,
               decoration: const BoxDecoration(
-                color: Color(0xFFF5F3FF),
+                color: AppColors.chartPurpleLight,
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.shopping_cart_rounded,
-                  color: Color(0xFF8B5CF6), size: 18),
+                  color: AppColors.chartPurple, size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -472,7 +472,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
         Text(
           '$currency ${fmt.format(item.lineTotal)}',
           style: const TextStyle(
-            color: Color(0xFF7C3AED),
+            color: AppColors.shopifyPurple,
             fontWeight: FontWeight.w700,
             fontSize: 14,
           ),
@@ -569,11 +569,11 @@ class ReceiptDetailScreen extends ConsumerWidget {
               width: 54,
               height: 50,
               decoration: BoxDecoration(
-                color: const Color(0xFFFEE2E2),
+                color: AppColors.badgeBgNegative,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(Icons.delete_rounded,
-                  color: Color(0xFFDC2626), size: 22),
+                  color: AppColors.badgeTextNegative, size: 22),
             ),
           ),
         ],
@@ -634,7 +634,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
 
               // Reverse linked purchase's receivedQty
               if (r.purchaseId != null) {
-                final purchases = ref.read(purchasesProvider);
+                final purchases = ref.read(purchasesProvider).value ?? [];
                 final pIdx =
                     purchases.indexWhere((p) => p.id == r.purchaseId);
                 if (pIdx >= 0) {
@@ -671,7 +671,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
               ));
             },
             child: const Text('Delete',
-                style: TextStyle(color: Color(0xFFDC2626))),
+                style: TextStyle(color: AppColors.badgeTextNegative)),
           ),
         ],
       ),
@@ -685,11 +685,11 @@ class ReceiptDetailScreen extends ConsumerWidget {
   (Color, Color) _statusColors(ReceiptStatus status) {
     switch (status) {
       case ReceiptStatus.confirmed:
-        return (const Color(0xFFDCFCE7), const Color(0xFF166534));
+        return (AppColors.badgeBgPositive, const Color(0xFF166534));
       case ReceiptStatus.rejected:
-        return (const Color(0xFFFEE2E2), const Color(0xFFDC2626));
+        return (AppColors.badgeBgNegative, AppColors.badgeTextNegative);
       case ReceiptStatus.pending:
-        return (const Color(0xFFF3E8FF), const Color(0xFF7C3AED));
+        return (const Color(0xFFF3E8FF), AppColors.shopifyPurple);
     }
   }
 }

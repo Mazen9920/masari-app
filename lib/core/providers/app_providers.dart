@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/category_data.dart';
 import '../../shared/models/product_model.dart';
@@ -250,16 +251,12 @@ class CategoriesNotifier extends AsyncNotifier<List<CategoryData>> {
     CategoryData.customCategories = newList;
     state = AsyncValue.data(newList);
 
-    // Reassign orphaned transactions to Uncategorized
-    final txNotifier = ref.read(transactionsProvider.notifier);
-    final transactions = ref.read(transactionsProvider).value ?? [];
-    for (final tx in transactions) {
-      if (tx.categoryId == id) {
-        await txNotifier.updateTransaction(
-          tx.copyWith(categoryId: 'cat_uncategorized'),
-        );
-      }
-    }
+    // Reassign ALL orphaned transactions to Uncategorized (server-side batch)
+    final txRepo = ref.read(transactionRepositoryProvider);
+    await txRepo.reassignCategory(id, 'cat_uncategorized');
+
+    // Refresh loaded transactions to reflect the reassignment
+    ref.read(transactionsProvider.notifier).refresh();
 
     final repo = ref.read(categoryRepositoryProvider);
     final result = await repo.deleteCategory(id);
@@ -437,9 +434,9 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     }
   }
 
-  Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool skipCostLayer = false}) async {
+  Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool skipCostLayer = false, bool clearLegacyLayers = false}) async {
     final repo = ref.read(productRepositoryProvider);
-    final result = await repo.adjustStock(id, variantId, delta, reason, unitCost: unitCost, valuationMethod: valuationMethod, supplierName: supplierName, skipCostLayer: skipCostLayer);
+    final result = await repo.adjustStock(id, variantId, delta, reason, unitCost: unitCost, valuationMethod: valuationMethod, supplierName: supplierName, skipCostLayer: skipCostLayer, clearLegacyLayers: clearLegacyLayers);
     if (result.isSuccess && result.data != null) {
       final current = state.value ?? [];
       state = AsyncValue.data([
@@ -478,6 +475,11 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
           name: 'InventoryNotifier',
         );
       }
+    }).catchError((Object e) {
+      developer.log(
+        'Auto-push to Shopify error: $e',
+        name: 'InventoryNotifier',
+      );
     });
   }
 
@@ -505,6 +507,11 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
           name: 'InventoryNotifier',
         );
       }
+    }).catchError((Object e) {
+      developer.log(
+        'Auto-push product to Shopify error: $e',
+        name: 'InventoryNotifier',
+      );
     });
   }
 
@@ -516,12 +523,14 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     required int qty,
     required String valuationMethod,
   }) async {
-    final products = state.value ?? [];
-    final product = products.cast<Product?>().firstWhere(
-      (p) => p!.id == productId,
-      orElse: () => null,
-    );
-    if (product == null) return 'Product not found';
+    if (qty <= 0) return 'Quantity must be greater than 0';
+
+    // Read fresh from Firestore to avoid stale cost layers in local cache
+    final freshResult = await ref.read(productRepositoryProvider).getProductById(productId);
+    if (!freshResult.isSuccess || freshResult.data == null) {
+      return freshResult.error ?? 'Product not found';
+    }
+    final product = freshResult.data!;
     if (!product.hasBreakdown) return 'No breakdown recipe';
 
     final recipe = product.breakdownRecipe!;
@@ -597,7 +606,7 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     }).toList();
 
     final order = ConversionOrder(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: const Uuid().v4(),
       userId: ref.read(authProvider).user?.id ?? '',
       productId: productId,
       productName: product.name,
@@ -625,6 +634,7 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
   /// selling-price ratio). Fixes data from before cost-layer tracking.
   Future<String?> recalculateBreakdownCosts({
     required String productId,
+    bool confirmed = false,
   }) async {
     final products = state.value ?? [];
     final product = products.cast<Product?>().firstWhere(
@@ -635,6 +645,19 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     if (!product.hasBreakdown) return 'No breakdown recipe';
 
     final recipe = product.breakdownRecipe!;
+
+    // Guard: if any output variant already has cost layers, require explicit
+    // confirmation so the user is aware existing layer history will be replaced.
+    if (!confirmed) {
+      final hasExistingLayers = recipe.outputs.any((o) {
+        final v = product.variantById(o.variantId);
+        return v != null && v.costLayers.isNotEmpty;
+      });
+      if (hasExistingLayers) {
+        return 'CONFIRM_REQUIRED';
+      }
+    }
+
     final sourceVariant = product.variantById(recipe.sourceVariantId);
     if (sourceVariant == null) return 'Source variant not found';
 
@@ -790,7 +813,11 @@ class SuppliersNotifier extends AsyncNotifier<List<Supplier>> {
         if (newItems.isNotEmpty) _lastDocId = newItems.last.id;
         
         final currentList = state.value ?? [];
-        state = AsyncValue.data([...currentList, ...newItems]);
+        final existingIds = currentList.map((s) => s.id).toSet();
+        final deduped = newItems.where((s) => !existingIds.contains(s.id)).toList();
+        if (deduped.isNotEmpty) {
+          state = AsyncValue.data([...currentList, ...deduped]);
+        }
       }
     } catch (e) {
       // Silently fail pagination, let user try again or swipe to refresh
@@ -889,26 +916,23 @@ final suppliersProvider =
 });
 
 // ═══════════════════════════════════════════════════════════
-// PURCHASES  — Firestore-backed with optimistic updates
+// PURCHASES  — AsyncNotifier with optimistic updates
 // ═══════════════════════════════════════════════════════════
 
-class PurchasesNotifier extends Notifier<List<Purchase>> {
+class PurchasesNotifier extends AsyncNotifier<List<Purchase>> {
   @override
-  List<Purchase> build() {
-    _load();
-    return [];
-  }
-
-  Future<void> _load() async {
+  Future<List<Purchase>> build() async {
     final repo = ref.read(purchaseRepositoryProvider);
     final result = await repo.getPurchases();
     if (result.isSuccess && result.data != null) {
-      state = result.data!;
+      return result.data!;
     }
+    throw Exception(result.error ?? 'Failed to load purchases');
   }
 
   void addPurchase(Purchase p) {
-    state = [...state, p];
+    final current = state.value ?? [];
+    state = AsyncValue.data([...current, p]);
     _createPurchase(p);
   }
 
@@ -916,16 +940,17 @@ class PurchasesNotifier extends Notifier<List<Purchase>> {
     final repo = ref.read(purchaseRepositoryProvider);
     final result = await repo.createPurchase(p);
     if (result.isSuccess && result.data != null) {
-      // Replace optimistic item with the one carrying the real Firestore ID
-      state = [for (final x in state) if (x.id == p.id) result.data! else x];
+      final current = state.value ?? [];
+      state = AsyncValue.data([for (final x in current) if (x.id == p.id) result.data! else x]);
     } else if (!result.isSuccess) {
-      state = state.where((x) => x.id != p.id).toList();
+      final current = state.value ?? [];
+      state = AsyncValue.data(current.where((x) => x.id != p.id).toList());
     }
   }
 
   void updatePurchase(Purchase updated) {
-    final old = state;
-    state = [for (final p in state) if (p.id == updated.id) updated else p];
+    final old = state.value ?? [];
+    state = AsyncValue.data([for (final p in old) if (p.id == updated.id) updated else p]);
     _updatePurchase(updated, old);
   }
 
@@ -933,13 +958,13 @@ class PurchasesNotifier extends Notifier<List<Purchase>> {
     final repo = ref.read(purchaseRepositoryProvider);
     final result = await repo.updatePurchase(updated.id, updated);
     if (!result.isSuccess) {
-      state = rollback;
+      state = AsyncValue.data(rollback);
     }
   }
 
   void removePurchase(String id) {
-    final old = state;
-    state = state.where((p) => p.id != id).toList();
+    final old = state.value ?? [];
+    state = AsyncValue.data(old.where((p) => p.id != id).toList());
     _deletePurchase(id, old);
   }
 
@@ -947,40 +972,37 @@ class PurchasesNotifier extends Notifier<List<Purchase>> {
     final repo = ref.read(purchaseRepositoryProvider);
     final result = await repo.deletePurchase(id);
     if (!result.isSuccess) {
-      state = rollback;
+      state = AsyncValue.data(rollback);
     }
   }
 
   List<Purchase> forSupplier(String supplierId) =>
-      state.where((p) => p.supplierId == supplierId).toList()
+      (state.value ?? []).where((p) => p.supplierId == supplierId).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
 }
 
-final purchasesProvider = NotifierProvider<PurchasesNotifier, List<Purchase>>(() {
+final purchasesProvider = AsyncNotifierProvider<PurchasesNotifier, List<Purchase>>(() {
   return PurchasesNotifier();
 });
 
 // ═══════════════════════════════════════════════════════════
-// PAYMENTS  — Firestore-backed with optimistic updates
+// PAYMENTS  — AsyncNotifier with optimistic updates
 // ═══════════════════════════════════════════════════════════
 
-class PaymentsNotifier extends Notifier<List<Payment>> {
+class PaymentsNotifier extends AsyncNotifier<List<Payment>> {
   @override
-  List<Payment> build() {
-    _load();
-    return [];
-  }
-
-  Future<void> _load() async {
+  Future<List<Payment>> build() async {
     final repo = ref.read(paymentRepositoryProvider);
     final result = await repo.getPayments();
     if (result.isSuccess && result.data != null) {
-      state = result.data!;
+      return result.data!;
     }
+    throw Exception(result.error ?? 'Failed to load payments');
   }
 
   void addPayment(Payment p) {
-    state = [...state, p];
+    final current = state.value ?? [];
+    state = AsyncValue.data([...current, p]);
     _createPayment(p);
   }
 
@@ -988,16 +1010,17 @@ class PaymentsNotifier extends Notifier<List<Payment>> {
     final repo = ref.read(paymentRepositoryProvider);
     final result = await repo.createPayment(p);
     if (result.isSuccess && result.data != null) {
-      // Replace optimistic item with the one carrying the real Firestore ID
-      state = [for (final x in state) if (x.id == p.id) result.data! else x];
+      final current = state.value ?? [];
+      state = AsyncValue.data([for (final x in current) if (x.id == p.id) result.data! else x]);
     } else if (!result.isSuccess) {
-      state = state.where((x) => x.id != p.id).toList();
+      final current = state.value ?? [];
+      state = AsyncValue.data(current.where((x) => x.id != p.id).toList());
     }
   }
 
   void updatePayment(Payment updated) {
-    final old = state;
-    state = [for (final p in state) if (p.id == updated.id) updated else p];
+    final old = state.value ?? [];
+    state = AsyncValue.data([for (final p in old) if (p.id == updated.id) updated else p]);
     _updatePayment(updated, old);
   }
 
@@ -1005,13 +1028,13 @@ class PaymentsNotifier extends Notifier<List<Payment>> {
     final repo = ref.read(paymentRepositoryProvider);
     final result = await repo.updatePayment(updated.id, updated);
     if (!result.isSuccess) {
-      state = rollback;
+      state = AsyncValue.data(rollback);
     }
   }
 
   void removePayment(String id) {
-    final old = state;
-    state = state.where((p) => p.id != id).toList();
+    final old = state.value ?? [];
+    state = AsyncValue.data(old.where((p) => p.id != id).toList());
     _deletePayment(id, old);
   }
 
@@ -1019,16 +1042,16 @@ class PaymentsNotifier extends Notifier<List<Payment>> {
     final repo = ref.read(paymentRepositoryProvider);
     final result = await repo.deletePayment(id);
     if (!result.isSuccess) {
-      state = rollback;
+      state = AsyncValue.data(rollback);
     }
   }
 
   List<Payment> forSupplier(String supplierId) =>
-      state.where((p) => p.supplierId == supplierId).toList()
+      (state.value ?? []).where((p) => p.supplierId == supplierId).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
 }
 
-final paymentsProvider = NotifierProvider<PaymentsNotifier, List<Payment>>(() {
+final paymentsProvider = AsyncNotifierProvider<PaymentsNotifier, List<Payment>>(() {
   return PaymentsNotifier();
 });
 
@@ -1193,7 +1216,7 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
           final stockResult = await invNotifier.adjustStock(
             item.productId!,
             item.variantId ?? '${item.productId}_v0',
-            item.quantity.toInt(), // positive delta restores stock
+            item.quantity.round(), // positive delta restores stock
             'Sale deleted – stock restored',
             valuationMethod: valMethod,
           );

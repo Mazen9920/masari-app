@@ -300,6 +300,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                   context,
                   current: _categoryFilter,
                 );
+                if (!mounted) return;
                 if (result != null) {
                   DateTime? customMonth;
                   if (result.dateRange == 'Custom') {

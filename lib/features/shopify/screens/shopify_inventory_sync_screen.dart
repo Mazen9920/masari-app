@@ -620,7 +620,6 @@ class _InfoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -655,7 +654,6 @@ class _SyncBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     Color bg;
     Color fg;
     IconData icon;
@@ -714,7 +712,6 @@ class _PreviewTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final changedItems = items.where((i) => i.hasChange).toList();
     final unchangedItems =
         items.where((i) => !i.hasChange && !i.isUnmapped).toList();
@@ -903,7 +900,6 @@ class _PreviewRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final deltaColor = item.delta > 0
         ? AppColors.success
         : item.delta < 0
@@ -1018,7 +1014,6 @@ class _ProductSyncTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final totalStock = product.variants.fold<int>(
         0, (sum, v) => sum + v.currentStock);
 
@@ -1095,7 +1090,6 @@ class _SelectableProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final totalStock = product.variants.fold<int>(
         0, (sum, v) => sum + v.currentStock);
 

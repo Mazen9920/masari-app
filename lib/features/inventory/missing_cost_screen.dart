@@ -23,7 +23,7 @@ class _MissingCostEntry {
   _MissingCostEntry({
     required this.product,
     required this.variantRows,
-    this.applyToAll = false,
+    this.applyToAll = false, // ignore: unused_element_parameter
   }) : bulkCostCtrl = TextEditingController();
 
   void dispose() {
@@ -437,14 +437,14 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
               width: size,
               height: size,
               fit: BoxFit.cover,
-              placeholder: (_, __) => Container(
+              placeholder: (_, _) => Container(
                 width: size,
                 height: size,
                 color: const Color(0xFFF1F5F9),
                 child: Icon(Icons.inventory_2_rounded,
                     size: size * 0.5, color: AppColors.textTertiary),
               ),
-              errorWidget: (_, __, ___) => Container(
+              errorWidget: (_, _, _) => Container(
                 width: size,
                 height: size,
                 color: const Color(0xFFF1F5F9),

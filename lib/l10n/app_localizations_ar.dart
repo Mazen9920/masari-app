@@ -901,4 +901,50 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get catOwnerWithdrawal => 'سحب المالك';
+
+  @override
+  String get accounts => 'الحسابات';
+
+  @override
+  String countOutstanding(int count) {
+    return '$count مستحق';
+  }
+
+  @override
+  String get analytics => 'التحليلات';
+
+  @override
+  String get compareLabel => 'مقارنة';
+
+  @override
+  String get salesMetric => 'المبيعات';
+
+  @override
+  String get profitMetric => 'الربح';
+
+  @override
+  String get ordersMetric => 'الطلبات';
+
+  @override
+  String get recentTransactions => 'المعاملات الأخيرة';
+
+  @override
+  String get customizeDashboard => 'تخصيص لوحة التحكم';
+
+  @override
+  String get done => 'تم';
+
+  @override
+  String get toggleSectionsHint => 'تبديل الأقسام وسحبها لإعادة الترتيب.';
+
+  @override
+  String totalIncomeLabel(String amount) {
+    return 'إجمالي الدخل: $amount';
+  }
+
+  @override
+  String get noSalesInPeriod => 'لا توجد مبيعات في هذه الفترة';
+
+  @override
+  String get allProductsWellStocked => 'جميع المنتجات متوفرة بكميات كافية';
 }

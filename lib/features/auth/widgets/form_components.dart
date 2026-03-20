@@ -196,7 +196,7 @@ class _MasariPrimaryButtonState extends State<MasariPrimaryButton>
           decoration: BoxDecoration(
             color: widget.onPressed != null
                 ? AppColors.accentOrange
-                : AppColors.accentOrange.withOpacity(0.5),
+                : AppColors.accentOrange.withValues(alpha: 0.5),
             borderRadius: AppRadius.buttonRadius,
             boxShadow: widget.onPressed != null
                 ? AppColors.accentShadow

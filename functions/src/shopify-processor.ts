@@ -86,25 +86,21 @@ function consumeCostLayers(
     const totalLayerQty = layers.reduce((s, l) => s + l.remaining_qty, 0);
     if (totalLayerQty <= 0) return {layers: [], unitCost: fallbackCost};
     const updated: CostLayer[] = [];
-    let remaining = qty;
-    for (const layer of layers) {
-      const take = Math.min(
-        Math.floor(layer.remaining_qty * qty / totalLayerQty),
-        layer.remaining_qty,
-      );
-      remaining -= take;
+    // Accumulator pattern: track cumulative assigned count
+    // to guarantee the sum of all takes == qty exactly.
+    let cumulativeAssigned = 0;
+    for (let idx = 0; idx < layers.length; idx++) {
+      const layer = layers[idx];
+      const isLast = idx === layers.length - 1;
+      const take = isLast
+        ? Math.min(qty - cumulativeAssigned, layer.remaining_qty)
+        : Math.min(
+            Math.round(layer.remaining_qty * qty / totalLayerQty),
+            layer.remaining_qty,
+          );
+      cumulativeAssigned += take;
       const newQty = layer.remaining_qty - take;
       if (newQty > 0) updated.push({...layer, remaining_qty: newQty});
-    }
-    // Handle rounding remainder
-    for (let i = 0; i < updated.length && remaining > 0; i++) {
-      const take = Math.min(remaining, updated[i].remaining_qty);
-      updated[i] = {...updated[i], remaining_qty: updated[i].remaining_qty - take};
-      remaining -= take;
-      if (updated[i].remaining_qty <= 0) {
-        updated.splice(i, 1);
-        i--;
-      }
     }
     return {layers: updated, unitCost: fallbackCost};
   }
@@ -683,6 +679,7 @@ async function handleOrderCreate(
     date_time: saleDate,
     category_id: "cat_cogs",
     note: `Auto-generated from ${orderLabel}`,
+    payment_method: "shopify",
     sale_id: saleId,
     created_at: now,
   };
@@ -704,19 +701,21 @@ async function handleOrderCreate(
       date_time: saleDate,
       category_id: "cat_shipping",
       note: `Auto-generated from ${orderLabel}`,
+      payment_method: "shopify",
       sale_id: saleId,
       created_at: now,
     });
   }
 
-  // Stock adjustments happen post-batch (see below)
-
-  await batch.commit();
-
-  // ── Stock deduction (post-batch) ───────────────────────
+  // ── Stock deduction (BEFORE batch to prevent overselling) ──
+  // If stock deduction fails, the sale batch is never committed.
+  // If stock succeeds but batch fails, inventory is conservatively
+  // decremented (preferable to overselling) and is reconcilable.
   if (inventorySyncEnabled) {
     await adjustStockForItems(db, userId, saleItems, "deduct", undefined, valMethod);
   }
+
+  await batch.commit();
 
   // ── Sync log ───────────────────────────────────────────
   await writeSyncLog(db, userId, {
@@ -938,19 +937,73 @@ async function handleOrderUpdated(
   const oldItems =
     (saleData.items as Record<string, unknown>[]) ?? [];
 
-  // Rebuild new items from Shopify line items
+  // Build a lookup of old items by shopify_line_item_id for delta COGS
+  const oldItemMap = new Map<string, Record<string, unknown>>();
+  for (const oi of oldItems) {
+    const key = String(oi.shopify_line_item_id ?? "");
+    if (key) oldItemMap.set(key, oi);
+  }
+
+  // Rebuild new items from Shopify line items, using delta-based COGS
+  // to avoid re-consuming already-consumed cost layers (FIFO/LIFO).
   const newSaleItems: Record<string, unknown>[] = [];
   let newTotalCogs = 0;
 
   for (const li of shopifyLineItems) {
     const qty = Number(li.quantity) || 1;
-    const mapped = await resolveMapping(
-      db, userId, li, inventorySyncEnabled, qty, valMethod
-    );
-    const unitPrice = Number(li.price) || 0;
-    const costPrice = mapped.costPrice;
-    const lineCogs = round2(qty * costPrice);
+    const lineItemId = String(li.id);
+    const oldItem = oldItemMap.get(lineItemId);
+    const oldQty = oldItem ? (Number(oldItem.quantity) || 0) : 0;
+    const oldCostPrice = oldItem ? (Number(oldItem.cost_price) || 0) : 0;
+
+    let costPrice: number;
+    let lineCogs: number;
+    let mappedProductId: string | undefined;
+    let mappedVariantId: string | undefined;
+    let mappedVariantName: string | null = null;
+
+    if (oldItem && qty === oldQty) {
+      // Unchanged quantity — keep the stored cost_price
+      costPrice = oldCostPrice;
+      lineCogs = round2(qty * costPrice);
+      mappedProductId = oldItem.product_id as string | undefined;
+      mappedVariantId = oldItem.variant_id as string | undefined;
+      mappedVariantName = (li.variant_title || oldItem.variant_name || null) as string | null;
+    } else if (oldItem && qty < oldQty) {
+      // Quantity decreased — use stored cost_price for remaining
+      costPrice = oldCostPrice;
+      lineCogs = round2(qty * costPrice);
+      mappedProductId = oldItem.product_id as string | undefined;
+      mappedVariantId = oldItem.variant_id as string | undefined;
+      mappedVariantName = (li.variant_title || oldItem.variant_name || null) as string | null;
+    } else if (oldItem && qty > oldQty) {
+      // Quantity increased — keep old COGS + compute delta cost
+      const deltaQty = qty - oldQty;
+      const deltaMapped = await resolveMapping(
+        db, userId, li, inventorySyncEnabled, deltaQty, valMethod
+      );
+      // Total COGS = old portion + delta portion
+      lineCogs = round2(oldQty * oldCostPrice + deltaQty * deltaMapped.costPrice);
+      // Blended cost_price for the sale item record
+      costPrice = qty > 0 ? round2(lineCogs / qty) : 0;
+      mappedProductId = oldItem.product_id as string | undefined;
+      mappedVariantId = oldItem.variant_id as string | undefined;
+      mappedVariantName = (li.variant_title || oldItem.variant_name || null) as string | null;
+    } else {
+      // New item (not in old order) — compute full cost
+      const mapped = await resolveMapping(
+        db, userId, li, inventorySyncEnabled, qty, valMethod
+      );
+      costPrice = mapped.costPrice;
+      lineCogs = round2(qty * costPrice);
+      mappedProductId = mapped.productId;
+      mappedVariantId = mapped.variantId;
+      mappedVariantName = mapped.variantName;
+    }
+
     newTotalCogs += lineCogs;
+
+    const unitPrice = Number(li.price) || 0;
 
     const saleItem: Record<string, unknown> = {
       product_name: li.title || "Unknown",
@@ -959,10 +1012,10 @@ async function handleOrderUpdated(
       cost_price: costPrice,
       shopify_line_item_id: String(li.id),
     };
-    if (mapped.productId) saleItem.product_id = mapped.productId;
-    if (mapped.variantId) saleItem.variant_id = mapped.variantId;
-    if (mapped.variantName) {
-      saleItem.variant_name = mapped.variantName;
+    if (mappedProductId) saleItem.product_id = mappedProductId;
+    if (mappedVariantId) saleItem.variant_id = mappedVariantId;
+    if (mappedVariantName) {
+      saleItem.variant_name = mappedVariantName;
     }
     newSaleItems.push(saleItem);
   }
@@ -1002,7 +1055,12 @@ async function handleOrderUpdated(
     .sort()
     .join("|");
 
-  const itemsChanged = oldItemKeys !== newItemKeys;
+  // Idempotency guard: if the sale already has the same fingerprint,
+  // a concurrent webhook already processed this exact edit — skip
+  // item/stock changes to prevent double-adjustment.
+  const storedFingerprint = saleData._item_fingerprint as string | undefined;
+  const itemsChanged = oldItemKeys !== newItemKeys &&
+    newItemKeys !== storedFingerprint;
   const oldTaxAmount = Number(saleData.tax_amount) || 0;
   const oldDiscountAmount = Number(saleData.discount_amount) || 0;
   const oldShippingCost = Number(saleData.shipping_cost) || 0;
@@ -1034,6 +1092,7 @@ async function handleOrderUpdated(
 
     // Update sale items and financial fields
     updates.items = newSaleItems;
+    updates._item_fingerprint = newItemKeys;
     updates.tax_amount = newTaxAmount;
     updates.discount_amount = newDiscountAmount;
     updates.shipping_cost = newShippingCost;
@@ -1118,6 +1177,7 @@ async function handleOrderUpdated(
           date_time: toTs(order.created_at as string | null),
           category_id: "cat_shipping",
           note: `Auto-generated from ${label}`,
+          payment_method: "shopify",
           sale_id: saleId,
           created_at: now,
         });
@@ -1312,6 +1372,7 @@ async function handleOrderUpdated(
         date_time: toTs(refund.created_at as string | null),
         category_id: "cat_sales_revenue",
         note: refundNote,
+        payment_method: "shopify",
         sale_id: saleId,
         shopify_refund_id: shopifyRefundId,
         created_at: now,
@@ -1576,16 +1637,65 @@ async function handleOrderCancelled(
   await batch.commit();
 
   // ── Reverse stock ──────────────────────────────────────
-  // Skip stock restore if refunds already restored inventory
-  // (the refund handler already called adjustStockForItems with "restore")
+  // If refunds already restored SOME items, only restore the
+  // remaining items/quantities that were NOT part of refunds.
+  // This prevents both double-restore and missed-restore scenarios.
   const connDoc = await db
     .collection("shopify_connections")
     .doc(userId)
     .get();
   const conn = connDoc.exists ? connDoc.data() : null;
-  if (conn?.sync_inventory_enabled === true && !hasExistingRefunds) {
+  if (conn?.sync_inventory_enabled === true) {
     const items = saleData.items as Record<string, unknown>[];
-    await adjustStockForItems(db, userId, items, "restore", undefined, valMethod);
+
+    // Build map of quantities already restored by prior refunds
+    const restoredQtyMap = new Map<string, number>();
+    if (hasExistingRefunds) {
+      const refunds: Record<string, unknown>[] =
+        (order.refunds as Record<string, unknown>[]) ?? [];
+      for (const refund of refunds) {
+        const refundLineItems = (
+          refund.refund_line_items as Record<string, unknown>[]
+        ) ?? [];
+        for (const ri of refundLineItems) {
+          const liId = String(ri.line_item_id || "");
+          const matched = items.find(
+            (si) => String(si.shopify_line_item_id) === liId
+          );
+          if (matched?.product_id && matched?.variant_id) {
+            const key = `${matched.product_id}::${matched.variant_id}`;
+            restoredQtyMap.set(
+              key,
+              (restoredQtyMap.get(key) || 0) + (Number(ri.quantity) || 0),
+            );
+          }
+        }
+      }
+    }
+
+    // Restore only the delta: saleItemQty − alreadyRestoredQty
+    const itemsToRestore: Record<string, unknown>[] = [];
+    for (const item of items) {
+      if (!item.product_id || !item.variant_id) continue;
+      const key = `${item.product_id}::${item.variant_id}`;
+      const saleQty = Number(item.quantity) || 0;
+      const alreadyRestored = restoredQtyMap.get(key) || 0;
+      const remaining = saleQty - alreadyRestored;
+      if (remaining > 0) {
+        itemsToRestore.push({
+          product_id: item.product_id,
+          variant_id: item.variant_id,
+          quantity: remaining,
+          cost_price: item.cost_price,
+        });
+      }
+    }
+
+    if (itemsToRestore.length > 0) {
+      await adjustStockForItems(
+        db, userId, itemsToRestore, "restore", undefined, valMethod,
+      );
+    }
   }
 
   await writeSyncLog(db, userId, {
@@ -1648,7 +1758,8 @@ async function autoImportShopifyProduct(
       await existingSnap.docs[d].ref.delete();
     }
 
-    // Create mappings pointing to existing product
+    // Atomic batch: create all mappings pointing to existing product
+    const relinkBatch = db.batch();
     for (let i = 0; i < shopifyVariants.length; i++) {
       const sv = shopifyVariants[i];
       const svId = String(sv.id);
@@ -1668,7 +1779,7 @@ async function autoImportShopifyProduct(
       const variantTitle = sv.title || sv.option1 || "Default";
 
       const mappingRef = db.collection("shopify_product_mappings").doc();
-      await mappingRef.set({
+      relinkBatch.set(mappingRef, {
         id: mappingRef.id,
         user_id: userId,
         masari_product_id: prodId,
@@ -1682,6 +1793,7 @@ async function autoImportShopifyProduct(
         created_at: now,
       });
     }
+    await relinkBatch.commit();
 
     logger.info("Relinked existing Masari product to Shopify", {
       shopifyProductId,
@@ -1794,11 +1906,13 @@ async function autoImportShopifyProduct(
     _last_modified_by: "shopify_webhook",
   };
 
-  // Write product + all mappings
-  await prodRef.set(productDoc);
+  // Atomic write: product + all mappings in a single batch
+  const importBatch = db.batch();
+  importBatch.set(prodRef, productDoc);
   for (const m of mappingDocs) {
-    await m.ref.set(m.data);
+    importBatch.set(m.ref, m.data);
   }
+  await importBatch.commit();
 
   await writeSyncLog(db, userId, {
     action: "product_create",
@@ -2287,14 +2401,14 @@ async function handleInventoryUpdate(
     if (!prodData) return;
 
     // Echo prevention: if this product was recently modified by Masari
-    // (within 30s), this webhook is likely the echo of our own push.
+    // (within 120s), this webhook is likely the echo of our own push.
     const lastModBy = prodData._last_modified_by as string | undefined;
     if (lastModBy === "masari") {
       const updatedAt = prodData.updated_at as string | undefined;
       if (updatedAt) {
         const elapsed =
           Date.now() - new Date(updatedAt).getTime();
-        if (elapsed < 30_000) {
+        if (elapsed < 120_000) {
           logger.info("Skipping inventory webhook — echo from Masari push (time)", {
             inventoryItemId,
             elapsed,
@@ -2528,13 +2642,14 @@ async function resolveMapping(
     updated_at: now,
   };
 
-  await prodRef.set(productDoc);
+  // Atomic write: product + mapping in a single batch
+  const batch = db.batch();
+  batch.set(prodRef, productDoc);
 
-  // Create mapping
   const mappingRef = db
     .collection("shopify_product_mappings")
     .doc();
-  await mappingRef.set({
+  batch.set(mappingRef, {
     id: mappingRef.id,
     user_id: userId,
     masari_product_id: prodId,
@@ -2550,6 +2665,7 @@ async function resolveMapping(
     auto_imported: true,
     created_at: now,
   });
+  await batch.commit();
 
   logger.info("Auto-created product + mapping", {
     prodId,

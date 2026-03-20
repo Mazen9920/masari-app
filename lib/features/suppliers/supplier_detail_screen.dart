@@ -101,11 +101,11 @@ class SupplierDetailScreen extends ConsumerWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE67E22),
+                    color: AppColors.accentOrange,
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFE67E22).withValues(alpha: 0.25),
+                        color: AppColors.accentOrange.withValues(alpha: 0.25),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -139,11 +139,11 @@ class SupplierDetailScreen extends ConsumerWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF7C3AED),
+                    color: AppColors.shopifyPurple,
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF7C3AED).withValues(alpha: 0.25),
+                        color: AppColors.shopifyPurple.withValues(alpha: 0.25),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -249,7 +249,7 @@ class _ProfileSection extends StatelessWidget {
                     fit: BoxFit.cover,
                     width: 80,
                     height: 80,
-                    placeholder: (_, __) => Center(
+                    placeholder: (_, _) => Center(
                       child: Text(
                         supplier.initials,
                         style: TextStyle(
@@ -305,8 +305,8 @@ class _BalanceCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final purchases = ref.watch(purchasesProvider);
-    final payments = ref.watch(paymentsProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
+    final payments = ref.watch(paymentsProvider).value ?? [];
     final supplierPurchases = purchases.where((p) => p.supplierId == supplier.id);
     final supplierPayments = payments.where((p) => p.supplierId == supplier.id);
     final totalPurchased = supplierPurchases.fold<double>(0, (s, p) => s + p.total);
@@ -347,7 +347,7 @@ class _BalanceCard extends ConsumerWidget {
               child: Icon(
                 Icons.account_balance_wallet_rounded,
                 size: 56,
-                color: const Color(0xFFE67E22).withValues(alpha: 0.06),
+                color: AppColors.accentOrange.withValues(alpha: 0.06),
               ),
             ),
             Column(
@@ -365,7 +365,7 @@ class _BalanceCard extends ConsumerWidget {
                 Text(
                   '$currency ${fmt.format(outstanding)}',
                   style: const TextStyle(
-                    color: Color(0xFFE67E22),
+                    color: AppColors.accentOrange,
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
                   ),
@@ -387,6 +387,23 @@ class _ContactActions extends StatelessWidget {
   final Supplier supplier;
   const _ContactActions({required this.supplier});
 
+  Future<void> _launch(BuildContext context, Uri uri, String errorMsg) async {
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -399,9 +416,19 @@ class _ContactActions extends StatelessWidget {
             color: const Color(0xFF3498DB),
             onTap: () {
               HapticFeedback.lightImpact();
-              if (supplier.phone.isNotEmpty) {
-                launchUrl(Uri.parse('tel:${supplier.phone}'));
+              final phone = supplier.phone.trim();
+              if (phone.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('No phone number available'),
+                    backgroundColor: AppColors.warning,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+                return;
               }
+              _launch(context, Uri.parse('tel:$phone'), 'Cannot make a call from this device');
             },
           ),
           const SizedBox(width: 12),
@@ -411,10 +438,20 @@ class _ContactActions extends StatelessWidget {
             color: const Color(0xFF22C55E),
             onTap: () {
               HapticFeedback.lightImpact();
-              if (supplier.phone.isNotEmpty) {
-                final phone = supplier.phone.replaceAll(RegExp(r'[^0-9+]'), '');
-                launchUrl(Uri.parse('https://wa.me/$phone'));
+              final phone = supplier.phone.trim();
+              if (phone.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('No phone number available'),
+                    backgroundColor: AppColors.warning,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+                return;
               }
+              final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+              _launch(context, Uri.parse('https://wa.me/$cleaned'), 'Cannot open WhatsApp');
             },
           ),
           const SizedBox(width: 12),
@@ -424,9 +461,30 @@ class _ContactActions extends StatelessWidget {
             color: const Color(0xFF3498DB),
             onTap: () {
               HapticFeedback.lightImpact();
-              if (supplier.email.isNotEmpty) {
-                launchUrl(Uri.parse('mailto:${supplier.email}'));
+              final email = supplier.email.trim();
+              if (email.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('No email address available'),
+                    backgroundColor: AppColors.warning,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+                return;
               }
+              if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Invalid email address'),
+                    backgroundColor: AppColors.warning,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+                return;
+              }
+              _launch(context, Uri.parse('mailto:$email'), 'Cannot open email app');
             },
           ),
         ],
@@ -500,8 +558,8 @@ class _StatsRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(currencyProvider);
-    final purchases = ref.watch(purchasesProvider);
-    final payments = ref.watch(paymentsProvider);
+    final purchases = ref.watch(purchasesProvider).value ?? [];
+    final payments = ref.watch(paymentsProvider).value ?? [];
     final supplierPurchases = purchases.where((p) => p.supplierId == supplier.id).toList();
     final totalSpend = supplierPurchases.fold<double>(0, (s, p) => s + p.total);
     final supplierPayments = payments.where((p) => p.supplierId == supplier.id).toList();
@@ -652,7 +710,7 @@ class _StatsRow extends ConsumerWidget {
                       Row(
                         children: [
                           Icon(Icons.inventory_2_rounded,
-                              size: 14, color: const Color(0xFF7C3AED)),
+                              size: 14, color: AppColors.shopifyPurple),
                           const SizedBox(width: 4),
                           Text(
                             'Goods Received',
@@ -669,7 +727,7 @@ class _StatsRow extends ConsumerWidget {
                       Text(
                         '$currency ${fmt.format(totalReceived)}',
                         style: const TextStyle(
-                          color: Color(0xFF7C3AED),
+                          color: AppColors.shopifyPurple,
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                         ),
@@ -752,8 +810,8 @@ class _RecentActivity extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(currencyProvider);
-    final allPurchases = ref.watch(purchasesProvider);
-    final allPayments = ref.watch(paymentsProvider);
+    final allPurchases = ref.watch(purchasesProvider).value ?? [];
+    final allPayments = ref.watch(paymentsProvider).value ?? [];
     final allReceipts = ref.watch(goodsReceiptsProvider);
     final purchases = allPurchases
         .where((p) => p.supplierId == supplier.id)
@@ -978,7 +1036,7 @@ class _RecentActivity extends ConsumerWidget {
               width: 40,
               height: 40,
               decoration: const BoxDecoration(
-                color: Color(0xFFDCFCE7),
+                color: AppColors.badgeBgPositive,
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.payments_rounded,
@@ -1023,7 +1081,7 @@ class _RecentActivity extends ConsumerWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFDCFCE7),
+                    color: AppColors.badgeBgPositive,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text(
@@ -1049,7 +1107,7 @@ class _RecentActivity extends ConsumerWidget {
   (Color, Color) _statusColors(int status) {
     switch (status) {
       case 2:
-        return (const Color(0xFFDCFCE7), const Color(0xFF166534));
+        return (AppColors.badgeBgPositive, const Color(0xFF166534));
       case 1:
         return (const Color(0xFFDBEAFE), const Color(0xFF1D4ED8));
       default:
@@ -1083,7 +1141,7 @@ class _RecentActivity extends ConsumerWidget {
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.inventory_2_rounded,
-                  color: Color(0xFF7C3AED), size: 20),
+                  color: AppColors.shopifyPurple, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1117,7 +1175,7 @@ class _RecentActivity extends ConsumerWidget {
                 Text(
                   '$currency ${fmt.format(r.totalCost)}',
                   style: const TextStyle(
-                    color: Color(0xFF7C3AED),
+                    color: AppColors.shopifyPurple,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -1164,7 +1222,7 @@ class _RecentActivity extends ConsumerWidget {
                     value: 'details',
                     child: Row(children: [
                       Icon(Icons.visibility_rounded,
-                          size: 18, color: Color(0xFF7C3AED)),
+                          size: 18, color: AppColors.shopifyPurple),
                       SizedBox(width: 8),
                       Text('View Details'),
                     ])),
@@ -1180,10 +1238,10 @@ class _RecentActivity extends ConsumerWidget {
                     value: 'delete',
                     child: Row(children: [
                       Icon(Icons.delete_rounded,
-                          size: 18, color: Color(0xFFDC2626)),
+                          size: 18, color: AppColors.badgeTextNegative),
                       SizedBox(width: 8),
                       Text('Delete Receipt',
-                          style: TextStyle(color: Color(0xFFDC2626))),
+                          style: TextStyle(color: AppColors.badgeTextNegative)),
                     ])),
               ],
             ),
@@ -1243,7 +1301,7 @@ class _RecentActivity extends ConsumerWidget {
 
               // Reverse linked purchase receivedQty
               if (r.purchaseId != null) {
-                final purchases = ref.read(purchasesProvider);
+                final purchases = ref.read(purchasesProvider).value ?? [];
                 final pIdx =
                     purchases.indexWhere((p) => p.id == r.purchaseId);
                 if (pIdx >= 0) {
@@ -1282,7 +1340,7 @@ class _RecentActivity extends ConsumerWidget {
               ));
             },
             child: const Text('Delete',
-                style: TextStyle(color: Color(0xFFDC2626))),
+                style: TextStyle(color: AppColors.badgeTextNegative)),
           ),
         ],
       ),
@@ -1292,11 +1350,11 @@ class _RecentActivity extends ConsumerWidget {
   (Color, Color) _receiptStatusColors(ReceiptStatus status) {
     switch (status) {
       case ReceiptStatus.confirmed:
-        return (const Color(0xFFDCFCE7), const Color(0xFF166534));
+        return (AppColors.badgeBgPositive, const Color(0xFF166534));
       case ReceiptStatus.rejected:
-        return (const Color(0xFFFEE2E2), const Color(0xFFDC2626));
+        return (AppColors.badgeBgNegative, AppColors.badgeTextNegative);
       case ReceiptStatus.pending:
-        return (const Color(0xFFF3E8FF), const Color(0xFF7C3AED));
+        return (const Color(0xFFF3E8FF), AppColors.shopifyPurple);
     }
   }
 }

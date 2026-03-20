@@ -150,7 +150,7 @@ class SetupShell extends StatelessWidget {
         color: AppColors.backgroundLight,
         border: Border(
           top: BorderSide(
-            color: AppColors.borderLight.withOpacity(0.5),
+            color: AppColors.borderLight.withValues(alpha: 0.5),
           ),
         ),
       ),

@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/app_settings_provider.dart';
+import '../../../shared/models/sale_model.dart';
 import '../providers/dashboard_state_provider.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -22,9 +23,10 @@ class ProfitMarginsCard extends ConsumerWidget {
     final sales = salesAsync.value ?? [];
     final currency = ref.watch(appSettingsProvider).currency;
 
-    // Filter sales in the selected period
+    // Filter sales in the selected period (exclude cancelled)
     final periodSales = sales.where((s) {
-      return !s.date.isBefore(range.start) && !s.date.isAfter(range.end);
+      return s.orderStatus != OrderStatus.cancelled &&
+          !s.date.isBefore(range.start) && !s.date.isAfter(range.end);
     }).toList();
 
     double totalRevenue = 0;
@@ -59,6 +61,9 @@ class ProfitMarginsCard extends ConsumerWidget {
           !tx.dateTime.isAfter(range.end)) {
         if (tx.isIncome) {
           totalIncome += tx.amount.abs();
+        } else if (tx.categoryId == 'cat_sales_revenue') {
+          // Refund: reduce income, not increase expenses
+          totalIncome -= tx.amount.abs();
         } else {
           totalExpenses += tx.amount.abs();
         }
@@ -111,7 +116,7 @@ class ProfitMarginsCard extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Text(
-             'Revenue: ${fmt.format(totalIncome)}',
+             l10n.totalIncomeLabel(fmt.format(totalIncome)),
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textSecondary,
             ),
@@ -131,7 +136,7 @@ class ProfitMarginsCard extends ConsumerWidget {
                 ? AppColors.secondaryBlue
                 : AppColors.danger,
           ),
-          SizedBox(height: 14),
+          const SizedBox(height: 14),
           _MarginRow(
             label: l10n.cogsRatio,
             percentage: cogsRatio,
@@ -159,7 +164,6 @@ class _MarginRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final clamped = percentage.clamp(0.0, 100.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

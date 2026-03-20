@@ -178,7 +178,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
               context: context,
               initialDate: _receiptDate,
               firstDate: DateTime(2020),
-              lastDate: DateTime.now().add(const Duration(days: 1)),
+              lastDate: DateTime.now(),
             );
             if (picked != null) setState(() => _receiptDate = picked);
           },
@@ -186,7 +186,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: AppColors.surfaceSubtle,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                   color: AppColors.borderLight.withValues(alpha: 0.7)),
@@ -230,7 +230,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
                       right: s != ReceiptStatus.rejected ? 8 : 0),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: selected ? colors.$1 : const Color(0xFFF8FAFC),
+                    color: selected ? colors.$1 : AppColors.surfaceSubtle,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: selected
@@ -347,7 +347,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
                 Icons.inventory_rounded,
                 size: 18,
                 color: _syncToInventory
-                    ? const Color(0xFF10B981)
+                    ? AppColors.chartGreen
                     : AppColors.textTertiary,
               ),
             ),
@@ -377,7 +377,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
             Switch.adaptive(
               value: _syncToInventory,
               onChanged: (v) => setState(() => _syncToInventory = v),
-              activeTrackColor: const Color(0xFF10B981),
+              activeTrackColor: AppColors.chartGreen,
               activeThumbColor: Colors.white,
             ),
           ],
@@ -512,6 +512,9 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
       final l = _lines[i];
       final received = double.tryParse(l.receivedCtrl.text) ?? 0;
       final cost = double.tryParse(l.costCtrl.text) ?? 0;
+      final ordered = double.tryParse(l.orderedCtrl.text) ?? received;
+      // L4: clamp receivedQty ≤ orderedQty
+      final clampedReceived = ordered > 0 ? received.clamp(0.0, ordered) : received;
 
       // Try to resolve productId if not already set
       String? pid = l.productId;
@@ -548,8 +551,8 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
         productId: pid,
         variantId: resolvedVariantId,
         productName: l.nameCtrl.text.trim(),
-        orderedQty: double.tryParse(l.orderedCtrl.text) ?? received,
-        receivedQty: received,
+        orderedQty: ordered,
+        receivedQty: clampedReceived,
         unitCost: cost,
       ));
     }
@@ -558,7 +561,9 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
     if (_syncToInventory) {
       for (int i = 0; i < _lines.length; i++) {
         final l = _lines[i];
-        final newQty = double.tryParse(l.receivedCtrl.text) ?? 0;
+        final rawNewQty = double.tryParse(l.receivedCtrl.text) ?? 0;
+        final orderedQty = double.tryParse(l.orderedCtrl.text) ?? rawNewQty;
+        final newQty = orderedQty > 0 ? rawNewQty.clamp(0.0, orderedQty) : rawNewQty;
         final oldQty = l.originalReceivedQty;
         final delta = (newQty - oldQty).toInt();
         if (delta != 0) {
@@ -593,7 +598,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
 
     // Update linked purchase receivedQty
     if (old.purchaseId != null) {
-      final purchases = ref.read(purchasesProvider);
+      final purchases = ref.read(purchasesProvider).value ?? [];
       final pIdx = purchases.indexWhere((p) => p.id == old.purchaseId);
       if (pIdx >= 0) {
         final purchase = purchases[pIdx];
@@ -623,6 +628,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
       }
     }
 
+    if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
 
     context.safePop();
@@ -658,7 +664,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
         labelStyle:
             TextStyle(color: AppColors.textTertiary, fontSize: 13),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: AppColors.surfaceSubtle,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
@@ -678,11 +684,11 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
   (Color, Color) _statusChipColors(ReceiptStatus s) {
     switch (s) {
       case ReceiptStatus.confirmed:
-        return (const Color(0xFFDCFCE7), const Color(0xFF166534));
+        return (AppColors.badgeBgPositive, const Color(0xFF166534));
       case ReceiptStatus.rejected:
-        return (const Color(0xFFFEE2E2), const Color(0xFFDC2626));
+        return (AppColors.badgeBgNegative, AppColors.badgeTextNegative);
       case ReceiptStatus.pending:
-        return (const Color(0xFFF3E8FF), const Color(0xFF7C3AED));
+        return (const Color(0xFFF3E8FF), AppColors.shopifyPurple);
     }
   }
 }
@@ -717,7 +723,6 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
