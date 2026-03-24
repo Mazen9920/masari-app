@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
+
+const _kPrivacyUrl = 'https://masari.app/privacy.html';
+const _kTermsUrl = 'https://masari.app/terms.html';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -18,7 +23,7 @@ class AboutScreen extends StatelessWidget {
           onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
-        title: Text('About Masari', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
+        title: Text(l10n.aboutTitle, style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -47,10 +52,10 @@ class AboutScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Text('Masari', style: AppTypography.h1.copyWith(color: AppColors.primaryNavy)),
+            Text(l10n.appName, style: AppTypography.h1.copyWith(color: AppColors.primaryNavy)),
             const SizedBox(height: 4),
             Text(
-              'Smart Financial Management',
+              l10n.aboutTagline,
               style: TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 8),
@@ -58,8 +63,8 @@ class AboutScreen extends StatelessWidget {
               future: PackageInfo.fromPlatform(),
               builder: (context, snapshot) {
                 final version = snapshot.hasData
-                    ? 'Version ${snapshot.data!.version} (Build ${snapshot.data!.buildNumber})'
-                    : 'Loading...';
+                    ? l10n.aboutVersion(snapshot.data!.version, snapshot.data!.buildNumber)
+                    : l10n.loading;
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
@@ -85,30 +90,30 @@ class AboutScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  _buildLink(icon: Icons.description_outlined, title: 'Terms of Service', onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Opening Terms of Service...')));
+                  _buildLink(icon: Icons.description_outlined, title: l10n.aboutTermsOfService, onTap: () {
+                    launchUrl(Uri.parse(_kTermsUrl), mode: LaunchMode.externalApplication);
                   }),
                   _divider(),
-                  _buildLink(icon: Icons.privacy_tip_outlined, title: 'Privacy Policy', onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Opening Privacy Policy...')));
+                  _buildLink(icon: Icons.privacy_tip_outlined, title: l10n.aboutPrivacyPolicy, onTap: () {
+                    launchUrl(Uri.parse(_kPrivacyUrl), mode: LaunchMode.externalApplication);
                   }),
                   _divider(),
-                  _buildLink(icon: Icons.gavel_rounded, title: 'Open Source Licenses', onTap: () async {
+                  _buildLink(icon: Icons.gavel_rounded, title: l10n.aboutOpenSourceLicenses, onTap: () async {
                     final info = await PackageInfo.fromPlatform();
                     if (!context.mounted) return;
                     showLicensePage(
                       context: context,
-                      applicationName: 'Masari',
+                      applicationName: l10n.appName,
                       applicationVersion: info.version,
                     );
                   }),
                   _divider(),
-                  _buildLink(icon: Icons.star_outline_rounded, title: 'Rate the App', onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thank you! Opening app store...')));
+                  _buildLink(icon: Icons.star_outline_rounded, title: l10n.aboutRateApp, onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.aboutRateThankYou)));
                   }),
                   _divider(),
-                  _buildLink(icon: Icons.share_outlined, title: 'Share Masari', onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Share link copied to clipboard!')));
+                  _buildLink(icon: Icons.share_outlined, title: l10n.aboutShareMasari, onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.aboutShareCopied)));
                   }),
                 ],
               ),
@@ -116,12 +121,12 @@ class AboutScreen extends StatelessWidget {
             const SizedBox(height: 32),
             // Footer
             Text(
-              'Made with ❤️ in Egypt',
+              l10n.aboutMadeIn,
               style: TextStyle(fontSize: 13, color: AppColors.textTertiary, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 4),
             Text(
-              '© 2026 Masari. All rights reserved.',
+              l10n.aboutCopyright,
               style: TextStyle(fontSize: 11, color: AppColors.textTertiary.withValues(alpha: 0.7)),
             ),
             const SizedBox(height: 40),

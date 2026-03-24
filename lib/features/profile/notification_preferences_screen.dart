@@ -5,12 +5,14 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/notification_settings_provider.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class NotificationPreferencesScreen extends ConsumerWidget {
   const NotificationPreferencesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final settings = ref.watch(notificationSettingsProvider);
     final notifier = ref.read(notificationSettingsProvider.notifier);
 
@@ -23,7 +25,7 @@ class NotificationPreferencesScreen extends ConsumerWidget {
           onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
-        title: Text('Notifications', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
+        title: Text(l10n.notificationsTitle, style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -32,14 +34,14 @@ class NotificationPreferencesScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sectionTitle('CHANNELS'),
+            _sectionTitle(l10n.notificationsSectionChannels),
             const SizedBox(height: 10),
             _buildCard([
               _buildToggleRow(
                 icon: Icons.notifications_active_outlined,
                 iconColor: const Color(0xFF3B82F6),
-                title: 'Push Notifications',
-                subtitle: 'Get instant alerts on your device',
+                title: l10n.notificationsPush,
+                subtitle: l10n.notificationsPushSubtitle,
                 value: settings.pushNotifications,
                 onChanged: (v) => notifier.setPush(v),
               ),
@@ -47,21 +49,21 @@ class NotificationPreferencesScreen extends ConsumerWidget {
               _buildToggleRow(
                 icon: Icons.mail_outline_rounded,
                 iconColor: const Color(0xFF8B5CF6),
-                title: 'Email Notifications',
-                subtitle: 'Receive updates via email',
+                title: l10n.notificationsEmail,
+                subtitle: l10n.notificationsEmailSubtitle,
                 value: settings.emailNotifications,
                 onChanged: (v) => notifier.setEmail(v),
               ),
             ]),
             const SizedBox(height: 24),
-            _sectionTitle('ALERTS'),
+            _sectionTitle(l10n.notificationsSectionAlerts),
             const SizedBox(height: 10),
             _buildCard([
               _buildToggleRow(
                 icon: Icons.inventory_2_outlined,
                 iconColor: const Color(0xFFEF4444),
-                title: 'Low Stock Alerts',
-                subtitle: 'When items hit minimum quantity',
+                title: l10n.notificationsLowStock,
+                subtitle: l10n.notificationsLowStockSubtitle,
                 value: settings.lowStockAlerts,
                 onChanged: (v) => notifier.setLowStock(v),
               ),
@@ -69,21 +71,21 @@ class NotificationPreferencesScreen extends ConsumerWidget {
               _buildToggleRow(
                 icon: Icons.payments_outlined,
                 iconColor: const Color(0xFFF59E0B),
-                title: 'Payment Reminders',
-                subtitle: 'Upcoming vendor payments',
+                title: l10n.notificationsPaymentReminders,
+                subtitle: l10n.notificationsPaymentSubtitle,
                 value: settings.paymentReminders,
                 onChanged: (v) => notifier.setPaymentReminders(v),
               ),
             ]),
             const SizedBox(height: 24),
-            _sectionTitle('REPORTS'),
+            _sectionTitle(l10n.notificationsSectionReports),
             const SizedBox(height: 10),
             _buildCard([
               _buildToggleRow(
                 icon: Icons.summarize_outlined,
                 iconColor: const Color(0xFF22C55E),
-                title: 'Weekly Digest',
-                subtitle: 'Summary every Monday morning',
+                title: l10n.notificationsWeeklyDigest,
+                subtitle: l10n.notificationsWeeklySubtitle,
                 value: settings.weeklyDigest,
                 onChanged: (v) => notifier.setWeeklyDigest(v),
               ),
@@ -91,8 +93,8 @@ class NotificationPreferencesScreen extends ConsumerWidget {
               _buildToggleRow(
                 icon: Icons.calendar_month_outlined,
                 iconColor: const Color(0xFF0EA5E9),
-                title: 'Monthly Report',
-                subtitle: 'Detailed report on the 1st',
+                title: l10n.notificationsMonthlyReport,
+                subtitle: l10n.notificationsMonthlySubtitle,
                 value: settings.monthlyReport,
                 onChanged: (v) => notifier.setMonthlyReport(v),
               ),

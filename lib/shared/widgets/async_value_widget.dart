@@ -69,6 +69,7 @@ class _DefaultLoadingWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -85,7 +86,7 @@ class _DefaultLoadingWidget extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-             'Loading...',
+             l10n.loading,
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textTertiary,
             ),
@@ -131,7 +132,7 @@ class _DefaultErrorWidget extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-               'Something went wrong',
+               l10n.somethingWentWrongShort,
               style: AppTypography.h3.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w600,

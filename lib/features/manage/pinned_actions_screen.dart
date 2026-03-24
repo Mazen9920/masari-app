@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/pinned_actions_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Pinned Actions screen — reorder and toggle visibility of hub quick actions.
 class PinnedActionsScreen extends ConsumerStatefulWidget {
@@ -37,7 +38,7 @@ class _PinnedActionsScreenState extends ConsumerState<PinnedActionsScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
               child: Text(
-                'Drag and drop to reorder the actions that appear on your Manage Hub. The first $_visibleCount will be visible by default.',
+                AppLocalizations.of(context)!.pinnedActionsInstructions(_visibleCount),
                 style: AppTypography.bodySmall.copyWith(
                   color: AppColors.textTertiary,
                   fontSize: 13,
@@ -102,7 +103,7 @@ class _PinnedActionsScreenState extends ConsumerState<PinnedActionsScreen> {
           GestureDetector(
             onTap: () => Navigator.of(context).pop(),
             child: Text(
-              'Cancel',
+              AppLocalizations.of(context)!.cancelButton,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w500,
@@ -111,7 +112,7 @@ class _PinnedActionsScreenState extends ConsumerState<PinnedActionsScreen> {
             ),
           ),
           Text(
-            'Pinned Actions',
+            AppLocalizations.of(context)!.pinnedActionsTitle,
             style: AppTypography.h2.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
@@ -124,7 +125,7 @@ class _PinnedActionsScreenState extends ConsumerState<PinnedActionsScreen> {
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: const Text('Pinned actions saved'),
+                  content: Text(AppLocalizations.of(context)!.pinnedActionsSaved),
                   backgroundColor: AppColors.primaryNavy,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
@@ -133,7 +134,7 @@ class _PinnedActionsScreenState extends ConsumerState<PinnedActionsScreen> {
               );
             },
             child: Text(
-              'Save',
+              AppLocalizations.of(context)!.saveButton,
               style: TextStyle(
                 color: const Color(0xFFE67E22),
                 fontWeight: FontWeight.w700,
@@ -172,7 +173,7 @@ class _PinnedActionsScreenState extends ConsumerState<PinnedActionsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
-              'HIDDEN FROM DASHBOARD',
+              AppLocalizations.of(context)!.hiddenFromDashboard,
               style: TextStyle(
                 color: AppColors.textTertiary,
                 fontSize: 10,
@@ -318,7 +319,7 @@ class _ActionTile extends StatelessWidget {
               // Label
               Expanded(
                 child: Text(
-                  action.label,
+                  action.localizedLabel(AppLocalizations.of(context)!),
                   style: AppTypography.labelLarge.copyWith(
                     color: isHidden
                         ? AppColors.textTertiary

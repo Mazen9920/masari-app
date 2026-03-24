@@ -3,6 +3,7 @@ import '../../../shared/models/category_data.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/theme/app_colors.dart';
@@ -39,6 +40,8 @@ class TransactionsListScreen extends ConsumerStatefulWidget {
 }
 
 class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
   int _allTabPeriodIndex = 2; // "This Month" default
   int _salesTabPeriodIndex = 2;
   int get _selectedPeriodIndex => _tabIndex == 0 ? _allTabPeriodIndex : _salesTabPeriodIndex;
@@ -63,7 +66,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
   final Set<String> _selectedIds = {};
   bool _shopifyBannerDismissed = false;
 
-  final _periods = const ['All', 'This Week', 'This Month', 'Last Month', 'Custom'];
+  List<String> get _periods => [l10n.all, l10n.periodThisWeek, l10n.periodThisMonth, l10n.periodLastMonth, l10n.periodCustom];
 
   final _scrollController = ScrollController();
 
@@ -122,7 +125,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           if (!mounted) return;
           if (!result.isSuccess && context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Shopify payment sync failed for order: ${result.error}'),
+              content: Text(l10n.shopifyPaymentSyncFailed(result.error ?? '')),
               backgroundColor: AppColors.danger,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -134,7 +137,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${toUpdate.length} sale${toUpdate.length != 1 ? 's' : ''} marked as paid'),
+        content: Text(l10n.nSalesMarkedPaid(toUpdate.length)),
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -152,14 +155,14 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Cancel Orders'),
-        content: Text('Cancel ${toUpdate.length} selected order${toUpdate.length != 1 ? 's' : ''}?\n\nThis will restore stock and create reversal accounting entries. This cannot be undone.'),
+        title: Text(l10n.cancelOrdersTitle),
+        content: Text(l10n.cancelOrdersBody(toUpdate.length)),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Go Back')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.goBack)),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-            child: const Text('Cancel Orders'),
+            child: Text(l10n.cancelOrdersTitle),
           ),
         ],
       ),
@@ -228,7 +231,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           if (!mounted) return;
           if (!result.isSuccess && context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Shopify cancel failed for order: ${result.error}'),
+              content: Text(l10n.shopifyCancelFailed(result.error ?? '')),
               backgroundColor: AppColors.danger,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -240,7 +243,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${toUpdate.length} order${toUpdate.length != 1 ? 's' : ''} cancelled (stock & accounting reverted)'),
+        content: Text(l10n.nOrdersCancelled(toUpdate.length)),
         backgroundColor: AppColors.danger,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -401,18 +404,22 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     final yesterday = today.subtract(const Duration(days: 1));
 
     // Hide sale-linked transactions from the list — they appear in the Sales tab.
-    // Also hide COGS and shipping (they appear as expandable children).
-    final displayList = _filteredTransactions
-        .where((t) => t.saleId == null)
-        .toList();
+    // But if the user navigated here with a category filter that targets sale
+    // categories (e.g. from P&L drill-down), show them so the list isn't empty.
+    const saleCategoryIds = {'cat_sales_revenue', 'cat_cogs', 'cat_shipping'};
+    final hasSaleCategoryFilter = _filter.selectedCategories.isNotEmpty &&
+        _filter.selectedCategories.any(saleCategoryIds.contains);
+    final displayList = hasSaleCategoryFilter
+        ? _filteredTransactions
+        : _filteredTransactions.where((t) => t.saleId == null).toList();
 
     for (final tx in displayList) {
       final txDate = DateTime(tx.dateTime.year, tx.dateTime.month, tx.dateTime.day);
       String label;
       if (txDate == today) {
-        label = 'Today — ${_formatMonthDay(tx.dateTime)}';
+        label = '${l10n.periodToday} — ${_formatMonthDay(tx.dateTime)}';
       } else if (txDate == yesterday) {
-        label = 'Yesterday — ${_formatMonthDay(tx.dateTime)}';
+        label = '${l10n.periodYesterday} — ${_formatMonthDay(tx.dateTime)}';
       } else {
         label = _formatMonthDay(tx.dateTime, includeYear: tx.dateTime.year != today.year);
       }
@@ -422,13 +429,9 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
   }
 
   String _formatMonthDay(DateTime dt, {bool includeYear = false}) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
     return includeYear
-        ? '${months[dt.month - 1]} ${dt.day}, ${dt.year}'
-        : '${months[dt.month - 1]} ${dt.day}';
+        ? DateFormat('MMM d, y', 'en').format(dt)
+        : DateFormat('MMM d', 'en').format(dt);
   }
 
   double get _totalIncome => roundMoney(
@@ -480,9 +483,9 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       final d = DateTime(s.date.year, s.date.month, s.date.day);
       String label;
       if (d == today) {
-        label = 'Today — ${_formatMonthDay(s.date)}';
+        label = '${l10n.periodToday} — ${_formatMonthDay(s.date)}';
       } else if (d == yesterday) {
-        label = 'Yesterday — ${_formatMonthDay(s.date)}';
+        label = '${l10n.periodYesterday} — ${_formatMonthDay(s.date)}';
       } else {
         label = _formatMonthDay(s.date);
       }
@@ -524,7 +527,8 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       context: context,
       delegate: TransactionSearchDelegate(
           transactions: _allTransactions,
-          currency: ref.read(appSettingsProvider).currency),
+          currency: ref.read(appSettingsProvider).currency,
+          searchHint: l10n.searchTransactions),
     );
   }
 
@@ -547,7 +551,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Transaction duplicated'),
+          content: Text(l10n.transactionDuplicated),
           backgroundColor: AppColors.primaryNavy,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -562,12 +566,12 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Delete Transaction', style: AppTypography.h3),
-        content: const Text('Are you sure you want to delete this transaction?'),
+        title: Text(l10n.deleteTransaction, style: AppTypography.h3),
+        content: Text(l10n.deleteTransactionConfirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () {
@@ -577,13 +581,13 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('Transaction deleted'),
+                    content: Text(l10n.transactionDeleted),
                     backgroundColor: AppColors.primaryNavy,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10)),
                     action: SnackBarAction(
-                      label: 'Undo',
+                      label: l10n.undoLabel,
                       textColor: AppColors.accentOrange,
                       onPressed: () {
                         ref
@@ -596,7 +600,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               }
             },
             style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Delete'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -704,9 +708,9 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
         ),
         child: Row(
           children: [
-            _buildTabItem('All Transactions', 0),
+            _buildTabItem(l10n.allTransactionsTab, 0),
             const SizedBox(width: 4),
-            _buildTabItem('Sales', 1),
+            _buildTabItem(l10n.salesTab, 1),
           ],
         ),
       ),
@@ -798,7 +802,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               child: Column(
                 children: [
                   Text(
-                    'Revenue',
+                    l10n.revenue,
                     style: AppTypography.caption.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w600,
@@ -823,7 +827,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               child: Column(
                 children: [
                   Text(
-                    'COGS',
+                    l10n.cogs,
                     style: AppTypography.caption.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w600,
@@ -848,7 +852,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               child: Column(
                 children: [
                   Text(
-                    'Gross Profit',
+                    l10n.grossProfit,
                     style: AppTypography.caption.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w600,
@@ -921,7 +925,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _selectedIds.isEmpty ? 'Select orders' : '${_selectedIds.length} Selected',
+                      _selectedIds.isEmpty ? l10n.selectOrders : l10n.nSelected(_selectedIds.length),
                       style: AppTypography.h3.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -930,7 +934,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
                     ),
                     if (_selectedIds.isNotEmpty)
                       Text(
-                        'Ready for bulk actions',
+                        l10n.readyForBulkActions,
                         style: AppTypography.captionSmall.copyWith(
                           color: Colors.white.withValues(alpha: 0.7),
                         ),
@@ -949,7 +953,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    allSelected ? 'Deselect All' : 'Select All',
+                    allSelected ? l10n.deselectAll : l10n.selectAll,
                     style: AppTypography.labelSmall.copyWith(
                       color: allSelected ? Colors.white : AppColors.primaryNavy,
                       fontWeight: FontWeight.w700,
@@ -978,7 +982,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           // Title
           Expanded(
             child: Text(
-              widget.pageTitle ?? 'Transactions',
+              widget.pageTitle ?? l10n.transactions,
               style: AppTypography.h1.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w800,
@@ -1184,7 +1188,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               child: Column(
                 children: [
                   Text(
-                    'Income',
+                    l10n.income,
                     style: AppTypography.caption.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w600,
@@ -1213,7 +1217,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               child: Column(
                 children: [
                   Text(
-                    'Expenses',
+                    l10n.expenses,
                     style: AppTypography.caption.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w600,
@@ -1413,11 +1417,11 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           children: [
             const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.danger),
             const SizedBox(height: 12),
-            Text('Failed to load sales', style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
+            Text(l10n.failedToLoadSales, style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => ref.invalidate(salesProvider),
-              child: const Text('Retry'),
+              child: Text(l10n.retry),
             ),
           ],
         ),
@@ -1436,17 +1440,17 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
 
       if (isGrowth && !shopifyActive) {
         shopifyBanner = _ShopifyBanner(
-          title: 'Connect your Shopify store',
-          subtitle: 'Sync orders, inventory & products automatically.',
-          actionLabel: 'Connect Shopify',
+          title: l10n.connectYourShopifyStore,
+          subtitle: l10n.syncOrdersInventoryProducts,
+          actionLabel: l10n.connectShopify,
           onAction: () => context.push(AppRoutes.shopifySetupWizard),
           onDismiss: () => setState(() => _shopifyBannerDismissed = true),
         );
       } else if (!isGrowth) {
         shopifyBanner = _ShopifyBanner(
-          title: 'Shopify Integration',
-          subtitle: 'Sync your Shopify store with Masari. Available on Growth Mode.',
-          actionLabel: 'Upgrade to Growth',
+          title: l10n.shopifyIntegration,
+          subtitle: l10n.shopifyIntegrationUpgradeDesc,
+          actionLabel: l10n.upgradeToGrowth,
           isUpgrade: true,
           onAction: () => context.push('/profile/subscription'),
           onDismiss: () => setState(() => _shopifyBannerDismissed = true),
@@ -1605,7 +1609,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            'No Transactions Found',
+            l10n.noTransactionsFound,
             style: AppTypography.h3.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -1613,7 +1617,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'Try adjusting your filters or period',
+            l10n.tryAdjustingFilters,
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textTertiary,
             ),
@@ -1676,7 +1680,9 @@ class _TransactionTile extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      transaction.title,
+                      transaction.title == category.name
+                          ? category.localizedName(AppLocalizations.of(context)!)
+                          : transaction.title,
                       style: AppTypography.labelLarge.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w700,
@@ -1698,7 +1704,7 @@ class _TransactionTile extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(50),
                       ),
                       child: Text(
-                        category.name,
+                        category.localizedName(AppLocalizations.of(context)!),
                         style: AppTypography.captionSmall.copyWith(
                           color: transaction.isIncome
                               ? AppColors.accentOrange
@@ -1851,7 +1857,7 @@ class _SwipeActionTileState extends State<_SwipeActionTile>
                 children: [
                   _actionButton(
                     icon: Icons.edit_rounded,
-                    label: 'Edit',
+                    label: AppLocalizations.of(context)!.edit,
                     color: AppColors.primaryNavy,
                     onTap: () {
                       _close();
@@ -1860,7 +1866,7 @@ class _SwipeActionTileState extends State<_SwipeActionTile>
                   ),
                   _actionButton(
                     icon: Icons.copy_rounded,
-                    label: 'Copy',
+                    label: AppLocalizations.of(context)!.copyAction,
                     color: const Color(0xFF6366F1),
                     onTap: () {
                       _close();
@@ -1869,7 +1875,7 @@ class _SwipeActionTileState extends State<_SwipeActionTile>
                   ),
                   _actionButton(
                     icon: Icons.delete_rounded,
-                    label: 'Delete',
+                    label: AppLocalizations.of(context)!.delete,
                     color: AppColors.danger,
                     onTap: () {
                       _close();
@@ -2006,7 +2012,7 @@ class _SalesBulkActionBar extends StatelessWidget {
                     const Icon(Icons.check_circle_rounded, size: 18, color: Colors.white),
                     const SizedBox(width: 6),
                     Text(
-                      'Mark as Paid',
+                      AppLocalizations.of(context)!.markAsPaid,
                       style: AppTypography.labelSmall.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -2037,7 +2043,7 @@ class _SalesBulkActionBar extends StatelessWidget {
                     const Icon(Icons.cancel_rounded, size: 18, color: Colors.white),
                     const SizedBox(width: 6),
                     Text(
-                      'Cancel',
+                      AppLocalizations.of(context)!.cancel,
                       style: AppTypography.labelSmall.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -2141,9 +2147,9 @@ class _ShopifyBanner extends StatelessWidget {
                                   color: AppColors.accentOrange.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: const Text(
-                                  'GROWTH',
-                                  style: TextStyle(
+                                child: Text(
+                                  AppLocalizations.of(context)!.growthBadge,
+                                  style: const TextStyle(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w800,
                                     color: AppColors.accentOrange,
@@ -2280,7 +2286,9 @@ class _SaleGroupTile extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          revenueTransaction.title,
+                          revenueTransaction.title == category.name
+                              ? category.localizedName(AppLocalizations.of(context)!)
+                              : revenueTransaction.title,
                           style: AppTypography.labelLarge.copyWith(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w700,
@@ -2297,7 +2305,7 @@ class _SaleGroupTile extends ConsumerWidget {
                             borderRadius: BorderRadius.circular(50),
                           ),
                           child: Text(
-                            category.name,
+                            category.localizedName(AppLocalizations.of(context)!),
                             style: AppTypography.captionSmall.copyWith(
                               color: AppColors.accentOrange,
                               fontWeight: FontWeight.w700,
@@ -2414,7 +2422,7 @@ class _SaleChildRow extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                category.name,
+                category.localizedName(AppLocalizations.of(context)!),
                 style: AppTypography.bodySmall.copyWith(
                   color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
@@ -2451,14 +2459,14 @@ Color _fulfillmentColor(FulfillmentStatus s) {
   }
 }
 
-String _fulfillmentLabel(FulfillmentStatus s) {
+String _fulfillmentLabel(FulfillmentStatus s, AppLocalizations l10n) {
   switch (s) {
     case FulfillmentStatus.fulfilled:
-      return 'Fulfilled';
+      return l10n.fulfilled;
     case FulfillmentStatus.partial:
-      return 'Partial Ship';
+      return l10n.fulfillmentPartialShip;
     case FulfillmentStatus.unfulfilled:
-      return 'Unfulfilled';
+      return l10n.unfulfilled;
   }
 }
 
@@ -2497,19 +2505,21 @@ class _SaleTileWithExpand extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCancelled = sale.orderStatus == OrderStatus.cancelled;
 
+    final l10n = AppLocalizations.of(context)!;
+
     String statusLabel;
     switch (sale.paymentStatus) {
       case PaymentStatus.paid:
-        statusLabel = 'Paid';
+        statusLabel = l10n.paid;
         break;
       case PaymentStatus.refunded:
-        statusLabel = 'Refunded';
+        statusLabel = l10n.refunded;
         break;
       case PaymentStatus.partial:
-        statusLabel = 'Partial';
+        statusLabel = l10n.partial;
         break;
       case PaymentStatus.unpaid:
-        statusLabel = 'Unpaid';
+        statusLabel = l10n.unpaid;
         break;
     }
 
@@ -2533,11 +2543,11 @@ class _SaleTileWithExpand extends StatelessWidget {
       subtitleParts.add(sale.customerName!);
     }
     final itemCount = sale.items.length;
-    subtitleParts.add('$itemCount ${itemCount == 1 ? 'item' : 'items'}');
+    subtitleParts.add(l10n.nItemsCount(itemCount));
     subtitleParts.add(DateFormat('h:mm a').format(sale.date));
 
     // Title text
-    final titleText = sale.displayOrderTitle;
+    final titleText = sale.localizedDisplayOrderTitle(l10n);
 
     return GestureDetector(
       onTap: onTap,
@@ -2669,19 +2679,19 @@ class _SaleTileWithExpand extends StatelessWidget {
                           children: [
                             if (sale.isCompleted)
                               _StatusBadge(
-                                label: 'Completed',
+                                label: l10n.completed,
                                 variant: _BadgeVariant.success,
                               )
                             else ...[
                               if (isCancelled)
                                 _StatusBadge(
-                                  label: 'Cancelled',
+                                  label: l10n.cancelled,
                                   variant: _BadgeVariant.critical,
                                 )
                               else ...[
                                 // Fulfillment badge
                                 _StatusBadge(
-                                  label: _fulfillmentLabel(sale.fulfillmentStatus),
+                                  label: _fulfillmentLabel(sale.fulfillmentStatus, l10n),
                                   variant: sale.fulfillmentStatus == FulfillmentStatus.fulfilled
                                       ? _BadgeVariant.neutral
                                       : sale.fulfillmentStatus == FulfillmentStatus.partial
@@ -2691,9 +2701,9 @@ class _SaleTileWithExpand extends StatelessWidget {
                                 // Payment badge
                                 _StatusBadge(
                                   label: sale.paymentStatus == PaymentStatus.unpaid
-                                      ? 'Payment pending'
+                                      ? l10n.paymentPending
                                       : sale.paymentStatus == PaymentStatus.refunded
-                                          ? 'Refunded'
+                                          ? l10n.refunded
                                           : statusLabel,
                                   variant: sale.paymentStatus == PaymentStatus.paid
                                       ? _BadgeVariant.success

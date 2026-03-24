@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../shared/models/transaction_model.dart';
@@ -77,7 +78,7 @@ class TransactionDetailScreen extends ConsumerWidget {
               icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
             ),
             title: Text(
-              'Transaction Detail',
+              AppLocalizations.of(context)!.transactionDetail,
               style: AppTypography.h3.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w800,
@@ -97,6 +98,8 @@ class TransactionDetailScreen extends ConsumerWidget {
     final formattedAmount =
         '${isIncome ? '+' : '-'}$currency ${NumberFormat('#,##0.00', 'en').format(displayTransaction.amount.abs())}';
 
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -108,7 +111,7 @@ class TransactionDetailScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
         ),
         title: Text(
-          'Transaction Detail',
+          l10n.transactionDetail,
           style: AppTypography.h3.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w800,
@@ -133,16 +136,16 @@ class TransactionDetailScreen extends ConsumerWidget {
                   );
                   ref.read(transactionsProvider.notifier).addTransaction(dup);
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction duplicated')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.transactionDuplicated)));
                   }
                 case 'delete':
                   _showDeleteDialog(context, displayTransaction, ref);
               }
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Edit')])),
-              const PopupMenuItem(value: 'duplicate', child: Row(children: [Icon(Icons.content_copy_rounded, size: 18), SizedBox(width: 8), Text('Duplicate')])),
-              PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.danger), SizedBox(width: 8), Text('Delete', style: TextStyle(color: AppColors.danger))])),
+              PopupMenuItem(value: 'edit', child: Row(children: [const Icon(Icons.edit_outlined, size: 18), const SizedBox(width: 8), Text(l10n.edit)])),
+              PopupMenuItem(value: 'duplicate', child: Row(children: [const Icon(Icons.content_copy_rounded, size: 18), const SizedBox(width: 8), Text(l10n.duplicateAction)])),
+              PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.danger), const SizedBox(width: 8), Text(l10n.delete, style: const TextStyle(color: AppColors.danger))])),
             ],
           ),
         ],
@@ -160,7 +163,7 @@ class TransactionDetailScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // ─── Detail Info Rows ───
-            _buildInfoCard(displayTransaction),
+            _buildInfoCard(context, displayTransaction),
 
             const SizedBox(height: 20),
 
@@ -225,7 +228,7 @@ class TransactionDetailScreen extends ConsumerWidget {
           final badgeColor = isCancelled ? AppColors.danger : AppColors.success;
           final bgColor = isCancelled ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4);
           final borderColor = isCancelled ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0);
-          final label = isCancelled ? 'CANCELLED' : 'COMPLETED';
+          final label = isCancelled ? AppLocalizations.of(context)!.cancelledStatus : AppLocalizations.of(context)!.completedStatus;
           final icon = isCancelled ? Icons.cancel_rounded : Icons.check_circle_rounded;
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -255,7 +258,8 @@ class TransactionDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildInfoCard(Transaction currentTx) {
+  Widget _buildInfoCard(BuildContext context, Transaction currentTx) {
+    final l10n = AppLocalizations.of(context)!;
     final hasNote = currentTx.note != null && currentTx.note!.isNotEmpty;
     return Container(
       decoration: BoxDecoration(
@@ -266,13 +270,13 @@ class TransactionDetailScreen extends ConsumerWidget {
       child: Column(
         children: [
           _infoRow(
-            'Date & Time',
+            l10n.dateAndTime,
             currentTx.formattedTime,
             isLast: false,
           ),
           _infoRow(
-            'Category',
-            CategoryData.findById(currentTx.categoryId).name,
+            l10n.category,
+            CategoryData.findById(currentTx.categoryId).localizedName(AppLocalizations.of(context)!),
             isLast: false,
             leadingWidget: Container(
               width: 8,
@@ -284,7 +288,7 @@ class TransactionDetailScreen extends ConsumerWidget {
             ),
           ),
           _infoRow(
-            'Payment Method',
+            l10n.paymentMethodLabel,
             currentTx.paymentMethod,
             isLast: false,
             leadingWidget: Icon(Icons.payments_rounded,
@@ -292,12 +296,12 @@ class TransactionDetailScreen extends ConsumerWidget {
           ),
           if (hasNote)
             _infoRow(
-              'Note',
+              l10n.noteLabel,
               currentTx.note!,
               isLast: false,
             ),
           _infoRow(
-            'Transaction ID',
+            l10n.transactionId,
             '#${currentTx.id}',
             isLast: true,
             isMono: true,
@@ -370,14 +374,15 @@ class TransactionDetailScreen extends ConsumerWidget {
   }
 
   void _showDeleteDialog(BuildContext context, Transaction transaction, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Delete Transaction', style: AppTypography.h3),
-        content: const Text('Are you sure you want to delete this transaction?'),
+        title: Text(l10n.deleteTransaction, style: AppTypography.h3),
+        content: Text(l10n.deleteTransactionConfirm),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
           FilledButton(
             onPressed: () {
               // Keep a copy for undo
@@ -390,12 +395,12 @@ class TransactionDetailScreen extends ConsumerWidget {
               });
               messenger.showSnackBar(
                 SnackBar(
-                  content: const Text('Transaction deleted'),
+                  content: Text(l10n.transactionDeleted),
                   backgroundColor: AppColors.primaryNavy,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   action: SnackBarAction(
-                    label: 'Undo',
+                    label: l10n.undoLabel,
                     textColor: AppColors.accentOrange,
                     onPressed: () {
                       ref.read(transactionsProvider.notifier).addTransaction(deleted);
@@ -405,7 +410,7 @@ class TransactionDetailScreen extends ConsumerWidget {
               );
             },
             style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Delete'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -413,6 +418,7 @@ class TransactionDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildBottomActions(BuildContext context, Transaction currentTx, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
         // Duplicate button
@@ -428,10 +434,10 @@ class TransactionDetailScreen extends ConsumerWidget {
                 saleId: null,
               );
               ref.read(transactionsProvider.notifier).addTransaction(dup);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction duplicated')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.transactionDuplicated)));
             },
             icon: const Icon(Icons.content_copy_rounded, size: 18),
-            label: const Text('Duplicate Transaction'),
+            label: Text(l10n.duplicateTransaction),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.textSecondary,
               side: const BorderSide(color: AppColors.borderLight),
@@ -448,7 +454,7 @@ class TransactionDetailScreen extends ConsumerWidget {
         TextButton(
           onPressed: () => _showDeleteDialog(context, currentTx, ref),
           child: Text(
-            'Delete Transaction',
+            l10n.deleteTransaction,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.danger,
             ),

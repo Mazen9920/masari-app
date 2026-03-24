@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
@@ -29,6 +30,8 @@ class AddTransactionScreen extends ConsumerStatefulWidget {
 }
 
 class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
   late bool _isExpense = widget.initialIsExpense;
   String _amount = '0';
   int _selectedPaymentIndex = 0;
@@ -127,6 +130,16 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     return parsed.toStringAsFixed(parsed == parsed.roundToDouble() ? 0 : 2);
   }
 
+  String _localizedPaymentMethod(String name) {
+    switch (name) {
+      case 'Cash': return l10n.paymentCash;
+      case 'Card': return l10n.paymentCard;
+      case 'Bank': return l10n.paymentBank;
+      case 'Wallet': return l10n.paymentWallet;
+      default: return name;
+    }
+  }
+
   /// Builds and saves the transaction. Returns true on success.
   Future<bool> _saveTransaction() async {
     HapticFeedback.mediumImpact();
@@ -135,7 +148,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final amount = double.tryParse(_amount) ?? 0;
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid amount')),
+        SnackBar(content: Text(l10n.pleaseEnterValidAmount)),
       );
       return false;
     }
@@ -207,7 +220,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     _customCategoryController.clear();
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saved! Ready for next transaction.')),
+      SnackBar(content: Text(l10n.savedReadyForNext)),
     );
   }
 
@@ -280,8 +293,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           ),
           Text(
             widget.hideToggle
-                ? (_isExpense ? 'New Expense' : 'New Other Income')
-                : 'New Transaction',
+                ? (_isExpense ? l10n.newExpense : l10n.newOtherIncome)
+                : l10n.newTransaction,
             style: AppTypography.h3.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -351,7 +364,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                     },
                     child: Center(
                       child: Text(
-                        'Expense',
+                        l10n.expense,
                         style: AppTypography.labelMedium.copyWith(
                           color: _isExpense ? Colors.white : AppColors.textTertiary,
                           fontWeight: FontWeight.w700,
@@ -374,7 +387,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                     },
                     child: Center(
                       child: Text(
-                        'Income',
+                        l10n.income,
                         style: AppTypography.labelMedium.copyWith(
                           color: !_isExpense ? Colors.white : AppColors.textTertiary,
                           fontWeight: FontWeight.w700,
@@ -400,7 +413,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       child: Column(
         children: [
           Text(
-            'AMOUNT',
+            l10n.amountLabel,
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textTertiary,
               letterSpacing: 1.5,
@@ -548,7 +561,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             child: Row(
               children: [
                 Text(
-                  'MOST USED & RECENT',
+                  l10n.mostUsedAndRecent,
                   style: AppTypography.captionSmall.copyWith(
                     color: AppColors.accentOrange,
                     fontWeight: FontWeight.w800,
@@ -593,7 +606,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          cat.name,
+                          cat.localizedName(AppLocalizations.of(context)!),
                           style: AppTypography.captionSmall.copyWith(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w700,
@@ -635,7 +648,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ─── Category Grid ───
-          _sectionHeader('Category', showSeeAll: false),
+          _sectionHeader(l10n.category, showSeeAll: false),
           const SizedBox(height: 12),
           _buildCategorySection(),
 
@@ -647,7 +660,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           const SizedBox(height: 20),
 
           // ─── Payment Method ───
-          _sectionHeader('Payment Method'),
+          _sectionHeader(l10n.paymentMethodLabel),
           const SizedBox(height: 10),
           _buildPaymentMethods(),
 
@@ -683,10 +696,10 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         if (showSeeAll)
           GestureDetector(
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('All categories view coming soon')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.allCategoriesComingSoon)));
             },
             child: Text(
-              'See All',
+              l10n.seeAllLabel,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.accentOrange,
                 fontWeight: FontWeight.w700,
@@ -726,7 +739,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                    child: const Icon(Icons.grid_view_rounded, size: 20, color: AppColors.textTertiary)
                  ),
                  const SizedBox(height: 6),
-                 const Text('More', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.textSecondary))
+                 Text(l10n.moreLabel, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.textSecondary))
                ]
              )
            );
@@ -783,7 +796,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  cat.name,
+                  cat.localizedName(AppLocalizations.of(context)!),
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: isSelected && !_isCustomCategory ? FontWeight.w700 : FontWeight.w500,
@@ -811,7 +824,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           TextField(
             controller: _customCategoryController,
             decoration: InputDecoration(
-               hintText: 'Enter custom category...',
+               hintText: l10n.enterCustomCategory,
                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                suffixIcon: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() { _isCustomCategory = false; _customCategoryController.clear(); })),
@@ -824,9 +837,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         else
           GestureDetector(
             onTap: () => setState(() => _isCustomCategory = true),
-            child: const Padding(
-              padding: EdgeInsets.only(left: 4),
-              child: Text('+ Add Custom Category', style: TextStyle(color: AppColors.accentOrange, fontWeight: FontWeight.w600, fontSize: 13)),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(l10n.addCustomCategory, style: const TextStyle(color: AppColors.accentOrange, fontWeight: FontWeight.w600, fontSize: 13)),
             ),
           ),
       ],
@@ -861,7 +874,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
             child: TextField(
               controller: _payeeController,
               decoration: InputDecoration(
-                hintText: selectedSupplier?.name ?? 'Payee Name (Optional)',
+                hintText: selectedSupplier?.name ?? l10n.payeeNameOptional,
                 hintStyle: AppTypography.labelMedium.copyWith(
                   color: AppColors.textTertiary,
                 ),
@@ -926,7 +939,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Select Payee', style: AppTypography.h3),
+              Text(l10n.selectPayee, style: AppTypography.h3),
               IconButton(
                 icon: const Icon(Icons.close_rounded),
                 onPressed: () => context.safePop(),
@@ -996,7 +1009,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    method.name,
+                    _localizedPaymentMethod(method.name),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
@@ -1017,7 +1030,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   Widget _buildDateField() {
     final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
     final label = isToday
-        ? 'Today, ${DateFormat('MMM d').format(_selectedDate)}'
+        ? '${l10n.periodToday}, ${DateFormat('MMM d').format(_selectedDate)}'
         : DateFormat('EEE, MMM d, y').format(_selectedDate);
     return GestureDetector(
       onTap: () async {
@@ -1070,7 +1083,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         decoration: InputDecoration(
           icon: const Icon(Icons.edit_note_rounded,
               size: 22, color: AppColors.textTertiary),
-          hintText: 'Add a note (optional)',
+          hintText: l10n.addNoteOptional,
           hintStyle: AppTypography.bodyMedium.copyWith(
             color: AppColors.textTertiary,
           ),
@@ -1122,7 +1135,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        _isExpense ? 'Expense' : 'Income',
+                        _isExpense ? l10n.expense : l10n.income,
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textSecondary,
                         ),
@@ -1137,7 +1150,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                     ],
                   ),
                   Text(
-                    '${cat.name} · Today',
+                    '${cat.localizedName(AppLocalizations.of(context)!)} · ${l10n.periodToday}',
                     style: AppTypography.captionSmall.copyWith(
                       color: AppColors.textSecondary,
                     ),
@@ -1152,7 +1165,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               child: Column(
                 children: [
                   MasariPrimaryButton(
-                    text: 'Save Transaction',
+                    text: l10n.saveTransaction,
                     icon: Icons.check_rounded,
                     onPressed: _amount != '0' ? _onSave : null,
                   ),
@@ -1162,7 +1175,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                         ? _onSaveAndAnother
                         : null,
                     child: Text(
-                      'Save & Add Another',
+                      l10n.saveAndAddAnother,
                       style: AppTypography.captionSmall.copyWith(
                         color: AppColors.textTertiary,
                         fontWeight: FontWeight.w600,

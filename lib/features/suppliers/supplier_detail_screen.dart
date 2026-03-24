@@ -10,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/supplier_model.dart';
 import '../../shared/models/purchase_model.dart';
 import '../../shared/models/payment_model.dart';
@@ -23,6 +24,7 @@ class SupplierDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     // Watch for live updates
     final suppliers = ref.watch(suppliersProvider).value ?? [];
     final live = suppliers.firstWhere(
@@ -113,11 +115,11 @@ class SupplierDetailScreen extends ConsumerWidget {
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                      SizedBox(width: 6),
+                    children: [
+                      const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                      const SizedBox(width: 6),
                       Text(
-                        'Purchase',
+                        l10n.purchaseButton,
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -151,11 +153,11 @@ class SupplierDetailScreen extends ConsumerWidget {
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.inventory_2_rounded, color: Colors.white, size: 20),
-                      SizedBox(width: 6),
+                    children: [
+                      const Icon(Icons.inventory_2_rounded, color: Colors.white, size: 20),
+                      const SizedBox(width: 6),
                       Text(
-                        'Receive Goods',
+                        l10n.receiveGoodsButton,
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -174,6 +176,7 @@ class SupplierDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildHeader(BuildContext context, Supplier live) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
       decoration: BoxDecoration(
@@ -193,7 +196,7 @@ class SupplierDetailScreen extends ConsumerWidget {
           Expanded(
             child: Center(
               child: Text(
-                'Supplier Detail',
+                l10n.supplierDetailTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -283,7 +286,7 @@ class _ProfileSection extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Category: ${supplier.category}',
+          AppLocalizations.of(context)!.categoryColon(supplier.category),
           style: TextStyle(
             color: AppColors.textTertiary,
             fontSize: 13,
@@ -353,7 +356,7 @@ class _BalanceCard extends ConsumerWidget {
             Column(
               children: [
                 Text(
-                  'TOTAL DUE',
+                  AppLocalizations.of(context)!.totalDue,
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 11,
@@ -406,13 +409,14 @@ class _ContactActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           _contactButton(
             icon: Icons.call_rounded,
-            label: 'Call',
+            label: l10n.callAction,
             color: const Color(0xFF3498DB),
             onTap: () {
               HapticFeedback.lightImpact();
@@ -420,7 +424,7 @@ class _ContactActions extends StatelessWidget {
               if (phone.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('No phone number available'),
+                    content: Text(l10n.noPhoneNumberAvailable),
                     backgroundColor: AppColors.warning,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -428,13 +432,13 @@ class _ContactActions extends StatelessWidget {
                 );
                 return;
               }
-              _launch(context, Uri.parse('tel:$phone'), 'Cannot make a call from this device');
+              _launch(context, Uri.parse('tel:$phone'), l10n.cannotMakeCall);
             },
           ),
           const SizedBox(width: 12),
           _contactButton(
             icon: Icons.chat_rounded,
-            label: 'WhatsApp',
+            label: l10n.whatsAppAction,
             color: const Color(0xFF22C55E),
             onTap: () {
               HapticFeedback.lightImpact();
@@ -442,7 +446,7 @@ class _ContactActions extends StatelessWidget {
               if (phone.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('No phone number available'),
+                    content: Text(l10n.noPhoneNumberAvailable),
                     backgroundColor: AppColors.warning,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -451,13 +455,13 @@ class _ContactActions extends StatelessWidget {
                 return;
               }
               final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-              _launch(context, Uri.parse('https://wa.me/$cleaned'), 'Cannot open WhatsApp');
+              _launch(context, Uri.parse('https://wa.me/$cleaned'), l10n.cannotOpenWhatsApp);
             },
           ),
           const SizedBox(width: 12),
           _contactButton(
             icon: Icons.email_rounded,
-            label: 'Email',
+            label: l10n.emailAction,
             color: const Color(0xFF3498DB),
             onTap: () {
               HapticFeedback.lightImpact();
@@ -465,7 +469,7 @@ class _ContactActions extends StatelessWidget {
               if (email.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('No email address available'),
+                    content: Text(l10n.noEmailAvailable),
                     backgroundColor: AppColors.warning,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -476,7 +480,7 @@ class _ContactActions extends StatelessWidget {
               if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('Invalid email address'),
+                    content: Text(l10n.invalidEmailAddress),
                     backgroundColor: AppColors.warning,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -484,7 +488,7 @@ class _ContactActions extends StatelessWidget {
                 );
                 return;
               }
-              _launch(context, Uri.parse('mailto:$email'), 'Cannot open email app');
+              _launch(context, Uri.parse('mailto:$email'), l10n.cannotOpenEmailApp);
             },
           ),
         ],
@@ -557,6 +561,7 @@ class _StatsRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(currencyProvider);
     final purchases = ref.watch(purchasesProvider).value ?? [];
     final payments = ref.watch(paymentsProvider).value ?? [];
@@ -596,7 +601,7 @@ class _StatsRow extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Total Purchased',
+                        l10n.totalPurchased,
                         style: TextStyle(
                           color: AppColors.textTertiary,
                           fontSize: 11,
@@ -619,7 +624,7 @@ class _StatsRow extends ConsumerWidget {
               ),
               const SizedBox(width: 12),
               _statCard(
-                  'Last Purchase', dateFmt.format(supplier.lastTransaction)),
+                  l10n.lastPurchaseLabel, dateFmt.format(supplier.lastTransaction)),
             ],
           ),
           const SizedBox(height: 10),
@@ -652,7 +657,7 @@ class _StatsRow extends ConsumerWidget {
                               size: 14, color: const Color(0xFF16A34A)),
                           const SizedBox(width: 4),
                           Text(
-                            'Total Payments',
+                            l10n.totalPaymentsLabel,
                             style: TextStyle(
                               color: AppColors.textTertiary,
                               fontSize: 11,
@@ -677,7 +682,7 @@ class _StatsRow extends ConsumerWidget {
               ),
               const SizedBox(width: 12),
               _statCard(
-                '${supplierPayments.length} Payment${supplierPayments.length == 1 ? '' : 's'}',
+                l10n.paymentCount(supplierPayments.length),
                 supplierPayments.isNotEmpty
                     ? dateFmt.format(supplierPayments.first.date)
                     : '—',
@@ -713,7 +718,7 @@ class _StatsRow extends ConsumerWidget {
                               size: 14, color: AppColors.shopifyPurple),
                           const SizedBox(width: 4),
                           Text(
-                            'Goods Received',
+                            l10n.goodsReceivedLabel,
                             style: TextStyle(
                               color: AppColors.textTertiary,
                               fontSize: 11,
@@ -738,7 +743,7 @@ class _StatsRow extends ConsumerWidget {
               ),
               const SizedBox(width: 12),
               _statCard(
-                '${supplierReceipts.length} Receipt${supplierReceipts.length == 1 ? '' : 's'}',
+                l10n.receiptCountLabel(supplierReceipts.length),
                 supplierReceipts.isNotEmpty
                     ? dateFmt.format(supplierReceipts.first.date)
                     : '—',
@@ -809,6 +814,7 @@ class _RecentActivity extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(currencyProvider);
     final allPurchases = ref.watch(purchasesProvider).value ?? [];
     final allPayments = ref.watch(paymentsProvider).value ?? [];
@@ -850,7 +856,7 @@ class _RecentActivity extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 10),
             child: Text(
-              'Recent Activity',
+              l10n.recentActivity,
               style: AppTypography.h2.copyWith(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w700,
@@ -875,7 +881,7 @@ class _RecentActivity extends ConsumerWidget {
                       color: AppColors.textTertiary, size: 36),
                   const SizedBox(height: 10),
                   Text(
-                    'No activity yet',
+                    l10n.noActivityYet,
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
@@ -884,7 +890,7 @@ class _RecentActivity extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Record a purchase, payment, or receive goods to get started.',
+                    l10n.noActivityHelp,
                     style: TextStyle(
                       color: AppColors.textTertiary,
                       fontSize: 12,
@@ -936,6 +942,7 @@ class _RecentActivity extends ConsumerWidget {
   }
 
   Widget _buildPurchaseRow(BuildContext context, Purchase p, String currency) {
+    final l10n = AppLocalizations.of(context)!;
     final statusColors = _statusColors(p.paymentStatus);
     return GestureDetector(
       onTap: () {
@@ -964,8 +971,8 @@ class _RecentActivity extends ConsumerWidget {
                 children: [
                   Text(
                     p.referenceNo.isNotEmpty
-                        ? 'Purchase #${p.referenceNo}'
-                        : 'Purchase — ${p.items.length} item${p.items.length == 1 ? '' : 's'}',
+                        ? l10n.purchaseReference(p.referenceNo)
+                        : l10n.purchaseItemCount(p.items.length),
                     style: TextStyle(
                       color: AppColors.primaryNavy,
                       fontWeight: FontWeight.w600,
@@ -1002,7 +1009,7 @@ class _RecentActivity extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    p.statusLabel,
+                    p.localizedStatusLabel(l10n),
                     style: TextStyle(
                       color: statusColors.$2,
                       fontSize: 9,
@@ -1022,6 +1029,7 @@ class _RecentActivity extends ConsumerWidget {
   }
 
   Widget _buildPaymentRow(BuildContext context, Payment p, String currency) {
+    final l10n = AppLocalizations.of(context)!;
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
@@ -1048,7 +1056,7 @@ class _RecentActivity extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Payment — ${p.method}',
+                    l10n.paymentMethodDash(p.method),
                     style: TextStyle(
                       color: AppColors.primaryNavy,
                       fontWeight: FontWeight.w600,
@@ -1084,8 +1092,8 @@ class _RecentActivity extends ConsumerWidget {
                     color: AppColors.badgeBgPositive,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text(
-                    'PAID',
+                  child: Text(
+                    l10n.paidBadge,
                     style: TextStyle(
                       color: Color(0xFF166534),
                       fontSize: 9,
@@ -1117,6 +1125,7 @@ class _RecentActivity extends ConsumerWidget {
 
   Widget _buildReceiptRow(
       BuildContext context, GoodsReceipt r, String currency, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final receiptStatusColors = _receiptStatusColors(r.status);
     final totalItems =
         r.items.fold<double>(0, (s, i) => s + i.receivedQty);
@@ -1149,7 +1158,7 @@ class _RecentActivity extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Received ${totalItems.toInt()} item${totalItems.toInt() == 1 ? '' : 's'}',
+                    l10n.receivedItemCount(totalItems.toInt()),
                     style: TextStyle(
                       color: AppColors.primaryNavy,
                       fontWeight: FontWeight.w600,
@@ -1189,7 +1198,7 @@ class _RecentActivity extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    r.statusLabel.toUpperCase(),
+                    r.localizedStatusLabel(l10n).toUpperCase(),
                     style: TextStyle(
                       color: receiptStatusColors.$2,
                       fontSize: 9,
@@ -1217,14 +1226,16 @@ class _RecentActivity extends ConsumerWidget {
                   _confirmDeleteReceipt(context, r, ref, currency);
                 }
               },
-              itemBuilder: (_) => const [
+              itemBuilder: (ctx2) {
+                final l10n2 = AppLocalizations.of(ctx2)!;
+                return [
                 PopupMenuItem(
                     value: 'details',
                     child: Row(children: [
                       Icon(Icons.visibility_rounded,
                           size: 18, color: AppColors.shopifyPurple),
                       SizedBox(width: 8),
-                      Text('View Details'),
+                      Text(l10n2.viewDetailsAction),
                     ])),
                 PopupMenuItem(
                     value: 'edit',
@@ -1232,7 +1243,7 @@ class _RecentActivity extends ConsumerWidget {
                       Icon(Icons.edit_rounded,
                           size: 18, color: Color(0xFFEA580C)),
                       SizedBox(width: 8),
-                      Text('Edit Receipt'),
+                      Text(l10n2.editReceipt),
                     ])),
                 PopupMenuItem(
                     value: 'delete',
@@ -1240,10 +1251,11 @@ class _RecentActivity extends ConsumerWidget {
                       Icon(Icons.delete_rounded,
                           size: 18, color: AppColors.badgeTextNegative),
                       SizedBox(width: 8),
-                      Text('Delete Receipt',
+                      Text(l10n2.deleteReceipt,
                           style: TextStyle(color: AppColors.badgeTextNegative)),
                     ])),
-              ],
+              ];
+              },
             ),
           ],
         ),
@@ -1256,17 +1268,19 @@ class _RecentActivity extends ConsumerWidget {
     HapticFeedback.heavyImpact();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx)!;
+        return AlertDialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Receipt'),
-        content: const Text(
-          'This will delete the receipt and reverse the inventory stock adjustment. Continue?',
+        title: Text(l10n.deleteReceipt),
+        content: Text(
+          l10n.deleteReceiptConfirmation,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel',
+            child: Text(l10n.cancel,
                 style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
@@ -1332,18 +1346,19 @@ class _RecentActivity extends ConsumerWidget {
                   .removeReceipt(r.id);
 
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: const Text('Receipt deleted'),
+                content: Text(l10n.receiptDeleted),
                 backgroundColor: AppColors.danger,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ));
             },
-            child: const Text('Delete',
+            child: Text(l10n.delete,
                 style: TextStyle(color: AppColors.badgeTextNegative)),
           ),
         ],
-      ),
+      );
+      },
     );
   }
 

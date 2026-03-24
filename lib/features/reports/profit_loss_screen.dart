@@ -37,6 +37,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     label: DateFormat('MMMM yyyy').format(DateTime.now()),
   );
   bool _showTrend = false;
+  bool _sharing = false;
 
   @override
   void initState() {
@@ -142,10 +143,11 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
       int i = 0;
       final items = topEntries.map((e) {
         final color = palette[i++ % palette.length];
-        String catName = CategoryData.findById(e.key).name;
+        String catName = CategoryData.findById(e.key).localizedName(AppLocalizations.of(context)!);
         
         return _BreakdownItem(
           label: catName,
+          categoryId: e.key,
           amount: e.value,
           color: color,
           percentage: total > 0 ? e.value / total : 0,
@@ -154,8 +156,10 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
       // Add "Other" bucket if there are more than 5 categories
       if (entries.length > 5) {
         final otherTotal = entries.skip(5).fold(0.0, (sum, e) => sum + e.value);
+        final otherCatIds = entries.skip(5).map((e) => e.key).toSet();
         items.add(_BreakdownItem(
           label: l10n.other,
+          categoryId: otherCatIds.join(','),
           amount: otherTotal,
           color: const Color(0xFF6B7280),
           percentage: total > 0 ? otherTotal / total : 0,
@@ -1073,7 +1077,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
                 child: InkWell(
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    _navigateToCategoryTransactions(item.label);
+                    _navigateToCategoryTransactions(item.label, item.categoryId);
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
@@ -1124,18 +1128,19 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     );
   }
 
-  void _navigateToCategoryTransactions(String category) {
-    // Construct filter for selected category
+  void _navigateToCategoryTransactions(String displayName, String categoryId) {
+    // categoryId may be comma-separated for the "Other" bucket
+    final ids = categoryId.split(',').toSet();
     final filter = TransactionFilter(
         type: TransactionType.all,
-        amountRange: const RangeValues(0, 1000000), // Wide range
-        selectedCategories: {category},
+        amountRange: const RangeValues(0, 1000000),
+        selectedCategories: ids,
     );
 
     context.pushNamed(
       'TransactionsListScreen',
       extra: {
-        'pageTitle': '$category Transactions',
+        'pageTitle': '$displayName Transactions',
         'showBackButton': true,
         'initialFilter': filter,
       },
@@ -1192,12 +1197,13 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
   }
 
   Widget _buildSharePill() {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: ElevatedButton.icon(
-        onPressed: () async {
+        onPressed: _sharing ? null : () async {
           HapticFeedback.lightImpact();
+          setState(() => _sharing = true);
           final origin = ShareService.originFrom(context);
-          final l10n = AppLocalizations.of(context)!;
           final reportSvc = ref.read(reportServiceProvider);
           final shareSvc = ref.read(shareServiceProvider);
           final settings = ref.read(appSettingsProvider);
@@ -1220,15 +1226,19 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(AppLocalizations.of(context)!.somethingWentWrong),
+                  content: Text(l10n.somethingWentWrong),
                   backgroundColor: Colors.red,
                 ),
               );
             }
+          } finally {
+            if (mounted) setState(() => _sharing = false);
           }
         },
-        icon: const Icon(Icons.ios_share_rounded, size: 16),
-        label: Text(AppLocalizations.of(context)!.shareReport, style: const TextStyle(fontSize: 13)),
+        icon: _sharing
+            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.ios_share_rounded, size: 16),
+        label: Text(_sharing ? l10n.preparingReport : l10n.shareReport, style: const TextStyle(fontSize: 13)),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primaryNavy,
           foregroundColor: Colors.white,
@@ -1251,12 +1261,14 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
 
 class _BreakdownItem {
   final String label;
+  final String categoryId;
   final double amount;
   final Color color;
   final double percentage;
 
   _BreakdownItem({
     required this.label,
+    required this.categoryId,
     required this.amount,
     required this.color,
     required this.percentage,

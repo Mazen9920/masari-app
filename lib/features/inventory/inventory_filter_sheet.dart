@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Result returned from the filter sheet
 class InventoryFilterResult {
@@ -60,6 +61,7 @@ class _InventoryFilterSheet extends StatefulWidget {
 }
 
 class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   int _sortIndex = 0;
   final Set<String> _statusFilters = {};
   final Set<String> _categories = {};
@@ -161,7 +163,7 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Filter & Sort',
+                l10n.filterAndSort,
                 style: AppTypography.h3.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w800,
@@ -190,10 +192,16 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Sort By'),
+        _sectionLabel(l10n.sortBy),
         const SizedBox(height: 10),
         ...List.generate(_sortOptions.length, (i) {
           final isSelected = _sortIndex == i;
+          final sortLabels = [
+            l10n.sortStockLowToHigh,
+            l10n.sortStockHighToLow,
+            l10n.sortNameAZ,
+            l10n.sortValueHighToLow,
+          ];
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: GestureDetector(
@@ -219,7 +227,7 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _sortOptions[i],
+                      sortLabels[i],
                       style: AppTypography.labelMedium.copyWith(
                         color: isSelected
                             ? AppColors.primaryNavy
@@ -256,13 +264,18 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Stock Status'),
+        _sectionLabel(l10n.stockStatus),
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: _statusOptions.map((status) {
             final isSelected = _statusFilters.contains(status);
+            final statusLabels = {
+              'In Stock': l10n.inStock,
+              'Low Stock': l10n.lowStock,
+              'Out of Stock': l10n.outOfStock,
+            };
             return GestureDetector(
               onTap: () {
                 HapticFeedback.lightImpact();
@@ -288,7 +301,7 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
                   ),
                 ),
                 child: Text(
-                  status,
+                  statusLabels[status] ?? status,
                   style: AppTypography.labelMedium.copyWith(
                     color:
                         isSelected ? Colors.white : AppColors.textSecondary,
@@ -309,10 +322,10 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Category'),
+        _sectionLabel(l10n.category),
         const SizedBox(height: 10),
         if (widget.categoryOptions.isEmpty)
-          Text('No categories yet',
+          Text(l10n.noCategoriesYet,
               style: AppTypography.bodySmall
                   .copyWith(color: AppColors.textTertiary))
         else
@@ -340,10 +353,10 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Supplier'),
+        _sectionLabel(l10n.supplier),
         const SizedBox(height: 10),
         if (widget.supplierOptions.isEmpty)
-          Text('No suppliers yet',
+          Text(l10n.noSuppliersYet,
               style: AppTypography.bodySmall
                   .copyWith(color: AppColors.textTertiary))
         else
@@ -409,12 +422,12 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Price Range (${widget.currency})'),
+        _sectionLabel(l10n.priceRangeCurrency(widget.currency)),
         const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
-              child: _priceField(_minPriceController, 'Min', '0'),
+              child: _priceField(_minPriceController, l10n.min, '0'),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -425,7 +438,7 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
               ),
             ),
             Expanded(
-              child: _priceField(_maxPriceController, 'Max', '10000'),
+              child: _priceField(_maxPriceController, l10n.max, '10000'),
             ),
           ],
         ),
@@ -526,7 +539,7 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
                 ),
               ),
               child: Text(
-                'Apply Filters',
+                l10n.applyFilters,
                 style: AppTypography.labelMedium.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -548,7 +561,7 @@ class _InventoryFilterSheetState extends State<_InventoryFilterSheet> {
               });
             },
             child: Text(
-              'Reset All',
+              l10n.resetAll,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.textTertiary,
                 fontWeight: FontWeight.w500,

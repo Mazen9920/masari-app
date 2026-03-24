@@ -48,7 +48,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Not enough stock. Available: ${sourceVariant.currentStock}'),
+              l10n.notEnoughStockAvailable(sourceVariant.currentStock)),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -74,7 +74,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $error'),
+          content: Text(l10n.breakdownError(error)),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -83,7 +83,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-               'Breakdown complete — $_qty ${sourceVariant.displayName} processed'),
+               l10n.breakdownComplete(_qty, sourceVariant.localizedDisplayName(l10n))),
           backgroundColor: AppColors.success,
         ),
       );
@@ -111,7 +111,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                   color: AppColors.textTertiary.withValues(alpha: 0.3)),
               const SizedBox(height: 16),
               Text(
-                'Breakdown recipe not configured',
+                l10n.breakdownNotConfigured,
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.textTertiary,
                   fontWeight: FontWeight.w600,
@@ -119,7 +119,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Add a breakdown recipe in product settings to enable this feature.',
+                l10n.breakdownNotConfiguredDesc,
                 style: AppTypography.bodySmall.copyWith(
                   color: AppColors.textTertiary,
                 ),
@@ -128,7 +128,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => context.safePop(),
-                child: const Text('Go Back'),
+                child: Text(l10n.goBack),
               ),
             ],
           ),
@@ -153,7 +153,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
               const SizedBox(height: 12),
               TextButton(
                 onPressed: () => context.safePop(),
-                child: const Text('Go Back'),
+                child: Text(l10n.goBack),
               ),
             ],
           ),
@@ -197,7 +197,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
           leading: TextButton(
             onPressed: _isSaving ? null : () => context.safePop(),
             child: Text(
-               'Cancel',
+               l10n.cancel,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.textTertiary,
                 fontWeight: FontWeight.w500,
@@ -206,7 +206,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
           ),
           leadingWidth: 80,
           title: Text(
-             'Break Down',
+             l10n.breakDown,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.primaryNavy,
               fontWeight: FontWeight.w700,
@@ -247,7 +247,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                 'Source: ${sourceVariant.displayName}',
+                                 l10n.sourceLabel(sourceVariant.localizedDisplayName(l10n)),
                                 style: AppTypography.captionSmall.copyWith(
                                   color: AppColors.primaryNavy,
                                   fontWeight: FontWeight.w600,
@@ -256,7 +256,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '${sourceVariant.currentStock} in stock',
+                              l10n.inStockCount(sourceVariant.currentStock),
                               style: AppTypography.captionSmall.copyWith(
                                 color: AppColors.textTertiary,
                               ),
@@ -349,7 +349,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                               'Exceeds available stock (${sourceVariant.currentStock})',
+                               l10n.exceedsAvailableStock(sourceVariant.currentStock),
                               style: AppTypography.captionSmall
                                   .copyWith(color: AppColors.danger),
                             ),
@@ -369,7 +369,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                                   color: AppColors.primaryNavy),
                               const SizedBox(width: 6),
                               Text(
-                                 'Cost Allocation Preview',
+                                 l10n.costAllocationPreview,
                                 style: AppTypography.labelMedium.copyWith(
                                   color: AppColors.textPrimary,
                                   fontWeight: FontWeight.w700,
@@ -379,7 +379,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                             'Method: ${valuationMethod.toUpperCase()}',
+                             l10n.methodLabel(valuationMethod.toUpperCase()),
                             style: AppTypography.captionSmall.copyWith(
                               color: AppColors.textTertiary,
                             ),
@@ -387,13 +387,13 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                           const Divider(height: 20),
                           _costRow(
                             label:
-                                 'Source cost ($qty × $currency ${fmt.format(cogsPerUnit)})',
+                                 l10n.sourceCostLabel(qty, currency, fmt.format(cogsPerUnit)),
                             value: '$currency ${fmt.format(totalCost)}',
                             isTotal: false,
                           ),
                           const SizedBox(height: 12),
                           Text(
-                             'OUTPUTS',
+                             l10n.outputs.toUpperCase(),
                             style: AppTypography.captionSmall.copyWith(
                               color: AppColors.textTertiary,
                               fontWeight: FontWeight.w600,
@@ -445,7 +445,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            v.displayName,
+                                            v.localizedDisplayName(l10n),
                                             style: AppTypography
                                                 .labelMedium
                                                 .copyWith(
@@ -455,7 +455,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                                             ),
                                           ),
                                           Text(
-                                            '$outputQty units',
+                                            l10n.unitsCount(outputQty),
                                             style: AppTypography
                                                 .captionSmall
                                                 .copyWith(
@@ -470,7 +470,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                                           CrossAxisAlignment.end,
                                       children: [
                                         Text(
-                                          '$currency ${fmt.format(allocatedUnitCost)}/unit',
+                                          l10n.perUnitCost(currency, fmt.format(allocatedUnitCost)),
                                           style: AppTypography
                                               .labelMedium
                                               .copyWith(
@@ -479,7 +479,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                                           ),
                                         ),
                                         Text(
-                                          'total $currency ${fmt.format(allocatedUnitCost * outputQty)}',
+                                          l10n.totalCostValue(currency, fmt.format(allocatedUnitCost * outputQty)),
                                           style: AppTypography
                                               .captionSmall
                                               .copyWith(
@@ -544,7 +544,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                               strokeWidth: 2, color: Colors.white),
                         )
                       : Text(
-                           'Break Down $qty ${sourceVariant.displayName}',
+                           l10n.breakDownAction(qty, sourceVariant.localizedDisplayName(l10n)),
                           style: AppTypography.labelMedium.copyWith(
                             color: qty > 0 &&
                                     qty <= sourceVariant.currentStock

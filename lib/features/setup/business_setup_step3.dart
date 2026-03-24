@@ -6,6 +6,7 @@ import '../../core/theme/app_styles.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/business_profile_provider.dart';
+import '../../l10n/app_localizations.dart';
 import 'widgets/setup_shell.dart';
 
 class BusinessSetupStep3 extends ConsumerStatefulWidget {
@@ -43,17 +44,17 @@ class _BusinessSetupStep3State extends ConsumerState<BusinessSetupStep3> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SetupShell(
       currentStep: 3,
-      title: 'Choose your plan',
-      subtitle:
-          "Select the plan that fits your business. You can change this anytime.",
-      buttonText: "Let's Go!",
+      title: l10n.chooseYourPlan,
+      subtitle: l10n.setupStep3Subtitle,
+      buttonText: l10n.letsGo,
       buttonIcon: Icons.auto_awesome_rounded,
       onBack: () => context.go(AppRoutes.setupStep2),
       onContinue: _onLetsGo,
       belowButton: Text(
-        'You can change your plan anytime in settings.',
+        l10n.changePlanAnytime,
         style: AppTypography.caption.copyWith(
           color: AppColors.textTertiary,
           fontSize: 12,
@@ -65,10 +66,9 @@ class _BusinessSetupStep3State extends ConsumerState<BusinessSetupStep3> {
           // ─── Launch Mode ───
           _TierCard(
             emoji: '🌱',
-            title: 'Launch Mode',
-            subtitle:
-                'Free forever. Track income, expenses, inventory & suppliers with simple reports.',
-            badge: 'Free',
+            title: l10n.launchMode,
+            subtitle: l10n.launchModeSubtitle,
+            badge: l10n.freeBadge,
             badgeColor: AppColors.success,
             isSelected: _selectedIndex == 0,
             isEnabled: true,
@@ -80,10 +80,9 @@ class _BusinessSetupStep3State extends ConsumerState<BusinessSetupStep3> {
           // ─── Growth Mode ───
           _TierCard(
             emoji: '🚀',
-            title: 'Growth Mode',
-            subtitle:
-                'Advanced sales, P&L, balance sheet, AI insights, Shopify integration & more.',
-            badge: 'Popular',
+            title: l10n.growthMode,
+            subtitle: l10n.growthModeSubtitle,
+            badge: l10n.popularBadge,
             badgeColor: AppColors.accentOrange,
             isSelected: _selectedIndex == 1,
             isEnabled: true,
@@ -95,10 +94,9 @@ class _BusinessSetupStep3State extends ConsumerState<BusinessSetupStep3> {
           // ─── Pro Mode (Coming Soon) ───
           _TierCard(
             emoji: '👑',
-            title: 'Pro Mode',
-            subtitle:
-                "Full control: multi-store, investor reports, advanced modeling & unlimited users.",
-            badge: 'Coming Soon',
+            title: l10n.proMode,
+            subtitle: l10n.proModeSubtitle,
+            badge: l10n.comingSoonBadge,
             badgeColor: AppColors.textTertiary,
             isSelected: false,
             isEnabled: false,

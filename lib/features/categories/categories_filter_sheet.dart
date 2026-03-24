@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Filter/sort options returned from the bottom sheet.
 class CategoryFilterResult {
@@ -138,7 +139,7 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            'Filter & Sort',
+            AppLocalizations.of(context)!.filterAndSort,
             style: AppTypography.h3.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
@@ -167,7 +168,7 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Sort By',
+          AppLocalizations.of(context)!.sortBy,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w800,
@@ -177,6 +178,13 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
         ...List.generate(_sortOptions.length, (i) {
           final (label, value) = _sortOptions[i];
           final isSelected = _sortBy == value;
+          final l10n = AppLocalizations.of(context)!;
+          final displayLabel = switch (value) {
+            CategorySortBy.highestAmount => l10n.highestAmount,
+            CategorySortBy.mostTransactions => l10n.mostTransactions,
+            CategorySortBy.lowestAmount => l10n.lowestAmount,
+            CategorySortBy.nameAZ => l10n.nameAZ,
+          };
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: GestureDetector(
@@ -188,7 +196,7 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    label,
+                    displayLabel,
                     style: AppTypography.bodyMedium.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w500,
@@ -229,12 +237,34 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
   }
 
   // ─── Date Range ───
+  String _localizedDateLabel(String key) {
+    final l10n = AppLocalizations.of(context)!;
+    return switch (key) {
+      'This Month' => l10n.thisMonthFilter,
+      'Last Month' => l10n.lastMonthFilter,
+      'Quarter to Date' => l10n.quarterToDate,
+      'Custom' => l10n.customFilter,
+      _ => key,
+    };
+  }
+
+  String _localizedTypeLabel(String key) {
+    final l10n = AppLocalizations.of(context)!;
+    return switch (key) {
+      'Operational' => l10n.operationalType,
+      'Marketing' => l10n.marketingType,
+      'Fixed Costs' => l10n.fixedCostsType,
+      'Variable' => l10n.variableType,
+      _ => key,
+    };
+  }
+
   Widget _buildDateSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Date Range',
+          AppLocalizations.of(context)!.dateRange,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w800,
@@ -270,7 +300,7 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        label,
+                        _localizedDateLabel(label),
                         style: AppTypography.labelSmall.copyWith(
                           color: isSelected ? AppColors.accentOrange : AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
@@ -301,16 +331,16 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Category Status',
+          AppLocalizations.of(context)!.categoryStatus,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 16),
-        _toggleRow('Hide Empty Categories', _hideEmpty, (v) => setState(() => _hideEmpty = v)),
+        _toggleRow(AppLocalizations.of(context)!.hideEmptyCategories, _hideEmpty, (v) => setState(() => _hideEmpty = v)),
         const SizedBox(height: 16),
-        _toggleRow('Show Only Over Budget', _showOverBudget, (v) => setState(() => _showOverBudget = v)),
+        _toggleRow(AppLocalizations.of(context)!.showOnlyOverBudget, _showOverBudget, (v) => setState(() => _showOverBudget = v)),
       ],
     );
   }
@@ -346,7 +376,7 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Category Types',
+          AppLocalizations.of(context)!.categoryTypes,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w800,
@@ -380,7 +410,7 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
                   ),
                 ),
                 child: Text(
-                  type,
+                  _localizedTypeLabel(type),
                   style: AppTypography.labelSmall.copyWith(
                     color: isSelected ? Colors.white : AppColors.textSecondary,
                     fontWeight: FontWeight.w600,
@@ -429,7 +459,7 @@ class _CategoriesFilterSheetState extends State<_CategoriesFilterSheet> {
               ),
             ),
             child: Text(
-              'Apply Filters',
+              AppLocalizations.of(context)!.applyFilters,
               style: AppTypography.labelLarge.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,

@@ -38,13 +38,13 @@ class ShopifySyncStatusWidget extends ConsumerWidget {
 
     if (syncStatus.isSyncing) {
       dotColor = AppColors.secondaryBlue;
-      statusText = syncStatus.message ?? 'Syncing…';
+      statusText = syncStatus.message ?? l10n.shopifySyncingStatus;
     } else if (conn.hasError) {
       dotColor = AppColors.danger;
       statusText = l10n.connectionError;
     } else {
       dotColor = AppColors.success;
-      statusText = _lastSyncText(conn.lastOrderSyncAt);
+      statusText = _lastSyncText(l10n, conn.lastOrderSyncAt);
     }
 
     return GestureDetector(
@@ -97,7 +97,7 @@ class ShopifySyncStatusWidget extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                     'Shopify · ${conn.shopName}',
+                     l10n.shopifyConnectedTo(conn.shopName),
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -153,14 +153,14 @@ class ShopifySyncStatusWidget extends ConsumerWidget {
     ).animate().fadeIn(duration: 250.ms);
   }
 
-  String _lastSyncText(DateTime? lastSync) {
-    if (lastSync == null) return 'Connected';
+  String _lastSyncText(AppLocalizations l10n, DateTime? lastSync) {
+    if (lastSync == null) return l10n.shopifyConnectedLabel;
 
     final diff = DateTime.now().difference(lastSync);
-    if (diff.inMinutes < 1) return  'Last sync: just now';
-    if (diff.inMinutes < 60) return  'Last sync: ${diff.inMinutes} min ago';
-    if (diff.inHours < 24) return  'Last sync: ${diff.inHours}h ago';
-    if (diff.inDays < 7) return  'Last sync: ${diff.inDays}d ago';
-    return  'Last sync: ${DateFormat('MMM dd').format(lastSync)}';
+    if (diff.inMinutes < 1) return l10n.shopifyLastSyncJustNow;
+    if (diff.inMinutes < 60) return l10n.shopifyLastSyncMinAgo(diff.inMinutes);
+    if (diff.inHours < 24) return l10n.shopifyLastSyncHoursAgo(diff.inHours);
+    if (diff.inDays < 7) return l10n.shopifyLastSyncDaysAgo(diff.inDays);
+    return l10n.shopifyLastSyncTime(DateFormat('MMM dd').format(lastSync));
   }
 }

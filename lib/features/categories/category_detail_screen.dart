@@ -8,6 +8,7 @@ import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/category_data.dart';
+import '../../l10n/app_localizations.dart';
 import 'edit_category_screen.dart';
 
 class CategoryDetailScreen extends ConsumerWidget {
@@ -111,7 +112,7 @@ class CategoryDetailScreen extends ConsumerWidget {
           ),
           Expanded(
             child: Text(
-              liveCategory.name,
+              liveCategory.localizedName(AppLocalizations.of(context)!),
               textAlign: TextAlign.center,
               style: AppTypography.h3.copyWith(
                 color: AppColors.textPrimary,
@@ -194,7 +195,7 @@ class _BudgetControlState extends State<_BudgetControl> {
       } else {
         HapticFeedback.heavyImpact();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a valid budget amount')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.enterValidBudget)),
         );
         return;
       }
@@ -231,7 +232,7 @@ class _BudgetControlState extends State<_BudgetControl> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Monthly Budget',
+                AppLocalizations.of(context)!.monthlyBudgetLabel,
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontWeight: FontWeight.w700,
@@ -243,7 +244,7 @@ class _BudgetControlState extends State<_BudgetControl> {
               Text(
                 hasBudget
                     ? '${widget.currency} ${widget.category.budgetLimit!.toStringAsFixed(0)}'
-                    : 'No budget set',
+                    : AppLocalizations.of(context)!.noBudgetSet,
                 style: AppTypography.labelMedium.copyWith(
                   color: hasBudget ? AppColors.primaryNavy : AppColors.textTertiary,
                   fontWeight: FontWeight.w700,
@@ -264,7 +265,7 @@ class _BudgetControlState extends State<_BudgetControl> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              hasBudget ? 'Edit' : 'Set Budget',
+              hasBudget ? AppLocalizations.of(context)!.editLabel : AppLocalizations.of(context)!.setBudget,
               style: TextStyle(
                 color: AppColors.accentOrange,
                 fontWeight: FontWeight.w700,
@@ -282,7 +283,7 @@ class _BudgetControlState extends State<_BudgetControl> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'SET MONTHLY BUDGET',
+          AppLocalizations.of(context)!.setMonthlyBudget,
           style: AppTypography.captionSmall.copyWith(
             color: AppColors.textTertiary,
             fontWeight: FontWeight.w800,
@@ -334,7 +335,7 @@ class _BudgetControlState extends State<_BudgetControl> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: Text(
-                    'Remove',
+                    AppLocalizations.of(context)!.removeLabel,
                     style: TextStyle(
                       color: AppColors.danger,
                       fontWeight: FontWeight.w600,
@@ -349,7 +350,7 @@ class _BudgetControlState extends State<_BudgetControl> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: Text(
-                  'Cancel',
+                  AppLocalizations.of(context)!.cancelLabel,
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontWeight: FontWeight.w600,
@@ -366,9 +367,9 @@ class _BudgetControlState extends State<_BudgetControl> {
                   color: AppColors.accentOrange,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  'Save',
-                  style: TextStyle(
+                child: Text(
+                  AppLocalizations.of(context)!.saveLabel,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
@@ -448,7 +449,7 @@ class _SpendCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'CURRENT SPEND',
+                    AppLocalizations.of(context)!.currentSpend,
                     style: AppTypography.captionSmall.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w700,
@@ -498,7 +499,7 @@ class _SpendCard extends StatelessWidget {
 
           const SizedBox(height: 4),
           Text(
-            '$transactionCount transaction${transactionCount != 1 ? 's' : ''} this month',
+            AppLocalizations.of(context)!.nTransactionsThisMonth(transactionCount),
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textTertiary,
             ),
@@ -511,7 +512,7 @@ class _SpendCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '$usedPercent% Used',
+                AppLocalizations.of(context)!.percentUsed(usedPercent),
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -519,7 +520,7 @@ class _SpendCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '$currency ${remaining.toStringAsFixed(0)} Left',
+                AppLocalizations.of(context)!.amountLeft(currency, remaining.toStringAsFixed(0)),
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontSize: 11,
@@ -556,7 +557,7 @@ class _SpendCard extends StatelessWidget {
                 Icon(Icons.warning_rounded, size: 14, color: AppColors.accentOrange),
                 const SizedBox(width: 4),
                 Text(
-                  'Approaching budget limit',
+                  AppLocalizations.of(context)!.approachingBudgetLimit,
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -633,7 +634,7 @@ class _TrendChart extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '3 Month Trend',
+            AppLocalizations.of(context)!.threeMonthTrend,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -741,7 +742,7 @@ class _TransactionsList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Transactions',
+          AppLocalizations.of(context)!.transactionsLabel,
           style: AppTypography.h3.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w800,
@@ -749,7 +750,7 @@ class _TransactionsList extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         if (transactions.isEmpty)
-          _buildEmpty()
+          _buildEmpty(context)
         else
           ...transactions.asMap().entries.map((entry) {
             final i = entry.key;
@@ -763,7 +764,7 @@ class _TransactionsList extends StatelessWidget {
     );
   }
 
-  Widget _buildEmpty() {
+  Widget _buildEmpty(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(32),
       width: double.infinity,
@@ -776,7 +777,7 @@ class _TransactionsList extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'No transactions yet',
+            AppLocalizations.of(context)!.noTransactionsYet,
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textTertiary,
             ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 
@@ -260,7 +261,7 @@ class SocialLoginButtons extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'or continue with',
+                AppLocalizations.of(context)!.orContinueWith,
                 style: AppTypography.caption.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -277,7 +278,7 @@ class SocialLoginButtons extends StatelessWidget {
           children: [
             Expanded(
               child: _SocialButton(
-                label: 'Google',
+                label: AppLocalizations.of(context)!.google,
                 icon: Icons.g_mobiledata_rounded,
                 iconColor: const Color(0xFF4285F4),
                 iconSize: 26,
@@ -287,7 +288,7 @@ class SocialLoginButtons extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: _SocialButton(
-                label: 'Apple',
+                label: AppLocalizations.of(context)!.apple,
                 icon: Icons.apple,
                 iconColor: AppColors.textPrimary,
                 iconSize: 22,

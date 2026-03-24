@@ -1,7 +1,9 @@
+import 'dart:ui' show Locale;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../l10n/app_localizations.dart';
 
 // ─── Keys (suffixes — prefixed with userId at runtime) ───────────────────────
 const _kCurrency   = 'settings_currency';
@@ -38,6 +40,9 @@ enum SubscriptionTier {
   /// Whether this tier is Growth or above.
   bool get isGrowthOrAbove => index >= SubscriptionTier.growth.index;
 
+  /// Product limit for inventory. null = unlimited.
+  int? get productLimit => this == SubscriptionTier.launch ? 20 : null;
+
   String get label => switch (this) {
     SubscriptionTier.launch => 'Launch',
     SubscriptionTier.growth => 'Growth',
@@ -48,6 +53,12 @@ enum SubscriptionTier {
     SubscriptionTier.launch => 'Launch',
     SubscriptionTier.growth => 'Growth',
     SubscriptionTier.pro    => 'Pro',
+  };
+
+  String localizedLabel(AppLocalizations l10n) => switch (this) {
+    SubscriptionTier.launch => l10n.tierLaunch,
+    SubscriptionTier.growth => l10n.tierGrowth,
+    SubscriptionTier.pro    => l10n.tierPro,
   };
 }
 
@@ -69,11 +80,57 @@ enum GrowthFeature {
   salesSystem('Sales & COGS', 'Record sales, track cost of goods sold & gross profit'),
   supplierPaymentToggle('Payment Settings', 'Control whether supplier payments create transactions'),
   shopifyIntegration('Shopify Integration', 'Connect your Shopify store for two-way order and inventory sync'),
-  manufacturingMode('Manufacturing Mode', 'Flag products as manufactured to decouple goods receipt from cost layers');
+  manufacturingMode('Manufacturing Mode', 'Flag products as manufactured to decouple goods receipt from cost layers'),
+  supplierManagement('Supplier Management', 'Track suppliers, record purchases & payments'),
+  fullCashFlow('Full Cash Flow Analysis', 'GAAP operating, investing & financing breakdown with drill-down');
 
   const GrowthFeature(this.displayName, this.description);
   final String displayName;
   final String description;
+
+  String localizedDisplayName(AppLocalizations l10n) => switch (this) {
+    GrowthFeature.balanceSheet          => l10n.featureBalanceSheet,
+    GrowthFeature.fullProfitLoss        => l10n.featureIncomeStatement,
+    GrowthFeature.exportReports         => l10n.featureExportReports,
+    GrowthFeature.budgetLimits          => l10n.featureBudgetLimits,
+    GrowthFeature.purchasesSummary      => l10n.featurePurchasesDashboard,
+    GrowthFeature.paymentsSummary       => l10n.featurePaymentsDashboard,
+    GrowthFeature.rawMaterials          => l10n.featureRawMaterials,
+    GrowthFeature.inventorySettings     => l10n.featureInventorySettings,
+    GrowthFeature.stockMovements        => l10n.featureStockMovements,
+    GrowthFeature.recurringTransactions => l10n.featureRecurringTransactions,
+    GrowthFeature.aiChat                => l10n.featureAiInsights,
+    GrowthFeature.hubSettings           => l10n.featureHubCustomization,
+    GrowthFeature.goodsReceiving        => l10n.featureGoodsReceiving,
+    GrowthFeature.salesSystem           => l10n.featureSalesCogs,
+    GrowthFeature.supplierPaymentToggle => l10n.featurePaymentSettings,
+    GrowthFeature.shopifyIntegration    => l10n.featureShopifyIntegration,
+    GrowthFeature.manufacturingMode     => l10n.featureManufacturingMode,
+    GrowthFeature.supplierManagement    => l10n.featureSupplierManagement,
+    GrowthFeature.fullCashFlow          => l10n.featureFullCashFlow,
+  };
+
+  String localizedDescription(AppLocalizations l10n) => switch (this) {
+    GrowthFeature.balanceSheet          => l10n.featureBalanceSheetDesc,
+    GrowthFeature.fullProfitLoss        => l10n.featureIncomeStatementDesc,
+    GrowthFeature.exportReports         => l10n.featureExportReportsDesc,
+    GrowthFeature.budgetLimits          => l10n.featureBudgetLimitsDesc,
+    GrowthFeature.purchasesSummary      => l10n.featurePurchasesDashboardDesc,
+    GrowthFeature.paymentsSummary       => l10n.featurePaymentsDashboardDesc,
+    GrowthFeature.rawMaterials          => l10n.featureRawMaterialsDesc,
+    GrowthFeature.inventorySettings     => l10n.featureInventorySettingsDesc,
+    GrowthFeature.stockMovements        => l10n.featureStockMovementsDesc,
+    GrowthFeature.recurringTransactions => l10n.featureRecurringTransactionsDesc,
+    GrowthFeature.aiChat                => l10n.featureAiInsightsDesc,
+    GrowthFeature.hubSettings           => l10n.featureHubCustomizationDesc,
+    GrowthFeature.goodsReceiving        => l10n.featureGoodsReceivingDesc,
+    GrowthFeature.salesSystem           => l10n.featureSalesCogsDesc,
+    GrowthFeature.supplierPaymentToggle => l10n.featurePaymentSettingsDesc,
+    GrowthFeature.shopifyIntegration    => l10n.featureShopifyIntegrationDesc,
+    GrowthFeature.manufacturingMode     => l10n.featureManufacturingModeDesc,
+    GrowthFeature.supplierManagement    => l10n.featureSupplierManagementDesc,
+    GrowthFeature.fullCashFlow          => l10n.featureFullCashFlowDesc,
+  };
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────

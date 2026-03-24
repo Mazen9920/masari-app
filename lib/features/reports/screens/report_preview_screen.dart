@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 
@@ -18,20 +19,20 @@ class ReportPreviewScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
         title: Text(
-          'Report Preview: Feb 2026',
+          AppLocalizations.of(context)!.reportPreview,
           style: AppTypography.h3.copyWith(color: AppColors.primaryNavy, fontSize: 16),
         ),
         centerTitle: true,
         actions: [
           IconButton(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report downloaded to device')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.reportDownloaded)));
             },
             icon: const Icon(Icons.download_outlined, color: AppColors.primaryNavy),
           ),
           IconButton(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Share options opening...')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.shareOptionsOpening)));
             },
             icon: const Icon(Icons.share_outlined, color: AppColors.primaryNavy),
           ),
@@ -77,7 +78,7 @@ class ReportPreviewScreen extends StatelessWidget {
           children: [
             ElevatedButton.icon(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report shared via WhatsApp')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.reportSharedWhatsApp)));
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF25D366),
@@ -88,19 +89,19 @@ class ReportPreviewScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
               ),
               icon: const Icon(Icons.chat_rounded, size: 20),
-              label: const Text('Share via WhatsApp', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              label: Text(AppLocalizations.of(context)!.shareViaWhatsApp, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             ),
             const SizedBox(height: 12),
             TextButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Share options opening...')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.shareOptionsOpening)));
               },
               style: TextButton.styleFrom(
                 foregroundColor: Colors.grey.shade500,
                 minimumSize: const Size(double.infinity, 44),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
               ),
-              child: const Text('Other Share Options', style: TextStyle(fontWeight: FontWeight.w500)),
+              child: Text(AppLocalizations.of(context)!.otherShareOptions, style: TextStyle(fontWeight: FontWeight.w500)),
             ),
           ],
         ),
@@ -155,7 +156,7 @@ class ReportPreviewScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('TechStyle Egypt', style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.bold, fontSize: 14)),
-                      Text('FEBRUARY 2026 REPORT', style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w500, fontSize: 9, letterSpacing: 0.5)),
+                      Text(AppLocalizations.of(context)!.reportMonthTitle('FEBRUARY 2026'), style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w500, fontSize: 9, letterSpacing: 0.5)),
                     ],
                   ),
                 ],
@@ -163,7 +164,7 @@ class ReportPreviewScreen extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('Generated', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w600, fontSize: 12)),
+                  Text(AppLocalizations.of(context)!.reportGenerated, style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w600, fontSize: 12)),
                   Text('01 Mar 2026', style: TextStyle(color: Colors.grey.shade400, fontSize: 9)),
                 ],
               ),
@@ -176,17 +177,17 @@ class ReportPreviewScreen extends StatelessWidget {
           // KPIs
           Row(
             children: [
-              Expanded(child: _buildKPICard('Net Profit', 'EGP 42k', '+12%', true, Colors.green)),
+              Expanded(child: _buildKPICard(AppLocalizations.of(context)!.netProfit, 'EGP 42k', '+12%', true, Colors.green)),
               const SizedBox(width: 8),
-              Expanded(child: _buildKPICard('Revenue', 'EGP 128k', 'vs 114k last mo.', null, Colors.blue)),
+              Expanded(child: _buildKPICard(AppLocalizations.of(context)!.revenue, 'EGP 128k', AppLocalizations.of(context)!.reportVsLastMonth('114k'), null, Colors.blue)),
               const SizedBox(width: 8),
-              Expanded(child: _buildKPICard('Expenses', 'EGP 86k', '-2%', false, Colors.red)),
+              Expanded(child: _buildKPICard(AppLocalizations.of(context)!.expenses, 'EGP 86k', '-2%', false, Colors.red)),
             ],
           ),
           const SizedBox(height: 24),
 
           // Cashflow Trend
-          Text('CASHFLOW TREND', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade800, letterSpacing: 0.5)),
+          Text(AppLocalizations.of(context)!.reportCashflowTrend, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade800, letterSpacing: 0.5)),
           const SizedBox(height: 8),
           Divider(color: Colors.grey.shade100, height: 1),
           const SizedBox(height: 8),
@@ -231,17 +232,17 @@ class ReportPreviewScreen extends StatelessWidget {
           const SizedBox(height: 24),
 
           // Top Expenses
-          Text('TOP EXPENSES', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade800, letterSpacing: 0.5)),
+          Text(AppLocalizations.of(context)!.reportTopExpenses, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade800, letterSpacing: 0.5)),
           const SizedBox(height: 8),
           Divider(color: Colors.grey.shade100, height: 1),
           const SizedBox(height: 8),
-          _buildExpenseRow('Salaries', 0.65, AppColors.primaryNavy),
+          _buildExpenseRow(AppLocalizations.of(context)!.expenseSalaries, 0.65, AppColors.primaryNavy),
           const SizedBox(height: 8),
-          _buildExpenseRow('Rent', 0.20, AppColors.accentOrange),
+          _buildExpenseRow(AppLocalizations.of(context)!.expenseRent, 0.20, AppColors.accentOrange),
           const SizedBox(height: 8),
-          _buildExpenseRow('Marketing', 0.10, Colors.teal.shade500),
+          _buildExpenseRow(AppLocalizations.of(context)!.expenseMarketing, 0.10, Colors.teal.shade500),
           const SizedBox(height: 8),
-          _buildExpenseRow('Software', 0.05, Colors.purple.shade500),
+          _buildExpenseRow(AppLocalizations.of(context)!.expenseSoftware, 0.05, Colors.purple.shade500),
           const SizedBox(height: 24),
 
           // AI Analysis
@@ -277,10 +278,10 @@ class ReportPreviewScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('AI Analysis', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.indigo.shade900)),
+                      Text(AppLocalizations.of(context)!.reportAiAnalysis, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.indigo.shade900)),
                       const SizedBox(height: 2),
                       Text(
-                        'Revenue grew by 12% vs January. Salaries remain your largest outflow, consider reviewing contract renewals.',
+                        AppLocalizations.of(context)!.reportAiAnalysisMock,
                         style: TextStyle(fontSize: 9, color: Colors.indigo.shade800.withValues(alpha: 0.8), height: 1.5),
                       ),
                     ],
@@ -296,8 +297,8 @@ class ReportPreviewScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Powered by Masari', style: TextStyle(fontSize: 8, color: Colors.grey.shade400)),
-              Text('Page 1 of 1', style: TextStyle(fontSize: 8, color: Colors.grey.shade400)),
+              Text(AppLocalizations.of(context)!.reportPoweredBy, style: TextStyle(fontSize: 8, color: Colors.grey.shade400)),
+              Text(AppLocalizations.of(context)!.reportPageOf(1, 1), style: TextStyle(fontSize: 8, color: Colors.grey.shade400)),
             ],
           ),
         ],

@@ -7,6 +7,7 @@ import '../../core/navigation/app_router.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../l10n/app_localizations.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
 import '../shopify/providers/shopify_sync_provider.dart';
 
@@ -19,6 +20,7 @@ class InventorySettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   bool _autoUpdateStock = false;
   bool _lowStockAlerts = true;
   bool _hideOutOfStock = false;
@@ -80,7 +82,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
     notifier.setCurrency(_currency);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Settings saved'),
+        content: Text(l10n.settingsSaved),
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -150,7 +152,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
           ),
           const SizedBox(width: 4),
           Text(
-            'Inventory Settings',
+            l10n.inventorySettings,
             style: AppTypography.h3.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
@@ -187,12 +189,12 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Stock Management'),
+        _sectionTitle(l10n.stockManagement),
         _card(
           children: [
             _toggleRow(
-              title: 'Auto-update Stock',
-              subtitle: 'Automatically decrease stock on sales',
+              title: l10n.autoUpdateStock,
+              subtitle: l10n.autoUpdateStockDesc,
               value: _autoUpdateStock,
               onChanged: (v) => setState(() => _autoUpdateStock = v),
             ),
@@ -200,11 +202,11 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
             _divider(),
             const SizedBox(height: 12),
             _tapRow(
-              title: 'Unit of Measure',
-              subtitle: 'Default unit for new items',
+              title: l10n.unitOfMeasure,
+              subtitle: l10n.defaultUnitDesc,
               trailing: _defaultUnit,
               onTap: () => _showPicker(
-                'Unit of Measure',
+                l10n.unitOfMeasureTitle,
                 _units,
                 _defaultUnit,
                 (v) => setState(() => _defaultUnit = v),
@@ -223,11 +225,11 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Alerts & Notifications'),
+        _sectionTitle(l10n.alertsAndNotifications),
         _card(
           children: [
             _toggleRow(
-              title: 'Low Stock Alerts',
+              title: l10n.lowStockAlerts,
               value: _lowStockAlerts,
               onChanged: (v) => setState(() => _lowStockAlerts = v),
             ),
@@ -239,7 +241,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Alert Threshold',
+                    l10n.alertThreshold,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w600,
@@ -258,7 +260,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
                     child: Row(
                       children: [
                         Text(
-                          'Notify when stock is below',
+                          l10n.notifyWhenStockBelow,
                           style: AppTypography.bodySmall.copyWith(
                             color: AppColors.textTertiary,
                             fontSize: 13,
@@ -307,7 +309,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'units',
+                          l10n.units,
                           style: AppTypography.bodySmall.copyWith(
                             color: AppColors.textTertiary,
                             fontSize: 13,
@@ -332,15 +334,15 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Configuration'),
+        _sectionTitle(l10n.configurationSection),
         _card(
           children: [
             _navRow(
               icon: Icons.category_rounded,
               iconBg: const Color(0xFFEFF6FF),
               iconColor: const Color(0xFF2563EB),
-              title: 'Manage Categories',
-              subtitle: 'Edit existing groupings',
+              title: l10n.manageCategories,
+              subtitle: l10n.manageCategoriesDesc,
               onTap: () {
                 HapticFeedback.lightImpact();
                 context.push(AppRoutes.categories);
@@ -351,8 +353,8 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
               icon: Icons.local_shipping_rounded,
               iconBg: const Color(0xFFF3E8FF),
               iconColor: const Color(0xFF9333EA),
-              title: 'Manage Suppliers',
-              subtitle: 'Edit vendor details',
+              title: l10n.manageSuppliers,
+              subtitle: l10n.manageSuppliersDesc,
               onTap: () {
                 HapticFeedback.lightImpact();
                 context.push(AppRoutes.suppliers);
@@ -371,12 +373,12 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Advanced'),
+        _sectionTitle(l10n.advancedSection),
         _card(
           children: [
             // Valuation method
             _tapRow(
-              title: 'Valuation Method',
+              title: l10n.valuationMethod,
               subtitle: _valuationDescription(_valuationMethod),
               trailing: _valuationMethod.replaceAll(' (Default)', ''),
               onTap: () => _showValuationPicker(),
@@ -384,11 +386,11 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
             _divider(),
             // Currency
             _tapRow(
-              title: 'Currency',
-              subtitle: 'Used across all inventory screens',
+              title: l10n.currencyLabel,
+              subtitle: l10n.currencyDesc,
               trailing: _currency,
               onTap: () => _showPicker(
-                'Currency',
+                l10n.currencyTitle,
                 _currencies,
                 _currency,
                 (v) => setState(() => _currency = v),
@@ -397,16 +399,16 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
             _divider(),
             // Breakdown feature
             _toggleRow(
-              title: 'Product Breakdown',
-              subtitle: 'Enable breakdown & selling options',
+              title: l10n.productBreakdown,
+              subtitle: l10n.productBreakdownDesc,
               value: _breakdownEnabled,
               onChanged: (v) => setState(() => _breakdownEnabled = v),
             ),
             _divider(),
             // Hide out-of-stock
             _toggleRow(
-              title: 'Hide out-of-stock items',
-              subtitle: 'Remove from main inventory view',
+              title: l10n.hideOutOfStockItems,
+              subtitle: l10n.hideOutOfStockDesc,
               value: _hideOutOfStock,
               onChanged: (v) => setState(() => _hideOutOfStock = v),
             ),
@@ -430,21 +432,21 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Shopify Sync'),
+        _sectionTitle(l10n.shopifySync),
         _card(
           children: [
             // Hide drafted products toggle
             _toggleRow(
-              title: 'Hide drafted products',
-              subtitle: 'Hide Shopify products with draft status',
+              title: l10n.hideDraftedProducts,
+              subtitle: l10n.hideDraftedProductsDesc,
               value: _hideShopifyDrafts,
               onChanged: (v) => setState(() => _hideShopifyDrafts = v),
             ),
             _divider(),
             // Inventory sync toggle
             _toggleRow(
-              title: 'Inventory Sync',
-              subtitle: 'Sync stock levels with Shopify',
+              title: l10n.inventorySyncLabel,
+              subtitle: l10n.syncStockWithShopify,
               value: syncEnabled,
               onChanged: (v) async {
                 HapticFeedback.mediumImpact();
@@ -467,7 +469,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Sync Mode',
+                      l10n.syncModeLabel,
                       style: AppTypography.labelMedium.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
@@ -475,7 +477,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Choose how inventory stays in sync',
+                      l10n.chooseHowSync,
                       style: AppTypography.captionSmall.copyWith(
                         color: AppColors.textTertiary,
                         fontSize: 12,
@@ -486,8 +488,8 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
                       icon: Icons.sync_rounded,
                       iconColor: const Color(0xFF16A34A),
                       iconBg: const Color(0xFFDCFCE7),
-                      title: 'Always-On',
-                      subtitle: 'Real-time sync every 30 seconds',
+                      title: l10n.alwaysOnLabel,
+                      subtitle: l10n.alwaysOnDesc,
                       selected: isAlwaysOn,
                       onTap: () => _setSyncMode('always'),
                     ),
@@ -496,8 +498,8 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
                       icon: Icons.touch_app_rounded,
                       iconColor: const Color(0xFF2563EB),
                       iconBg: const Color(0xFFDBEAFE),
-                      title: 'On-Demand',
-                      subtitle: 'Sync manually when you choose',
+                      title: l10n.onDemandLabel,
+                      subtitle: l10n.onDemandDesc,
                       selected: !isAlwaysOn,
                       onTap: () => _setSyncMode('on_demand'),
                     ),
@@ -596,9 +598,9 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
 
   String _valuationDescription(String method) {
     return switch (method) {
-      'FIFO (Default)' => 'First In, First Out — oldest stock sold first',
-      'LIFO'           => 'Last In, First Out — newest stock sold first',
-      'Average Cost'   => 'Weighted average of all purchase costs',
+      'FIFO (Default)' => l10n.fifoDescription,
+      'LIFO'           => l10n.lifoDescription,
+      'Average Cost'   => l10n.averageCostDescription,
       _                => '',
     };
   }
@@ -623,7 +625,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Valuation Method',
+                      l10n.valuationMethodTitle,
                       style: AppTypography.h3.copyWith(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w800,
@@ -708,7 +710,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
         onPressed: _save,
         icon: const Icon(Icons.save_rounded, size: 20),
         label: Text(
-          'Save Changes',
+          l10n.saveChanges,
           style: AppTypography.labelMedium.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.w700,

@@ -10,6 +10,7 @@ import '../../core/providers/app_settings_provider.dart';
 import '../../core/services/shopify_sync_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/sale_model.dart';
 import '../../shared/widgets/async_value_widget.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
@@ -25,6 +26,7 @@ class SalesListScreen extends ConsumerStatefulWidget {
 }
 
 class _SalesListScreenState extends ConsumerState<SalesListScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   final _scrollCtrl = ScrollController();
   String _search = '';
   int _statusFilter = -1; // -1 = all
@@ -113,8 +115,9 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
           s.externalOrderId != null || s.shopifyOrderNumber != null).length;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
-          '${toUpdate.length} sale${toUpdate.length != 1 ? 's' : ''} marked as paid'
-          '${shopifyCount > 0 ? ' ($shopifyCount Shopify — local only, not synced to Shopify)' : ''}',
+          shopifyCount > 0
+              ? l10n.salesMarkedPaidShopify(toUpdate.length, shopifyCount)
+              : l10n.salesMarkedPaid(toUpdate.length),
         ),
         backgroundColor: shopifyCount > 0 ? Colors.orange.shade700 : AppColors.success,
         behavior: SnackBarBehavior.floating,
@@ -138,20 +141,19 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Cancel Orders'),
+        title: Text(l10n.cancelOrders),
         content: Text(
-          'Cancel ${toUpdate.length} selected order${toUpdate.length != 1 ? 's' : ''}?\n\n'
-          'This will restore stock and create reversal accounting entries. This cannot be undone.',
+          l10n.cancelOrdersBulkMsg(toUpdate.length),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Go Back'),
+            child: Text(l10n.goBack),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-            child: const Text('Cancel Orders'),
+            child: Text(l10n.cancelOrders),
           ),
         ],
       ),
@@ -216,7 +218,7 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
           if (!mounted) return;
           if (!result.isSuccess && context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Shopify cancel failed for order: ${result.error}'),
+              content: Text(l10n.shopifyCancelFailedMsg(result.error ?? '')),
               backgroundColor: AppColors.danger,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -228,7 +230,7 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${toUpdate.length} order${toUpdate.length != 1 ? 's' : ''} cancelled — stock & accounting reverted'),
+        content: Text(l10n.ordersCancelledDetail(toUpdate.length)),
         backgroundColor: AppColors.danger,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -404,8 +406,8 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
             Expanded(
               child: Text(
                 _selectedIds.isEmpty
-                    ? 'Select orders'
-                    : '${_selectedIds.length} selected',
+                    ? l10n.selectOrders
+                    : l10n.selectedCount(_selectedIds.length),
                 style: AppTypography.h1.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -419,7 +421,7 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
                   ? () => setState(() => _selectedIds.clear())
                   : () => _selectAll(filtered),
               child: Text(
-                allSelected ? 'Deselect All' : 'Select All',
+                allSelected ? l10n.deselectAll : l10n.selectAll,
                 style: AppTypography.labelSmall.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -449,7 +451,7 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
           ),
           Expanded(
             child: Text(
-              'Sales',
+              l10n.salesHeader,
               style: AppTypography.h1.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w800,
@@ -526,8 +528,8 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
         if (conn == null || !conn.isActive) return const SizedBox.shrink();
         final lastSync = conn.lastOrderSyncAt;
         final label = lastSync != null
-            ? 'Last sync: ${_timeAgo(lastSync)}'
-            : 'Syncing orders from Shopify';
+            ? l10n.lastSyncTimeAgo(_timeAgo(lastSync))
+            : l10n.syncingOrdersFromShopify;
         return Container(
           margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -565,10 +567,10 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
 
   String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    if (diff.inMinutes < 1) return l10n.timeAgoJustNow;
+    if (diff.inMinutes < 60) return l10n.timeAgoMinutes(diff.inMinutes);
+    if (diff.inHours < 24) return l10n.timeAgoHours(diff.inHours);
+    if (diff.inDays < 7) return l10n.timeAgoDays(diff.inDays);
     return DateFormat('MMM dd').format(dt);
   }
 
@@ -582,7 +584,7 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
           TextField(
             onChanged: (v) => setState(() => _search = v),
             decoration: InputDecoration(
-              hintText: 'Search sales...',
+              hintText: l10n.searchSales,
               hintStyle: AppTypography.bodySmall
                   .copyWith(color: AppColors.textTertiary),
               prefixIcon: Icon(Icons.search_rounded,
@@ -610,15 +612,15 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                _filterChip(-1, 'All'),
+                _filterChip(-1, l10n.all),
                 const SizedBox(width: 6),
-                _filterChip(2, 'Paid'),
+                _filterChip(2, l10n.paid),
                 const SizedBox(width: 6),
-                _filterChip(1, 'Partial'),
+                _filterChip(1, l10n.partial),
                 const SizedBox(width: 6),
-                _filterChip(0, 'Unpaid'),
+                _filterChip(0, l10n.unpaid),
                 const SizedBox(width: 6),
-                _filterChip(3, 'Refunded'),
+                _filterChip(3, l10n.refunded),
               ],
             ),
           ),
@@ -630,9 +632,9 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
-                  _sourceChip('all', 'All Sources'),
+                  _sourceChip('all', l10n.allSources),
                   const SizedBox(width: 6),
-                  _sourceChip('manual', 'Manual'),
+                  _sourceChip('manual', l10n.manualSource),
                   const SizedBox(width: 6),
                   _sourceChip('shopify', 'Shopify'),
                 ],
@@ -717,11 +719,11 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
                 size: 48,
                 color: AppColors.textTertiary.withValues(alpha: 0.5)),
             const SizedBox(height: 16),
-            Text('No sales found',
+            Text(l10n.noSalesFound,
                 style: AppTypography.labelMedium
                     .copyWith(color: AppColors.textSecondary)),
             const SizedBox(height: 6),
-            Text('Tap + to record your first sale',
+            Text(l10n.tapPlusToRecordFirstSale,
                 style: AppTypography.captionSmall
                     .copyWith(color: AppColors.textTertiary)),
           ],
@@ -746,6 +748,7 @@ class _BulkActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final bottom = MediaQuery.of(context).padding.bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, bottom + 12),
@@ -784,7 +787,7 @@ class _BulkActionBar extends StatelessWidget {
                         size: 18, color: Colors.white),
                     const SizedBox(width: 6),
                     Text(
-                      'Mark as Paid',
+                      l10n.markAsPaid,
                       style: AppTypography.labelSmall.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -816,7 +819,7 @@ class _BulkActionBar extends StatelessWidget {
                         size: 18, color: Colors.white),
                     const SizedBox(width: 6),
                     Text(
-                      'Cancel',
+                      l10n.cancel,
                       style: AppTypography.labelSmall.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -857,6 +860,7 @@ class _SaleCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final fmt = NumberFormat('#,##0.00', 'en');
     final dateFmt = DateFormat('MMM dd, yyyy');
 
@@ -865,19 +869,19 @@ class _SaleCard extends ConsumerWidget {
     switch (sale.paymentStatus) {
       case PaymentStatus.paid:
         statusColor = AppColors.success;
-        statusLabel = 'Paid';
+        statusLabel = l10n.paid;
         break;
       case PaymentStatus.refunded:
         statusColor = AppColors.danger;
-        statusLabel = 'Refunded';
+        statusLabel = l10n.refunded;
         break;
       case PaymentStatus.partial:
         statusColor = AppColors.warning;
-        statusLabel = 'Partial';
+        statusLabel = l10n.partial;
         break;
       case PaymentStatus.unpaid:
         statusColor = AppColors.danger;
-        statusLabel = 'Unpaid';
+        statusLabel = l10n.unpaid;
         break;
     }
 
@@ -986,7 +990,7 @@ class _SaleCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    sale.displayOrderTitle,
+                    sale.localizedDisplayOrderTitle(l10n),
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -996,7 +1000,7 @@ class _SaleCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${sale.items.length} item${sale.items.length != 1 ? 's' : ''} · ${dateFmt.format(sale.date)}',
+                    l10n.saleItemsCount(sale.items.length, dateFmt.format(sale.date)),
                     style: AppTypography.captionSmall.copyWith(
                         color: AppColors.textSecondary),
                   ),
@@ -1036,7 +1040,7 @@ class _SaleCard extends ConsumerWidget {
                               size: 10, color: AppColors.warning),
                           const SizedBox(width: 3),
                           Text(
-                            'No COGS',
+                            l10n.noCogs,
                             style: AppTypography.captionSmall.copyWith(
                               color: AppColors.warning,
                               fontWeight: FontWeight.w700,
@@ -1081,7 +1085,7 @@ class _SaleCard extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          'Delivered',
+                          l10n.delivered,
                           style: AppTypography.captionSmall.copyWith(
                             color: const Color(0xFF3B82F6),
                             fontWeight: FontWeight.w700,
@@ -1102,7 +1106,7 @@ class _SaleCard extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        isCancelled ? 'Cancelled' : statusLabel,
+                        isCancelled ? l10n.cancelled : statusLabel,
                         style: AppTypography.captionSmall.copyWith(
                           color: isCancelled ? AppColors.danger : statusColor,
                           fontWeight: FontWeight.w700,

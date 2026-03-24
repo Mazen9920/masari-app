@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../l10n/app_localizations.dart';
 
 enum DashboardPeriod {
   today,
@@ -92,6 +93,42 @@ extension DashboardPeriodX on DashboardPeriod {
     if (days <= 90) return BucketStrategy.daily;
     return BucketStrategy.monthly;
   }
+
+  /// Localized label for period list / header button.
+  String localizedLabel(AppLocalizations l10n) => switch (this) {
+        DashboardPeriod.today => l10n.periodToday,
+        DashboardPeriod.yesterday => l10n.periodYesterday,
+        DashboardPeriod.last7Days => l10n.periodLast7Days,
+        DashboardPeriod.last30Days => l10n.periodLast30Days,
+        DashboardPeriod.last90Days => l10n.periodLast90Days,
+        DashboardPeriod.last365Days => l10n.periodLast365Days,
+        DashboardPeriod.lastMonth => l10n.periodLastMonth,
+        DashboardPeriod.last12Months => l10n.periodLast12Months,
+        DashboardPeriod.lastYear => l10n.periodLastYear,
+        DashboardPeriod.weekToDate => l10n.periodWeekToDate,
+        DashboardPeriod.monthToDate => l10n.periodMonthToDate,
+        DashboardPeriod.quarterToDate => l10n.periodQuarterToDate,
+        DashboardPeriod.yearToDate => l10n.periodYearToDate,
+        DashboardPeriod.custom => l10n.periodCustom,
+      };
+
+  /// Localized comparison label for stat cards.
+  String localizedVsLabel(AppLocalizations l10n) => switch (this) {
+        DashboardPeriod.today => l10n.vsYesterday,
+        DashboardPeriod.yesterday => l10n.vsDayBefore,
+        DashboardPeriod.last7Days => l10n.vsPrior7Days,
+        DashboardPeriod.last30Days => l10n.vsPrior30Days,
+        DashboardPeriod.last90Days => l10n.vsPrior90Days,
+        DashboardPeriod.last365Days => l10n.vsPrior365Days,
+        DashboardPeriod.lastMonth => l10n.vsMonthBefore,
+        DashboardPeriod.last12Months => l10n.vsPrior12Months,
+        DashboardPeriod.lastYear => l10n.vsPriorYear,
+        DashboardPeriod.weekToDate => l10n.vsLastWeek,
+        DashboardPeriod.monthToDate => l10n.vsLastMonth,
+        DashboardPeriod.quarterToDate => l10n.vsLastQuarter,
+        DashboardPeriod.yearToDate => l10n.vsLastYear,
+        DashboardPeriod.custom => l10n.vsPriorPeriod,
+      };
 }
 
 enum BucketStrategy { hourly, daily, monthly }

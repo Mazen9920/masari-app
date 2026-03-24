@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +9,7 @@ import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/reports/reports_screen.dart';
 import '../../features/transactions/transactions_list_screen.dart';
 import '../../features/manage/manage_screen.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Main app shell with bottom navigation bar + center FAB.
 /// Tabs: Home | Reports | (+) FAB | Cards | Profile
@@ -19,6 +22,31 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  bool _isOffline = false;
+  late final StreamSubscription<List<ConnectivityResult>> _connectivitySub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Check initial state
+    Connectivity().checkConnectivity().then((results) {
+      if (mounted) {
+        setState(() => _isOffline = results.every((r) => r == ConnectivityResult.none));
+      }
+    });
+    // Listen for changes
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      if (mounted) {
+        setState(() => _isOffline = results.every((r) => r == ConnectivityResult.none));
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub.cancel();
+    super.dispose();
+  }
 
   final List<Widget> _screens = [
     const DashboardScreen(),
@@ -44,10 +72,28 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+      body: Column(
+        children: [
+          if (_isOffline)
+            MaterialBanner(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: const Icon(Icons.cloud_off_rounded, color: Colors.white, size: 20),
+              content: Text(
+                l10n.offlineBanner,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+              backgroundColor: Colors.grey.shade700,
+              actions: const [SizedBox.shrink()],
+            ),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _screens,
+            ),
+          ),
+        ],
       ),
       extendBody: true,
       bottomNavigationBar: _buildBottomNav(),
@@ -55,6 +101,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildBottomNav() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -75,11 +122,11 @@ class _MainShellState extends State<MainShell> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _navItem(0, Icons.dashboard_rounded, 'Home'),
-              _navItem(1, Icons.receipt_long_rounded, 'Transactions'),
+              _navItem(0, Icons.dashboard_rounded, l10n.home),
+              _navItem(1, Icons.receipt_long_rounded, l10n.transactions),
               _buildFAB(),
-              _navItem(3, Icons.bar_chart_rounded, 'Reports'),
-              _navItem(4, Icons.grid_view_rounded, 'Manage'),
+              _navItem(3, Icons.bar_chart_rounded, l10n.reports),
+              _navItem(4, Icons.grid_view_rounded, l10n.manage),
             ],
           ),
         ),
@@ -90,7 +137,7 @@ class _MainShellState extends State<MainShell> {
   Widget _navItem(int index, IconData icon, String label) {
     final isActive = _currentIndex == index;
     return Semantics(
-      label: '$label tab',
+      label: AppLocalizations.of(context)!.tabLabel(label),
       button: true,
       selected: isActive,
       child: GestureDetector(
@@ -128,7 +175,7 @@ class _MainShellState extends State<MainShell> {
 
   Widget _buildFAB() {
     return Semantics(
-      label: 'Add transaction',
+      label: AppLocalizations.of(context)!.addTransaction,
       button: true,
       child: GestureDetector(
         onTap: _openAddTransaction,

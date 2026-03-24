@@ -7,6 +7,7 @@ import '../../../core/theme/app_styles.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/app_settings_provider.dart';
 import '../../../core/navigation/app_router.dart';
+import '../../../l10n/app_localizations.dart';
 import '../providers/dashboard_state_provider.dart';
 import '../../../shared/models/category_data.dart';
 
@@ -41,7 +42,7 @@ class AIInsightCard extends ConsumerStatefulWidget {
 class _AIInsightCardState extends ConsumerState<AIInsightCard> {
   bool _dismissed = false;
 
-  _Insight? _generateInsight() {
+  _Insight? _generateInsight(AppLocalizations l10n) {
     final ds = ref.watch(dashboardStateProvider);
     final range = ds.range;
     final currency = ref.watch(appSettingsProvider).currency;
@@ -97,7 +98,7 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
         .where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')
         .fold<double>(0, (sum, t) => sum + t.amount.abs());
 
-    final vsLabel = ds.period.vsLabel;
+    final vsLabel = ds.period.localizedVsLabel(l10n);
 
     // 1) Check for biggest expense category spike
     if (curTxns.isNotEmpty && prevTxns.isNotEmpty) {
@@ -128,13 +129,12 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
       }
 
       if (spikeCat != null) {
-        final catName = CategoryData.findById(spikeCat).name;
+        final catName = CategoryData.findById(spikeCat).localizedName(l10n);
         return _Insight(
-          headline: 'Your $catName spending is up ',
+          headline: l10n.insightSpendingUp(catName),
           boldPart: '${spikePct.toStringAsFixed(0)}% $vsLabel.',
-          detail:
-              'You spent ${fmt.format(spikeAmt)} on $catName this period, compared to ${fmt.format(prevByCategory[spikeCat] ?? 0)} in the previous period.',
-          ctaLabel: 'View Transactions',
+          detail: l10n.insightSpendingUpDetail(fmt.format(spikeAmt), catName, fmt.format(prevByCategory[spikeCat] ?? 0)),
+          ctaLabel: l10n.viewTransactions,
           routeName: 'TransactionsListScreen',
         );
       }
@@ -145,11 +145,10 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
       final revChange = (curRevenue - prevRevenue) / prevRevenue * 100;
       if (revChange < -15) {
         return _Insight(
-          headline: 'Revenue has dropped ',
+          headline: l10n.insightRevenueDropped,
           boldPart: '${revChange.abs().toStringAsFixed(0)}% $vsLabel.',
-          detail:
-              'Current revenue is ${fmt.format(curRevenue)} compared to ${fmt.format(prevRevenue)} in the previous period. Consider reviewing your sales strategy.',
-          ctaLabel: 'View Sales',
+          detail: l10n.insightRevenueDropDetail(fmt.format(curRevenue), fmt.format(prevRevenue)),
+          ctaLabel: l10n.viewSales,
           routeName: 'SalesListScreen',
         );
       }
@@ -165,11 +164,11 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
     }).toList();
     if (lowStockProducts.length >= 2) {
       return _Insight(
-        headline: 'You have ',
-        boldPart: '${lowStockProducts.length} products running low on stock.',
-        detail:
-            '${lowStockProducts.take(3).map((p) => p.name).join(', ')}${lowStockProducts.length > 3 ? ' and more' : ''} need restocking soon to avoid stockouts.',
-        ctaLabel: 'Check Inventory',
+        headline: l10n.insightLowStock,
+        boldPart: l10n.insightLowStockBold(lowStockProducts.length),
+        detail: l10n.insightLowStockDetail(
+            '${lowStockProducts.take(3).map((p) => p.name).join(', ')}${lowStockProducts.length > 3 ? l10n.andMore : ''}'),
+        ctaLabel: l10n.checkInventory,
         routeName: 'InventoryListScreen',
       );
     }
@@ -179,11 +178,10 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
       final margin = (curRevenue - curExpenses) / curRevenue * 100;
       if (margin < 20) {
         return _Insight(
-          headline: 'Your profit margin is ',
+          headline: l10n.insightProfitMargin,
           boldPart: '${margin.toStringAsFixed(1)}% this period.',
-          detail:
-              'With ${fmt.format(curRevenue)} in revenue and ${fmt.format(curExpenses)} in expenses, your margin is tight. Look for ways to reduce costs or increase prices.',
-          ctaLabel: 'View Analytics',
+          detail: l10n.insightProfitMarginDetail(fmt.format(curRevenue), fmt.format(curExpenses)),
+          ctaLabel: l10n.viewAnalytics,
           routePath: AppRoutes.reports,
         );
       }
@@ -194,11 +192,10 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
       final growth = (curRevenue - prevRevenue) / prevRevenue * 100;
       if (growth > 10) {
         return _Insight(
-          headline: 'Revenue is growing — up ',
+          headline: l10n.insightRevenueGrowing,
           boldPart: '${growth.toStringAsFixed(0)}% $vsLabel!',
-          detail:
-              'You earned ${fmt.format(curRevenue)} this period, compared to ${fmt.format(prevRevenue)} previously. Keep up the momentum.',
-          ctaLabel: 'View Sales',
+          detail: l10n.insightRevenueGrowDetail(fmt.format(curRevenue), fmt.format(prevRevenue)),
+          ctaLabel: l10n.viewSales,
           routeName: 'SalesListScreen',
         );
       }
@@ -209,11 +206,10 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
       final reduction = (prevExpenses - curExpenses) / prevExpenses * 100;
       if (reduction > 10) {
         return _Insight(
-          headline: 'Expenses are down ',
+          headline: l10n.insightExpensesDown,
           boldPart: '${reduction.toStringAsFixed(0)}% $vsLabel.',
-          detail:
-              'You spent ${fmt.format(curExpenses)} this period vs ${fmt.format(prevExpenses)} previously. Great cost management!',
-          ctaLabel: 'View Transactions',
+          detail: l10n.insightExpensesDownDetail(fmt.format(curExpenses), fmt.format(prevExpenses)),
+          ctaLabel: l10n.viewTransactions,
           routeName: 'TransactionsListScreen',
         );
       }
@@ -227,7 +223,8 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
   Widget build(BuildContext context) {
     if (_dismissed) return const SizedBox.shrink();
 
-    final insight = _generateInsight();
+    final l10n = AppLocalizations.of(context)!;
+    final insight = _generateInsight(l10n);
     if (insight == null) return const SizedBox.shrink();
 
     return Container(
@@ -281,7 +278,7 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'MASARI AI INSIGHT',
+                        l10n.masariAiInsight,
                         style: AppTypography.captionSmall.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,

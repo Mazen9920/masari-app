@@ -232,7 +232,7 @@ class _AlertRow extends StatelessWidget {
                 Text(
                   alert.isOutOfStock
                       ? l10n.outOfStockStatus
-                      : '${alert.currentStock} left (reorder at ${alert.reorderPoint})',
+                      : l10n.stockLeftReorder(alert.currentStock, alert.reorderPoint),
                   style: AppTypography.captionSmall.copyWith(
                     color: color,
                     fontWeight: FontWeight.w500,

@@ -6,12 +6,14 @@ import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class ManageSubscriptionScreen extends ConsumerWidget {
   const ManageSubscriptionScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(currencyProvider);
     final currentTier = ref.watch(tierProvider);
     return Scaffold(
@@ -23,7 +25,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
           onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
-        title: Text('Your Plan', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
+        title: Text(l10n.subscriptionTitle, style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
         actions: [
           Center(
@@ -48,7 +50,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    currentTier == SubscriptionTier.launch ? 'Free' : currentTier.shortLabel,
+                    currentTier == SubscriptionTier.launch ? l10n.subscriptionFree : currentTier.localizedLabel(l10n),
                     style: TextStyle(
                       color: AppColors.success,
                       fontSize: 12,
@@ -68,7 +70,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Current Plan Card
-            _buildCurrentPlanCard(currentTier, currency),
+            _buildCurrentPlanCard(currentTier, currency, l10n),
             const SizedBox(height: 32),
 
             // Available Upgrades Title
@@ -78,31 +80,31 @@ class ManageSubscriptionScreen extends ConsumerWidget {
                 children: [
                   Text(
                     currentTier == SubscriptionTier.launch
-                        ? 'Available Upgrades'
-                        : 'Manage Plan',
+                        ? l10n.subscriptionAvailableUpgrades
+                        : l10n.subscriptionManagePlan,
                     style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
                   ),
                   if (currentTier == SubscriptionTier.launch)
-                    Text('Save 20% on yearly', style: TextStyle(color: AppColors.accentOrange, fontSize: 12, fontWeight: FontWeight.w600)),
+                    Text(l10n.subscriptionSaveYearly, style: TextStyle(color: AppColors.accentOrange, fontSize: 12, fontWeight: FontWeight.w600)),
                 ],
               ),
               const SizedBox(height: 16),
             ],
 
             // Growth Mode Card (includes Shopify)
-            _buildGrowthModeCard(context, currency, ref, currentTier),
+            _buildGrowthModeCard(context, currency, ref, currentTier, l10n),
             const SizedBox(height: 20),
 
             // Pro Mode Card
-            _buildProModeCard(context, currency),
+            _buildProModeCard(context, currency, l10n),
             const SizedBox(height: 32),
 
             // Bottom Accordions
-            _buildCompareButton(context),
+            _buildCompareButton(context, l10n),
             const SizedBox(height: 24),
-            Text('Frequently Asked Questions', style: AppTypography.h3.copyWith(color: AppColors.textPrimary)),
+            Text(l10n.subscriptionFaqTitle, style: AppTypography.h3.copyWith(color: AppColors.textPrimary)),
             const SizedBox(height: 12),
-            _buildFAQ(),
+            _buildFAQ(l10n),
             const SizedBox(height: 40),
           ],
         ),
@@ -111,7 +113,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
   }
 
   // ─── Current plan hero card ──────────────────────────────────────────────────
-  Widget _buildCurrentPlanCard(SubscriptionTier currentTier, String currency) {
+  Widget _buildCurrentPlanCard(SubscriptionTier currentTier, String currency, AppLocalizations l10n) {
     final isGrowthVariant = currentTier.isGrowthOrAbove;
 
     final String planName;
@@ -123,24 +125,24 @@ class ManageSubscriptionScreen extends ConsumerWidget {
 
     switch (currentTier) {
       case SubscriptionTier.launch:
-        planName = 'Launch Mode';
-        planDesc = 'Perfect for early-stage startups.';
-        planPrice = 'Free';
-        planSuffix = 'Forever';
+        planName = l10n.subscriptionLaunchMode;
+        planDesc = l10n.subscriptionLaunchDesc;
+        planPrice = l10n.subscriptionFree;
+        planSuffix = l10n.subscriptionForever;
         planIcon = Icons.rocket_launch_outlined;
         bgColor = AppColors.primaryNavy;
       case SubscriptionTier.growth:
-        planName = 'Growth Mode';
-        planDesc = 'For scaling businesses.';
-        planPrice = '$currency 249';
-        planSuffix = '/mo';
+        planName = l10n.subscriptionGrowthMode;
+        planDesc = l10n.subscriptionGrowthDesc;
+        planPrice = l10n.subscriptionGrowthPrice(currency);
+        planSuffix = l10n.subscriptionPerMonth;
         planIcon = Icons.show_chart_rounded;
         bgColor = AppColors.accentOrange;
       case SubscriptionTier.pro:
-        planName = 'Pro Mode';
-        planDesc = 'For established enterprises.';
-        planPrice = '$currency 749';
-        planSuffix = '/mo';
+        planName = l10n.subscriptionProMode;
+        planDesc = l10n.subscriptionProDesc;
+        planPrice = l10n.subscriptionProPrice(currency);
+        planSuffix = l10n.subscriptionPerMonth;
         planIcon = Icons.emoji_events_outlined;
         bgColor = AppColors.primaryNavy;
     }
@@ -148,33 +150,34 @@ class ManageSubscriptionScreen extends ConsumerWidget {
     final List<String> features;
     if (isGrowthVariant) {
       features = [
-        'Everything in Launch Mode',
-        'Sales system with COGS tracking',
-        'Goods receiving & inventory auto-link',
-        'Full Income Statement (P&L)',
-        'Balance Sheet',
-        'Recurring transactions',
-        'AI financial insights',
-        'Shopify integration & order sync',
-        '5 Team members',
+        l10n.subscriptionFeatureEverythingLaunch,
+        l10n.subscriptionFeatureSalesCogs,
+        l10n.subscriptionFeatureGoodsReceiving,
+        l10n.subscriptionFeatureIncomeStatement,
+        l10n.subscriptionFeatureBalanceSheet,
+        l10n.subscriptionFeatureRecurring,
+        l10n.subscriptionFeatureUnlimitedProducts,
+        l10n.subscriptionFeatureSupplierManagement,
+        l10n.subscriptionFeatureFullCashFlowAnalysis,
+        l10n.subscriptionFeatureAiInsights,
+        l10n.subscriptionFeatureShopify,
+        l10n.subscriptionFeature5Team,
       ];
     } else if (currentTier == SubscriptionTier.pro) {
       features = [
-        'Everything in Growth Mode',
-        'Advanced financial modeling',
-        'Investor reporting dashboard',
-        'Multi-store management',
-        'Unlimited users & full API access',
+        l10n.subscriptionFeatureEverythingGrowth,
+        l10n.subscriptionFeatureFinancialModeling,
+        l10n.subscriptionFeatureInvestorDash,
+        l10n.subscriptionFeatureMultiStore,
+        l10n.subscriptionFeatureUnlimitedApi,
       ];
     } else {
       features = [
-        'Income & expense tracking',
-        'Simple profit/loss report',
-        'Cash flow overview',
-        'Basic inventory & stock',
-        'Supplier ledger & purchases',
-        'Custom categories',
-        '1 Admin User',
+        l10n.subscriptionFeatureIncomeExpense,
+        l10n.subscriptionFeatureSimpleCashOverview,
+        l10n.subscriptionFeatureUpTo20Products,
+        l10n.subscriptionFeatureCustomCategories,
+        l10n.subscriptionFeature1Admin,
       ];
     }
 
@@ -245,7 +248,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                     ),
-                    child: const Text('Active', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                    child: Text(l10n.subscriptionActive, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -274,7 +277,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
   }
 
   // ─── Growth Mode Card (includes Shopify) ───────────────────────────────────
-  Widget _buildGrowthModeCard(BuildContext context, String currency, WidgetRef ref, SubscriptionTier currentTier) {
+  Widget _buildGrowthModeCard(BuildContext context, String currency, WidgetRef ref, SubscriptionTier currentTier, AppLocalizations l10n) {
     final isOnGrowth = currentTier == SubscriptionTier.growth;
     final isAboveGrowth = currentTier.index > SubscriptionTier.growth.index;
 
@@ -314,8 +317,8 @@ class ManageSubscriptionScreen extends ConsumerWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Growth Mode', style: AppTypography.h3.copyWith(color: AppColors.textPrimary)),
-                      Text('For scaling businesses', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                      Text(l10n.subscriptionGrowthMode, style: AppTypography.h3.copyWith(color: AppColors.textPrimary)),
+                      Text(l10n.subscriptionGrowthDesc, style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                     ],
                   ),
                 ],
@@ -324,40 +327,46 @@ class ManageSubscriptionScreen extends ConsumerWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('$currency 249', style: TextStyle(color: AppColors.textPrimary, fontSize: 32, fontWeight: FontWeight.bold)),
+                  Text(l10n.subscriptionGrowthPrice(currency), style: TextStyle(color: AppColors.textPrimary, fontSize: 32, fontWeight: FontWeight.bold)),
                   const SizedBox(width: 4),
                   Padding(
                     padding: const EdgeInsets.only(bottom: 6),
-                    child: Text('/mo', style: TextStyle(color: AppColors.textTertiary, fontSize: 15)),
+                    child: Text(l10n.subscriptionPerMonth, style: TextStyle(color: AppColors.textTertiary, fontSize: 15)),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
-              _buildFeatureItem('Everything in Launch, plus:', isBold: true),
+              _buildFeatureItem(l10n.subscriptionEverythingLaunchPlus, isBold: true),
               const SizedBox(height: 12),
-              _buildFeatureItem('Sales system with COGS tracking'),
+              _buildFeatureItem(l10n.subscriptionFeatureSalesCogs),
               const SizedBox(height: 12),
-              _buildFeatureItem('Goods receiving & inventory auto-link'),
+              _buildFeatureItem(l10n.subscriptionFeatureGoodsReceiving),
               const SizedBox(height: 12),
-              _buildFeatureItem('Full Income Statement (P&L)'),
+              _buildFeatureItem(l10n.subscriptionFeatureIncomeStatement),
               const SizedBox(height: 12),
-              _buildFeatureItem('Balance Sheet'),
+              _buildFeatureItem(l10n.subscriptionFeatureBalanceSheet),
               const SizedBox(height: 12),
-              _buildFeatureItem('Budget limits per category'),
+              _buildFeatureItem(l10n.subscriptionFeatureBudgetLimits),
               const SizedBox(height: 12),
-              _buildFeatureItem('Recurring transactions'),
+              _buildFeatureItem(l10n.subscriptionFeatureRecurring),
               const SizedBox(height: 12),
-              _buildFeatureItem('Purchase & payment dashboards'),
+              _buildFeatureItem(l10n.subscriptionFeaturePurchaseDash),
               const SizedBox(height: 12),
-              _buildFeatureItem('Raw materials tracking'),
+              _buildFeatureItem(l10n.subscriptionFeatureRawMaterials),
               const SizedBox(height: 12),
-              _buildFeatureItem('Report export & share'),
+              _buildFeatureItem(l10n.subscriptionFeatureReportExport),
               const SizedBox(height: 12),
-              _buildFeatureItem('AI financial insights'),
+              _buildFeatureItem(l10n.subscriptionFeatureUnlimitedProducts),
               const SizedBox(height: 12),
-              _buildFeatureItem('Shopify integration & order sync'),
+              _buildFeatureItem(l10n.subscriptionFeatureSupplierManagement),
               const SizedBox(height: 12),
-              _buildFeatureItem('5 Team members'),
+              _buildFeatureItem(l10n.subscriptionFeatureFullCashFlowAnalysis),
+              const SizedBox(height: 12),
+              _buildFeatureItem(l10n.subscriptionFeatureAiInsights),
+              const SizedBox(height: 12),
+              _buildFeatureItem(l10n.subscriptionFeatureShopify),
+              const SizedBox(height: 12),
+              _buildFeatureItem(l10n.subscriptionFeature5Team),
               const SizedBox(height: 24),
               if (isOnGrowth) ...[
                 Container(
@@ -372,25 +381,25 @@ class ManageSubscriptionScreen extends ConsumerWidget {
                     children: [
                       Icon(Icons.check_circle_rounded, color: AppColors.success, size: 20),
                       const SizedBox(width: 8),
-                      Text('Current Plan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.success)),
+                      Text(l10n.subscriptionCurrentPlan, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.success)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextButton(
-                  onPressed: () => _showDowngradeDialog(context, ref, SubscriptionTier.launch),
-                  child: Text('Switch to Launch Mode', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+                  onPressed: () => _showDowngradeDialog(context, ref, SubscriptionTier.launch, l10n),
+                  child: Text(l10n.subscriptionSwitchToLaunch, style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
                 ),
               ] else if (isAboveGrowth) ...[
                 OutlinedButton(
-                  onPressed: () => _showDowngradeDialog(context, ref, SubscriptionTier.growth),
+                  onPressed: () => _showDowngradeDialog(context, ref, SubscriptionTier.growth, l10n),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.textSecondary,
                     side: const BorderSide(color: AppColors.borderLight, width: 1.5),
                     minimumSize: const Size(double.infinity, 50),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                   ),
-                  child: const Text('Switch to Growth', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  child: Text(l10n.subscriptionSwitchToGrowth, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 ),
               ] else ...[
                 FilledButton(
@@ -398,7 +407,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
                     HapticFeedback.lightImpact();
                     ref.read(appSettingsProvider.notifier).setTier(SubscriptionTier.growth);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Switched to Growth Mode!')),
+                      SnackBar(content: Text(l10n.subscriptionSwitchedToGrowth)),
                     );
                   },
                   style: FilledButton.styleFrom(
@@ -411,8 +420,8 @@ class ManageSubscriptionScreen extends ConsumerWidget {
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text('Upgrade to Growth', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    children: [
+                      Text(l10n.subscriptionUpgradeToGrowth, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                       SizedBox(width: 8),
                       Icon(Icons.arrow_forward_rounded, size: 18),
                     ],
@@ -439,10 +448,10 @@ class ManageSubscriptionScreen extends ConsumerWidget {
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.star_rounded, color: Colors.white, size: 14),
-                    SizedBox(width: 4),
-                    Text('MOST POPULAR', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  children: [
+                    const Icon(Icons.star_rounded, color: Colors.white, size: 14),
+                    const SizedBox(width: 4),
+                    Text(l10n.subscriptionMostPopular, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                   ],
                 ),
               ),
@@ -453,7 +462,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
   }
 
   // ─── Pro Mode Card ─────────────────────────────────────────────────────────
-  Widget _buildProModeCard(BuildContext context, String currency) {
+  Widget _buildProModeCard(BuildContext context, String currency, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -486,8 +495,8 @@ class ManageSubscriptionScreen extends ConsumerWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Pro Mode', style: AppTypography.h3.copyWith(color: AppColors.textPrimary)),
-                  Text('For established enterprises', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                  Text(l10n.subscriptionProMode, style: AppTypography.h3.copyWith(color: AppColors.textPrimary)),
+                  Text(l10n.subscriptionProDesc, style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
                 ],
               ),
             ],
@@ -496,30 +505,30 @@ class ManageSubscriptionScreen extends ConsumerWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('$currency 749', style: TextStyle(color: AppColors.textPrimary, fontSize: 32, fontWeight: FontWeight.bold)),
+              Text(l10n.subscriptionProPrice(currency), style: TextStyle(color: AppColors.textPrimary, fontSize: 32, fontWeight: FontWeight.bold)),
               const SizedBox(width: 4),
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: Text('/mo', style: TextStyle(color: AppColors.textTertiary, fontSize: 15)),
+                child: Text(l10n.subscriptionPerMonth, style: TextStyle(color: AppColors.textTertiary, fontSize: 15)),
               ),
             ],
           ),
           const SizedBox(height: 24),
-          _buildFeatureItem('Everything in Growth, plus:', isBold: true, iconOpacity: 0.7),
+          _buildFeatureItem(l10n.subscriptionEverythingGrowthPlus, isBold: true, iconOpacity: 0.7),
           const SizedBox(height: 12),
-          _buildFeatureItem('Advanced financial modeling', iconOpacity: 0.7),
+          _buildFeatureItem(l10n.subscriptionFeatureFinancialModeling, iconOpacity: 0.7),
           const SizedBox(height: 12),
-          _buildFeatureItem('Investor reporting dashboard', iconOpacity: 0.7),
+          _buildFeatureItem(l10n.subscriptionFeatureInvestorDash, iconOpacity: 0.7),
           const SizedBox(height: 12),
-          _buildFeatureItem('Multi-store management', iconOpacity: 0.7),
+          _buildFeatureItem(l10n.subscriptionFeatureMultiStore, iconOpacity: 0.7),
           const SizedBox(height: 12),
-          _buildFeatureItem('Unlimited users & full API access', iconOpacity: 0.7),
+          _buildFeatureItem(l10n.subscriptionFeatureUnlimitedApi, iconOpacity: 0.7),
           const SizedBox(height: 24),
           OutlinedButton(
             onPressed: () {
               HapticFeedback.lightImpact();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Added to Pro Mode waitlist!')),
+                SnackBar(content: Text(l10n.subscriptionAddedToWaitlist)),
               );
             },
             style: OutlinedButton.styleFrom(
@@ -528,7 +537,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
               minimumSize: const Size(double.infinity, 54),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
             ),
-            child: const Text('Join Waitlist', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            child: Text(l10n.subscriptionJoinWaitlist, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -536,7 +545,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
   }
 
   // ─── Downgrade dialog ──────────────────────────────────────────────────────
-  void _showDowngradeDialog(BuildContext context, WidgetRef ref, SubscriptionTier targetTier) {
+  void _showDowngradeDialog(BuildContext context, WidgetRef ref, SubscriptionTier targetTier, AppLocalizations l10n) {
     HapticFeedback.lightImpact();
     final currentTier = ref.read(tierProvider);
     final isShopifyDowngrade = currentTier.hasShopifyAccess && !targetTier.hasShopifyAccess;
@@ -544,14 +553,14 @@ class ManageSubscriptionScreen extends ConsumerWidget {
     String title;
     String message;
     if (targetTier == SubscriptionTier.launch) {
-      title = 'Switch to Launch Mode?';
-      message = 'You will lose access to Growth features like Balance Sheet, Income Statement, AI Insights, and more. Your data will be preserved.';
+      title = l10n.subscriptionSwitchLaunchTitle;
+      message = l10n.subscriptionSwitchLaunchMessage;
       if (currentTier.hasShopifyAccess) {
-        message += ' Your Shopify integration will also be disconnected.';
+        message += l10n.subscriptionShopifyDisconnectWarning;
       }
     } else {
-      title = 'Switch to ${targetTier.label}?';
-      message = 'Your data will be preserved. Feature access will change based on the new plan.';
+      title = l10n.subscriptionSwitchToTierTitle(targetTier.localizedLabel(l10n));
+      message = l10n.subscriptionSwitchGenericMessage;
     }
 
     showDialog(
@@ -563,7 +572,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () async {
@@ -578,14 +587,14 @@ class ManageSubscriptionScreen extends ConsumerWidget {
               ref.read(appSettingsProvider.notifier).setTier(targetTier);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Switched to ${targetTier.label} Mode')),
+                  SnackBar(content: Text(l10n.subscriptionSwitchedToTier(targetTier.localizedLabel(l10n)))),
                 );
               }
             },
             style: FilledButton.styleFrom(
               backgroundColor: isShopifyDowngrade ? AppColors.danger : AppColors.accentOrange,
             ),
-            child: Text('Switch to ${targetTier.shortLabel}'),
+            child: Text(l10n.subscriptionSwitchToTierButton(targetTier.localizedLabel(l10n))),
           ),
         ],
       ),
@@ -617,7 +626,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCompareButton(BuildContext context) {
+  Widget _buildCompareButton(BuildContext context, AppLocalizations l10n) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -628,7 +637,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Full feature comparison coming soon')));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.subscriptionComparisonComingSoon)));
           },
           borderRadius: BorderRadius.circular(12),
           child: Padding(
@@ -636,7 +645,7 @@ class ManageSubscriptionScreen extends ConsumerWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Compare full feature matrix', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(l10n.subscriptionCompareFeatures, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                 Icon(Icons.chevron_right_rounded, color: AppColors.textTertiary),
               ],
             ),
@@ -646,27 +655,27 @@ class ManageSubscriptionScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildFAQ() {
+  Widget _buildFAQ(AppLocalizations l10n) {
     return Column(
       children: [
         _buildFAQItem(
-          'Does Growth Mode include Shopify integration?',
-          'Yes! Growth Mode includes full Shopify e-commerce integration: real-time order sync, inventory management, and product mapping between your Shopify store and Masari.',
+          l10n.subscriptionFaqShopifyQ,
+          l10n.subscriptionFaqShopifyA,
         ),
         const SizedBox(height: 12),
         _buildFAQItem(
-          'How does Shopify integration work?',
-          'After upgrading to Growth Mode, you connect your Shopify store once through a secure OAuth process. After that, your Shopify orders automatically sync as Masari sales in real-time. You can also sync inventory on-demand between Shopify and Masari.',
+          l10n.subscriptionFaqShopifyHowQ,
+          l10n.subscriptionFaqShopifyHowA,
         ),
         const SizedBox(height: 12),
         _buildFAQItem(
-          'Can I downgrade later?',
-          'Yes, you can switch between plans at any time. Your data will be preserved, but access to plan-specific features will change. If you downgrade from Growth, your Shopify connection will be paused but existing data is kept.',
+          l10n.subscriptionFaqDowngradeQ,
+          l10n.subscriptionFaqDowngradeA,
         ),
         const SizedBox(height: 12),
         _buildFAQItem(
-          'Do you offer custom enterprise plans?',
-          'Absolutely. For organizations needing custom integrations or dedicated support, please contact our sales team directly.',
+          l10n.subscriptionFaqEnterpriseQ,
+          l10n.subscriptionFaqEnterpriseA,
         ),
       ],
     );

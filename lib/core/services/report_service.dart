@@ -1,15 +1,19 @@
 import 'dart:typed_data';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import '../../l10n/app_localizations.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/sale_model.dart';
 import '../../shared/models/product_model.dart';
 import '../../shared/models/balance_sheet_entries.dart';
 import '../../shared/models/category_data.dart';
+import '../utils/arabic_pdf_reshaper.dart';
 import 'package:csv/csv.dart' as csv_lib;
+
+/// Reshape Arabic text for correct PDF glyph joining.
+String _r(String text) => ArabicPdfReshaper.reshape(text);
 
 /// Centralised report generation service.
 /// Produces real PDF bytes and CSV strings from live app data.
@@ -38,28 +42,44 @@ class ReportService {
   //  FONT LOADING
   // ──────────────────────────────────────────────────────
 
-  pw.ThemeData? _cachedTheme;
+  pw.ThemeData? _cachedThemeLtr;
+  pw.ThemeData? _cachedThemeAr;
 
-  /// Load Roboto from Google Fonts (supports full Unicode).
-  /// Falls back to default PDF fonts if loading fails.
-  Future<pw.ThemeData> _loadTheme() async {
-    if (_cachedTheme != null) return _cachedTheme!;
-    try {
-      final regular = await PdfGoogleFonts.robotoRegular();
-      final bold = await PdfGoogleFonts.robotoBold();
-      final italic = await PdfGoogleFonts.robotoItalic();
-      final boldItalic = await PdfGoogleFonts.robotoBoldItalic();
-      _cachedTheme = pw.ThemeData.withFont(
+  /// Load fonts for PDF generation.
+  /// When [isArabic] is true, NotoSansArabic is the **base** font so that
+  /// Arabic characters stay in a single text span (prevents the font-fallback
+  /// mechanism from splitting each character into its own span, which would
+  /// break Arabic letter joining).
+  Future<pw.ThemeData> _loadTheme({bool isArabic = false}) async {
+    if (isArabic && _cachedThemeAr != null) return _cachedThemeAr!;
+    if (!isArabic && _cachedThemeLtr != null) return _cachedThemeLtr!;
+
+    final regular = pw.Font.ttf(await rootBundle.load('assets/fonts/Roboto-Regular.ttf'));
+    final bold = pw.Font.ttf(await rootBundle.load('assets/fonts/Roboto-Bold.ttf'));
+    final italic = pw.Font.ttf(await rootBundle.load('assets/fonts/Roboto-Italic.ttf'));
+    final boldItalic = pw.Font.ttf(await rootBundle.load('assets/fonts/Roboto-BoldItalic.ttf'));
+    final arabicRegular = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'));
+    final arabicBold = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSansArabic-Bold.ttf'));
+
+    if (isArabic) {
+      _cachedThemeAr = pw.ThemeData.withFont(
+        base: arabicRegular,
+        bold: arabicBold,
+        italic: arabicRegular,
+        boldItalic: arabicBold,
+        fontFallback: [regular, bold],
+      );
+      return _cachedThemeAr!;
+    } else {
+      _cachedThemeLtr = pw.ThemeData.withFont(
         base: regular,
         bold: bold,
         italic: italic,
         boldItalic: boldItalic,
+        fontFallback: [arabicRegular, arabicBold],
       );
-    } catch (_) {
-      // Fallback to built-in Helvetica if Google Fonts fail
-      _cachedTheme = pw.ThemeData.withFont();
+      return _cachedThemeLtr!;
     }
-    return _cachedTheme!;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -76,7 +96,7 @@ class ReportService {
     required bool isMonthly,
     String? businessName,
   }) async {
-    final theme = await _loadTheme();
+    final theme = await _loadTheme(isArabic: l10n.localeName == 'ar');
     final pdf = pw.Document(
       theme: theme,
       title:  l10n.pnlStatement,
@@ -126,13 +146,15 @@ class ReportService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        textDirection: l10n.localeName == 'ar' ? pw.TextDirection.rtl : pw.TextDirection.ltr,
         margin: const pw.EdgeInsets.all(40),
         header: (ctx) => _pdfHeader(
            l10n.pnlStatement,
           periodLabel,
           businessName,
+          generatedLabel: l10n.pdfGeneratedOn(DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now())),
         ),
-        footer: (ctx) => _pdfFooter(ctx),
+        footer: (ctx) => _pdfFooter(ctx, footerLabel: l10n.pdfFooterLabel, pageLabel: l10n.reportPageOf(ctx.pageNumber, ctx.pagesCount)),
         build: (ctx) => [
           // KPI row
           _kpiRow(fmt, currency, [
@@ -146,21 +168,30 @@ class ReportService {
           _sectionTitle( l10n.revenueSources),
           _breakdownTable(revenueMap, totalRevenue, currency, fmt,
               noDataLabel: l10n.noDataForPeriod,
-              amountHeader: l10n.amountWithCurrency(currency)),
+              categoryLabel: l10n.category,
+              amountHeader: l10n.amountWithCurrency(currency),
+              totalLabel: l10n.total,
+              l10n: l10n),
           pw.SizedBox(height: 16),
 
           // COGS breakdown
           _sectionTitle( l10n.costOfGoodsSold),
           _breakdownTable(cogsMap, cogs, currency, fmt,
               noDataLabel: l10n.noDataForPeriod,
-              amountHeader: l10n.amountWithCurrency(currency)),
+              categoryLabel: l10n.category,
+              amountHeader: l10n.amountWithCurrency(currency),
+              totalLabel: l10n.total,
+              l10n: l10n),
           pw.SizedBox(height: 16),
 
           // OpEx breakdown
           _sectionTitle( l10n.operatingExpenses),
           _breakdownTable(opexMap, opex, currency, fmt,
               noDataLabel: l10n.noDataForPeriod,
-              amountHeader: l10n.amountWithCurrency(currency)),
+              categoryLabel: l10n.category,
+              amountHeader: l10n.amountWithCurrency(currency),
+              totalLabel: l10n.total,
+              l10n: l10n),
           pw.SizedBox(height: 24),
 
           // Summary
@@ -199,7 +230,7 @@ class ReportService {
     required DateTime asOfDate,
     String? businessName,
   }) async {
-    final theme = await _loadTheme();
+    final theme = await _loadTheme(isArabic: l10n.localeName == 'ar');
     final pdf = pw.Document(
       theme: theme,
       title:  l10n.balanceSheet,
@@ -220,9 +251,12 @@ class ReportService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        textDirection: l10n.localeName == 'ar' ? pw.TextDirection.rtl : pw.TextDirection.ltr,
         margin: const pw.EdgeInsets.all(40),
-        header: (ctx) => _pdfHeader( l10n.balanceSheet,  l10n.asOfDate(dateLabel), businessName),
-        footer: (ctx) => _pdfFooter(ctx),
+        header: (ctx) => _pdfHeader( l10n.balanceSheet,  l10n.asOfDate(dateLabel), businessName,
+          generatedLabel: l10n.pdfGeneratedOn(DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now())),
+        ),
+        footer: (ctx) => _pdfFooter(ctx, footerLabel: l10n.pdfFooterLabel, pageLabel: l10n.reportPageOf(ctx.pageNumber, ctx.pagesCount)),
         build: (ctx) => [
           // Assets
           _sectionTitle( l10n.assetsSection),
@@ -278,7 +312,7 @@ class ReportService {
     required double openingBalance,
     String? businessName,
   }) async {
-    final theme = await _loadTheme();
+    final theme = await _loadTheme(isArabic: l10n.localeName == 'ar');
     final pdf = pw.Document(
       theme: theme,
       title:  l10n.cashFlowStatement,
@@ -289,8 +323,17 @@ class ReportService {
         ? DateFormat( 'MMMM yyyy').format(periodStart)
         :  l10n.yearPeriod(periodStart.year);
 
+    // Compute the period's opening balance from seed + all pre-period cash transactions
+    // (excludes COGS — non-cash accrual entry).
+    final double periodOpening = openingBalance + transactions
+        .where((tx) => tx.dateTime.isBefore(periodStart) && tx.categoryId != 'cat_cogs')
+        .fold(0.0, (sum, tx) => sum + (tx.isIncome ? tx.amount.abs() : -tx.amount.abs()));
+
+    // Filter to period and exclude COGS (non-cash accrual P&L entry —
+    // actual cash outflow for inventory is captured by cat_supplier_payment).
     final filtered = transactions.where((tx) =>
       !tx.dateTime.isBefore(periodStart) && !tx.dateTime.isAfter(periodEnd)
+        && tx.categoryId != 'cat_cogs'
     ).toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
@@ -331,15 +374,18 @@ class ReportService {
       }
     }
     final netCashFlow = totalInflow - totalOutflow;
-    final closingBalance = openingBalance + netCashFlow;
+    final closingBalance = periodOpening + netCashFlow;
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        textDirection: l10n.localeName == 'ar' ? pw.TextDirection.rtl : pw.TextDirection.ltr,
         margin: const pw.EdgeInsets.all(40),
         header: (ctx) =>
-            _pdfHeader( l10n.cashFlowStatement, periodLabel, businessName),
-        footer: (ctx) => _pdfFooter(ctx),
+            _pdfHeader( l10n.cashFlowStatement, periodLabel, businessName,
+              generatedLabel: l10n.pdfGeneratedOn(DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now())),
+            ),
+        footer: (ctx) => _pdfFooter(ctx, footerLabel: l10n.pdfFooterLabel, pageLabel: l10n.reportPageOf(ctx.pageNumber, ctx.pagesCount)),
         build: (ctx) => [
           _kpiRow(fmt, currency, [
             ( l10n.totalInflow, totalInflow, _green),
@@ -352,22 +398,31 @@ class ReportService {
           _sectionTitle( l10n.cashInflows),
           _breakdownTable(inflowByCat, totalInflow, currency, fmt,
               noDataLabel: l10n.noDataForPeriod,
-              amountHeader: l10n.amountWithCurrency(currency)),
+              categoryLabel: l10n.category,
+              amountHeader: l10n.amountWithCurrency(currency),
+              totalLabel: l10n.total,
+              l10n: l10n),
           pw.SizedBox(height: 16),
 
           // Cash Outflows
           _sectionTitle( l10n.cashOutflows),
           _breakdownTable(outflowByCat, totalOutflow, currency, fmt,
               noDataLabel: l10n.noDataForPeriod,
-              amountHeader: l10n.amountWithCurrency(currency)),
+              categoryLabel: l10n.category,
+              amountHeader: l10n.amountWithCurrency(currency),
+              totalLabel: l10n.total,
+              l10n: l10n),
           pw.SizedBox(height: 24),
 
           // GAAP Activities breakdown
           _sectionTitle(l10n.operatingActivities),
           _breakdownTable(operatingByCat, operatingNet, currency, fmt,
               noDataLabel: l10n.noDataForPeriod,
+              categoryLabel: l10n.category,
               amountHeader: l10n.amountWithCurrency(currency),
-              isSigned: true),
+              totalLabel: l10n.total,
+              isSigned: true,
+              l10n: l10n),
           pw.SizedBox(height: 8),
           _subtotalRow(fmt, currency, l10n.netOperatingCashFlow, operatingNet),
           pw.SizedBox(height: 16),
@@ -375,8 +430,11 @@ class ReportService {
           _sectionTitle(l10n.investingActivities),
           _breakdownTable(investingByCat, investingNet, currency, fmt,
               noDataLabel: l10n.noDataForPeriod,
+              categoryLabel: l10n.category,
               amountHeader: l10n.amountWithCurrency(currency),
-              isSigned: true),
+              totalLabel: l10n.total,
+              isSigned: true,
+              l10n: l10n),
           pw.SizedBox(height: 8),
           _subtotalRow(fmt, currency, l10n.netInvestingCashFlow, investingNet),
           pw.SizedBox(height: 16),
@@ -384,15 +442,18 @@ class ReportService {
           _sectionTitle(l10n.financingActivities),
           _breakdownTable(financingByCat, financingNet, currency, fmt,
               noDataLabel: l10n.noDataForPeriod,
+              categoryLabel: l10n.category,
               amountHeader: l10n.amountWithCurrency(currency),
-              isSigned: true),
+              totalLabel: l10n.total,
+              isSigned: true,
+              l10n: l10n),
           pw.SizedBox(height: 8),
           _subtotalRow(fmt, currency, l10n.netFinancingCashFlow, financingNet),
           pw.SizedBox(height: 24),
 
           // Summary
           _summaryTable(fmt, currency, [
-            ( l10n.openingBalance, openingBalance),
+            ( l10n.openingBalance, periodOpening),
             ( l10n.totalCashInflow, totalInflow),
             ( l10n.totalCashOutflow, -totalOutflow),
             ( l10n.netCashFlow, netCashFlow),
@@ -421,7 +482,7 @@ class ReportService {
     required double openingBalance,
     String? businessName,
   }) async {
-    final theme = await _loadTheme();
+    final theme = await _loadTheme(isArabic: l10n.localeName == 'ar');
     final pdf = pw.Document(
       theme: theme,
       title:  l10n.monthlyFinancialReport,
@@ -453,10 +514,11 @@ class ReportService {
     final grossProfit = salesRevenue - cogsCost;
     final netProfit = grossProfit + otherIncome - opex;
 
-    // ── Cash flow aggregation ──
+    // ── Cash flow aggregation (excludes COGS — non-cash accrual entry) ──
     final cfTx = transactions.where((tx) =>
         tx.dateTime.year == month.year &&
-        tx.dateTime.month == month.month).toList();
+        tx.dateTime.month == month.month &&
+        tx.categoryId != 'cat_cogs').toList();
     double totalInflow = 0, totalOutflow = 0;
     double cfOperating = 0, cfInvesting = 0, cfFinancing = 0;
     for (final tx in cfTx) {
@@ -476,6 +538,12 @@ class ReportService {
       }
     }
     final netCash = totalInflow - totalOutflow;
+
+    // Compute period opening balance (seed + pre-month cash, excluding COGS)
+    final monthStart = DateTime(month.year, month.month, 1);
+    final double cfPeriodOpening = openingBalance + transactions
+        .where((tx) => tx.dateTime.isBefore(monthStart) && tx.categoryId != 'cat_cogs')
+        .fold(0.0, (sum, tx) => sum + (tx.isIncome ? tx.amount.abs() : -tx.amount.abs()));
 
     // ── Sales aggregation ──
     final monthSales = sales.where((s) =>
@@ -497,7 +565,7 @@ class ReportService {
         products.where((p) => p.status == StockStatus.outOfStock).length;
 
     // ── Balance sheet ──
-    final bankBalance = openingBalance + netCash;
+    final bankBalance = cfPeriodOpening + netCash;
     final accountsReceivable = sales
         .where((s) => s.orderStatus != OrderStatus.cancelled)
         .fold<double>(0, (sum, s) => sum + s.outstanding);
@@ -512,10 +580,13 @@ class ReportService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        textDirection: l10n.localeName == 'ar' ? pw.TextDirection.rtl : pw.TextDirection.ltr,
         margin: const pw.EdgeInsets.all(40),
         header: (ctx) => _pdfHeader(
-             l10n.monthlyFinancialReport, periodLabel, businessName),
-        footer: (ctx) => _pdfFooter(ctx),
+             l10n.monthlyFinancialReport, periodLabel, businessName,
+          generatedLabel: l10n.pdfGeneratedOn(DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now())),
+        ),
+        footer: (ctx) => _pdfFooter(ctx, footerLabel: l10n.pdfFooterLabel, pageLabel: l10n.reportPageOf(ctx.pageNumber, ctx.pagesCount)),
         build: (ctx) => [
           // === P&L Summary ===
           _sectionTitle( l10n.profitAndLoss),
@@ -532,11 +603,11 @@ class ReportService {
           // === Cash Flow Summary ===
           _sectionTitle( l10n.cashFlow),
           _summaryTable(fmt, currency, [
-            ( l10n.openingBalance, openingBalance),
+            ( l10n.openingBalance, cfPeriodOpening),
             ( l10n.cashInflowLabel, totalInflow),
             ( l10n.cashOutflowLabel, -totalOutflow),
             ( l10n.netCashFlow, netCash),
-            ( l10n.closingBalance, openingBalance + netCash),
+            ( l10n.closingBalance, cfPeriodOpening + netCash),
           ]),
           pw.SizedBox(height: 8),
           _summaryTable(fmt, currency, [
@@ -700,7 +771,9 @@ class ReportService {
   // ═══════════════════════════════════════════════════════
 
   static pw.Widget _pdfHeader(
-      String title, String subtitle, String? businessName) {
+      String title, String subtitle, String? businessName, {
+      String? generatedLabel,
+  }) {
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 20),
       padding: const pw.EdgeInsets.only(bottom: 12),
@@ -713,27 +786,31 @@ class ReportService {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(title,
+              pw.Text(_r(title),
+                  textDirection: pw.TextDirection.ltr,
                   style: pw.TextStyle(
                       fontSize: 20,
                       fontWeight: pw.FontWeight.bold,
                       color: _navy)),
               pw.SizedBox(height: 4),
-              pw.Text(subtitle,
+              pw.Text(_r(subtitle),
+                  textDirection: pw.TextDirection.ltr,
                   style: const pw.TextStyle(fontSize: 11, color: _grey)),
             ],
           ),
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
-              pw.Text(businessName ?? 'Masari',
+              pw.Text(_r(businessName ?? 'Masari'),
+                  textDirection: pw.TextDirection.ltr,
                   style: pw.TextStyle(
                       fontSize: 14,
                       fontWeight: pw.FontWeight.bold,
                       color: _navy)),
               pw.SizedBox(height: 2),
               pw.Text(
-                   'Generated ${DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now())}',
+                   _r(generatedLabel ?? 'Generated ${DateFormat('dd MMM yyyy, HH:mm').format(DateTime.now())}'),
+                  textDirection: pw.TextDirection.ltr,
                   style: const pw.TextStyle(fontSize: 9, color: _grey)),
             ],
           ),
@@ -742,7 +819,10 @@ class ReportService {
     );
   }
 
-  static pw.Widget _pdfFooter(pw.Context ctx) {
+  static pw.Widget _pdfFooter(pw.Context ctx, {
+    String? footerLabel,
+    String? pageLabel,
+  }) {
     return pw.Container(
       margin: const pw.EdgeInsets.only(top: 12),
       padding: const pw.EdgeInsets.only(top: 8),
@@ -752,9 +832,11 @@ class ReportService {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text( 'Masari App - Financial Report',
+          pw.Text(_r(footerLabel ?? 'Masari App - Financial Report'),
+              textDirection: pw.TextDirection.ltr,
               style: const pw.TextStyle(fontSize: 8, color: _grey)),
-          pw.Text( 'Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+          pw.Text(_r(pageLabel ?? 'Page ${ctx.pageNumber} of ${ctx.pagesCount}'),
+              textDirection: pw.TextDirection.ltr,
               style: const pw.TextStyle(fontSize: 8, color: _grey)),
         ],
       ),
@@ -777,11 +859,13 @@ class ReportService {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text(item.$1,
+                      pw.Text(_r(item.$1),
+                          textDirection: pw.TextDirection.ltr,
                           style: const pw.TextStyle(
                               fontSize: 9, color: _grey)),
                       pw.SizedBox(height: 4),
                       pw.Text('$currency ${fmt.format(item.$2)}',
+                          textDirection: pw.TextDirection.ltr,
                           style: pw.TextStyle(
                               fontSize: 14,
                               fontWeight: pw.FontWeight.bold,
@@ -797,7 +881,8 @@ class ReportService {
   static pw.Widget _sectionTitle(String title) {
     return pw.Padding(
       padding: const pw.EdgeInsets.only(bottom: 8, top: 4),
-      child: pw.Text(title,
+      child: pw.Text(_r(title),
+          textDirection: pw.TextDirection.ltr,
           style: pw.TextStyle(
               fontSize: 13,
               fontWeight: pw.FontWeight.bold,
@@ -813,7 +898,9 @@ class ReportService {
     String noDataLabel = 'No data for this period',
     String categoryLabel = 'Category',
     String amountHeader = 'Amount',
+    String totalLabel = 'Total',
     bool isSigned = false,
+    AppLocalizations? l10n,
   }) {
     if (map.isEmpty) {
       return pw.Container(
@@ -822,7 +909,8 @@ class ReportService {
           color: _lightGrey,
           borderRadius: pw.BorderRadius.circular(6),
         ),
-        child: pw.Text( noDataLabel,
+        child: pw.Text(_r(noDataLabel),
+            textDirection: pw.TextDirection.ltr,
             style: const pw.TextStyle(fontSize: 10, color: _grey)),
       );
     }
@@ -850,8 +938,10 @@ class ReportService {
         ...sorted.map((e) {
           final displayVal = isSigned ? e.value : e.value.abs();
           final pct = absTotal > 0 ? (e.value.abs() / absTotal * 100) : 0;
+          final cat = CategoryData.findById(e.key);
+          final catName = l10n != null ? cat.localizedName(l10n) : cat.name;
           return pw.TableRow(children: [
-            _tableCell(CategoryData.findById(e.key).name),
+            _tableCell(catName),
             _tableCell(fmt.format(displayVal), align: pw.TextAlign.right),
             _tableCell('${pct.toStringAsFixed(1)}%',
                 align: pw.TextAlign.right),
@@ -860,7 +950,7 @@ class ReportService {
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: _lightGrey),
           children: [
-            _tableCell('Total', bold: true),
+            _tableCell(totalLabel, bold: true),
             _tableCell(fmt.format(isSigned ? total : total.abs()),
                 bold: true, align: pw.TextAlign.right),
             _tableCell('100%', bold: true, align: pw.TextAlign.right),
@@ -883,10 +973,12 @@ class ReportService {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(label,
+          pw.Text(_r(label),
+              textDirection: pw.TextDirection.ltr,
               style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
           pw.Text(
             '$currency ${fmt.format(value)}',
+            textDirection: pw.TextDirection.ltr,
             style: pw.TextStyle(
               fontWeight: pw.FontWeight.bold,
               fontSize: 10,
@@ -907,7 +999,9 @@ class ReportService {
         1: const pw.FlexColumnWidth(2),
       },
       children: rows.map((row) {
-        final isTotal = row.$1.contains('Net') || row.$1.contains('Closing');
+        final isTotal = row.$1.contains('Net') || row.$1.contains('Closing') ||
+            row.$1.contains('\u0635\u0627\u0641\u064a') || row.$1.contains('\u062e\u062a\u0627\u0645\u064a') ||
+            row.$1.contains('\u0625\u062c\u0645\u0627\u0644\u064a');
         return pw.TableRow(
           decoration:
               isTotal ? const pw.BoxDecoration(color: _lightGrey) : null,
@@ -967,12 +1061,14 @@ class ReportService {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text( label,
+          pw.Text(_r(label),
+              textDirection: pw.TextDirection.ltr,
               style: pw.TextStyle(
                   fontSize: 14,
                   fontWeight: pw.FontWeight.bold,
                   color: _white)),
           pw.Text('$currency ${fmt.format(equity)}',
+              textDirection: pw.TextDirection.ltr,
               style: pw.TextStyle(
                   fontSize: 16,
                   fontWeight: pw.FontWeight.bold,
@@ -998,10 +1094,12 @@ class ReportService {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text(item.$1,
+                    pw.Text(_r(item.$1),
+                        textDirection: pw.TextDirection.ltr,
                         style: const pw.TextStyle(fontSize: 9, color: _grey)),
                     pw.SizedBox(height: 3),
-                    pw.Text(item.$2,
+                    pw.Text(_r(item.$2),
+                        textDirection: pw.TextDirection.ltr,
                         style: pw.TextStyle(
                             fontSize: 12,
                             fontWeight: pw.FontWeight.bold,
@@ -1022,7 +1120,8 @@ class ReportService {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: pw.Text(
-        text,
+        _r(text),
+        textDirection: pw.TextDirection.ltr,
         textAlign: align,
         style: pw.TextStyle(
           fontSize: 10,

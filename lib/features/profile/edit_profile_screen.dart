@@ -11,6 +11,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/user_profile_provider.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -44,6 +45,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   void _showImageSourcePicker() {
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -63,16 +65,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('Change Profile Photo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              Text(l10n.editProfileChangePhoto, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               const SizedBox(height: 16),
               ListTile(
                 leading: const Icon(Icons.camera_alt_rounded, color: AppColors.accentOrange),
-                title: const Text('Take a Photo'),
+                title: Text(l10n.editProfileTakePhoto),
                 onTap: () { Navigator.pop(ctx); _pickImage(ImageSource.camera); },
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_rounded, color: AppColors.secondaryBlue),
-                title: const Text('Choose from Gallery'),
+                title: Text(l10n.editProfileChooseGallery),
                 onTap: () { Navigator.pop(ctx); _pickImage(ImageSource.gallery); },
               ),
             ],
@@ -95,7 +97,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final phone = _phoneController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name cannot be empty')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.editProfileNameEmpty)),
       );
       return;
     }
@@ -128,6 +130,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider);
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -137,7 +140,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
-        title: Text('Edit Profile', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
+        title: Text(l10n.editProfileTitle, style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
         actions: [
           TextButton(
@@ -145,7 +148,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             child: _saving
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : Text(
-                    'Save',
+                    l10n.save,
                     style: TextStyle(color: AppColors.accentOrange, fontWeight: FontWeight.bold, fontSize: 15),
                   ),
           ),
@@ -225,12 +228,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             ),
             const SizedBox(height: 32),
             // Form fields
-            _buildField('Full Name', _nameController, Icons.person_outline_rounded),
+            _buildField(l10n.editProfileFullName, _nameController, Icons.person_outline_rounded),
             const SizedBox(height: 16),
-            _buildField('Email Address', _emailController, Icons.mail_outline_rounded,
+            _buildField(l10n.editProfileEmail, _emailController, Icons.mail_outline_rounded,
                 keyboardType: TextInputType.emailAddress),
             const SizedBox(height: 16),
-            _buildField('Phone Number', _phoneController, Icons.phone_outlined,
+            _buildField(l10n.editProfilePhone, _phoneController, Icons.phone_outlined,
                 keyboardType: TextInputType.phone),
           ],
         ),

@@ -82,7 +82,7 @@ class ShopifySaleBadge extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                         'Shopify',
+                         l10n.shopifyBadge,
                         style: AppTypography.captionSmall.copyWith(
                           color: ShopifyColors.greenDark,
                           fontWeight: FontWeight.w700,
@@ -124,7 +124,7 @@ class ShopifySaleBadge extends StatelessWidget {
                         size: 14, color: ShopifyColors.greenDark),
                     const SizedBox(width: 4),
                     Text(
-                       'View',
+                       l10n.shopifyViewButton,
                       style: AppTypography.labelSmall.copyWith(
                         color: ShopifyColors.greenDark,
                         fontWeight: FontWeight.w700,
@@ -168,6 +168,7 @@ class ShopifyProductBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -205,7 +206,7 @@ class ShopifyProductBadge extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                       'Linked to Shopify',
+                       l10n.shopifyLinkedToShopify,
                       style: AppTypography.labelMedium.copyWith(
                         color: ShopifyColors.greenDark,
                         fontWeight: FontWeight.w700,
@@ -230,7 +231,7 @@ class ShopifyProductBadge extends StatelessWidget {
                 if (lastInventorySyncAt != null) ...[
                   const SizedBox(height: 2),
                   Text(
-                     'Last sync: ${_timeAgo(AppLocalizations.of(context)!, lastInventorySyncAt!)}',
+                     l10n.shopifyLastSyncTime(_timeAgo(l10n, lastInventorySyncAt!)),
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondary,
                       fontSize: 12,
@@ -248,9 +249,9 @@ class ShopifyProductBadge extends StatelessWidget {
   String _timeAgo(AppLocalizations l10n, DateTime dt) {
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return l10n.justNow;
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    if (diff.inMinutes < 60) return l10n.shopifyTimeMinAgo(diff.inMinutes);
+    if (diff.inHours < 24) return l10n.shopifyTimeHoursAgo(diff.inHours);
+    if (diff.inDays < 7) return l10n.shopifyTimeDaysAgo(diff.inDays);
     return DateFormat( 'MMM dd').format(dt);
   }
 }

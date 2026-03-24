@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
+import '../../../l10n/app_localizations.dart';
 
 // ═══════════════════════════════════════════════════════════
 // ILLUSTRATION 1: Track Effortlessly
@@ -262,7 +263,7 @@ class _TrackIllustrationState extends State<TrackIllustration>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Income',
+                AppLocalizations.of(context)!.onboardingIncome,
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textSecondary,
                   letterSpacing: 0,
@@ -311,7 +312,7 @@ class _TrackIllustrationState extends State<TrackIllustration>
           ),
           const SizedBox(width: 8),
           Text(
-            'Auto-categorized',
+            AppLocalizations.of(context)!.onboardingAutoCategorized,
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textSecondary,
               letterSpacing: 0,
@@ -451,7 +452,7 @@ class _AIInsightIllustrationState extends State<AIInsightIllustration>
               ),
               const SizedBox(height: 4),
               Text(
-                'Unsorted',
+                AppLocalizations.of(context)!.onboardingUnsorted,
                 style: AppTypography.captionSmall.copyWith(
                   fontSize: 8,
                   color: AppColors.textTertiary,
@@ -592,7 +593,7 @@ class _AIInsightIllustrationState extends State<AIInsightIllustration>
           const SizedBox(width: 10),
           Flexible(
             child: Text(
-              '"Your cash flow looks healthier this month."',
+              AppLocalizations.of(context)!.onboardingAiQuote,
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textSecondary,
                 fontStyle: FontStyle.italic,

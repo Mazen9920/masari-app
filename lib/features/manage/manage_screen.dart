@@ -7,8 +7,10 @@ import '../../core/theme/app_styles.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/hub_settings_provider.dart';
 import '../../core/providers/notifications_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../categories/add_category_sheet.dart';
 import '../shopify/widgets/shopify_sync_status_widget.dart';
 
@@ -78,7 +80,7 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'QUICK ACTIONS',
+                      AppLocalizations.of(context)!.quickActions,
                       style: AppTypography.captionSmall.copyWith(
                         color: AppColors.textTertiary,
                         fontWeight: FontWeight.w700,
@@ -91,7 +93,7 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
                       children: [
                         _QuickActionPill(
                           icon: Icons.add_box_rounded,
-                          label: 'Product',
+                          label: AppLocalizations.of(context)!.productAction,
                           color: AppColors.primaryNavy,
                           onTap: () {
                             HapticFeedback.lightImpact();
@@ -101,7 +103,7 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
                         const SizedBox(width: 10),
                         _QuickActionPill(
                           icon: Icons.person_add_rounded,
-                          label: 'Supplier',
+                          label: AppLocalizations.of(context)!.supplierAction,
                           color: const Color(0xFF059669),
                           onTap: () {
                             HapticFeedback.lightImpact();
@@ -111,7 +113,7 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
                         const SizedBox(width: 10),
                         _QuickActionPill(
                           icon: Icons.new_label_rounded,
-                          label: 'Category',
+                          label: AppLocalizations.of(context)!.categoryAction,
                           color: const Color(0xFF7C3AED),
                           onTap: () {
                             HapticFeedback.lightImpact();
@@ -121,7 +123,7 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
                         const SizedBox(width: 10),
                         _QuickActionPill(
                           icon: Icons.tune_rounded,
-                          label: 'Settings',
+                          label: AppLocalizations.of(context)!.settingsAction,
                           color: AppColors.textSecondary,
                           onTap: () {
                             HapticFeedback.lightImpact();
@@ -167,27 +169,35 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
     required int supplierCount,
     required int dueCount,
   }) {
+    final l10n = AppLocalizations.of(context)!;
+    final tier = ref.watch(tierProvider);
     // Build shared chips
-    final inventoryChip = (settings.showStatBadges &&
-            settings.lowStockAlerts &&
-            lowStockCount > 0)
-        ? _StatChip(label: '$lowStockCount low', color: AppColors.danger)
-        : _StatChip(label: '$productCount items', color: AppColors.primaryNavy);
+    final productLimit = tier.productLimit;
+    final Widget inventoryChip;
+    if (productLimit != null && productCount >= productLimit) {
+      inventoryChip = _StatChip(label: l10n.limitReached, color: AppColors.warning);
+    } else if (productLimit != null) {
+      inventoryChip = _StatChip(label: '$productCount/$productLimit', color: AppColors.primaryNavy);
+    } else if (settings.showStatBadges && settings.lowStockAlerts && lowStockCount > 0) {
+      inventoryChip = _StatChip(label: l10n.nLow(lowStockCount), color: AppColors.danger);
+    } else {
+      inventoryChip = _StatChip(label: l10n.nItems(productCount), color: AppColors.primaryNavy);
+    }
 
     final suppliersChip = (settings.showStatBadges &&
             settings.paymentDueReminders &&
             dueCount > 0)
-        ? _StatChip(label: '$dueCount dues', color: AppColors.warning)
+        ? _StatChip(label: l10n.nDues(dueCount), color: AppColors.warning)
         : _StatChip(
-            label: '$supplierCount vendors', color: const Color(0xFF059669));
+            label: l10n.nVendors(supplierCount), color: const Color(0xFF059669));
 
     final categoriesChip = settings.showStatBadges
         ? _StatChip(
-            label: '$categoryCount active', color: const Color(0xFF7C3AED))
+            label: l10n.nActive(categoryCount), color: const Color(0xFF7C3AED))
         : null;
 
-    const sectionLabel = Text(
-      'YOUR WORKSPACE',
+    final sectionLabel = Text(
+      l10n.yourWorkspace,
       style: TextStyle(
         color: AppColors.textTertiary,
         fontWeight: FontWeight.w700,
@@ -202,7 +212,7 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
         _GridSectionData(
             icon: Icons.inventory_2_rounded,
             gradient: const [Color(0xFF1B4F72), Color(0xFF2E86C1)],
-            title: 'Inventory',
+            title: l10n.inventoryTitle,
             badge: inventoryChip,
             onTap: () {
               HapticFeedback.lightImpact();
@@ -212,8 +222,10 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
         _GridSectionData(
             icon: Icons.local_shipping_rounded,
             gradient: const [Color(0xFF059669), Color(0xFF34D399)],
-            title: 'Suppliers',
-            badge: suppliersChip,
+            title: l10n.suppliersTitle,
+            badge: ref.watch(tierProvider).isGrowthOrAbove
+                ? suppliersChip
+                : _StatChip(label: 'Growth', color: AppColors.accentOrange),
             onTap: () {
               HapticFeedback.lightImpact();
               context.push(AppRoutes.suppliers);
@@ -222,7 +234,7 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
         _GridSectionData(
             icon: Icons.category_rounded,
             gradient: const [Color(0xFF7C3AED), Color(0xFFA78BFA)],
-            title: 'Categories',
+            title: l10n.budgetCategories,
             badge: categoriesChip,
             onTap: () {
               HapticFeedback.lightImpact();
@@ -270,8 +282,8 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
         _SectionTile(
             icon: Icons.inventory_2_rounded,
             iconGradient: const [Color(0xFF1B4F72), Color(0xFF2E86C1)],
-            title: 'Inventory',
-            subtitle: 'Products, stock & reorders',
+            title: l10n.inventoryTitle,
+            subtitle: l10n.inventorySubtitle,
             trailing: inventoryChip,
             onTap: () {
               HapticFeedback.lightImpact();
@@ -282,9 +294,11 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
         _SectionTile(
             icon: Icons.local_shipping_rounded,
             iconGradient: const [Color(0xFF059669), Color(0xFF34D399)],
-            title: 'Suppliers',
-            subtitle: 'Vendors, purchases & payables',
-            trailing: suppliersChip,
+            title: l10n.suppliersTitle,
+            subtitle: l10n.suppliersSubtitle,
+            trailing: ref.watch(tierProvider).isGrowthOrAbove
+                ? suppliersChip
+                : _StatChip(label: 'Growth', color: AppColors.accentOrange),
             onTap: () {
               HapticFeedback.lightImpact();
               context.push(AppRoutes.suppliers);
@@ -297,8 +311,8 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
         _SectionTile(
             icon: Icons.category_rounded,
             iconGradient: const [Color(0xFF7C3AED), Color(0xFFA78BFA)],
-            title: 'Budget & Categories',
-            subtitle: 'Organize expenses & income',
+            title: l10n.budgetCategories,
+            subtitle: l10n.budgetCategoriesSubtitle,
             trailing: categoriesChip,
             onTap: () {
               HapticFeedback.lightImpact();
@@ -328,7 +342,7 @@ class _CleanHeader extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Management Hub',
+                AppLocalizations.of(context)!.managementHub,
                 style: AppTypography.h1.copyWith(
                   color: AppColors.textPrimary,
                 ),
@@ -405,7 +419,7 @@ class _CleanHeader extends StatelessWidget {
                       size: 20, color: AppColors.textTertiary),
                   const SizedBox(width: 10),
                   Text(
-                    'Search inventory, suppliers…',
+                    AppLocalizations.of(context)!.searchInventorySuppliers,
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textTertiary,
                       fontSize: 13,
@@ -624,6 +638,7 @@ class _QuickActionPill extends StatelessWidget {
 class _InsightsBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     // Compute a real insight from live data
     final products = ref.watch(inventoryProvider).value ?? [];
     final suppliers = ref.watch(suppliersProvider).value ?? [];
@@ -637,25 +652,25 @@ class _InsightsBanner extends ConsumerWidget {
     IconData icon;
 
     if (outOfStockCount > 0) {
-      title = '$outOfStockCount Product${outOfStockCount > 1 ? 's' : ''} Out of Stock';
-      subtitle = 'Reorder soon to avoid missed sales.';
+      title = l10n.nProductsOutOfStock(outOfStockCount);
+      subtitle = l10n.reorderSoonSubtitle;
       icon = Icons.error_outline_rounded;
     } else if (lowStockCount > 0) {
-      title = '$lowStockCount Product${lowStockCount > 1 ? 's' : ''} Running Low';
-      subtitle = 'Review stock levels and reorder before they run out.';
+      title = l10n.nProductsRunningLow(lowStockCount);
+      subtitle = l10n.reviewStockSubtitle;
       icon = Icons.warning_amber_rounded;
     } else if (dueCount > 0) {
-      title = '$dueCount Supplier Payment${dueCount > 1 ? 's' : ''} Due';
-      subtitle = 'Check outstanding balances to stay on top of payables.';
+      title = l10n.nSupplierPaymentsDue(dueCount);
+      subtitle = l10n.checkOutstandingSubtitle;
       icon = Icons.payment_rounded;
     } else if (totalProducts > 0) {
       final avgValue = products.fold<double>(0, (s, p) => s + p.totalCostValue) / totalProducts;
-      title = 'Inventory Healthy';
-      subtitle = '$totalProducts products tracked, avg value ${avgValue.toStringAsFixed(0)} per item.';
+      title = l10n.inventoryHealthy;
+      subtitle = l10n.inventoryHealthySubtitle(totalProducts, avgValue.toStringAsFixed(0));
       icon = Icons.check_circle_outline_rounded;
     } else {
-      title = 'Get Started';
-      subtitle = 'Add your first product to start tracking inventory.';
+      title = l10n.getStarted;
+      subtitle = l10n.getStartedSubtitle;
       icon = Icons.add_business_rounded;
     }
 

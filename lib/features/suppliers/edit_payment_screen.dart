@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/supplier_model.dart';
 import '../../shared/models/payment_model.dart';
 import '../../shared/models/purchase_model.dart';
@@ -22,6 +23,18 @@ class EditPaymentScreen extends ConsumerStatefulWidget {
 }
 
 class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
+  String _localizedMethodName(String method) {
+    switch (method) {
+      case 'Cash': return l10n.cash;
+      case 'Bank Transfer': return l10n.bankTransfer;
+      case 'InstaPay': return l10n.instaPay;
+      case 'Vodafone Cash': return l10n.vodafoneCash;
+      default: return method;
+    }
+  }
+
   late final TextEditingController _amountCtrl;
   late final TextEditingController _notesCtrl;
   DateTime _paymentDate = DateTime.now();
@@ -93,7 +106,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Payment updated'),
+        content: Text(l10n.paymentUpdated),
         backgroundColor: AppColors.primaryNavy,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -215,18 +228,20 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
     HapticFeedback.heavyImpact();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Payment'),
-        content: const Text(
-          'Are you sure you want to delete this payment record? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary)),
+      builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx)!;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(l10n.deletePaymentTitle),
+          content: Text(
+            l10n.deletePaymentConfirmation,
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(l10n.cancel,
+                  style: TextStyle(color: AppColors.textSecondary)),
+            ),
           TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
@@ -253,12 +268,13 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
               }
               Navigator.of(context).pop();
             },
-            child: const Text('Delete',
+            child: Text(l10n.delete,
                 style: TextStyle(
                     color: AppColors.chartRed, fontWeight: FontWeight.w600)),
           ),
         ],
-      ),
+        );
+      },
     );
   }
 
@@ -322,10 +338,10 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                     Center(
                       child: GestureDetector(
                         onTap: _confirmDelete,
-                        child: const Padding(
-                          padding: EdgeInsets.only(bottom: 40),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 40),
                           child: Text(
-                            'Delete Payment',
+                            l10n.deletePaymentTitle,
                             style: TextStyle(
                               color: AppColors.chartRed,
                               fontWeight: FontWeight.w600,
@@ -364,7 +380,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
           GestureDetector(
             onTap: () => Navigator.of(context).pop(),
             child: Text(
-              'Cancel',
+              l10n.cancel,
               style: TextStyle(
                 color: AppColors.primaryNavy,
                 fontSize: 15,
@@ -374,7 +390,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
           Expanded(
             child: Center(
               child: Text(
-                'Edit Payment',
+                l10n.editPaymentTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w600,
@@ -386,7 +402,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
           GestureDetector(
             onTap: _save,
             child: Text(
-              'Save',
+              l10n.save,
               style: TextStyle(
                 color: AppColors.accentOrange,
                 fontWeight: FontWeight.w600,
@@ -430,7 +446,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'PAYING TO',
+                  l10n.payingTo,
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 10,
@@ -457,7 +473,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              'Locked',
+              l10n.lockedLabel,
               style: TextStyle(
                 color: AppColors.textTertiary,
                 fontSize: 11,
@@ -479,7 +495,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'PAYMENT AMOUNT',
+            l10n.paymentAmountSection,
             style: TextStyle(
               color: AppColors.textTertiary,
               fontSize: 10,
@@ -554,7 +570,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Payment Date',
+                        l10n.paymentDateLabel,
                         style: TextStyle(
                           color: AppColors.textTertiary,
                           fontSize: 11,
@@ -587,7 +603,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'PAYMENT METHOD',
+                l10n.paymentMethodLabel,
                 style: TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 10,
@@ -633,7 +649,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                                   : AppColors.textTertiary),
                           const SizedBox(width: 6),
                           Text(
-                            m.label,
+                            _localizedMethodName(m.label),
                             style: TextStyle(
                               color: selected
                                   ? AppColors.primaryNavy
@@ -688,7 +704,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Text(
-              'APPLIED TO INVOICES',
+              l10n.appliedToInvoices,
               style: TextStyle(
                 color: AppColors.textTertiary,
                 fontSize: 10,
@@ -704,7 +720,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'No linked invoices',
+                l10n.noLinkedInvoices,
                 style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
               ),
             )
@@ -773,7 +789,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            purchase.statusLabel,
+                            purchase.localizedStatusLabel(l10n),
                             style: TextStyle(
                               color: purchase.paymentStatus == 2
                                   ? AppColors.success
@@ -803,7 +819,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'NOTES',
+            l10n.notes,
             style: TextStyle(
               color: AppColors.textTertiary,
               fontSize: 10,
@@ -821,7 +837,7 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
               height: 1.5,
             ),
             decoration: InputDecoration(
-              hintText: 'Add a note…',
+              hintText: l10n.addNoteHint,
               hintStyle:
                   TextStyle(color: AppColors.textTertiary, fontSize: 14),
               border: InputBorder.none,
@@ -864,13 +880,13 @@ class _EditPaymentScreenState extends ConsumerState<EditPaymentScreen> {
               ),
             ],
           ),
-          child: const Row(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.check_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 8),
+              const Icon(Icons.check_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
               Text(
-                'Save Changes',
+                l10n.saveChanges,
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,

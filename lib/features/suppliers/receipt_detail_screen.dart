@@ -9,6 +9,7 @@ import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/goods_receipt_model.dart';
 import '../../shared/models/purchase_model.dart';
 import '../../shared/utils/safe_pop.dart';
@@ -22,6 +23,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(currencyProvider);
     final fmt = NumberFormat('#,##0.00', 'en');
     final dateFmt = DateFormat('MMM dd, yyyy');
@@ -50,7 +52,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
         bottom: false,
         child: Column(
           children: [
-            _buildHeader(context, live, ref, currency),
+            _buildHeader(context, live, ref, currency, l10n),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -59,28 +61,28 @@ class ReceiptDetailScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ── Hero card ──
-                    _buildHeroCard(live, currency, fmt, dateFmt, statusColors)
+                    _buildHeroCard(live, currency, fmt, dateFmt, statusColors, l10n)
                         .animate()
                         .fadeIn(duration: 250.ms),
                     const SizedBox(height: 16),
 
                     // ── Linked PO ──
                     if (linkedPurchase != null) ...[
-                      _buildLinkedPO(context, live, linkedPurchase, currency, fmt)
+                      _buildLinkedPO(context, live, linkedPurchase, currency, fmt, l10n)
                           .animate()
                           .fadeIn(duration: 250.ms, delay: 60.ms),
                       const SizedBox(height: 16),
                     ],
 
                     // ── Items ──
-                    _buildItemsList(live, currency, fmt)
+                    _buildItemsList(live, currency, fmt, l10n)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 120.ms),
 
                     // ── Notes ──
                     if (live.notes != null && live.notes!.isNotEmpty) ...[
                       const SizedBox(height: 16),
-                      _buildNotesCard(live)
+                      _buildNotesCard(live, l10n)
                           .animate()
                           .fadeIn(duration: 250.ms, delay: 180.ms),
                     ],
@@ -91,7 +93,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
           ],
         ),
       ),
-      bottomSheet: _buildBottomActions(context, live, ref, currency),
+      bottomSheet: _buildBottomActions(context, live, ref, currency, l10n),
     );
   }
 
@@ -100,7 +102,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
 
   Widget _buildHeader(
-      BuildContext context, GoodsReceipt r, WidgetRef ref, String currency) {
+      BuildContext context, GoodsReceipt r, WidgetRef ref, String currency, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
       decoration: BoxDecoration(
@@ -121,7 +123,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
           Expanded(
             child: Center(
               child: Text(
-                'Receipt Details',
+                l10n.receiptDetailsTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -138,25 +140,25 @@ class ReceiptDetailScreen extends ConsumerWidget {
               if (v == 'edit') {
                 context.pushNamed('EditReceiptScreen', extra: {'receipt': r});
               } else if (v == 'delete') {
-                _confirmDelete(context, r, ref, currency);
+                _confirmDelete(context, r, ref, currency, l10n);
               }
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                   value: 'edit',
                   child: Row(children: [
-                    Icon(Icons.edit_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text('Edit Receipt'),
+                    const Icon(Icons.edit_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    Text(l10n.editReceipt),
                   ])),
-              const PopupMenuItem(
+              PopupMenuItem(
                   value: 'delete',
                   child: Row(children: [
-                    Icon(Icons.delete_rounded,
+                    const Icon(Icons.delete_rounded,
                         size: 18, color: AppColors.badgeTextNegative),
-                    SizedBox(width: 8),
-                    Text('Delete Receipt',
-                        style: TextStyle(color: AppColors.badgeTextNegative)),
+                    const SizedBox(width: 8),
+                    Text(l10n.deleteReceipt,
+                        style: const TextStyle(color: AppColors.badgeTextNegative)),
                   ])),
             ],
           ),
@@ -170,11 +172,11 @@ class ReceiptDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
 
   Widget _buildHeroCard(GoodsReceipt r, String currency, NumberFormat fmt,
-      DateFormat dateFmt, (Color, Color) statusColors) {
+      DateFormat dateFmt, (Color, Color) statusColors, AppLocalizations l10n) {
     final itemNames =
         r.items.map((i) => i.productName).take(3).join(', ');
     final overflow = r.items.length > 3
-        ? ' +${r.items.length - 3} more'
+        ? ' ${l10n.nMoreItems(r.items.length - 3)}'
         : '';
 
     return Container(
@@ -238,7 +240,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  r.statusLabel,
+                  r.localizedStatusLabel(l10n),
                   style: TextStyle(
                     color: statusColors.$2,
                     fontWeight: FontWeight.w700,
@@ -264,7 +266,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                 Expanded(
                   child: Column(
                     children: [
-                      Text('Total Cost',
+                      Text(l10n.totalCostLabel,
                           style: TextStyle(
                               color: AppColors.textTertiary, fontSize: 11)),
                       const SizedBox(height: 4),
@@ -287,7 +289,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                 Expanded(
                   child: Column(
                     children: [
-                      Text('Items',
+                      Text(l10n.items,
                           style: TextStyle(
                               color: AppColors.textTertiary, fontSize: 11)),
                       const SizedBox(height: 4),
@@ -310,7 +312,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                 Expanded(
                   child: Column(
                     children: [
-                      Text('Fulfilment',
+                      Text(l10n.fulfilmentLabel,
                           style: TextStyle(
                               color: AppColors.textTertiary, fontSize: 11)),
                       const SizedBox(height: 4),
@@ -338,9 +340,9 @@ class ReceiptDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
 
   Widget _buildLinkedPO(BuildContext context, GoodsReceipt r,
-      Purchase purchase, String currency, NumberFormat fmt) {
+      Purchase purchase, String currency, NumberFormat fmt, AppLocalizations l10n) {
     final poLabel = purchase.referenceNo.isNotEmpty
-        ? 'PO #${purchase.referenceNo}'
+        ? l10n.poNumberLabel(purchase.referenceNo)
         : 'PO – ${purchase.items.map((i) => i.name).take(2).join(', ')}';
 
     return GestureDetector(
@@ -390,7 +392,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Total: $currency ${fmt.format(purchase.total)} · ${purchase.items.length} item${purchase.items.length == 1 ? '' : 's'}',
+                    l10n.linkedPoTotal('$currency ${fmt.format(purchase.total)}', purchase.items.length),
                     style: TextStyle(
                         color: AppColors.textTertiary, fontSize: 12),
                   ),
@@ -410,7 +412,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
 
   Widget _buildItemsList(
-      GoodsReceipt r, String currency, NumberFormat fmt) {
+      GoodsReceipt r, String currency, NumberFormat fmt, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -423,7 +425,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Items Received',
+            l10n.itemsReceivedLabel,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -431,7 +433,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           for (int i = 0; i < r.items.length; i++) ...[
-            _buildItemRow(r.items[i], currency, fmt),
+            _buildItemRow(r.items[i], currency, fmt, l10n),
             if (i < r.items.length - 1)
               Divider(
                   height: 16,
@@ -443,7 +445,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildItemRow(
-      ReceiptItem item, String currency, NumberFormat fmt) {
+      ReceiptItem item, String currency, NumberFormat fmt, AppLocalizations l10n) {
     return Row(
       children: [
         Expanded(
@@ -460,7 +462,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'Received ${item.receivedQty.toStringAsFixed(0)} of ${item.orderedQty.toStringAsFixed(0)} · $currency ${fmt.format(item.unitCost)} ea',
+                l10n.receivedOfOrdered(item.receivedQty.toStringAsFixed(0), item.orderedQty.toStringAsFixed(0), '$currency ${fmt.format(item.unitCost)}'),
                 style: TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 12,
@@ -485,7 +487,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
   //  NOTES
   // ═══════════════════════════════════════════════════════
 
-  Widget _buildNotesCard(GoodsReceipt r) {
+  Widget _buildNotesCard(GoodsReceipt r, AppLocalizations l10n) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -499,7 +501,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Notes',
+            l10n.notes,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -520,7 +522,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
 
   Widget _buildBottomActions(
-      BuildContext context, GoodsReceipt r, WidgetRef ref, String currency) {
+      BuildContext context, GoodsReceipt r, WidgetRef ref, String currency, AppLocalizations l10n) {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(
@@ -544,13 +546,13 @@ class ReceiptDetailScreen extends ConsumerWidget {
                   color: AppColors.primaryNavy,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.edit_rounded, color: Colors.white, size: 18),
-                    SizedBox(width: 8),
+                    const Icon(Icons.edit_rounded, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
                     Text(
-                      'Edit Receipt',
+                      l10n.editReceipt,
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -564,7 +566,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(width: 12),
           GestureDetector(
-            onTap: () => _confirmDelete(context, r, ref, currency),
+            onTap: () => _confirmDelete(context, r, ref, currency, l10n),
             child: Container(
               width: 54,
               height: 50,
@@ -586,20 +588,18 @@ class ReceiptDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
 
   void _confirmDelete(
-      BuildContext context, GoodsReceipt r, WidgetRef ref, String currency) {
+      BuildContext context, GoodsReceipt r, WidgetRef ref, String currency, AppLocalizations l10n) {
     HapticFeedback.heavyImpact();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Receipt'),
-        content: const Text(
-          'This will delete the receipt and reverse the inventory stock adjustment. Continue?',
-        ),
+        title: Text(l10n.deleteReceipt),
+        content: Text(l10n.deleteReceiptConfirmation),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel',
+            child: Text(l10n.cancel,
                 style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
@@ -625,7 +625,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                           pid,
                           item.variantId ?? '${pid}_v0',
                           -item.receivedQty.toInt(),
-                          'Receipt deleted – reversal',
+                          l10n.receiptDeletedReversal,
                           valuationMethod: ref.read(appSettingsProvider).valuationMethod,
                         );
                   }
@@ -663,15 +663,15 @@ class ReceiptDetailScreen extends ConsumerWidget {
               context.safePop(); // go back
 
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: const Text('Receipt deleted'),
+                content: Text(l10n.receiptDeleted),
                 backgroundColor: AppColors.danger,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
               ));
             },
-            child: const Text('Delete',
-                style: TextStyle(color: AppColors.badgeTextNegative)),
+            child: Text(l10n.delete,
+                style: const TextStyle(color: AppColors.badgeTextNegative)),
           ),
         ],
       ),

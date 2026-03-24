@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../core/providers/app_settings_provider.dart';
 import '../../cash_flow/models/recurring_transaction_model.dart';
 import '../../cash_flow/providers/scheduled_transactions_provider.dart';
 
@@ -15,6 +17,8 @@ class AddRecurringSheet extends ConsumerStatefulWidget {
 }
 
 class _AddRecurringSheetState extends ConsumerState<AddRecurringSheet> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
@@ -59,7 +63,7 @@ class _AddRecurringSheetState extends ConsumerState<AddRecurringSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  widget.transaction != null ? 'Edit Scheduled Transaction' : 'New Recurring Transaction',
+                  widget.transaction != null ? l10n.editScheduledTransaction : l10n.newRecurringTransaction,
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 IconButton(
@@ -81,10 +85,10 @@ class _AddRecurringSheetState extends ConsumerState<AddRecurringSheet> {
               child: Row(
                 children: [
                   Expanded(
-                    child: _buildTypeToggle('Expense', !_isIncome, Colors.red),
+                    child: _buildTypeToggle(l10n.expense, !_isIncome, Colors.red, isIncome: false),
                   ),
                   Expanded(
-                    child: _buildTypeToggle('Income', _isIncome, Colors.green),
+                    child: _buildTypeToggle(l10n.income, _isIncome, Colors.green, isIncome: true),
                   ),
                 ],
               ),
@@ -95,10 +99,10 @@ class _AddRecurringSheetState extends ConsumerState<AddRecurringSheet> {
             TextFormField(
               controller: _titleController,
               decoration: InputDecoration(
-                labelText: 'Title (e.g., Office Rent)',
+                labelText: l10n.titleFieldHint,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              validator: (v) => v!.isEmpty ? 'Required' : null,
+              validator: (v) => v!.isEmpty ? l10n.requiredField : null,
             ),
             const SizedBox(height: 16),
 
@@ -107,11 +111,11 @@ class _AddRecurringSheetState extends ConsumerState<AddRecurringSheet> {
               controller: _amountController,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: 'Amount (EGP)',
+                labelText: l10n.amountFieldHint(ref.watch(appSettingsProvider).currency),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 prefixIcon: const Icon(Icons.attach_money_rounded),
               ),
-              validator: (v) => v!.isEmpty ? 'Required' : null,
+              validator: (v) => v!.isEmpty ? l10n.requiredField : null,
             ),
             const SizedBox(height: 16),
 
@@ -122,13 +126,18 @@ class _AddRecurringSheetState extends ConsumerState<AddRecurringSheet> {
                   child: DropdownButtonFormField<RecurrenceFrequency>(
                     initialValue: _frequency,
                     decoration: InputDecoration(
-                      labelText: 'Frequency',
+                      labelText: l10n.frequencyLabel,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     items: RecurrenceFrequency.values.map((f) {
+                      final label = switch (f) {
+                        RecurrenceFrequency.weekly => l10n.weekly,
+                        RecurrenceFrequency.monthly => l10n.monthly,
+                        RecurrenceFrequency.yearly => l10n.yearly,
+                      };
                       return DropdownMenuItem(
                         value: f,
-                        child: Text(f.name[0].toUpperCase() + f.name.substring(1)),
+                        child: Text(label),
                       );
                     }).toList(),
                     onChanged: (v) => setState(() => _frequency = v!),
@@ -178,7 +187,7 @@ class _AddRecurringSheetState extends ConsumerState<AddRecurringSheet> {
                   backgroundColor: AppColors.primaryNavy,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('Save Scheduled Transaction', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: Text(l10n.saveScheduledTransaction, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -187,10 +196,10 @@ class _AddRecurringSheetState extends ConsumerState<AddRecurringSheet> {
     );
   }
 
-  Widget _buildTypeToggle(String label, bool isSelected, Color color) {
+  Widget _buildTypeToggle(String label, bool isSelected, Color color, {required bool isIncome}) {
     return GestureDetector(
       onTap: () {
-        setState(() => _isIncome = label == 'Income');
+        setState(() => _isIncome = isIncome);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),

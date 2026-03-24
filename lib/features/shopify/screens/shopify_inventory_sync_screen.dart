@@ -89,7 +89,7 @@ class _ShopifyInventorySyncScreenState
                 ),
                 error: (e, _) => Center(
                   child: Text(
-                     'Failed to load mappings:\n$e',
+                     l10n.shopifyLoadMappingsError(e.toString()),
                     textAlign: TextAlign.center,
                     style: AppTypography.bodyMedium.copyWith(
                       color: AppColors.danger,
@@ -145,7 +145,7 @@ class _ShopifyInventorySyncScreenState
           ),
           const Spacer(),
           Text(
-             'Inventory Sync',
+             l10n.shopifyInventorySyncTitle,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.primaryNavy,
               fontWeight: FontWeight.w700,
@@ -170,15 +170,14 @@ class _ShopifyInventorySyncScreenState
                 size: 48, color: AppColors.textTertiary),
             const SizedBox(height: 16),
             Text(
-               'No Product Mappings',
+               l10n.shopifyNoProductMappings,
               style: AppTypography.h3.copyWith(
                 color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-               'Link your Masari products to Shopify products first\n'
-              'using the Product Mappings screen.',
+               l10n.shopifyNoProductMappingsDesc,
               textAlign: TextAlign.center,
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textTertiary,
@@ -216,15 +215,14 @@ class _ShopifyInventorySyncScreenState
                 _InfoBanner(
                   color: AppColors.primaryNavy,
                   icon: Icons.info_outline_rounded,
-                  text:  'Pull will update stock levels in Masari to '
-                      'match Shopify for all mapped products.  Review the preview before confirming.',
+                  text: l10n.shopifyPullInfo,
                 ).animate().fadeIn(duration: 200.ms),
                 const SizedBox(height: 16),
 
                 if (!hasPreview) ...[
                   // Show mapped products list
                   Text(
-                    '${mappedProducts.length} MAPPED PRODUCT(S)',
+                    l10n.shopifyMappedProductsCount(mappedProducts.length),
                     style: AppTypography.captionSmall.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w700,
@@ -266,7 +264,7 @@ class _ShopifyInventorySyncScreenState
           _buildDualActions(
             cancelLabel: l10n.cancel,
             confirmLabel:
-                 'Confirm Pull (${preview.where((i) => i.hasChange).length} changes)',
+                 l10n.shopifyConfirmPullCount(preview.where((i) => i.hasChange).length),
             isSyncing: syncStatus.isSyncing,
             hasChanges: preview.any((i) => i.hasChange),
             onCancel: () {
@@ -306,9 +304,7 @@ class _ShopifyInventorySyncScreenState
                 _InfoBanner(
                   color: AppColors.warning,
                   icon: Icons.warning_amber_rounded,
-                  text:  'Push will overwrite Shopify stock levels with '
-                      'your Masari inventory values. Select products, '
-                      'then review the preview.',
+                  text: l10n.shopifyPushInfo,
                 ).animate().fadeIn(duration: 200.ms),
                 const SizedBox(height: 16),
 
@@ -341,7 +337,7 @@ class _ShopifyInventorySyncScreenState
                             ),
                             const SizedBox(width: 8),
                             Text(
-                               'Select All (${mappedProducts.length})',
+                               l10n.shopifySelectAll(mappedProducts.length),
                               style:
                                   AppTypography.labelMedium.copyWith(
                                 color: AppColors.primaryNavy,
@@ -392,7 +388,7 @@ class _ShopifyInventorySyncScreenState
           _buildBottomAction(
             label: _selectedProductIds.isEmpty
                 ? l10n.selectProductsToPreview
-                :  'Fetch Preview (${_selectedProductIds.length})',
+                :  l10n.shopifyFetchPreviewCount(_selectedProductIds.length),
             icon: Icons.preview_rounded,
             isSyncing: syncStatus.isSyncing,
             enabled: _selectedProductIds.isNotEmpty,
@@ -407,7 +403,7 @@ class _ShopifyInventorySyncScreenState
           _buildDualActions(
             cancelLabel: l10n.cancel,
             confirmLabel:
-                 'Confirm Push (${preview.where((i) => i.hasChange).length} changes)',
+                 l10n.shopifyConfirmPushCount(preview.where((i) => i.hasChange).length),
             isSyncing: syncStatus.isSyncing,
             hasChanges: preview.any((i) => i.hasChange),
             onCancel: () {
@@ -470,7 +466,7 @@ class _ShopifyInventorySyncScreenState
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        'Loading…',
+                        l10n.shopifyLoadingStatus,
                         style: AppTypography.labelLarge.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -535,7 +531,7 @@ class _ShopifyInventorySyncScreenState
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      'Syncing…',
+                      l10n.shopifySyncingStatus,
                       style: AppTypography.labelLarge.copyWith(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w700,
@@ -587,7 +583,7 @@ class _ShopifyInventorySyncScreenState
                       child: Text(
                         hasChanges
                             ? confirmLabel
-                            :  'No Changes',
+                            :  l10n.shopifyNoChanges,
                         textAlign: TextAlign.center,
                         style: AppTypography.labelMedium.copyWith(
                           color: Colors.white,
@@ -712,6 +708,7 @@ class _PreviewTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final changedItems = items.where((i) => i.hasChange).toList();
     final unchangedItems =
         items.where((i) => !i.hasChange && !i.isUnmapped).toList();
@@ -743,9 +740,8 @@ class _PreviewTable extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 changedItems.isNotEmpty
-                    ? '${changedItems.length} variant(s) will change, '
-                        '${unchangedItems.length} unchanged'
-                    :  'All variants are already in sync!',
+                    ? l10n.shopifyPreviewChangeSummary(changedItems.length, unchangedItems.length)
+                    :  l10n.shopifyAllInSync,
                 style: AppTypography.bodySmall.copyWith(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
@@ -757,7 +753,7 @@ class _PreviewTable extends StatelessWidget {
         const SizedBox(height: 14),
 
         // Table header
-        _tableHeader(direction),
+        _tableHeader(l10n, direction),
         const Divider(height: 1),
 
         // Changed items first
@@ -768,7 +764,7 @@ class _PreviewTable extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(
-               'UNCHANGED (${unchangedItems.length})',
+               l10n.shopifyUnchangedCount(unchangedItems.length),
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
                 fontWeight: FontWeight.w700,
@@ -801,7 +797,7 @@ class _PreviewTable extends StatelessWidget {
                         size: 16, color: AppColors.warning),
                     const SizedBox(width: 6),
                     Text(
-                      '${unmappedItems.length} variant(s) skipped',
+                      l10n.shopifySkippedCount(unmappedItems.length),
                       style: AppTypography.labelSmall.copyWith(
                         color: AppColors.warning,
                         fontWeight: FontWeight.w700,
@@ -815,7 +811,7 @@ class _PreviewTable extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
                       '${item.displayName}'
-                      '${item.warning != null ? ' — ${item.warning}' : ' — no Shopify level found'}',
+                      '${item.warning != null ? ' — ${item.warning}' : ' — ${l10n.shopifyNoShopifyLevelFound}'}',
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                         fontSize: 12,
@@ -830,7 +826,7 @@ class _PreviewTable extends StatelessWidget {
     );
   }
 
-  Widget _tableHeader(String direction) {
+  Widget _tableHeader(AppLocalizations l10n, String direction) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
       child: Row(
@@ -838,7 +834,7 @@ class _PreviewTable extends StatelessWidget {
           Expanded(
             flex: 3,
             child: Text(
-               'PRODUCT',
+               l10n.shopifyTableProduct,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
                 fontWeight: FontWeight.w700,
@@ -850,7 +846,7 @@ class _PreviewTable extends StatelessWidget {
           SizedBox(
             width: 55,
             child: Text(
-               'MASARI',
+               l10n.shopifyTableMasari,
               textAlign: TextAlign.center,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
@@ -863,7 +859,7 @@ class _PreviewTable extends StatelessWidget {
           SizedBox(
             width: 55,
             child: Text(
-               'SHOPIFY',
+               l10n.shopifyTableShopify,
               textAlign: TextAlign.center,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
@@ -876,7 +872,7 @@ class _PreviewTable extends StatelessWidget {
           SizedBox(
             width: 50,
             child: Text(
-               'DELTA',
+               l10n.shopifyTableDelta,
               textAlign: TextAlign.center,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
@@ -1014,6 +1010,7 @@ class _ProductSyncTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final totalStock = product.variants.fold<int>(
         0, (sum, v) => sum + v.currentStock);
 
@@ -1053,7 +1050,7 @@ class _ProductSyncTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  '${product.variants.length} variant(s) · $totalStock in stock',
+                  l10n.shopifyVariantInfo(product.variants.length, totalStock),
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textSecondary,
                     fontSize: 12,
@@ -1090,6 +1087,7 @@ class _SelectableProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final totalStock = product.variants.fold<int>(
         0, (sum, v) => sum + v.currentStock);
 
@@ -1135,7 +1133,7 @@ class _SelectableProductTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    '${mappings.length} mapping(s) · $totalStock in stock',
+                    l10n.shopifyMappingInfo(mappings.length, totalStock),
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondary,
                       fontSize: 12,

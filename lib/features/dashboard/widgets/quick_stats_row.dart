@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/app_settings_provider.dart';
+import '../../../l10n/app_localizations.dart';
 import '../providers/dashboard_state_provider.dart';
 
 /// Horizontal scrolling row of stat cards: Revenue, Expenses, Net Profit.
@@ -83,7 +84,8 @@ class QuickStatsRow extends ConsumerWidget {
         ? ((curProfit - prevProfit) / prevProfit.abs() * 100)
         : (curProfit > 0 ? 100.0 : (curProfit < 0 ? -100.0 : 0.0));
 
-    final vsLabel = ds.period.vsLabel;
+    final l10n = AppLocalizations.of(context)!;
+    final vsLabel = ds.period.localizedVsLabel(l10n);
 
     return SizedBox(
       height: 120,
@@ -93,7 +95,7 @@ class QuickStatsRow extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         children: [
           _StatCard(
-            label: 'Revenue',
+            label: l10n.revenue,
             amount: fmt.format(curRevenue),
             change: '${revenuePct >= 0 ? '+' : ''}${revenuePct.toStringAsFixed(1)}% $vsLabel',
             changePositive: revenuePct >= 0,
@@ -102,7 +104,7 @@ class QuickStatsRow extends ConsumerWidget {
           ),
           const SizedBox(width: 12),
           _StatCard(
-            label: 'Expenses',
+            label: l10n.expenses,
             amount: fmt.format(curExpenses),
             change: '${expensesPct >= 0 ? '+' : ''}${expensesPct.toStringAsFixed(1)}% $vsLabel',
             changePositive: expensesPct <= 0, // lower expenses = positive
@@ -111,11 +113,11 @@ class QuickStatsRow extends ConsumerWidget {
           ),
           const SizedBox(width: 12),
           _StatCard(
-            label: 'Net Profit',
+            label: l10n.netProfit,
             amount: fmt.format(curProfit),
             change: curProfit >= 0
                 ? '${profitPct >= 0 ? '+' : ''}${profitPct.toStringAsFixed(1)}% $vsLabel'
-                : 'Loss $vsLabel',
+                : '${l10n.lossLabel} $vsLabel',
             changePositive: curProfit >= 0 && profitPct >= 0,
             icon: Icons.monetization_on_rounded,
             accentColor: AppColors.accentOrange,

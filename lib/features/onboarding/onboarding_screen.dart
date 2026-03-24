@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/navigation/app_router.dart';
+import '../../l10n/app_localizations.dart';
 import 'widgets/onboarding_page.dart';
 import 'widgets/onboarding_illustrations.dart';
 
@@ -22,31 +23,28 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   late AnimationController _buttonAnimController;
   late Animation<double> _buttonScale;
 
-  final List<OnboardingPageData> _pages = const [
+  List<OnboardingPageData> _pages(AppLocalizations l10n) => [
     OnboardingPageData(
-      title: 'Track Your Money Effortlessly',
-      highlightWord: 'Effortlessly',
-      subtitle:
-          'Automatically categorize income and expenses. No accounting degree needed.',
-      illustration: TrackIllustration(),
+      title: l10n.onboardingTitle1,
+      highlightWord: l10n.onboardingHighlight1,
+      subtitle: l10n.onboardingSubtitle1,
+      illustration: const TrackIllustration(),
     ),
     OnboardingPageData(
-      title: 'AI Does the Hard Work',
-      highlightWord: 'Hard Work',
-      subtitle:
-          'Smart insights, error detection, and plain-English explanations of your finances.',
-      illustration: AIInsightIllustration(),
+      title: l10n.onboardingTitle2,
+      highlightWord: l10n.onboardingHighlight2,
+      subtitle: l10n.onboardingSubtitle2,
+      illustration: const AIInsightIllustration(),
     ),
     OnboardingPageData(
-      title: 'Grow With Confidence',
-      highlightWord: 'Confidence',
-      subtitle:
-          'Monthly reports, profitability tracking, and business valuation — all automated.',
-      illustration: GrowIllustration(),
+      title: l10n.onboardingTitle3,
+      highlightWord: l10n.onboardingHighlight3,
+      subtitle: l10n.onboardingSubtitle3,
+      illustration: const GrowIllustration(),
     ),
   ];
 
-  bool get _isLastPage => _currentPage == _pages.length - 1;
+  bool get _isLastPage => _currentPage == 2;
 
   @override
   void initState() {
@@ -107,10 +105,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               child: PageView.builder(
                 controller: _pageController,
                 onPageChanged: _onPageChanged,
-                itemCount: _pages.length,
+                itemCount: 3,
                 physics: const BouncingScrollPhysics(),
                 itemBuilder: (context, index) {
-                  return OnboardingPage(data: _pages[index]);
+                  final l10n = AppLocalizations.of(context)!;
+                  return OnboardingPage(data: _pages(l10n)[index]);
                 },
               ),
             ),
@@ -139,7 +138,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             child: GestureDetector(
               onTap: _isLastPage ? null : _skip,
               child: Text(
-                'Skip',
+                AppLocalizations.of(context)!.onboardingSkip,
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -179,7 +178,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildPageIndicators() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(_pages.length, (index) {
+      children: List.generate(3, (index) {
         final isActive = index == _currentPage;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 300),
@@ -236,7 +235,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 child: Text(
-                  _isLastPage ? 'Get Started' : 'Next',
+                  _isLastPage ? AppLocalizations.of(context)!.getStarted : AppLocalizations.of(context)!.onboardingNext,
                   key: ValueKey(_isLastPage),
                   style: AppTypography.labelLarge.copyWith(
                     color: Colors.white,

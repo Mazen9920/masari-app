@@ -7,6 +7,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/sale_model.dart';
 import '../../../shared/models/transaction_model.dart' as txn;
 import '../../../shared/utils/money_utils.dart';
@@ -32,6 +33,7 @@ class EditCogsDialog extends ConsumerStatefulWidget {
 }
 
 class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   late List<TextEditingController> _controllers;
   bool _saving = false;
   final _fmt = NumberFormat('#,##0.00', 'en');
@@ -119,7 +121,7 @@ class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'COGS updated — ${widget.currency} ${_fmt.format(newTotalCogs)}',
+              l10n.cogsUpdated(widget.currency, _fmt.format(newTotalCogs)),
             ),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
@@ -132,7 +134,7 @@ class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to update COGS: $e'),
+            content: Text(l10n.failedUpdateCogs(e.toString())),
             backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
             shape:
@@ -181,7 +183,7 @@ class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Edit Cost of Goods',
+                          l10n.editCostOfGoods,
                           style: AppTypography.h3.copyWith(
                             color: AppColors.textPrimary,
                             fontSize: 17,
@@ -189,7 +191,7 @@ class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Enter the cost price per unit for each item',
+                          l10n.enterCostPricePerUnit,
                           style: AppTypography.captionSmall
                               .copyWith(color: AppColors.textSecondary),
                         ),
@@ -235,7 +237,7 @@ class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Total COGS',
+                        l10n.totalCogs,
                         style: AppTypography.labelMedium.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w700,
@@ -268,7 +270,7 @@ class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
                             ),
                           ),
                           child: Text(
-                            'Cancel',
+                            l10n.cancel,
                             style: AppTypography.labelSmall.copyWith(
                               color: AppColors.textSecondary,
                               fontWeight: FontWeight.w600,
@@ -297,7 +299,7 @@ class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
                                   ),
                                 )
                               : Text(
-                                  'Save',
+                                  l10n.save,
                                   style: AppTypography.labelSmall.copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w700,
@@ -337,7 +339,7 @@ class _EditCogsDialogState extends ConsumerState<EditCogsDialog> {
               ),
             ),
             Text(
-              'Qty: ${item.quantity % 1 == 0 ? item.quantity.toInt() : item.quantity}',
+              '${l10n.qty}: ${item.quantity % 1 == 0 ? item.quantity.toInt() : item.quantity}',
               style: AppTypography.captionSmall
                   .copyWith(color: AppColors.textSecondary),
             ),

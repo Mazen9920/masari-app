@@ -4,6 +4,7 @@
 library;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../l10n/app_localizations.dart';
 import '../utils/money_utils.dart';
 
 /// Payment status for a sale.
@@ -220,6 +221,13 @@ class Sale {
     if (shopifyOrderNumber != null) return '#$shopifyOrderNumber Shopify';
     if (orderNumber != null) return '#O-$orderNumber';
     return customerName ?? 'Walk-in Customer';
+  }
+
+  /// Localized version of [displayOrderTitle].
+  String localizedDisplayOrderTitle(AppLocalizations l10n) {
+    if (shopifyOrderNumber != null) return '#$shopifyOrderNumber Shopify';
+    if (orderNumber != null) return '#O-$orderNumber';
+    return customerName ?? l10n.walkIn;
   }
 
   // ── copyWith ─────────────────────────────────────────────

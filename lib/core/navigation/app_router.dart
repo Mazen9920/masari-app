@@ -275,10 +275,10 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         name: 'ScheduledTransactionsScreen',
         path: AppRoutes.scheduledTransactions,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.recurringTransactions,
-          appBarTitle: 'Scheduled Transactions',
-          child: ScheduledTransactionsScreen(),
+          appBarTitle: AppLocalizations.of(context)!.scheduledTransactions,
+          child: const ScheduledTransactionsScreen(),
         ),
       ),
       GoRoute(
@@ -295,7 +295,11 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
       GoRoute(
         path: AppRoutes.suppliers,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const SuppliersOverviewScreen(),
+        builder: (context, state) => FeatureGateScreen(
+          feature: GrowthFeature.supplierManagement,
+          appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+          child: const SuppliersOverviewScreen(),
+        ),
       ),
       GoRoute(
         name: 'TransactionDetailScreen',
@@ -321,7 +325,11 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final args = state.extra as Map<String, dynamic>? ?? {};
-          return SupplierDetailScreen(supplier: args['supplier']);
+          return FeatureGateScreen(
+            feature: GrowthFeature.supplierManagement,
+            appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+            child: SupplierDetailScreen(supplier: args['supplier']),
+          );
         },
       ),
       GoRoute(
@@ -375,7 +383,11 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final args = state.extra as Map<String, dynamic>? ?? {};
-          return EditSupplierScreen(supplier: args['supplier']);
+          return FeatureGateScreen(
+            feature: GrowthFeature.supplierManagement,
+            appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+            child: EditSupplierScreen(supplier: args['supplier']),
+          );
         },
       ),
       GoRoute(
@@ -384,9 +396,13 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final args = state.extra as Map<String, dynamic>? ?? {};
-          return EditPaymentScreen(
-            payment: args['payment'],
-            supplierId: args['supplierId'],
+          return FeatureGateScreen(
+            feature: GrowthFeature.supplierManagement,
+            appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+            child: EditPaymentScreen(
+              payment: args['payment'],
+              supplierId: args['supplierId'],
+            ),
           );
         },
       ),
@@ -396,9 +412,13 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final args = state.extra as Map<String, dynamic>? ?? {};
-          return RecordPurchaseScreen(
-            preselectedSupplierId: args['preselectedSupplierId'],
-            purchaseToEdit: args['purchaseToEdit'],
+          return FeatureGateScreen(
+            feature: GrowthFeature.supplierManagement,
+            appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+            child: RecordPurchaseScreen(
+                preselectedSupplierId: args['preselectedSupplierId'],
+              purchaseToEdit: args['purchaseToEdit'],
+            ),
           );
         },
       ),
@@ -408,9 +428,13 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final args = state.extra as Map<String, dynamic>? ?? {};
-          return RecordPaymentScreen(
-            preselectedSupplierId: args['preselectedSupplierId'],
-            preselectedPurchaseId: args['preselectedPurchaseId'],
+          return FeatureGateScreen(
+            feature: GrowthFeature.supplierManagement,
+            appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+            child: RecordPaymentScreen(
+              preselectedSupplierId: args['preselectedSupplierId'],
+              preselectedPurchaseId: args['preselectedPurchaseId'],
+            ),
           );
         },
       ),
@@ -431,7 +455,7 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
           final args = state.extra as Map<String, dynamic>? ?? {};
           return TransactionsListScreen(
             showBackButton: args['showBackButton'] ?? true,
-            pageTitle: args['pageTitle'] ?? 'Transactions',
+            pageTitle: args['pageTitle'] ?? AppLocalizations.of(context)!.transactions,
             initialFilter: args['initialFilter'],
           );
         },
@@ -442,7 +466,11 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final args = state.extra as Map<String, dynamic>? ?? {};
-          return PaymentDetailScreen(payment: args['payment'], supplier: args['supplier']);
+          return FeatureGateScreen(
+            feature: GrowthFeature.supplierManagement,
+            appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+            child: PaymentDetailScreen(payment: args['payment'], supplier: args['supplier']),
+          );
         },
       ),
       GoRoute(
@@ -451,7 +479,11 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final args = state.extra as Map<String, dynamic>? ?? {};
-          return PurchaseDetailScreen(supplier: args['supplier'], purchase: args['purchase']);
+          return FeatureGateScreen(
+            feature: GrowthFeature.supplierManagement,
+            appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+            child: PurchaseDetailScreen(supplier: args['supplier'], purchase: args['purchase']),
+          );
         },
       ),
       GoRoute(
@@ -462,9 +494,13 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
           final args = state.extra as Map<String, dynamic>? ?? {};
           final receipt = args['receipt'];
           if (receipt is! GoodsReceipt) {
-            return const Scaffold(body: Center(child: Text('Receipt not found')));
+            return Scaffold(body: Center(child: Text(AppLocalizations.of(context)!.receiptNotFound)));
           }
-          return ReceiptDetailScreen(receipt: receipt);
+          return FeatureGateScreen(
+            feature: GrowthFeature.supplierManagement,
+            appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+            child: ReceiptDetailScreen(receipt: receipt),
+          );
         },
       ),
       GoRoute(
@@ -475,9 +511,13 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
           final args = state.extra as Map<String, dynamic>? ?? {};
           final receipt = args['receipt'];
           if (receipt is! GoodsReceipt) {
-            return const Scaffold(body: Center(child: Text('Receipt not found')));
+            return Scaffold(body: Center(child: Text(AppLocalizations.of(context)!.receiptNotFound)));
           }
-          return EditReceiptScreen(receipt: receipt);
+          return FeatureGateScreen(
+            feature: GrowthFeature.supplierManagement,
+            appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+            child: EditReceiptScreen(receipt: receipt),
+          );
         },
       ),
       GoRoute(
@@ -490,36 +530,40 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         name: 'AddMaterialScreen',
         path: '/inventory/add-material',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.rawMaterials,
-          appBarTitle: 'Add Material',
-          child: AddMaterialScreen(),
+          appBarTitle: AppLocalizations.of(context)!.addMaterial,
+          child: const AddMaterialScreen(),
         ),
       ),
       GoRoute(
         name: 'AddSupplierScreen',
         path: '/suppliers/add',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const AddSupplierScreen(),
+        builder: (context, state) => FeatureGateScreen(
+          feature: GrowthFeature.supplierManagement,
+          appBarTitle: AppLocalizations.of(context)!.suppliersTitle,
+          child: const AddSupplierScreen(),
+        ),
       ),
       GoRoute(
         name: 'HubSettingsScreen',
         path: '/manage/settings',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.hubSettings,
-          appBarTitle: 'Hub Settings',
-          child: HubSettingsScreen(),
+          appBarTitle: AppLocalizations.of(context)!.hubSettings,
+          child: const HubSettingsScreen(),
         ),
       ),
       GoRoute(
         name: 'ExportShareScreen',
         path: '/reports/export',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.exportReports,
-          appBarTitle: 'Export & Share',
-          child: ExportShareScreen(),
+          appBarTitle: AppLocalizations.of(context)!.exportAndShare,
+          child: const ExportShareScreen(),
         ),
       ),
       GoRoute(
@@ -537,10 +581,10 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         name: 'BudgetsOverviewScreen',
         path: '/categories/budgets',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.budgetLimits,
-          appBarTitle: 'Budgets',
-          child: BudgetsOverviewScreen(),
+          appBarTitle: AppLocalizations.of(context)!.budgetsTitle,
+          child: const BudgetsOverviewScreen(),
         ),
       ),
       GoRoute(
@@ -601,50 +645,50 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         name: 'PaymentsSummaryScreen',
         path: '/suppliers/payments',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.paymentsSummary,
-          appBarTitle: 'Payments Dashboard',
-          child: PaymentsSummaryScreen(),
+          appBarTitle: AppLocalizations.of(context)!.paymentsDashboardTitle,
+          child: const PaymentsSummaryScreen(),
         ),
       ),
       GoRoute(
         name: 'PurchasesSummaryScreen',
         path: '/suppliers/purchases',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.purchasesSummary,
-          appBarTitle: 'Purchases Dashboard',
-          child: PurchasesSummaryScreen(),
+          appBarTitle: AppLocalizations.of(context)!.purchasesDashboardTitle,
+          child: const PurchasesSummaryScreen(),
         ),
       ),
       GoRoute(
         name: 'ReceivedGoodsSummaryScreen',
         path: '/suppliers/received-goods',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.goodsReceiving,
-          appBarTitle: 'Received Goods',
-          child: ReceivedGoodsSummaryScreen(),
+          appBarTitle: AppLocalizations.of(context)!.receivedGoods,
+          child: const ReceivedGoodsSummaryScreen(),
         ),
       ),
       GoRoute(
         name: 'InventorySettingsScreen',
         path: '/inventory/settings',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.inventorySettings,
-          appBarTitle: 'Inventory Settings',
-          child: InventorySettingsScreen(),
+          appBarTitle: AppLocalizations.of(context)!.inventorySettings,
+          child: const InventorySettingsScreen(),
         ),
       ),
       GoRoute(
         name: 'PinnedActionsScreen',
         path: '/manage/pinned',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.hubSettings,
-          appBarTitle: 'Pinned Actions',
-          child: PinnedActionsScreen(),
+          appBarTitle: AppLocalizations.of(context)!.pinnedActions,
+          child: const PinnedActionsScreen(),
         ),
       ),
       GoRoute(
@@ -655,7 +699,7 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
            final args = state.extra as Map<String, dynamic>? ?? {};
            return FeatureGateScreen(
              feature: GrowthFeature.aiChat,
-             appBarTitle: 'AI Insights',
+             appBarTitle: AppLocalizations.of(context)!.aiInsightsTitle,
              child: AiChatScreen(contextType: args['contextType']),
            );
         },
@@ -665,10 +709,10 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         name: 'SalesListScreen',
         path: '/sales',
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.salesSystem,
-          appBarTitle: 'Sales',
-          child: SalesListScreen(),
+          appBarTitle: AppLocalizations.of(context)!.salesTitle,
+          child: const SalesListScreen(),
         ),
       ),
       GoRoute(
@@ -699,7 +743,7 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
           final args = state.extra as Map<String, dynamic>? ?? {};
           return FeatureGateScreen(
             feature: GrowthFeature.goodsReceiving,
-            appBarTitle: 'Receive Goods',
+            appBarTitle: AppLocalizations.of(context)!.receiveGoods,
             child: ReceiveGoodsScreen(
               preselectedSupplierId: args['preselectedSupplierId'] as String?,
               preselectedPurchaseId: args['preselectedPurchaseId'] as String?,
@@ -712,60 +756,60 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         name: 'ShopifyConnectScreen',
         path: AppRoutes.shopify,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.shopifyIntegration,
-          appBarTitle: 'Shopify',
-          child: ShopifyConnectScreen(),
+          appBarTitle: AppLocalizations.of(context)!.shopifyTitle,
+          child: const ShopifyConnectScreen(),
         ),
       ),
       GoRoute(
         name: 'ShopifySetupWizard',
         path: AppRoutes.shopifySetupWizard,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.shopifyIntegration,
-          appBarTitle: 'Shopify Setup',
-          child: ShopifySetupWizardScreen(),
+          appBarTitle: AppLocalizations.of(context)!.shopifySetup,
+          child: const ShopifySetupWizardScreen(),
         ),
       ),
       GoRoute(
         name: 'ShopifyProductMappingScreen',
         path: AppRoutes.shopifyProductMappings,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.shopifyIntegration,
-          appBarTitle: 'Product Mappings',
-          child: ShopifyProductMappingScreen(),
+          appBarTitle: AppLocalizations.of(context)!.productMappingsTitle,
+          child: const ShopifyProductMappingScreen(),
         ),
       ),
       GoRoute(
         name: 'ShopifyImportScreen',
         path: AppRoutes.shopifyImport,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.shopifyIntegration,
-          appBarTitle: 'Import Orders',
-          child: ShopifyImportScreen(),
+          appBarTitle: AppLocalizations.of(context)!.importOrders,
+          child: const ShopifyImportScreen(),
         ),
       ),
       GoRoute(
         name: 'ShopifyInventorySyncScreen',
         path: AppRoutes.shopifyInventorySync,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.shopifyIntegration,
-          appBarTitle: 'Inventory Sync',
-          child: ShopifyInventorySyncScreen(),
+          appBarTitle: AppLocalizations.of(context)!.inventorySyncLabel,
+          child: const ShopifyInventorySyncScreen(),
         ),
       ),
       GoRoute(
         name: 'ShopifySyncHistoryScreen',
         path: AppRoutes.shopifySyncHistory,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (context, state) => const FeatureGateScreen(
+        builder: (context, state) => FeatureGateScreen(
           feature: GrowthFeature.shopifyIntegration,
-          appBarTitle: 'Sync History',
-          child: ShopifySyncHistoryScreen(),
+          appBarTitle: AppLocalizations.of(context)!.syncHistoryTitle,
+          child: const ShopifySyncHistoryScreen(),
         ),
       ),
     ],

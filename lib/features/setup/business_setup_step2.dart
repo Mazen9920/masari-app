@@ -23,22 +23,22 @@ class _BusinessSetupStep2State extends ConsumerState<BusinessSetupStep2> {
     _GoalOption(
       icon: Icons.trending_up_rounded,
       title: l10n.trackProfitability,
-      subtitle: 'Monitor margins and net profit in real-time.',
+      subtitle: l10n.goalTrackProfitSubtitle,
     ),
     _GoalOption(
       icon: Icons.account_balance_wallet_outlined,
       title: l10n.controlCashFlow,
-      subtitle: 'Manage incoming and outgoing payments.',
+      subtitle: l10n.goalCashFlowSubtitle,
     ),
     _GoalOption(
       icon: Icons.rocket_launch_rounded,
       title: l10n.growMyBusiness,
-      subtitle: 'Secure funding and plan for expansion.',
+      subtitle: l10n.goalGrowSubtitle,
     ),
     _GoalOption(
       icon: Icons.description_outlined,
       title: l10n.createFinancialReports,
-      subtitle: 'Automate P&L and balance sheet generation.',
+      subtitle: l10n.goalReportsSubtitle,
     ),
   ];
 
@@ -54,10 +54,9 @@ class _BusinessSetupStep2State extends ConsumerState<BusinessSetupStep2> {
   Widget build(BuildContext context) {
     return SetupShell(
       currentStep: 2,
-      title: "What's Your Main Goal?",
-      subtitle:
-          "Select the one that matters most right now. We'll customize your dashboard based on this.",
-      buttonText: 'Continue',
+      title: l10n.whatsYourMainGoal,
+      subtitle: l10n.setupStep2Subtitle,
+      buttonText: l10n.continueButton,
       onBack: () => context.go(AppRoutes.setupStep1),
       onContinue: _onContinue,
       child: Column(

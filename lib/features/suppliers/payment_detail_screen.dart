@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/payment_model.dart';
 import '../../shared/models/purchase_model.dart';
 import '../../shared/models/supplier_model.dart';
@@ -20,8 +21,19 @@ class PaymentDetailScreen extends ConsumerWidget {
   final Supplier? supplier;
   const PaymentDetailScreen({super.key, this.paymentId, this.payment, this.supplier});
 
+  String _localizedMethodName(String method, AppLocalizations l10n) {
+    switch (method) {
+      case 'Cash': return l10n.cash;
+      case 'Bank Transfer': return l10n.bankTransfer;
+      case 'InstaPay': return l10n.instaPay;
+      case 'Vodafone Cash': return l10n.vodafoneCash;
+      default: return method;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(currencyProvider);
     final fmt = NumberFormat('#,##0');
     final purchases = ref.watch(purchasesProvider).value ?? [];
@@ -32,27 +44,27 @@ class PaymentDetailScreen extends ConsumerWidget {
         bottom: false,
         child: Column(
           children: [
-            _buildHeader(context),
+            _buildHeader(context, l10n),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 child: Column(
                   children: [
-                    _buildHeroCard(fmt, currency)
+                    _buildHeroCard(fmt, currency, l10n)
                         .animate()
                         .fadeIn(duration: 300.ms)
                         .scale(begin: const Offset(0.95, 0.95)),
                     const SizedBox(height: 16),
-                    _buildInfoCard(fmt, currency)
+                    _buildInfoCard(fmt, currency, l10n)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 80.ms),
                     const SizedBox(height: 16),
-                    _buildInvoicesCard(fmt, currency, purchases)
+                    _buildInvoicesCard(fmt, currency, purchases, l10n)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 120.ms),
                     const SizedBox(height: 16),
-                    _buildAttachmentsCard()
+                    _buildAttachmentsCard(l10n)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 160.ms),
                     const SizedBox(height: 24),
@@ -60,7 +72,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            _buildBottomActions(context),
+            _buildBottomActions(context, l10n),
           ],
         ),
       ),
@@ -78,7 +90,7 @@ class PaymentDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
   //  HEADER
   // ═══════════════════════════════════════════════════════
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
       decoration: BoxDecoration(
@@ -101,7 +113,7 @@ class PaymentDetailScreen extends ConsumerWidget {
           Expanded(
             child: Center(
               child: Text(
-                'Payment Details',
+                l10n.paymentDetailsTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -133,7 +145,7 @@ class PaymentDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
   //  HERO CARD — success
   // ═══════════════════════════════════════════════════════
-  Widget _buildHeroCard(NumberFormat fmt, String currency) {
+  Widget _buildHeroCard(NumberFormat fmt, String currency, AppLocalizations l10n) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
@@ -167,8 +179,8 @@ class PaymentDetailScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 14),
-          const Text(
-            'Payment Successful',
+          Text(
+            l10n.paymentSuccessful,
             style: TextStyle(
               color: AppColors.success,
               fontWeight: FontWeight.w600,
@@ -193,7 +205,7 @@ class PaymentDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
   //  INFO ROWS
   // ═══════════════════════════════════════════════════════
-  Widget _buildInfoCard(NumberFormat fmt, String currency) {
+  Widget _buildInfoCard(NumberFormat fmt, String currency, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -214,7 +226,7 @@ class PaymentDetailScreen extends ConsumerWidget {
         children: [
           // Paid To
           _infoRow(
-            'Paid To',
+            l10n.paidTo,
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -252,7 +264,7 @@ class PaymentDetailScreen extends ConsumerWidget {
 
           // Date
           _infoRow(
-            'Date',
+            l10n.dateLabel,
             Text(
               payment != null ? DateFormat('MMM dd, yyyy').format(payment!.date) : '-',
               style: TextStyle(
@@ -266,7 +278,7 @@ class PaymentDetailScreen extends ConsumerWidget {
 
           // Payment Method
           _infoRow(
-            'Payment Method',
+            l10n.paymentMethodLabel,
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -274,7 +286,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                     size: 18, color: AppColors.textSecondary),
                 const SizedBox(width: 6),
                 Text(
-                  payment?.method ?? '',
+                  _localizedMethodName(payment?.method ?? '', l10n),
                   style: TextStyle(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w500,
@@ -288,7 +300,7 @@ class PaymentDetailScreen extends ConsumerWidget {
 
           // Reference No.
           _infoRow(
-            'Reference No.',
+            l10n.referenceNoLabel,
             Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -338,7 +350,7 @@ class PaymentDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
   //  APPLIED TO INVOICES
   // ═══════════════════════════════════════════════════════
-  Widget _buildInvoicesCard(NumberFormat fmt, String currency, List<Purchase> purchases) {
+  Widget _buildInvoicesCard(NumberFormat fmt, String currency, List<Purchase> purchases, AppLocalizations l10n) {
     final appliedIds = payment?.appliedToPurchaseIds ?? [];
     final appliedPurchases = purchases.where((p) => appliedIds.contains(p.id)).toList();
 
@@ -370,7 +382,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                   const BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Text(
-              'Applied to Invoices',
+              l10n.appliedToInvoices,
               style: TextStyle(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -386,7 +398,7 @@ class PaymentDetailScreen extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'No invoices linked',
+                l10n.noInvoicesLinked,
                 style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
               ),
             )
@@ -439,7 +451,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          p.statusLabel,
+                          p.localizedStatusLabel(l10n),
                           style: TextStyle(
                             color: p.paymentStatus == 2
                                 ? AppColors.success
@@ -462,7 +474,7 @@ class PaymentDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
   //  ATTACHMENTS
   // ═══════════════════════════════════════════════════════
-  Widget _buildAttachmentsCard() {
+  Widget _buildAttachmentsCard(AppLocalizations l10n) {
     final hasReceipt = payment?.receiptUrl != null && payment!.receiptUrl!.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(20),
@@ -484,7 +496,7 @@ class PaymentDetailScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Attachments',
+            l10n.attachmentsLabel,
             style: TextStyle(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w500,
@@ -514,7 +526,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
-                    'Receipt',
+                    l10n.receiptLabel,
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w500,
@@ -526,7 +538,7 @@ class PaymentDetailScreen extends ConsumerWidget {
             )
           else
             Text(
-              'No attachments',
+              l10n.noAttachments,
               style: TextStyle(
                 color: AppColors.textTertiary,
                 fontSize: 13,
@@ -540,7 +552,7 @@ class PaymentDetailScreen extends ConsumerWidget {
   // ═══════════════════════════════════════════════════════
   //  BOTTOM ACTIONS
   // ═══════════════════════════════════════════════════════
-  Widget _buildBottomActions(BuildContext context) {
+  Widget _buildBottomActions(BuildContext context, AppLocalizations l10n) {
     return Container(
       padding: EdgeInsets.fromLTRB(
           16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
@@ -574,7 +586,7 @@ class PaymentDetailScreen extends ConsumerWidget {
                       size: 20, color: AppColors.textSecondary),
                   const SizedBox(width: 8),
                   Text(
-                    'Download PDF Receipt',
+                    l10n.downloadPdfReceipt,
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
@@ -613,14 +625,14 @@ class PaymentDetailScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.replay_rounded,
+                  const Icon(Icons.replay_rounded,
                       size: 20, color: Colors.white),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Text(
-                    'Repeat Payment',
+                    l10n.repeatPayment,
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,

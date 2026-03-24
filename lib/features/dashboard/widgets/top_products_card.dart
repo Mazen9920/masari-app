@@ -212,7 +212,7 @@ class _ProductRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    '${quantity.toStringAsFixed(quantity.truncateToDouble() == quantity ? 0 : 1)} units',
+                    AppLocalizations.of(context)!.nUnitsCount(quantity.toStringAsFixed(quantity.truncateToDouble() == quantity ? 0 : 1)),
                     style: AppTypography.captionSmall.copyWith(
                       color: AppColors.textTertiary,
                     ),

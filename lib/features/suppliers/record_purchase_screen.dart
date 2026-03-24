@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
@@ -26,6 +27,19 @@ class RecordPurchaseScreen extends ConsumerStatefulWidget {
 }
 
 class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
+  String _localizedItemTypeLabel(_ItemType type) {
+    switch (type) {
+      case _ItemType.rawMaterial:
+        return l10n.rawMaterialLabel;
+      case _ItemType.product:
+        return l10n.productLabel;
+      case _ItemType.manufacturingFee:
+        return l10n.manufacturingFee;
+    }
+  }
+
   String? _selectedSupplierId;
   DateTime _purchaseDate = DateTime.now();
   final _refCtrl = TextEditingController();
@@ -108,7 +122,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Purchase recorded'),
+        content: Text(l10n.purchaseRecorded),
         backgroundColor: AppColors.primaryNavy,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -195,8 +209,8 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  'Confirm Purchase',
+                Text(
+                  l10n.confirmPurchase,
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -238,7 +252,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
           Expanded(
             child: Center(
               child: Text(
-                'Record Purchase',
+                l10n.recordPurchaseTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -253,7 +267,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Text(
-                'Save',
+                l10n.save,
                 style: TextStyle(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w600,
@@ -272,10 +286,10 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   // ═══════════════════════════════════════════════════════
   Widget _buildDetailsSection(List<Supplier> suppliers) {
     return _Card(
-      title: 'DETAILS',
+      title: l10n.detailsSection,
       children: [
         // Supplier picker
-        _Label('Supplier'),
+        _Label(l10n.supplier),
         const SizedBox(height: 6),
         GestureDetector(
           onTap: () => _showSupplierPicker(suppliers),
@@ -298,7 +312,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                             .firstWhere((s) => s.id == _selectedSupplierId,
                                 orElse: () => suppliers.first)
                             .name
-                        : 'Select a supplier',
+                        : l10n.selectASupplier,
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 15,
@@ -319,7 +333,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Label('Purchase Date'),
+                  _Label(l10n.purchaseDateLabel),
                   const SizedBox(height: 6),
                   GestureDetector(
                     onTap: () async {
@@ -358,12 +372,12 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Label('Reference No.'),
+                  _Label(l10n.referenceNoLabel),
                   const SizedBox(height: 6),
                   TextField(
                     controller: _refCtrl,
                     decoration: InputDecoration(
-                      hintText: 'Optional',
+                      hintText: l10n.optionalHint,
                       hintStyle: TextStyle(
                           color: AppColors.textTertiary, fontSize: 14),
                       filled: true,
@@ -415,7 +429,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Select Supplier',
+                l10n.selectSupplierTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -452,7 +466,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                 child: const Icon(Icons.add_rounded,
                     color: AppColors.accentOrange, size: 20),
               ),
-              title: const Text('+ Add New Supplier',
+              title: Text(l10n.addNewSupplierPlus,
                   style: TextStyle(
                       color: AppColors.accentOrange,
                       fontWeight: FontWeight.w600)),
@@ -487,7 +501,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'What are you purchasing?',
+                l10n.whatAreYouPurchasing,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -527,7 +541,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                type.label,
+                                _localizedItemTypeLabel(type),
                                 style: TextStyle(
                                   color: AppColors.primaryNavy,
                                   fontWeight: FontWeight.w700,
@@ -536,10 +550,10 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                               ),
                               Text(
                                 type == _ItemType.rawMaterial
-                                    ? 'Materials used in production'
+                                    ? l10n.materialsUsedInProduction
                                     : type == _ItemType.product
-                                        ? 'Finished goods for resale'
-                                        : 'Processing & assembly costs',
+                                        ? l10n.finishedGoodsForResale
+                                        : l10n.processingAndAssemblyCosts,
                                 style: TextStyle(
                                   color: AppColors.textTertiary,
                                   fontSize: 12,
@@ -624,7 +638,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   // ═══════════════════════════════════════════════════════
   Widget _buildItemsSection(NumberFormat fmt, List<Product> inventory, String currency) {
     return _Card(
-      title: 'ITEMS PURCHASED',
+      title: l10n.itemsPurchasedSection,
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
@@ -632,7 +646,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
-          '${_items.length} Items',
+          '${_items.length} ${l10n.items}',
           style: TextStyle(
             color: AppColors.primaryNavy,
             fontSize: 11,
@@ -666,7 +680,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'ITEM',
+                          l10n.itemLabel,
                           style: TextStyle(
                             color: AppColors.textTertiary,
                             fontSize: 9,
@@ -722,7 +736,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                                     _items[i] = item.copyWith(name: v);
                                   },
                                   decoration: InputDecoration(
-                                    hintText: 'e.g. Stitching fee, Printing...',
+                                    hintText: l10n.manufacturingFeeHint,
                                     hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 13),
                                     filled: true,
                                     fillColor: AppColors.surfaceSubtle,
@@ -759,7 +773,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    item.name.isEmpty ? 'Tap to select item' : item.name,
+                                    item.name.isEmpty ? l10n.tapToSelectItem : item.name,
                                     style: TextStyle(
                                       color: item.name.isEmpty ? AppColors.textTertiary : AppColors.textPrimary,
                                       fontWeight: FontWeight.w600,
@@ -786,7 +800,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  item.itemType.label,
+                                  _localizedItemTypeLabel(item.itemType),
                                   style: TextStyle(
                                     color: item.itemType.color,
                                     fontSize: 9,
@@ -820,7 +834,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                   Column(
                     children: [
                       Text(
-                        'QTY',
+                        l10n.qtyLabel,
                         style: TextStyle(
                           color: AppColors.textTertiary,
                           fontSize: 9,
@@ -881,7 +895,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                   Column(
                     children: [
                       Text(
-                        'UNIT PRICE',
+                        l10n.unitPriceLabel,
                         style: TextStyle(
                           color: AppColors.textTertiary,
                           fontSize: 9,
@@ -965,7 +979,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                     color: AppColors.accentOrange, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'Add Item',
+                  l10n.addItem,
                   style: TextStyle(
                     color: AppColors.accentOrange,
                     fontWeight: FontWeight.w700,
@@ -990,7 +1004,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Subtotal',
+            Text(l10n.subtotal,
                 style: TextStyle(
                     color: AppColors.textSecondary, fontSize: 13)),
             Text('${fmt.format(_subtotal)} $currency',
@@ -1005,10 +1019,10 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
           children: [
             Row(
               children: [
-                Text('Tax ',
+                Text(l10n.taxLabel,
                     style: TextStyle(
                         color: AppColors.textSecondary, fontSize: 13)),
-                Text('(Optional)',
+                Text(l10n.optionalLabel,
                     style: TextStyle(
                         color: AppColors.textTertiary, fontSize: 11)),
               ],
@@ -1075,7 +1089,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Total Amount',
+              l10n.totalAmountLabel,
               style: TextStyle(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -1114,10 +1128,10 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   //  SECTION 4 — PAYMENT STATUS
   // ═══════════════════════════════════════════════════════
   Widget _buildPaymentStatusSection(String currency) {
-    final statusLabels = ['Unpaid', 'Partial', 'Fully Paid'];
+    final statusLabels = [l10n.unpaid, l10n.partial, l10n.fullyPaid];
 
     return _Card(
-      title: 'PAYMENT STATUS',
+      title: l10n.paymentStatusSection,
       children: [
         // Segmented control
         Container(
@@ -1174,7 +1188,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
         // Conditional fields
         if (_paymentStatus == 0) ...[
           // Unpaid — show due date
-          _Label('Due Date'),
+          _Label(l10n.dueDateLabel),
           const SizedBox(height: 6),
           GestureDetector(
             onTap: () async {
@@ -1200,7 +1214,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               child: Text(
                 _dueDate != null
                     ? DateFormat('yyyy-MM-dd').format(_dueDate!)
-                    : 'Select due date',
+                    : l10n.selectDueDateHint,
                 style: TextStyle(
                   color: _dueDate != null
                       ? AppColors.textPrimary
@@ -1217,7 +1231,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                   size: 14, color: AppColors.textTertiary),
               const SizedBox(width: 4),
               Text(
-                'Alert will be sent on this date.',
+                l10n.alertWillBeSent,
                 style: TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 11,
@@ -1228,7 +1242,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
         ],
         if (_paymentStatus == 1) ...[
           // Partial — show amount paid
-          _Label('Amount Paid'),
+          _Label(l10n.amountPaid),
           const SizedBox(height: 6),
           TextField(
             controller: _paidAmountCtrl,
@@ -1276,7 +1290,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                 color: AppColors.textPrimary, fontSize: 15),
           ),
           const SizedBox(height: 12),
-          _Label('Due Date for Remaining'),
+          _Label(l10n.dueDateForRemaining),
           const SizedBox(height: 6),
           GestureDetector(
             onTap: () async {
@@ -1304,7 +1318,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               child: Text(
                 _dueDate != null
                     ? DateFormat('yyyy-MM-dd').format(_dueDate!)
-                    : 'Select due date',
+                    : l10n.selectDueDateHint,
                 style: TextStyle(
                   color: _dueDate != null
                       ? AppColors.textPrimary
@@ -1330,7 +1344,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                     color: Color(0xFF16A34A), size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'This purchase is fully paid',
+                  l10n.purchaseFullyPaid,
                   style: TextStyle(
                     color: const Color(0xFF166534),
                     fontWeight: FontWeight.w600,
@@ -1423,17 +1437,6 @@ class _Label extends StatelessWidget {
 enum _ItemType { rawMaterial, product, manufacturingFee }
 
 extension _ItemTypeExt on _ItemType {
-  String get label {
-    switch (this) {
-      case _ItemType.rawMaterial:
-        return 'Raw Material';
-      case _ItemType.product:
-        return 'Product';
-      case _ItemType.manufacturingFee:
-        return 'Manufacturing Fee';
-    }
-  }
-
   Color get color {
     switch (this) {
       case _ItemType.rawMaterial:

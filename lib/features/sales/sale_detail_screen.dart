@@ -15,6 +15,7 @@ import '../../core/theme/app_styles.dart';
 import '../../shared/models/sale_model.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
 import '../shopify/widgets/shopify_badges.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/utils/safe_pop.dart';
 import 'widgets/edit_cogs_dialog.dart';
 
@@ -77,7 +78,7 @@ class SaleDetailScreen extends ConsumerWidget {
                       }).animate().fadeIn(duration: 250.ms, delay: 40.ms),
                     ],
                     const SizedBox(height: 14),
-                    _buildSummaryCard(live, currency, fmt, dateFmt)
+                    _buildSummaryCard(context, live, currency, fmt, dateFmt)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 60.ms),
                     // ── Zero-COGS alert ──
@@ -89,7 +90,7 @@ class SaleDetailScreen extends ConsumerWidget {
                         child: _buildZeroCogsBanner(context, live, currency, ref),
                       ).animate().fadeIn(duration: 250.ms, delay: 80.ms),
                     const SizedBox(height: 14),
-                    _buildItemsList(live, currency, fmt, ref)
+                    _buildItemsList(context, live, currency, fmt, ref)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 100.ms),
                     const SizedBox(height: 14),
@@ -110,13 +111,13 @@ class SaleDetailScreen extends ConsumerWidget {
                     if (live.shippingAddress != null &&
                         live.shippingAddress!.isNotEmpty) ...[
                       const SizedBox(height: 14),
-                      _buildShippingCard(live, currency)
+                      _buildShippingCard(context, live, currency)
                           .animate()
                           .fadeIn(duration: 250.ms, delay: 260.ms),
                     ],
                     if (live.notes != null && live.notes!.isNotEmpty) ...[
                       const SizedBox(height: 14),
-                      _buildNotesCard(live)
+                      _buildNotesCard(context, live)
                           .animate()
                           .fadeIn(duration: 250.ms, delay: 300.ms),
                     ],
@@ -169,7 +170,7 @@ class SaleDetailScreen extends ConsumerWidget {
                     color: AppColors.danger.withValues(alpha: 0.7)),
                 const SizedBox(width: 8),
                 Text(
-                  'This order has been cancelled',
+                  AppLocalizations.of(context)!.orderCancelledBanner,
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.danger,
                     fontWeight: FontWeight.w600,
@@ -206,7 +207,7 @@ class SaleDetailScreen extends ConsumerWidget {
           Expanded(
             child: Center(
               child: Text(
-                'Order Details',
+                AppLocalizations.of(context)!.orderDetails,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -227,12 +228,12 @@ class SaleDetailScreen extends ConsumerWidget {
                 }
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(
-                    value: 'edit', child: Text('Edit Order')),
-                const PopupMenuItem(
+                PopupMenuItem(
+                    value: 'edit', child: Text(AppLocalizations.of(context)!.editOrder)),
+                PopupMenuItem(
                   value: 'cancel',
-                  child: Text('Cancel Order',
-                      style: TextStyle(color: AppColors.danger)),
+                  child: Text(AppLocalizations.of(context)!.cancelOrder,
+                      style: const TextStyle(color: AppColors.danger)),
                 ),
               ],
             )
@@ -257,30 +258,31 @@ class SaleDetailScreen extends ConsumerWidget {
 
   Widget _buildShopifyOrderStatusCard(BuildContext context, Sale live) {
     final isCancelled = live.orderStatus == OrderStatus.cancelled;
+    final l10n = AppLocalizations.of(context)!;
 
     // Payment status row
     final (Color payColor, String payLabel, IconData payIcon) =
         switch (live.paymentStatus) {
-      PaymentStatus.paid => (AppColors.success, 'Paid', Icons.check_circle_rounded),
-      PaymentStatus.partial => (AppColors.warning, 'Partially Paid', Icons.timelapse_rounded),
-      PaymentStatus.refunded => (AppColors.danger, 'Refunded', Icons.replay_rounded),
-      PaymentStatus.unpaid => (const Color(0xFFEF4444), 'Unpaid', Icons.money_off_rounded),
+      PaymentStatus.paid => (AppColors.success, l10n.paid, Icons.check_circle_rounded),
+      PaymentStatus.partial => (AppColors.warning, l10n.partiallyPaid, Icons.timelapse_rounded),
+      PaymentStatus.refunded => (AppColors.danger, l10n.refunded, Icons.replay_rounded),
+      PaymentStatus.unpaid => (const Color(0xFFEF4444), l10n.unpaid, Icons.money_off_rounded),
     };
 
     // Fulfillment status row
     final (Color fulfillColor, String fulfillLabel, IconData fulfillIcon) =
         switch (live.fulfillmentStatus) {
-      FulfillmentStatus.fulfilled => (AppColors.success, 'Fulfilled', Icons.check_circle_rounded),
-      FulfillmentStatus.partial => (AppColors.warning, 'Partially Fulfilled', Icons.timelapse_rounded),
-      FulfillmentStatus.unfulfilled => (AppColors.textTertiary, 'Unfulfilled', Icons.inventory_2_outlined),
+      FulfillmentStatus.fulfilled => (AppColors.success, l10n.fulfilled, Icons.check_circle_rounded),
+      FulfillmentStatus.partial => (AppColors.warning, l10n.partiallyFulfilled, Icons.timelapse_rounded),
+      FulfillmentStatus.unfulfilled => (AppColors.textTertiary, l10n.unfulfilled, Icons.inventory_2_outlined),
     };
 
     // Overall badge
     final (Color badgeColor, String badgeLabel, IconData badgeIcon) = isCancelled
-        ? (AppColors.danger, 'Cancelled', Icons.cancel_outlined)
+        ? (AppColors.danger, l10n.cancelled, Icons.cancel_outlined)
         : live.isCompleted
-            ? (AppColors.success, 'Completed', Icons.task_alt_rounded)
-            : (AppColors.warning, 'In Progress', Icons.sync_rounded);
+            ? (AppColors.success, l10n.completed, Icons.task_alt_rounded)
+            : (AppColors.warning, l10n.inProgress, Icons.sync_rounded);
 
     return _Card(
       children: [
@@ -291,7 +293,7 @@ class SaleDetailScreen extends ConsumerWidget {
                 size: 20, color: AppColors.textSecondary),
             const SizedBox(width: 8),
             Text(
-              'Order Status',
+              l10n.orderStatus,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -337,7 +339,7 @@ class SaleDetailScreen extends ConsumerWidget {
                 Icon(Icons.cancel_rounded, color: AppColors.danger, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'This order has been cancelled',
+                  l10n.orderCancelledBanner,
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.danger,
                     fontWeight: FontWeight.w600,
@@ -350,7 +352,7 @@ class SaleDetailScreen extends ConsumerWidget {
           // Payment row
           _buildStatusRow(
             icon: payIcon,
-            label: 'Payment',
+            label: l10n.payment,
             value: payLabel,
             color: payColor,
           ),
@@ -358,7 +360,7 @@ class SaleDetailScreen extends ConsumerWidget {
           // Fulfillment row
           _buildStatusRow(
             icon: fulfillIcon,
-            label: 'Fulfillment',
+            label: l10n.fulfillment,
             value: fulfillLabel,
             color: fulfillColor,
           ),
@@ -379,7 +381,7 @@ class SaleDetailScreen extends ConsumerWidget {
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
-                    'Synced from Shopify — statuses update automatically',
+                    l10n.syncedFromShopify,
                     style: AppTypography.captionSmall.copyWith(
                       color: AppColors.success,
                       fontWeight: FontWeight.w600,
@@ -435,30 +437,31 @@ class SaleDetailScreen extends ConsumerWidget {
   Widget _buildManualOrderStatusCard(
       BuildContext context, Sale live, WidgetRef ref) {
     final isCancelled = live.orderStatus == OrderStatus.cancelled;
+    final l10n = AppLocalizations.of(context)!;
 
     // Payment status
     final (Color payColor, String payLabel, IconData payIcon) =
         switch (live.paymentStatus) {
-      PaymentStatus.paid => (AppColors.success, 'Paid', Icons.check_circle_rounded),
-      PaymentStatus.partial => (AppColors.warning, 'Partially Paid', Icons.timelapse_rounded),
-      PaymentStatus.refunded => (AppColors.danger, 'Refunded', Icons.replay_rounded),
-      PaymentStatus.unpaid => (const Color(0xFFEF4444), 'Unpaid', Icons.money_off_rounded),
+      PaymentStatus.paid => (AppColors.success, l10n.paid, Icons.check_circle_rounded),
+      PaymentStatus.partial => (AppColors.warning, l10n.partiallyPaid, Icons.timelapse_rounded),
+      PaymentStatus.refunded => (AppColors.danger, l10n.refunded, Icons.replay_rounded),
+      PaymentStatus.unpaid => (const Color(0xFFEF4444), l10n.unpaid, Icons.money_off_rounded),
     };
 
     // Fulfillment status
     final (Color fulfillColor, String fulfillLabel, IconData fulfillIcon) =
         switch (live.fulfillmentStatus) {
-      FulfillmentStatus.fulfilled => (AppColors.success, 'Fulfilled', Icons.check_circle_rounded),
-      FulfillmentStatus.partial => (AppColors.warning, 'Partially Fulfilled', Icons.timelapse_rounded),
-      FulfillmentStatus.unfulfilled => (AppColors.textTertiary, 'Unfulfilled', Icons.inventory_2_outlined),
+      FulfillmentStatus.fulfilled => (AppColors.success, l10n.fulfilled, Icons.check_circle_rounded),
+      FulfillmentStatus.partial => (AppColors.warning, l10n.partiallyFulfilled, Icons.timelapse_rounded),
+      FulfillmentStatus.unfulfilled => (AppColors.textTertiary, l10n.unfulfilled, Icons.inventory_2_outlined),
     };
 
     // Overall badge
     final (Color badgeColor, String badgeLabel, IconData badgeIcon) = isCancelled
-        ? (AppColors.danger, 'Cancelled', Icons.cancel_outlined)
+        ? (AppColors.danger, l10n.cancelled, Icons.cancel_outlined)
         : live.isCompleted
-            ? (AppColors.success, 'Completed', Icons.task_alt_rounded)
-            : (AppColors.warning, 'In Progress', Icons.sync_rounded);
+            ? (AppColors.success, l10n.completed, Icons.task_alt_rounded)
+            : (AppColors.warning, l10n.inProgress, Icons.sync_rounded);
 
     return _Card(
       children: [
@@ -469,7 +472,7 @@ class SaleDetailScreen extends ConsumerWidget {
                 size: 20, color: AppColors.textSecondary),
             const SizedBox(width: 8),
             Text(
-              'Order Status',
+              l10n.orderStatus,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -515,7 +518,7 @@ class SaleDetailScreen extends ConsumerWidget {
                 Icon(Icons.cancel_rounded, color: AppColors.danger, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'This order has been cancelled',
+                  l10n.orderCancelledBanner,
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.danger,
                     fontWeight: FontWeight.w600,
@@ -530,7 +533,7 @@ class SaleDetailScreen extends ConsumerWidget {
             onTap: () => _showPaymentStatusSheet(context, ref, live),
             child: _buildStatusRow(
               icon: payIcon,
-              label: 'Payment',
+              label: l10n.payment,
               value: payLabel,
               color: payColor,
             ),
@@ -541,7 +544,7 @@ class SaleDetailScreen extends ConsumerWidget {
             onTap: () => _showFulfillmentStatusSheet(context, ref, live),
             child: _buildStatusRow(
               icon: fulfillIcon,
-              label: 'Fulfillment',
+              label: l10n.fulfillment,
               value: fulfillLabel,
               color: fulfillColor,
             ),
@@ -577,8 +580,8 @@ class SaleDetailScreen extends ConsumerWidget {
     if (live.externalOrderId != null || live.shopifyOrderNumber != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            'Status updated locally only. Shopify order status is not affected.',
+          content: Text(
+            AppLocalizations.of(context)!.statusUpdatedLocallyOnly,
           ),
           backgroundColor: Colors.orange.shade700,
           behavior: SnackBarBehavior.floating,
@@ -618,10 +621,11 @@ class SaleDetailScreen extends ConsumerWidget {
     ref.read(salesProvider.notifier).updateSale(updated);
 
     if (context.mounted) {
+      final l10n = AppLocalizations.of(context)!;
       final label = switch (newStatus) {
-        FulfillmentStatus.fulfilled => 'Order shipped & fulfilled',
-        FulfillmentStatus.partial => 'Marked as partially shipped',
-        FulfillmentStatus.unfulfilled => 'Marked as unfulfilled',
+        FulfillmentStatus.fulfilled => l10n.orderShippedFulfilled,
+        FulfillmentStatus.partial => l10n.markedPartiallyShipped,
+        FulfillmentStatus.unfulfilled => l10n.markedUnfulfilled,
       };
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(label),
@@ -642,9 +646,9 @@ class SaleDetailScreen extends ConsumerWidget {
     }
     // Already fulfilled — allow reverting
     final statuses = [
-      (FulfillmentStatus.unfulfilled, 'Unfulfilled', Icons.inventory_2_outlined, AppColors.textTertiary),
-      (FulfillmentStatus.partial, 'Partially Shipped', Icons.timelapse_rounded, AppColors.warning),
-      (FulfillmentStatus.fulfilled, 'Fulfilled', Icons.check_circle_rounded, AppColors.success),
+      (FulfillmentStatus.unfulfilled, AppLocalizations.of(context)!.unfulfilled, Icons.inventory_2_outlined, AppColors.textTertiary),
+      (FulfillmentStatus.partial, AppLocalizations.of(context)!.partiallyShipped, Icons.timelapse_rounded, AppColors.warning),
+      (FulfillmentStatus.fulfilled, AppLocalizations.of(context)!.fulfilled, Icons.check_circle_rounded, AppColors.success),
     ];
 
     showModalBottomSheet(
@@ -672,7 +676,7 @@ class SaleDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Fulfillment Status',
+                  AppLocalizations.of(context)!.fulfillmentStatus,
                   style: AppTypography.h3.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,
@@ -780,21 +784,18 @@ class SaleDetailScreen extends ConsumerWidget {
     // on Shopify (which handles refund + fulfillment properly), and the
     // webhook will auto-sync the cancellation back to Masari.
     if (isShopifyOrder && isPaid) {
+      final l10n = AppLocalizations.of(context)!;
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Cannot Cancel Here'),
+          title: Text(l10n.cannotCancelHere),
           content: Text(
-            'Shopify order #${live.shopifyOrderNumber ?? live.externalOrderId} '
-            'is marked as paid.\n\n'
-            'Paid orders must be cancelled directly on Shopify '
-            '(which will handle the refund automatically).\n\n'
-            'Once cancelled on Shopify, it will sync to Masari automatically.',
+            l10n.cannotCancelHereMsg(live.shopifyOrderNumber ?? live.externalOrderId ?? ''),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+              child: Text(l10n.ok),
             ),
           ],
         ),
@@ -804,42 +805,33 @@ class SaleDetailScreen extends ConsumerWidget {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Order'),
-        content: Text(
-          isShopifyOrder
-              ? 'This sale is linked to Shopify order '
-                  '#${live.shopifyOrderNumber ?? live.externalOrderId}.\n\n'
-                  'Cancelling here will:\n'
-                  '• Restore inventory stock locally\n'
-                  '• Create reversal entries for revenue & COGS\n'
-                  '• Mark the order as cancelled in Masari\n'
-                  '• Cancel the order on Shopify automatically\n\n'
-                  'This action cannot be undone.'
-              : 'Are you sure you want to cancel this order?\n\n'
-                  'This will:\n'
-                  '• Restore inventory stock\n'
-                  '• Create reversal entries for revenue & COGS\n'
-                  '• Mark the order as cancelled\n\n'
-                  'This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Keep Order'),
+      builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx)!;
+        return AlertDialog(
+          title: Text(l10n.cancelOrder),
+          content: Text(
+            isShopifyOrder
+                ? l10n.cancelOrderConfirmShopify(live.shopifyOrderNumber ?? live.externalOrderId ?? '')
+                : l10n.cancelOrderConfirmManual,
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _cancelOrder(context, ref, live);
-            },
-            child: Text(
-              'Cancel Order',
-              style: const TextStyle(color: AppColors.danger),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.keepOrder),
             ),
-          ),
-        ],
-      ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _cancelOrder(context, ref, live);
+              },
+              child: Text(
+                l10n.cancelOrder,
+                style: const TextStyle(color: AppColors.danger),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -860,7 +852,7 @@ class SaleDetailScreen extends ConsumerWidget {
 
       if (!result.isSuccess) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Shopify cancel failed: ${result.error}'),
+          content: Text(AppLocalizations.of(context)!.shopifyCancelFailedMsg(result.error ?? '')),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -921,8 +913,8 @@ class SaleDetailScreen extends ConsumerWidget {
     ref.read(salesProvider.notifier).updateSale(cancelled);
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: const Text(
-          'Order cancelled — stock restored, reversal entries created'),
+      content: Text(
+          AppLocalizations.of(context)!.orderCancelledDetail),
       backgroundColor: AppColors.primaryNavy,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -980,8 +972,8 @@ class SaleDetailScreen extends ConsumerWidget {
     ref.read(salesProvider.notifier).updateSale(refunded);
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: const Text(
-          'Order refunded — stock restored, reversal entries created'),
+      content: Text(
+          AppLocalizations.of(context)!.orderRefundedDetail),
       backgroundColor: AppColors.primaryNavy,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -991,29 +983,30 @@ class SaleDetailScreen extends ConsumerWidget {
   // ── Summary ─────────────────────────────────────────────
 
   Widget _buildSummaryCard(
-      Sale live, String currency, NumberFormat fmt, DateFormat dateFmt) {
+      BuildContext context, Sale live, String currency, NumberFormat fmt, DateFormat dateFmt) {
+    final l10n = AppLocalizations.of(context)!;
     Color statusColor;
     String statusLabel;
     IconData statusIcon;
     switch (live.paymentStatus) {
       case PaymentStatus.paid:
         statusColor = AppColors.success;
-        statusLabel = 'Paid';
+        statusLabel = l10n.paid;
         statusIcon = Icons.check_circle_rounded;
         break;
       case PaymentStatus.refunded:
         statusColor = AppColors.danger;
-        statusLabel = 'Refunded';
+        statusLabel = l10n.refunded;
         statusIcon = Icons.money_off_rounded;
         break;
       case PaymentStatus.partial:
         statusColor = AppColors.warning;
-        statusLabel = 'Partial';
+        statusLabel = l10n.partial;
         statusIcon = Icons.timelapse_rounded;
         break;
       case PaymentStatus.unpaid:
         statusColor = AppColors.danger;
-        statusLabel = 'Unpaid';
+        statusLabel = l10n.unpaid;
         statusIcon = Icons.money_off_rounded;
         break;
     }
@@ -1046,7 +1039,7 @@ class SaleDetailScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  live.displayOrderTitle,
+                  live.localizedDisplayOrderTitle(l10n),
                   style: AppTypography.h3.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,
@@ -1163,7 +1156,7 @@ class SaleDetailScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Missing Cost of Goods',
+                    AppLocalizations.of(context)!.missingCostOfGoods,
                     style: AppTypography.labelSmall.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -1171,7 +1164,7 @@ class SaleDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'COGS is zero — profit numbers may be inaccurate.',
+                    AppLocalizations.of(context)!.cogsZeroWarning,
                     style: AppTypography.captionSmall.copyWith(
                       color: AppColors.textSecondary,
                       height: 1.3,
@@ -1188,7 +1181,7 @@ class SaleDetailScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Fix',
+                AppLocalizations.of(context)!.fix,
                 style: AppTypography.labelSmall.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -1211,9 +1204,9 @@ class SaleDetailScreen extends ConsumerWidget {
 
   // ── Items ───────────────────────────────────────────────
 
-  Widget _buildItemsList(Sale live, String currency, NumberFormat fmt, WidgetRef ref) {
+  Widget _buildItemsList(BuildContext context, Sale live, String currency, NumberFormat fmt, WidgetRef ref) {
     return _Card(
-      title: 'Items (${live.items.length})',
+      title: AppLocalizations.of(context)!.itemsCount(live.items.length),
       children: [
         for (int i = 0; i < live.items.length; i++) ...[
           if (i > 0)
@@ -1279,26 +1272,27 @@ class SaleDetailScreen extends ConsumerWidget {
   // ── Totals ──────────────────────────────────────────────
 
   Widget _buildTotalsCard(BuildContext context, Sale live, String currency, NumberFormat fmt, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     return _Card(
-      title: 'Totals',
+      title: l10n.totals,
       children: [
-        _row('Subtotal', '$currency ${fmt.format(live.subtotal)}'),
+        _row(l10n.subtotal, '$currency ${fmt.format(live.subtotal)}'),
         if (live.taxAmount > 0) ...[
           const SizedBox(height: 6),
-          _row('Tax', '+ $currency ${fmt.format(live.taxAmount)}'),
+          _row(l10n.tax, '+ $currency ${fmt.format(live.taxAmount)}'),
         ],
         if (live.discountAmount > 0) ...[
           const SizedBox(height: 6),
-          _row('Discount', '- $currency ${fmt.format(live.discountAmount)}'),
+          _row(l10n.discount, '- $currency ${fmt.format(live.discountAmount)}'),
         ],
         const Divider(height: 16),
-        _row('Total', '$currency ${fmt.format(live.total)}', bold: true),
+        _row(l10n.total, '$currency ${fmt.format(live.total)}', bold: true),
         if (live.totalCogs > 0) ...[
           const SizedBox(height: 6),
-          _row('COGS', '$currency ${fmt.format(live.totalCogs)}',
+          _row(l10n.cogs, '$currency ${fmt.format(live.totalCogs)}',
               valueColor: AppColors.danger),
           const SizedBox(height: 4),
-          _row('Gross Profit', '$currency ${fmt.format(live.grossProfit)}',
+          _row(l10n.grossProfit, '$currency ${fmt.format(live.grossProfit)}',
               bold: true,
               valueColor:
                   live.grossProfit >= 0 ? AppColors.success : AppColors.danger),
@@ -1308,7 +1302,7 @@ class SaleDetailScreen extends ConsumerWidget {
             child: GestureDetector(
               onTap: () => _showEditCogsDialog(context, live, currency, ref),
               child: Text(
-                'Edit COGS',
+                l10n.editCogs,
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -1320,7 +1314,7 @@ class SaleDetailScreen extends ConsumerWidget {
         ],
         if (live.outstanding > 0) ...[
           const Divider(height: 16),
-          _row('Outstanding', '$currency ${fmt.format(live.outstanding)}',
+          _row(l10n.outstanding, '$currency ${fmt.format(live.outstanding)}',
               valueColor: AppColors.danger, bold: true),
         ],
       ],
@@ -1386,28 +1380,29 @@ class SaleDetailScreen extends ConsumerWidget {
   // ── Payment Info ────────────────────────────────────────
 
   Widget _buildPaymentInfo(BuildContext context, Sale live, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     Color statusColor;
     String statusLabel;
     IconData statusIcon;
     switch (live.paymentStatus) {
       case PaymentStatus.paid:
         statusColor = AppColors.success;
-        statusLabel = 'Paid';
+        statusLabel = l10n.paid;
         statusIcon = Icons.check_circle_rounded;
         break;
       case PaymentStatus.refunded:
         statusColor = AppColors.danger;
-        statusLabel = 'Refunded';
+        statusLabel = l10n.refunded;
         statusIcon = Icons.money_off_rounded;
         break;
       case PaymentStatus.partial:
         statusColor = AppColors.warning;
-        statusLabel = 'Partial';
+        statusLabel = l10n.partial;
         statusIcon = Icons.timelapse_rounded;
         break;
       case PaymentStatus.unpaid:
         statusColor = AppColors.danger;
-        statusLabel = 'Unpaid';
+        statusLabel = l10n.unpaid;
         statusIcon = Icons.money_off_rounded;
         break;
     }
@@ -1415,7 +1410,7 @@ class SaleDetailScreen extends ConsumerWidget {
     final isCancelled = live.orderStatus == OrderStatus.cancelled;
 
     return _Card(
-      title: 'Payment',
+      title: l10n.payment,
       children: [
         Row(
           children: [
@@ -1469,7 +1464,7 @@ class SaleDetailScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Amount Paid',
+              Text(l10n.amountPaid,
                   style: AppTypography.captionSmall
                       .copyWith(color: AppColors.textSecondary)),
               Text(
@@ -1488,11 +1483,12 @@ class SaleDetailScreen extends ConsumerWidget {
 
   void _showPaymentStatusSheet(
       BuildContext context, WidgetRef ref, Sale live) {
+    final l10n = AppLocalizations.of(context)!;
     final statuses = [
-      (PaymentStatus.unpaid, 'Unpaid', Icons.money_off_rounded, AppColors.danger),
-      (PaymentStatus.partial, 'Partial', Icons.pie_chart_rounded, AppColors.warning),
-      (PaymentStatus.paid, 'Paid', Icons.check_circle_rounded, AppColors.success),
-      (PaymentStatus.refunded, 'Refunded', Icons.money_off_rounded, AppColors.danger),
+      (PaymentStatus.unpaid, l10n.unpaid, Icons.money_off_rounded, AppColors.danger),
+      (PaymentStatus.partial, l10n.partial, Icons.pie_chart_rounded, AppColors.warning),
+      (PaymentStatus.paid, l10n.paid, Icons.check_circle_rounded, AppColors.success),
+      (PaymentStatus.refunded, l10n.refunded, Icons.money_off_rounded, AppColors.danger),
     ];
 
     showModalBottomSheet(
@@ -1520,7 +1516,7 @@ class SaleDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Update Payment Status',
+                  l10n.updatePaymentStatus,
                   style: AppTypography.h3.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,
@@ -1626,7 +1622,7 @@ class SaleDetailScreen extends ConsumerWidget {
     }
 
     return _Card(
-      title: 'Tracking',
+      title: AppLocalizations.of(context)!.tracking,
       children: [
         GestureDetector(
           onTap: () async {
@@ -1705,7 +1701,11 @@ class SaleDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                live.deliveryStatus!,
+                switch (live.deliveryStatus) {
+                  'Delivered' => AppLocalizations.of(context)!.delivered,
+                  'Shipped' => AppLocalizations.of(context)!.shipped,
+                  _ => live.deliveryStatus!,
+                },
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w600,
@@ -1720,9 +1720,10 @@ class SaleDetailScreen extends ConsumerWidget {
 
   // ── Shipping Info ───────────────────────────────────────
 
-  Widget _buildShippingCard(Sale live, String currency) {
+  Widget _buildShippingCard(BuildContext context, Sale live, String currency) {
+    final l10n = AppLocalizations.of(context)!;
     return _Card(
-      title: 'Shipping',
+      title: l10n.shipping,
       children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1746,7 +1747,7 @@ class SaleDetailScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Shipping Cost',
+              Text(l10n.shippingCost,
                   style: AppTypography.captionSmall
                       .copyWith(color: AppColors.textSecondary)),
               Text(
@@ -1773,9 +1774,9 @@ class SaleDetailScreen extends ConsumerWidget {
 
   // ── Notes ───────────────────────────────────────────────
 
-  Widget _buildNotesCard(Sale live) {
+  Widget _buildNotesCard(BuildContext context, Sale live) {
     return _Card(
-      title: 'Notes',
+      title: AppLocalizations.of(context)!.notes,
       children: [
         Text(
           live.notes!,
@@ -1790,6 +1791,7 @@ class SaleDetailScreen extends ConsumerWidget {
 
   Widget _buildBottomActionsContent(BuildContext context, Sale live,
       WidgetRef ref, String currency, NumberFormat fmt) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1809,15 +1811,15 @@ class SaleDetailScreen extends ConsumerWidget {
                 color: const Color(0xFF303030),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.local_shipping_rounded,
+                  const Icon(Icons.local_shipping_rounded,
                       color: Colors.white, size: 18),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Text(
-                    'Ship Order',
-                    style: TextStyle(
+                    l10n.shipOrder,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
@@ -1852,7 +1854,7 @@ class SaleDetailScreen extends ConsumerWidget {
                     if (result.isSuccess) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content:
-                            const Text('Payment synced to Shopify'),
+                            Text(l10n.paymentSyncedToShopify),
                         backgroundColor: AppColors.primaryNavy,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(
@@ -1861,7 +1863,7 @@ class SaleDetailScreen extends ConsumerWidget {
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(
-                            'Shopify payment sync failed: ${result.error}'),
+                            l10n.shopifyPaymentSyncFailed(result.error ?? '')),
                         backgroundColor: AppColors.danger,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(
@@ -1872,7 +1874,7 @@ class SaleDetailScreen extends ConsumerWidget {
                 }
 
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: const Text('Order marked as paid'),
+                  content: Text(l10n.orderMarkedAsPaid),
                   backgroundColor: AppColors.success,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
@@ -1900,7 +1902,7 @@ class SaleDetailScreen extends ConsumerWidget {
                         color: Colors.white, size: 18),
                     const SizedBox(width: 8),
                     Text(
-                      'Mark as Paid — $currency ${fmt.format(live.outstanding)}',
+                      l10n.markAsPaidAmount(currency, fmt.format(live.outstanding)),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -1933,7 +1935,7 @@ class SaleDetailScreen extends ConsumerWidget {
                           color: AppColors.danger.withValues(alpha: 0.4)),
                     ),
                     child: Text(
-                      'Cancel',
+                      l10n.cancel,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.danger,
@@ -1967,10 +1969,10 @@ class SaleDetailScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    child: const Text(
-                      'Edit Order',
+                    child: Text(
+                      l10n.editOrder,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
@@ -2082,6 +2084,7 @@ class _ShipOrderSheetState extends State<_ShipOrderSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final l10n = AppLocalizations.of(context)!;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -2124,14 +2127,14 @@ class _ShipOrderSheetState extends State<_ShipOrderSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Ship Order',
+                          l10n.shipOrder,
                           style: AppTypography.h3.copyWith(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                         Text(
-                          '${widget.sale.items.length} ${widget.sale.items.length == 1 ? 'item' : 'items'} to fulfill',
+                          l10n.itemsToFulfill(widget.sale.items.length),
                           style: TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 13,
@@ -2146,7 +2149,7 @@ class _ShipOrderSheetState extends State<_ShipOrderSheet> {
 
               // Shipping carrier
               Text(
-                'Shipping Carrier',
+                l10n.shippingCarrier,
                 style: AppTypography.labelSmall.copyWith(
                   color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
@@ -2195,7 +2198,7 @@ class _ShipOrderSheetState extends State<_ShipOrderSheet> {
 
               // Tracking number
               Text(
-                'Tracking Number',
+                l10n.trackingNumber,
                 style: AppTypography.labelSmall.copyWith(
                   color: AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
@@ -2206,7 +2209,7 @@ class _ShipOrderSheetState extends State<_ShipOrderSheet> {
                 controller: _trackingCtrl,
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
-                  hintText: 'e.g. 1Z999AA10123456784',
+                  hintText: AppLocalizations.of(context)!.trackingHintExample,
                   hintStyle: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 14,
@@ -2281,7 +2284,7 @@ class _ShipOrderSheetState extends State<_ShipOrderSheet> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Mark as fully fulfilled',
+                              l10n.markAsFullyFulfilled,
                               style: TextStyle(
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
@@ -2289,7 +2292,7 @@ class _ShipOrderSheetState extends State<_ShipOrderSheet> {
                               ),
                             ),
                             Text(
-                              'All items in this order will be marked as shipped',
+                              l10n.allItemsMarkedShipped,
                               style: TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 12,
@@ -2341,8 +2344,8 @@ class _ShipOrderSheetState extends State<_ShipOrderSheet> {
                       const SizedBox(width: 10),
                       Text(
                         _markFulfilled
-                            ? 'Ship & Fulfill Order'
-                            : 'Ship Partial Order',
+                            ? l10n.shipFulfillOrder
+                            : l10n.shipPartialOrder,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,

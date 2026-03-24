@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_styles.dart';
 import '../../../../shared/models/product_model.dart';
+import '../../../l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 
 class ItemSelectionResult {
@@ -59,6 +60,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final fmt = NumberFormat('#,##0', 'en');
 
@@ -83,7 +85,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Select Item', style: AppTypography.h3),
+              Text(l10n.selectItemTitle, style: AppTypography.h3),
               IconButton(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close_rounded),
@@ -97,7 +99,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
             controller: _searchCtrl,
             onChanged: _filter,
             decoration: InputDecoration(
-              hintText: 'Search inventory...',
+              hintText: l10n.searchInventoryHint,
               prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey),
               filled: true,
               fillColor: AppColors.backgroundLight,
@@ -116,7 +118,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24),
                       child: Text(
-                        'No matching items found.',
+                        l10n.noMatchingItems,
                         style: TextStyle(color: AppColors.textTertiary),
                       ),
                     ),
@@ -167,8 +169,8 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                         ),
                         subtitle: Text(
-                          '${product.isMaterial ? 'Raw Material' : 'Product'} • Stock: ${product.currentStock}'
-                          '${product.hasVariants && product.variants.length > 1 ? ' • ${product.variants.length} variants' : ''}',
+                          '${product.isMaterial ? l10n.rawMaterial : l10n.productLabel} • ${l10n.stockLabel(product.currentStock)}'
+                          '${product.hasVariants && product.variants.length > 1 ? ' • ${l10n.variantCount(product.variants.length)}' : ''}',
                           style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
                         ),
                         trailing: Text(
@@ -217,8 +219,8 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                     const SizedBox(width: 8),
                     Text(
                       _searchCtrl.text.isNotEmpty 
-                          ? 'Add "${_searchCtrl.text}" as custom item'
-                          : 'Write a custom item',
+                          ? l10n.addAsCustomItem(_searchCtrl.text)
+                          : l10n.writeCustomItem,
                       style: TextStyle(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w600,
@@ -237,6 +239,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
   }
 
   void _showVariantPicker(BuildContext ctx, Product product) {
+    final l10n = AppLocalizations.of(ctx)!;
     final fmt = NumberFormat('#,##0', 'en');
     showModalBottomSheet(
       context: ctx,
@@ -259,7 +262,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
               children: [
                 Expanded(
                   child: Text(
-                    'Select Variant — ${product.name}',
+                    l10n.selectVariantTitle(product.name),
                     style: AppTypography.h3,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -316,11 +319,11 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                       },
                     ),
                     title: Text(
-                      v.displayName,
+                      v.localizedDisplayName(l10n),
                       style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                     subtitle: Text(
-                      'SKU: ${v.sku.isNotEmpty ? v.sku : '—'} • Stock: ${v.currentStock}',
+                      '${l10n.skuLabel(v.sku.isNotEmpty ? v.sku : '—')} • ${l10n.stockLabel(v.currentStock)}',
                       style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
                     ),
                     trailing: Text(
@@ -342,18 +345,19 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
   }
 
   Future<String?> _showCustomNameDialog(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final TextEditingController nameCtrl = TextEditingController();
     return showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Custom Item', style: AppTypography.h3),
+        title: Text(l10n.customItemTitle, style: AppTypography.h3),
         content: TextField(
           controller: nameCtrl,
           autofocus: true,
           decoration: InputDecoration(
-            hintText: 'Enter item name...',
+            hintText: l10n.enterItemNameHint,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -363,7 +367,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: AppColors.textTertiary)),
+            child: Text(l10n.cancel, style: TextStyle(color: AppColors.textTertiary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -371,7 +375,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () => Navigator.pop(ctx, nameCtrl.text),
-            child: const Text('Add', style: TextStyle(color: Colors.white)),
+            child: Text(l10n.addAction, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),

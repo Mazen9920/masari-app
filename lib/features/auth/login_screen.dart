@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/providers/repository_providers.dart';
 import 'widgets/form_components.dart';
 
@@ -44,7 +45,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (success) {
       context.go(AppRoutes.home);
     } else {
-      final error = ref.read(authProvider).error ?? 'Login failed';
+      final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.loginFailed;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error),
         backgroundColor: AppColors.danger,
@@ -63,7 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (success) {
       context.go(AppRoutes.home);
     } else {
-      final error = ref.read(authProvider).error ?? 'Google sign-in failed';
+      final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.googleSignInFailed;
       if (error.contains('cancelled')) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error),
@@ -83,7 +84,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (success) {
       context.go(AppRoutes.home);
     } else {
-      final error = ref.read(authProvider).error ?? 'Apple sign-in failed';
+      final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.appleSignInFailed;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error),
         backgroundColor: AppColors.danger,
@@ -118,7 +119,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 _buildForgotPassword(),
                 const SizedBox(height: 28),
                 MasariPrimaryButton(
-                  text: _isLoading ? 'Logging in…' : 'Log In',
+                  text: _isLoading ? AppLocalizations.of(context)!.loggingIn : AppLocalizations.of(context)!.logIn,
                   icon: Icons.arrow_forward_rounded,
                   onPressed: _isLoading ? null : _onLogin,
                 ),
@@ -160,7 +161,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         const SizedBox(height: 24),
         Text(
-          'Welcome Back',
+          AppLocalizations.of(context)!.welcomeBack,
           style: AppTypography.h1.copyWith(
             color: AppColors.textPrimary,
             fontSize: 30,
@@ -168,7 +169,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Log in to manage your finances.',
+          AppLocalizations.of(context)!.logInSubtitle,
           style: AppTypography.bodyLarge.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -183,26 +184,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       child: Column(
         children: [
           MasariTextField(
-            label: 'Email Address',
+            label: AppLocalizations.of(context)!.emailAddress,
             icon: Icons.email_outlined,
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
               if (value == null || !value.contains('@')) {
-                return 'Please enter a valid email';
+                return AppLocalizations.of(context)!.pleaseEnterValidEmail;
               }
               return null;
             },
           ),
           const SizedBox(height: 16),
           MasariTextField(
-            label: 'Password',
+            label: AppLocalizations.of(context)!.password,
             icon: Icons.lock_outline_rounded,
             controller: _passwordController,
             obscureText: true,
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return 'Please enter your password';
+                return AppLocalizations.of(context)!.pleaseEnterPassword;
               }
               return null;
             },
@@ -219,14 +220,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         onTap: () async {
           final email = _emailController.text.trim();
           if (email.isEmpty || !email.contains('@')) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Please enter your email address first'),
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(AppLocalizations.of(context)!.enterEmailFirst),
             ));
             return;
           }
           // Access the repo through the notifier's mechanism
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Sending password reset link…'),
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(AppLocalizations.of(context)!.sendingResetLink),
           ));
           // We'll call signIn's repo via the provider pattern
           // For now, use the auth repository directly through the provider
@@ -237,8 +238,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(result.isSuccess
-                  ? 'Password reset link sent to $email'
-                  : result.error ?? 'Failed to send reset link'),
+                  ? AppLocalizations.of(context)!.resetLinkSent(email)
+                  : result.error ?? AppLocalizations.of(context)!.failedToSendResetLink),
               backgroundColor: result.isSuccess ? AppColors.primaryNavy : AppColors.danger,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -247,13 +248,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             if (!mounted) return;
             ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Failed to send reset link: $e'),
+              content: Text(AppLocalizations.of(context)!.failedToSendResetLinkError(e.toString())),
               backgroundColor: AppColors.danger,
             ));
           }
         },
         child: Text(
-          'Forgot Password?',
+          AppLocalizations.of(context)!.forgotPassword,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.secondaryBlue,
           ),
@@ -269,9 +270,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           color: AppColors.textSecondary,
         ),
         children: [
-          const TextSpan(text: "Don't have an account? "),
+          TextSpan(text: AppLocalizations.of(context)!.dontHaveAccount),
           TextSpan(
-            text: 'Sign Up',
+            text: AppLocalizations.of(context)!.signUp,
             style: const TextStyle(
               color: AppColors.secondaryBlue,
               fontWeight: FontWeight.w700,

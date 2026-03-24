@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../l10n/app_localizations.dart';
 import 'profit_loss_screen.dart';
 import 'balance_sheet_screen.dart';
 import 'cash_flow_screen.dart';
@@ -50,15 +51,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
       _initTabs(isGrowth);
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final tabs = isGrowth
-        ? const [
-            Tab(child: Text('Profit & Loss', textAlign: TextAlign.center)),
-            Tab(child: Text('Balance Sheet', textAlign: TextAlign.center)),
-            Tab(child: Text('Cash Flow', textAlign: TextAlign.center)),
+        ? [
+            Tab(child: Text(l10n.profitAndLoss, textAlign: TextAlign.center)),
+            Tab(child: Text(l10n.balanceSheet, textAlign: TextAlign.center)),
+            Tab(child: Text(l10n.cashFlowTab, textAlign: TextAlign.center)),
           ]
-        : const [
-            Tab(child: Text('Performance', textAlign: TextAlign.center)),
-            Tab(child: Text('Cash Flow', textAlign: TextAlign.center)),
+        : [
+            Tab(child: Text(l10n.performanceTab, textAlign: TextAlign.center)),
+            Tab(child: Text(l10n.cashFlowTab, textAlign: TextAlign.center)),
           ];
 
     final tabViews = isGrowth
@@ -79,12 +81,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
         elevation: 0,
         centerTitle: false,
         title: Text(
-          'Reports',
+          l10n.reportsTitle,
           style: AppTypography.h2.copyWith(color: AppColors.primaryNavy),
         ),
         actions: [
           Tooltip(
-            message: isGrowth ? 'Export & Share' : 'Upgrade to Growth to export',
+            message: isGrowth ? l10n.exportAndShare : l10n.upgradeToExport,
             child: IconButton(
               onPressed: isGrowth
                   ? () {
@@ -101,7 +103,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
             onPressed: () => _showAboutModal(context, isGrowth),
             icon: const Icon(Icons.info_outline_rounded,
                 color: AppColors.textSecondary, size: 22),
-            tooltip: 'About Reports',
+            tooltip: l10n.aboutReports,
           ),
           const SizedBox(width: 4),
         ],
@@ -158,6 +160,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
   }
 
   void _showAboutModal(BuildContext context, bool isGrowth) {
+    final l10n = AppLocalizations.of(context)!;
     HapticFeedback.lightImpact();
     showModalBottomSheet(
       useRootNavigator: true,
@@ -184,7 +187,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('About Reports', style: AppTypography.h3),
+                Text(l10n.aboutReports, style: AppTypography.h3),
                 IconButton(
                   onPressed: () => Navigator.of(ctx).pop(),
                   icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.textTertiary),
@@ -198,14 +201,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
             ),
             const SizedBox(height: 12),
             if (isGrowth) ...[
-              _aboutBullet(Icons.bar_chart_rounded, 'Profit & Loss shows revenue, expenses, and net profit for any period.'),
-              _aboutBullet(Icons.account_balance_rounded, 'Balance Sheet displays assets, liabilities, and equity at a point in time.'),
-              _aboutBullet(Icons.waterfall_chart_rounded, 'Cash Flow tracks money in and out with forecasted balances.'),
-              _aboutBullet(Icons.sync_rounded, 'Data updates in real-time as you add transactions.'),
-              _aboutBullet(Icons.ios_share_rounded, 'Tap the share icon to export PDF or share reports.'),
+              _aboutBullet(Icons.bar_chart_rounded, l10n.aboutPnl),
+              _aboutBullet(Icons.account_balance_rounded, l10n.aboutBalanceSheet),
+              _aboutBullet(Icons.waterfall_chart_rounded, l10n.aboutCashFlow),
+              _aboutBullet(Icons.sync_rounded, l10n.aboutRealTime),
+              _aboutBullet(Icons.ios_share_rounded, l10n.aboutExport),
             ] else ...[
-              _aboutBullet(Icons.trending_up_rounded, 'Track your business performance and cash flow.'),
-              _aboutBullet(Icons.sync_rounded, 'Reports update automatically as you add transactions.'),
+              _aboutBullet(Icons.trending_up_rounded, l10n.aboutPerformance),
+              _aboutBullet(Icons.sync_rounded, l10n.aboutAutoUpdate),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -220,7 +223,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Upgrade to Growth for Balance Sheet, full exports, and AI insights.',
+                        l10n.upgradeForBalanceSheet,
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.accentOrangeDark,
                           fontWeight: FontWeight.w600,

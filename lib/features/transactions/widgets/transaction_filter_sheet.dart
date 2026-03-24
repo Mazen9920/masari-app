@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../shared/models/transaction_model.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/category_data.dart';
 
 /// Filter bottom sheet for transactions.
@@ -114,7 +115,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Filter Transactions',
+                  AppLocalizations.of(context)!.filterTransactions,
                   style: AppTypography.h2.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w800,
@@ -124,7 +125,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                 GestureDetector(
                   onTap: _reset,
                   child: Text(
-                    'Reset',
+                    AppLocalizations.of(context)!.resetLabel,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.accentOrange,
                       fontWeight: FontWeight.w700,
@@ -187,7 +188,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      'Apply Filters',
+                      AppLocalizations.of(context)!.applyFilters,
                       style: AppTypography.labelLarge.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -232,7 +233,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Transaction Type'),
+        _sectionLabel(AppLocalizations.of(context)!.transactionType),
         const SizedBox(height: 10),
         Container(
           height: 46,
@@ -245,9 +246,9 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
             children: TransactionType.values.map((type) {
               final isSelected = _selectedType == type;
               final label = switch (type) {
-                TransactionType.all => 'All',
-                TransactionType.income => 'Income',
-                TransactionType.expense => 'Expense',
+                TransactionType.all => AppLocalizations.of(context)!.all,
+                TransactionType.income => AppLocalizations.of(context)!.income,
+                TransactionType.expense => AppLocalizations.of(context)!.expense,
               };
               return Expanded(
                 child: GestureDetector(
@@ -304,7 +305,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _sectionLabel('Amount Range'),
+            _sectionLabel(AppLocalizations.of(context)!.amountRange),
             Text(
               '${widget.currency}${_amountRange.start.toInt()} - ${widget.currency}${_amountRange.end.toInt() >= 10000 ? '10k+' : _amountRange.end.toInt().toString()}',
               style: AppTypography.labelMedium.copyWith(
@@ -369,7 +370,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Category'),
+        _sectionLabel(AppLocalizations.of(context)!.category),
         const SizedBox(height: 12),
         ...List.generate(_filterCategories.length, (index) {
           final cat = _filterCategories[index];
@@ -433,7 +434,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                     // Name
                     Expanded(
                       child: Text(
-                        cat.name,
+                        cat.localizedName(AppLocalizations.of(context)!),
                         style: AppTypography.labelMedium.copyWith(
                           color: isChecked
                               ? AppColors.textPrimary

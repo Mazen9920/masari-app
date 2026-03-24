@@ -10,6 +10,7 @@ import '../../../core/providers/app_settings_provider.dart';
 import '../../../core/services/shopify_sync_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
+import '../../../l10n/app_localizations.dart';
 import '../providers/shopify_connection_provider.dart';
 import '../providers/shopify_sync_provider.dart';
 import '../../../shared/utils/safe_pop.dart';
@@ -142,12 +143,13 @@ class _ShopifySetupWizardScreenState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(context),
+            _buildHeader(context, l10n),
             _buildProgressBar(),
             Expanded(
               child: PageView(
@@ -170,7 +172,7 @@ class _ShopifySetupWizardScreenState
 
   // ── Header ───────────────────────────────────────────────
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 16, 4),
       decoration: BoxDecoration(
@@ -194,7 +196,7 @@ class _ShopifySetupWizardScreenState
           ),
           const Spacer(),
           Text(
-            'Shopify Setup',
+            l10n.shopifySetup,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.primaryNavy,
               fontWeight: FontWeight.w700,
@@ -203,7 +205,7 @@ class _ShopifySetupWizardScreenState
           ),
           const Spacer(),
           Text(
-            'Step ${_currentStep + 1}/5',
+            l10n.shopifyStepCount(_currentStep + 1),
             style: TextStyle(
               color: AppColors.textTertiary,
               fontSize: 12,
@@ -244,37 +246,41 @@ class _ShopifySetupWizardScreenState
   void _showExitConfirmation() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Exit Setup?'),
-        content: Text(
-          _oauthCompleted
-              ? 'Your Shopify connection is active. You can finish setup later from the Manage screen.'
-              : 'Your setup is not complete. You can restart anytime from the Manage screen.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Continue Setup'),
+      builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx)!;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(l10n.shopifyExitSetup),
+          content: Text(
+            _oauthCompleted
+                ? l10n.shopifyExitActiveMessage
+                : l10n.shopifyExitIncompleteMessage,
           ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) context.safePop();
-              });
-            },
-            style: FilledButton.styleFrom(backgroundColor: AppColors.textSecondary),
-            child: const Text('Exit'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.shopifyContinueSetup),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) context.safePop();
+                });
+              },
+              style: FilledButton.styleFrom(backgroundColor: AppColors.textSecondary),
+              child: Text(l10n.shopifyExitButton),
+            ),
+          ],
+        );
+      },
     );
   }
 
   // ── Step 1: Store Domain ─────────────────────────────────
 
   Widget _buildStep1StoreDomain() {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
@@ -308,7 +314,7 @@ class _ShopifySetupWizardScreenState
           const SizedBox(height: 24),
           Center(
             child: Text(
-              'Connect Your Shopify Store',
+              l10n.shopifyConnectTitle,
               style: AppTypography.h2.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w800,
@@ -318,7 +324,7 @@ class _ShopifySetupWizardScreenState
           const SizedBox(height: 8),
           Center(
             child: Text(
-              'Enter your Shopify store domain to get started.\nThis is a one-time setup.',
+              l10n.shopifyStep1Subtitle,
               textAlign: TextAlign.center,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
@@ -330,7 +336,7 @@ class _ShopifySetupWizardScreenState
 
           // Domain input
           Text(
-            'SHOP DOMAIN',
+            l10n.shopifyShopDomain,
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textTertiary,
               fontWeight: FontWeight.w700,
@@ -362,7 +368,7 @@ class _ShopifySetupWizardScreenState
                   child: TextField(
                     controller: _domainController,
                     decoration: InputDecoration(
-                      hintText: 'your-store',
+                      hintText: l10n.shopifyHintStoreName,
                       hintStyle: AppTypography.bodyMedium.copyWith(
                         color: AppColors.textTertiary,
                       ),
@@ -384,7 +390,7 @@ class _ShopifySetupWizardScreenState
                 Padding(
                   padding: const EdgeInsets.only(right: 14),
                   child: Text(
-                    '.myshopify.com',
+                    l10n.shopifyDomainSuffix,
                     style: AppTypography.bodyMedium.copyWith(
                       color: AppColors.textTertiary,
                     ),
@@ -422,7 +428,7 @@ class _ShopifySetupWizardScreenState
                       children: [
                         const Icon(Icons.link_rounded, size: 20),
                         const SizedBox(width: 8),
-                        Text('Connect to Shopify', style: AppTypography.labelLarge.copyWith(
+                        Text(l10n.shopifyConnectToShopify, style: AppTypography.labelLarge.copyWith(
                           color: Colors.white, fontWeight: FontWeight.w700,
                         )),
                       ],
@@ -434,20 +440,20 @@ class _ShopifySetupWizardScreenState
           // Info cards
           _InfoCard(
             icon: Icons.security_rounded,
-            title: 'Secure OAuth Connection',
-            description: 'We never see your Shopify password. Authorization uses industry-standard OAuth 2.0.',
+            title: l10n.shopifySecureOAuthConnection,
+            description: l10n.shopifySecureOAuthConnectionDesc,
           ),
           const SizedBox(height: 10),
           _InfoCard(
             icon: Icons.sync_rounded,
-            title: 'Always-On Sync',
-            description: 'After setup, Shopify orders automatically sync to Masari in real-time via webhooks.',
+            title: l10n.shopifyAlwaysOnSync,
+            description: l10n.shopifyAlwaysOnSyncDesc,
           ),
           const SizedBox(height: 10),
           _InfoCard(
             icon: Icons.link_off_rounded,
-            title: 'Disconnect Anytime',
-            description: 'You can disconnect your Shopify store at any time from the settings.',
+            title: l10n.shopifyDisconnectAnytimeSetup,
+            description: l10n.shopifyDisconnectAnytimeSetupDesc,
           ),
           const SizedBox(height: 16),
 
@@ -473,7 +479,7 @@ class _ShopifySetupWizardScreenState
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Data Masari Will Access',
+                      l10n.shopifyDataAccess,
                       style: AppTypography.labelSmall.copyWith(
                         color: AppColors.shopifyPurple,
                         fontWeight: FontWeight.w700,
@@ -482,9 +488,9 @@ class _ShopifySetupWizardScreenState
                   ],
                 ),
                 const SizedBox(height: 10),
-                _DataBullet('Orders — customer name, email, phone, shipping address, items, and totals. Stored in your private Masari account to populate your sales ledger.'),
-                _DataBullet('Inventory — product titles, variants, and stock levels. Used to keep your Masari inventory in sync with Shopify.'),
-                _DataBullet('This data is never shared with third parties or used for marketing. It is accessible only by you and deleted when you delete your account.'),
+                _DataBullet(l10n.shopifyDataOrders),
+                _DataBullet(l10n.shopifyDataInventory),
+                _DataBullet(l10n.shopifyDataPrivacy),
               ],
             ),
           ),
@@ -494,9 +500,10 @@ class _ShopifySetupWizardScreenState
   }
 
   Future<void> _onConnectDomain() async {
+    final l10n = AppLocalizations.of(context)!;
     final domain = _domainController.text.trim().toLowerCase();
     if (domain.isEmpty) {
-      setState(() => _domainError = 'Please enter your Shopify store name');
+      setState(() => _domainError = l10n.shopifyValidationEmpty);
       return;
     }
     final cleanDomain = domain
@@ -505,7 +512,7 @@ class _ShopifySetupWizardScreenState
         .replaceAll('.myshopify.com', '')
         .replaceAll('/', '');
     if (cleanDomain.isEmpty || cleanDomain.contains(' ')) {
-      setState(() => _domainError = 'Invalid store name');
+      setState(() => _domainError = l10n.shopifyInvalidStoreName);
       return;
     }
 
@@ -548,6 +555,7 @@ class _ShopifySetupWizardScreenState
   // ── Step 2: OAuth Authorization ──────────────────────────
 
   Widget _buildStep2OAuth() {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(24, 48, 24, 40),
@@ -568,7 +576,7 @@ class _ShopifySetupWizardScreenState
           ),
           const SizedBox(height: 24),
           Text(
-            _oauthCompleted ? 'Connected!' : 'Authorizing…',
+            _oauthCompleted ? l10n.shopifyOAuthConnected : l10n.shopifyOAuthAuthorizing,
             style: AppTypography.h2.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
@@ -577,8 +585,8 @@ class _ShopifySetupWizardScreenState
           const SizedBox(height: 12),
           Text(
             _oauthCompleted
-                ? 'Your Shopify store is now connected to Masari.'
-                : 'Complete the authorization in your browser.\nWhen done, come back here.',
+                ? l10n.shopifyOAuthSuccess
+                : l10n.shopifyOAuthInstructions,
             textAlign: TextAlign.center,
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textSecondary,
@@ -605,7 +613,7 @@ class _ShopifySetupWizardScreenState
                           strokeWidth: 2.5, color: Colors.white,
                         ),
                       )
-                    : const Text("I've Authorized in Browser",
+                    : Text(l10n.shopifyAuthorizedInBrowser,
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
             ),
@@ -644,7 +652,7 @@ class _ShopifySetupWizardScreenState
               onPressed: () => _goToStep(0),
               icon: Icon(Icons.arrow_back_rounded,
                   size: 16, color: AppColors.textTertiary),
-              label: Text('Change Store',
+              label: Text(l10n.shopifyChangeStore,
                   style: TextStyle(color: AppColors.textTertiary)),
             ),
           ] else ...[
@@ -661,12 +669,12 @@ class _ShopifySetupWizardScreenState
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('Continue Setup', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    SizedBox(width: 8),
-                    Icon(Icons.arrow_forward_rounded, size: 18),
+                    Text(l10n.shopifyContinueSetup, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_forward_rounded, size: 18),
                   ],
                 ),
               ),
@@ -718,6 +726,7 @@ class _ShopifySetupWizardScreenState
   }
 
   Widget _buildStep3Location() {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
@@ -739,14 +748,14 @@ class _ShopifySetupWizardScreenState
           const SizedBox(height: 20),
           Center(
             child: Text(
-              'Select Your Location',
+              l10n.shopifySelectYourLocation,
               style: AppTypography.h2.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w800),
             ),
           ),
           const SizedBox(height: 8),
           Center(
             child: Text(
-              'Masari will sync inventory with this Shopify location.\nIf you have multiple locations, pick your primary one.',
+              l10n.shopifyLocationSubtitle,
               textAlign: TextAlign.center,
               style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary, height: 1.5),
             ),
@@ -831,7 +840,7 @@ class _ShopifySetupWizardScreenState
                                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                               )),
                               if (isPrimary)
-                                Text('Primary location', style: TextStyle(
+                                Text(l10n.shopifyPrimaryLocation, style: TextStyle(
                                   color: AppColors.shopifyPurple,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
@@ -858,12 +867,12 @@ class _ShopifySetupWizardScreenState
                 minimumSize: const Size(double.infinity, 54),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Continue', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  SizedBox(width: 8),
-                  Icon(Icons.arrow_forward_rounded, size: 18),
+                  Text(l10n.shopifyContinue, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward_rounded, size: 18),
                 ],
               ),
             ),
@@ -874,6 +883,7 @@ class _ShopifySetupWizardScreenState
   }
 
   Widget _buildLocationEmptyState() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -885,17 +895,17 @@ class _ShopifySetupWizardScreenState
         children: [
           Icon(Icons.warning_amber_rounded, color: AppColors.textTertiary, size: 32),
           const SizedBox(height: 8),
-          Text('No locations found', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+          Text(l10n.shopifyNoLocationsFound, style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Text(
-            'Make sure your Shopify store has at least one active location.',
+            l10n.shopifyNoLocationsMessage,
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 12),
           TextButton(
             onPressed: _fetchLocations,
-            child: const Text('Retry'),
+            child: Text(l10n.shopifyRetry),
           ),
         ],
       ),
@@ -917,6 +927,7 @@ class _ShopifySetupWizardScreenState
   // ── Step 4: Product & Inventory Sync ─────────────────────────
 
   Widget _buildStep4ProductSync() {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
@@ -952,8 +963,8 @@ class _ShopifySetupWizardScreenState
           Center(
             child: Text(
               _productSyncDone
-                  ? 'Products & Inventory Synced!'
-                  : 'Sync Products & Inventory',
+                  ? l10n.shopifyProductsSynced
+                  : l10n.shopifySyncProductsInventory,
               style: AppTypography.h2.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w800,
@@ -964,10 +975,10 @@ class _ShopifySetupWizardScreenState
           Center(
             child: Text(
               _syncingProducts
-                  ? 'Importing your Shopify products and inventory levels into Masari…'
+                  ? l10n.shopifySyncingProducts
                   : _productSyncDone
-                      ? '$_productsSynced product(s) imported with current inventory levels.'
-                      : 'We\'ll import your products and their current inventory levels from Shopify.',
+                      ? l10n.shopifyProductsSyncedCount(_productsSynced)
+                      : l10n.shopifySyncProductsSubtitle,
               textAlign: TextAlign.center,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
@@ -1024,7 +1035,7 @@ class _ShopifySetupWizardScreenState
                           color: const Color(0xFFF59E0B), size: 20),
                       const SizedBox(width: 8),
                       Text(
-                        'Set Product Costs',
+                        l10n.shopifySetProductCosts,
                         style: TextStyle(
                           color: const Color(0xFF92400E),
                           fontSize: 15,
@@ -1035,10 +1046,7 @@ class _ShopifySetupWizardScreenState
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'For accurate profit tracking, set the cost price for '
-                    'each product in your inventory.\n\n'
-                    'You can import historical orders anytime from '
-                    'Shopify Settings → Re-import Historical Orders.',
+                    l10n.shopifyCostGuidance,
                     style: TextStyle(
                       color: const Color(0xFF92400E).withValues(alpha: 0.85),
                       fontSize: 13,
@@ -1065,12 +1073,12 @@ class _ShopifySetupWizardScreenState
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.sync_rounded, size: 20),
-                    SizedBox(width: 8),
-                    Text('Sync Products & Inventory',
+                    const Icon(Icons.sync_rounded, size: 20),
+                    const SizedBox(width: 8),
+                    Text(l10n.shopifySyncProductsInventory,
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600)),
                   ],
@@ -1091,7 +1099,7 @@ class _ShopifySetupWizardScreenState
                       borderRadius: BorderRadius.circular(14)),
                   side: BorderSide(color: AppColors.shopifyPurple),
                 ),
-                child: const Text('Retry',
+                child: Text(l10n.shopifyRetry,
                     style: TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w600)),
               ),
@@ -1110,14 +1118,14 @@ class _ShopifySetupWizardScreenState
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('Continue',
+                    Text(l10n.shopifyContinue,
                         style: TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600)),
-                    SizedBox(width: 8),
-                    Icon(Icons.arrow_forward_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_forward_rounded, size: 18),
                   ],
                 ),
               ),
@@ -1129,6 +1137,7 @@ class _ShopifySetupWizardScreenState
   }
 
   Future<void> _startProductSync() async {
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _syncingProducts = true;
       _productSyncError = null;
@@ -1147,14 +1156,14 @@ class _ShopifySetupWizardScreenState
       } else {
         setState(() {
           _syncingProducts = false;
-          _productSyncError = 'Failed to sync products. Please try again.';
+          _productSyncError = l10n.shopifySyncFailed;
         });
       }
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _syncingProducts = false;
-        _productSyncError = 'Error syncing products: $e';
+        _productSyncError = 'Error: $e';
       });
     }
   }
@@ -1162,6 +1171,7 @@ class _ShopifySetupWizardScreenState
   // ── Step 5: Confirmation ─────────────────────────────────
 
   Widget _buildStep5Confirmation() {
+    final l10n = AppLocalizations.of(context)!;
     final conn = ref.watch(shopifyConnectionProvider).value;
     final shopName = conn?.shopName ?? _domainController.text;
 
@@ -1193,12 +1203,12 @@ class _ShopifySetupWizardScreenState
           ),
           const SizedBox(height: 24),
           Text(
-            'Ready to Sync!',
+            l10n.shopifyReadyToSync,
             style: AppTypography.h2.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
           Text(
-            "Here's a summary of your setup:",
+            l10n.shopifySetupSummary,
             style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 28),
@@ -1217,15 +1227,15 @@ class _ShopifySetupWizardScreenState
             ),
             child: Column(
               children: [
-                _SummaryRow(icon: Icons.store_rounded, label: 'Store', value: shopName),
+                _SummaryRow(icon: Icons.store_rounded, label: l10n.shopifyStore, value: shopName),
                 const Divider(height: 24),
-                _SummaryRow(icon: Icons.location_on_rounded, label: 'Location', value: _selectedLocationName ?? 'Default'),
+                _SummaryRow(icon: Icons.location_on_rounded, label: l10n.shopifySelectLocation, value: _selectedLocationName ?? 'Default'),
                 const Divider(height: 24),
-                _SummaryRow(icon: Icons.sync_rounded, label: 'Order Sync', value: 'Always on (real-time)'),
+                _SummaryRow(icon: Icons.sync_rounded, label: l10n.shopifyOrderSync, value: l10n.shopifyAlwaysOnRealtime),
                 const Divider(height: 24),
-                _SummaryRow(icon: Icons.inventory_2_outlined, label: 'Products Synced', value: '$_productsSynced product(s)'),
+                _SummaryRow(icon: Icons.inventory_2_outlined, label: l10n.shopifyProductsSyncedLabel, value: l10n.shopifyProductsCount(_productsSynced)),
                 const Divider(height: 24),
-                _SummaryRow(icon: Icons.inventory_2_outlined, label: 'Inventory Sync', value: 'Always on'),
+                _SummaryRow(icon: Icons.inventory_2_outlined, label: l10n.shopifyInventorySync, value: l10n.shopifyAlwaysOn),
               ],
             ),
           ),
@@ -1249,12 +1259,12 @@ class _ShopifySetupWizardScreenState
                       width: 22, height: 22,
                       child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                     )
-                  : const Row(
+                  : Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.rocket_launch_rounded, size: 20),
-                        SizedBox(width: 8),
-                        Text('Start Syncing', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                        const Icon(Icons.rocket_launch_rounded, size: 20),
+                        const SizedBox(width: 8),
+                        Text(l10n.shopifyStartSyncing, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                       ],
                     ),
             ),

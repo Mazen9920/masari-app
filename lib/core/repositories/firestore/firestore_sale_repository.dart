@@ -5,6 +5,7 @@ import '../../../shared/models/product_model.dart';
 import '../../../shared/models/sale_model.dart';
 import '../../../shared/models/transaction_model.dart' as models;
 import '../../services/result.dart';
+import '../../utils/stock_computation.dart';
 import '../sale_repository.dart';
 
 /// Firestore implementation of [SaleRepository].
@@ -307,6 +308,90 @@ class FirestoreSaleRepository implements SaleRepository {
       return Result.success(sale);
     } catch (e) {
       return Result.failure('Failed to create sale: $e');
+    }
+  }
+
+  @override
+  Future<Result<Sale>> createSaleWithTransactionsAndStockBatch(
+      Sale sale,
+      List<models.Transaction> transactions,
+      List<StockDeduction> stockDeductions) async {
+    if (stockDeductions.isEmpty) {
+      return createSaleWithTransactions(sale, transactions);
+    }
+
+    try {
+      final productsCollection = _firestore.collection('products');
+      final batch = _firestore.batch();
+      final now = FieldValue.serverTimestamp();
+
+      // ── Phase 1: READ product documents (served from cache when offline) ──
+      final productSnapshots = <String, DocumentSnapshot<Map<String, dynamic>>>{};
+      for (final deduction in stockDeductions) {
+        if (productSnapshots.containsKey(deduction.productId)) continue;
+        final docRef = productsCollection.doc(deduction.productId);
+        productSnapshots[deduction.productId] = await docRef.get();
+      }
+
+      // ── Phase 2: COMPUTE stock changes using shared helper ──
+      final productUpdates = <String, Product>{};
+
+      for (final deduction in stockDeductions) {
+        final snapshot = productSnapshots[deduction.productId]!;
+        if (!snapshot.exists) continue;
+
+        Product product;
+        if (productUpdates.containsKey(deduction.productId)) {
+          product = productUpdates[deduction.productId]!;
+        } else {
+          final data = snapshot.data()!;
+          data['id'] = snapshot.id;
+          product = Product.fromJson(data);
+        }
+
+        final result = computeStockChange(
+          product: product,
+          variantId: deduction.variantId,
+          delta: -deduction.quantity,
+          valuationMethod: deduction.valuationMethod,
+          reason: 'Sale',
+        );
+        productUpdates[deduction.productId] = result.updatedProduct;
+      }
+
+      // ── Phase 3: WRITE everything via batch ──
+
+      // Sale document
+      final saleJson = sale.toJson();
+      saleJson['user_id'] = _uid;
+      saleJson['created_at'] = now;
+      saleJson.remove('id');
+      batch.set(_collection.doc(sale.id), saleJson);
+
+      // Transaction documents (revenue, COGS, shipping)
+      final txnCollection = _firestore.collection('transactions');
+      for (final t in transactions) {
+        final txnJson = t.toJson();
+        txnJson['user_id'] = _uid;
+        txnJson['created_at'] = now;
+        txnJson.remove('id');
+        batch.set(txnCollection.doc(t.id), txnJson);
+      }
+
+      // Product stock updates
+      for (final entry in productUpdates.entries) {
+        final json = entry.value.toJson();
+        json.remove('id');
+        json['updated_at'] = DateTime.now().toIso8601String();
+        json['_last_modified_by'] = 'masari';
+        batch.update(productsCollection.doc(entry.key), json);
+      }
+
+      await batch.commit();
+
+      return Result.success(sale);
+    } catch (e) {
+      return Result.failure('Failed to create sale (batch): $e');
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/product_model.dart';
 import '../../shared/models/sale_model.dart';
 import 'app_providers.dart';
@@ -26,6 +27,7 @@ class AppNotification {
   final NotificationType type;
   final String? routeName;
   final Map<String, dynamic>? routeExtra;
+  final Map<String, String> params;
 
   const AppNotification({
     required this.id,
@@ -38,7 +40,64 @@ class AppNotification {
     required this.type,
     this.routeName,
     this.routeExtra,
+    this.params = const {},
   });
+
+  /// Returns the localized title based on notification kind (id prefix).
+  String localizedTitle(AppLocalizations l10n) {
+    if (id.startsWith('oos_')) return l10n.notifOutOfStockTitle(params['name'] ?? '');
+    if (id.startsWith('low_')) return l10n.notifLowStockTitle(params['name'] ?? '');
+    if (id.startsWith('purch_overdue_')) return l10n.notifOverdueTitle(params['name'] ?? '');
+    if (id.startsWith('purch_due_')) return l10n.notifPaymentDueTitle(params['name'] ?? '');
+    if (id.startsWith('sale_out_')) return l10n.notifUnpaidSaleTitle(params['name'] ?? '');
+    if (id == 'sales_outstanding') return l10n.notifUnpaidSalesTitle(params['count'] ?? '');
+    if (id.startsWith('sched_overdue_')) return l10n.notifScheduledOverdueTitle(params['title'] ?? '');
+    if (id.startsWith('sched_soon_')) return l10n.notifScheduledUpcomingTitle(params['title'] ?? '');
+    return title;
+  }
+
+  /// Returns the localized subtitle based on notification kind (id prefix).
+  String localizedSubtitle(AppLocalizations l10n) {
+    if (id.startsWith('oos_')) return l10n.notifOutOfStockSubtitle;
+    if (id.startsWith('low_')) {
+      final vNames = params['variantNames'];
+      final vStocks = params['variantStocks'];
+      if (vNames != null && vNames.isNotEmpty) {
+        final names = vNames.split('|');
+        final stocks = vStocks?.split('|') ?? [];
+        final detail = List.generate(
+          names.length,
+          (i) => l10n.notifVariantStockLeft(names[i], i < stocks.length ? stocks[i] : '0'),
+        ).join(', ');
+        if (detail.isNotEmpty) return detail;
+      }
+      return l10n.notifUnitsRemaining(params['count'] ?? '0');
+    }
+    if (id.startsWith('purch_overdue_')) {
+      return l10n.notifOverdueSubtitle(params['currency'] ?? '', params['amount'] ?? '', params['days'] ?? '', params['ref'] ?? '');
+    }
+    if (id.startsWith('purch_due_')) {
+      return l10n.notifPaymentDueSubtitle(params['currency'] ?? '', params['amount'] ?? '', params['days'] ?? '', params['ref'] ?? '');
+    }
+    if (id.startsWith('sale_out_')) {
+      return l10n.notifOutstandingFrom(params['currency'] ?? '', params['amount'] ?? '', params['date'] ?? '');
+    }
+    if (id == 'sales_outstanding') {
+      return l10n.notifTotalOutstanding(params['currency'] ?? '', params['amount'] ?? '');
+    }
+    if (id.startsWith('sched_overdue_')) {
+      final type = params['isIncome'] == 'true' ? l10n.income : l10n.expense;
+      return l10n.notifScheduledOverdueSubtitle(type, params['currency'] ?? '', params['amount'] ?? '', params['date'] ?? '');
+    }
+    if (id.startsWith('sched_soon_')) {
+      final type = params['isIncome'] == 'true' ? l10n.income : l10n.expense;
+      if (params['daysUntil'] == '0') {
+        return l10n.notifScheduledDueToday(type, params['currency'] ?? '', params['amount'] ?? '');
+      }
+      return l10n.notifScheduledDueInDays(type, params['currency'] ?? '', params['amount'] ?? '', params['daysUntil'] ?? '');
+    }
+    return subtitle;
+  }
 }
 
 // ═════════════════════════════════════════════════════════
@@ -68,6 +127,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
           type: NotificationType.alert,
           routeName: 'ProductDetailScreen',
           routeExtra: {'productId': p.id},
+          params: {'name': p.name},
         ));
       } else if (p.status == StockStatus.lowStock) {
         final lowVariants = p.variants.where(
@@ -84,6 +144,12 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
           type: NotificationType.alert,
           routeName: 'ProductDetailScreen',
           routeExtra: {'productId': p.id},
+          params: {
+            'name': p.name,
+            'count': '${p.currentStock}',
+            'variantNames': lowVariants.map((v) => v.displayName).join('|'),
+            'variantStocks': lowVariants.map((v) => '${v.currentStock}').join('|'),
+          },
         ));
       }
     }
@@ -118,6 +184,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
           type: NotificationType.alert,
           routeName: 'PurchaseDetailScreen',
           routeExtra: {'purchase': p, 'supplier': ?supplier},
+          params: {'name': p.supplierName, 'currency': currency, 'amount': fmt.format(p.outstanding), 'days': '$daysLate', 'ref': p.referenceNo},
         ));
       } else if (dueSoon) {
         final daysLeft = p.dueDate!.difference(now).inDays;
@@ -133,6 +200,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
           type: NotificationType.alert,
           routeName: 'PurchaseDetailScreen',
           routeExtra: {'purchase': p, 'supplier': ?supplier},
+          params: {'name': p.supplierName, 'currency': currency, 'amount': fmt.format(p.outstanding), 'days': '$daysLeft', 'ref': p.referenceNo},
         ));
       }
     }
@@ -160,6 +228,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
         type: NotificationType.update,
         routeName: 'SaleDetailScreen',
         routeExtra: {'sale': s},
+        params: {'name': s.customerName ?? 'Walk-in', 'currency': currency, 'amount': fmt.format(s.outstanding), 'date': DateFormat('dd MMM').format(s.date)},
       ));
     } else if (outstandingSales.length > 1) {
       final totalOutstanding =
@@ -173,6 +242,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
         subtitle: '$currency ${fmt.format(totalOutstanding)} total outstanding',
         createdAt: now,
         type: NotificationType.update,
+        params: {'count': '${outstandingSales.length}', 'currency': currency, 'amount': fmt.format(totalOutstanding)},
       ));
     }
   }
@@ -196,6 +266,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
           createdAt: st.nextDueDate,
           type: NotificationType.alert,
           routeName: 'ScheduledTransactionsScreen',
+          params: {'title': st.title, 'isIncome': '${st.isIncome}', 'currency': currency, 'amount': fmt.format(st.amount), 'date': DateFormat('dd MMM').format(st.nextDueDate)},
         ));
       } else if (daysUntil <= 3) {
         notifications.add(AppNotification(
@@ -210,6 +281,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
           createdAt: now,
           type: NotificationType.update,
           routeName: 'ScheduledTransactionsScreen',
+          params: {'title': st.title, 'isIncome': '${st.isIncome}', 'currency': currency, 'amount': fmt.format(st.amount), 'daysUntil': '$daysUntil'},
         ));
       }
     }

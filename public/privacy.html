@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Masari</title>
+  <style>
+    :root { --navy: #1a2744; --orange: #f5a623; --bg: #f8f9fb; --text: #333; --muted: #666; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .header { background: var(--navy); color: #fff; padding: 40px 20px; text-align: center; }
+    .header h1 { font-size: 28px; font-weight: 700; }
+    .header p { color: rgba(255,255,255,0.7); margin-top: 8px; font-size: 14px; }
+    .content { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
+    h2 { color: var(--navy); font-size: 20px; margin: 32px 0 12px; }
+    h3 { color: var(--navy); font-size: 16px; margin: 20px 0 8px; }
+    p, li { font-size: 15px; color: var(--muted); margin-bottom: 12px; }
+    ul { padding-left: 24px; }
+    li { margin-bottom: 8px; }
+    .badge { display: inline-block; background: var(--orange); color: #fff; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px; margin-bottom: 20px; }
+    a { color: var(--navy); }
+    /* RTL support */
+    [dir="rtl"] .content { direction: rtl; text-align: right; }
+    [dir="rtl"] ul { padding-left: 0; padding-right: 24px; }
+    .lang-switch { text-align: center; margin: 20px 0; }
+    .lang-switch button { background: var(--navy); color: #fff; border: none; padding: 8px 20px; border-radius: 20px; cursor: pointer; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 id="title">Privacy Policy</h1>
+    <p id="updated">Last updated: March 24, 2026</p>
+  </div>
+  <div class="lang-switch">
+    <button onclick="toggleLang()"><span id="langBtn">العربية</span></button>
+  </div>
+  <div class="content" id="content-en">
+    <span class="badge">Masari App</span>
+
+    <h2>1. Introduction</h2>
+    <p>Masari ("we", "our", "us") operates the Masari mobile application (the "App"). This Privacy Policy explains how we collect, use, and protect your personal information when you use our App.</p>
+    <p>By using Masari, you agree to the collection and use of information as described in this policy.</p>
+
+    <h2>2. Information We Collect</h2>
+
+    <h3>2.1 Account Information</h3>
+    <p>When you create an account, we collect:</p>
+    <ul>
+      <li>Full name</li>
+      <li>Email address</li>
+      <li>Phone number</li>
+      <li>Profile picture (optional)</li>
+      <li>Business name and industry</li>
+    </ul>
+
+    <h3>2.2 Financial Data You Enter</h3>
+    <p>The App allows you to track your business finances. This data is entered by you and includes:</p>
+    <ul>
+      <li>Income and expense transactions</li>
+      <li>Sales records and customer information</li>
+      <li>Inventory and product details</li>
+      <li>Supplier information and purchase records</li>
+      <li>Category and budget information</li>
+    </ul>
+    <p><strong>This financial data belongs to you.</strong> We do not sell, share, or use your financial data for advertising or marketing purposes.</p>
+
+    <h3>2.3 Shopify Integration Data</h3>
+    <p>If you connect your Shopify store, we access:</p>
+    <ul>
+      <li>Order information (for syncing sales)</li>
+      <li>Product and inventory data</li>
+      <li>Store location information</li>
+    </ul>
+    <p>This data is used solely to synchronize your Shopify store with Masari. It is never shared with third parties or used for marketing. It is accessible only by you and deleted when you delete your account.</p>
+
+    <h3>2.4 Automatically Collected Data</h3>
+    <ul>
+      <li><strong>Crash reports</strong>: We use Firebase Crashlytics to collect anonymous crash data to improve app stability.</li>
+      <li><strong>Device information</strong>: Device type, operating system version, and app version for debugging purposes.</li>
+    </ul>
+
+    <h2>3. How We Use Your Information</h2>
+    <ul>
+      <li>To provide and maintain the App's financial tracking features</li>
+      <li>To authenticate your identity and secure your account</li>
+      <li>To sync data with connected services (Shopify)</li>
+      <li>To send notifications you have opted into (low stock alerts, payment reminders)</li>
+      <li>To improve app performance and fix crashes</li>
+      <li>To process subscription payments (via our payment provider)</li>
+    </ul>
+
+    <h2>4. Data Storage & Security</h2>
+    <p>Your data is stored in <strong>Google Firebase</strong> (Firestore database and Firebase Storage), which provides:</p>
+    <ul>
+      <li>Encryption in transit (TLS/SSL)</li>
+      <li>Encryption at rest</li>
+      <li>SOC 1, SOC 2, and SOC 3 compliance</li>
+      <li>ISO 27001 certification</li>
+    </ul>
+    <p>Sensitive credentials (such as Shopify access tokens) are encrypted using AES-256-GCM before storage.</p>
+    <p>Your data is stored in the <strong>Middle East (me-central1)</strong> region.</p>
+
+    <h2>5. Data Sharing</h2>
+    <p>We do <strong>not</strong> sell your personal data. We share data only with:</p>
+    <ul>
+      <li><strong>Google Firebase</strong>: Cloud infrastructure provider (data processing)</li>
+      <li><strong>Payment provider</strong>: To process subscription payments (only payment-related data)</li>
+      <li><strong>Shopify</strong>: Only if you explicitly connect your store (OAuth-based, revocable)</li>
+    </ul>
+
+    <h2>6. Your Rights</h2>
+    <p>You have the right to:</p>
+    <ul>
+      <li><strong>Access</strong> your data: All your data is visible within the App</li>
+      <li><strong>Export</strong> your data: Available through the App's export features</li>
+      <li><strong>Delete</strong> your data: You can delete your entire account and all associated data from the App's settings</li>
+      <li><strong>Disconnect</strong> third-party services: You can disconnect Shopify at any time</li>
+    </ul>
+
+    <h2>7. Data Retention</h2>
+    <ul>
+      <li>Your data is retained as long as your account is active</li>
+      <li>When you delete your account, all data is permanently removed within 30 days</li>
+      <li>Shopify webhook logs are automatically purged after 30 days</li>
+      <li>Shopify sync logs are automatically purged after 90 days</li>
+    </ul>
+
+    <h2>8. Children's Privacy</h2>
+    <p>Masari is not intended for use by anyone under the age of 18. We do not knowingly collect personal information from children.</p>
+
+    <h2>9. Changes to This Policy</h2>
+    <p>We may update this Privacy Policy from time to time. We will notify you of any material changes through the App or via email.</p>
+
+    <h2>10. Contact Us</h2>
+    <p>If you have any questions about this Privacy Policy, contact us at:</p>
+    <p><strong>Email</strong>: <a href="mailto:support@masari.app">support@masari.app</a></p>
+  </div>
+
+  <div class="content" id="content-ar" style="display:none" dir="rtl">
+    <span class="badge">تطبيق مساري</span>
+
+    <h2>1. مقدمة</h2>
+    <p>يدير مساري ("نحن"، "لنا") تطبيق مساري للهاتف المحمول ("التطبيق"). توضح سياسة الخصوصية هذه كيف نجمع ونستخدم ونحمي معلوماتك الشخصية عند استخدام التطبيق.</p>
+    <p>باستخدام مساري، فإنك توافق على جمع واستخدام المعلومات كما هو موضح في هذه السياسة.</p>
+
+    <h2>2. المعلومات التي نجمعها</h2>
+
+    <h3>2.1 معلومات الحساب</h3>
+    <p>عند إنشاء حساب، نجمع:</p>
+    <ul>
+      <li>الاسم الكامل</li>
+      <li>البريد الإلكتروني</li>
+      <li>رقم الهاتف</li>
+      <li>صورة الملف الشخصي (اختياري)</li>
+      <li>اسم النشاط التجاري والصناعة</li>
+    </ul>
+
+    <h3>2.2 البيانات المالية التي تدخلها</h3>
+    <p>يتيح لك التطبيق تتبع أموال نشاطك التجاري. هذه البيانات يتم إدخالها بواسطتك وتشمل:</p>
+    <ul>
+      <li>معاملات الدخل والمصروفات</li>
+      <li>سجلات المبيعات ومعلومات العملاء</li>
+      <li>تفاصيل المخزون والمنتجات</li>
+      <li>معلومات الموردين وسجلات المشتريات</li>
+      <li>معلومات الفئات والميزانية</li>
+    </ul>
+    <p><strong>هذه البيانات المالية ملكك.</strong> نحن لا نبيع أو نشارك أو نستخدم بياناتك المالية لأغراض إعلانية أو تسويقية.</p>
+
+    <h3>2.3 بيانات ربط Shopify</h3>
+    <p>إذا قمت بربط متجر Shopify الخاص بك، فإننا نصل إلى:</p>
+    <ul>
+      <li>معلومات الطلبات (لمزامنة المبيعات)</li>
+      <li>بيانات المنتجات والمخزون</li>
+      <li>معلومات موقع المتجر</li>
+    </ul>
+    <p>تُستخدم هذه البيانات فقط لمزامنة متجرك مع مساري. لا تتم مشاركتها مع أطراف ثالثة أو استخدامها للتسويق. يمكنك الوصول إليها وحذفها عند حذف حسابك.</p>
+
+    <h3>2.4 البيانات المجمعة تلقائيًا</h3>
+    <ul>
+      <li><strong>تقارير الأعطال</strong>: نستخدم Firebase Crashlytics لجمع بيانات أعطال مجهولة لتحسين استقرار التطبيق.</li>
+      <li><strong>معلومات الجهاز</strong>: نوع الجهاز وإصدار نظام التشغيل وإصدار التطبيق لأغراض تصحيح الأخطاء.</li>
+    </ul>
+
+    <h2>3. كيف نستخدم معلوماتك</h2>
+    <ul>
+      <li>لتقديم وصيانة ميزات التتبع المالي في التطبيق</li>
+      <li>للتحقق من هويتك وتأمين حسابك</li>
+      <li>لمزامنة البيانات مع الخدمات المتصلة (Shopify)</li>
+      <li>لإرسال إشعارات اشتركت فيها (تنبيهات المخزون المنخفض، تذكيرات الدفع)</li>
+      <li>لتحسين أداء التطبيق وإصلاح الأعطال</li>
+      <li>لمعالجة مدفوعات الاشتراك (عبر مزود الدفع لدينا)</li>
+    </ul>
+
+    <h2>4. تخزين البيانات والأمان</h2>
+    <p>يتم تخزين بياناتك في <strong>Google Firebase</strong> (قاعدة بيانات Firestore و Firebase Storage)، والتي توفر:</p>
+    <ul>
+      <li>تشفير أثناء النقل (TLS/SSL)</li>
+      <li>تشفير أثناء التخزين</li>
+      <li>امتثال SOC 1 و SOC 2 و SOC 3</li>
+      <li>شهادة ISO 27001</li>
+    </ul>
+    <p>يتم تشفير بيانات الاعتماد الحساسة (مثل رموز وصول Shopify) باستخدام AES-256-GCM قبل التخزين.</p>
+    <p>يتم تخزين بياناتك في منطقة <strong>الشرق الأوسط (me-central1)</strong>.</p>
+
+    <h2>5. مشاركة البيانات</h2>
+    <p>نحن <strong>لا</strong> نبيع بياناتك الشخصية. نشارك البيانات فقط مع:</p>
+    <ul>
+      <li><strong>Google Firebase</strong>: مزود البنية التحتية السحابية (معالجة البيانات)</li>
+      <li><strong>مزود الدفع</strong>: لمعالجة مدفوعات الاشتراك (بيانات الدفع فقط)</li>
+      <li><strong>Shopify</strong>: فقط إذا قمت بربط متجرك صراحةً (قائم على OAuth، قابل للإلغاء)</li>
+    </ul>
+
+    <h2>6. حقوقك</h2>
+    <p>لديك الحق في:</p>
+    <ul>
+      <li><strong>الوصول</strong> إلى بياناتك: جميع بياناتك مرئية داخل التطبيق</li>
+      <li><strong>تصدير</strong> بياناتك: متاح من خلال ميزات التصدير في التطبيق</li>
+      <li><strong>حذف</strong> بياناتك: يمكنك حذف حسابك بالكامل وجميع البيانات المرتبطة من إعدادات التطبيق</li>
+      <li><strong>قطع الاتصال</strong> بخدمات الطرف الثالث: يمكنك قطع اتصال Shopify في أي وقت</li>
+    </ul>
+
+    <h2>7. الاحتفاظ بالبيانات</h2>
+    <ul>
+      <li>يتم الاحتفاظ ببياناتك طالما أن حسابك نشط</li>
+      <li>عند حذف حسابك، يتم إزالة جميع البيانات نهائيًا خلال 30 يومًا</li>
+      <li>يتم حذف سجلات Shopify webhook تلقائيًا بعد 30 يومًا</li>
+      <li>يتم حذف سجلات مزامنة Shopify تلقائيًا بعد 90 يومًا</li>
+    </ul>
+
+    <h2>8. خصوصية الأطفال</h2>
+    <p>مساري غير مخصص للاستخدام من قبل أي شخص يقل عمره عن 18 عامًا. نحن لا نجمع معلومات شخصية من الأطفال عن قصد.</p>
+
+    <h2>9. التغييرات على هذه السياسة</h2>
+    <p>قد نقوم بتحديث سياسة الخصوصية هذه من وقت لآخر. سنقوم بإخطارك بأي تغييرات جوهرية عبر التطبيق أو البريد الإلكتروني.</p>
+
+    <h2>10. اتصل بنا</h2>
+    <p>إذا كانت لديك أي أسئلة حول سياسة الخصوصية هذه، تواصل معنا على:</p>
+    <p><strong>البريد الإلكتروني</strong>: <a href="mailto:support@masari.app">support@masari.app</a></p>
+  </div>
+
+  <script>
+    let isAr = false;
+    function toggleLang() {
+      isAr = !isAr;
+      document.getElementById('content-en').style.display = isAr ? 'none' : 'block';
+      document.getElementById('content-ar').style.display = isAr ? 'block' : 'none';
+      document.getElementById('title').textContent = isAr ? 'سياسة الخصوصية' : 'Privacy Policy';
+      document.getElementById('updated').textContent = isAr ? 'آخر تحديث: 24 مارس 2026' : 'Last updated: March 24, 2026';
+      document.getElementById('langBtn').textContent = isAr ? 'English' : 'العربية';
+      document.documentElement.dir = isAr ? 'rtl' : 'ltr';
+      document.documentElement.lang = isAr ? 'ar' : 'en';
+    }
+  </script>
+</body>
+</html>

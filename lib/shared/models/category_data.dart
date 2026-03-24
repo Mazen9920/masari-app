@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 
 /// GAAP cash-flow activity classification.
 enum CashFlowType { operating, investing, financing }
@@ -374,6 +375,44 @@ class CategoryData {
       orElse: () => all.firstWhere((c) => c.id == 'cat_other'),
     );
   }
+
+  /// Returns the localized display name for built-in categories.
+  /// Custom (user-created) categories keep their original [name].
+  String localizedName(AppLocalizations l10n) {
+    switch (id) {
+      case 'cat_groceries': return l10n.categoryGroceries;
+      case 'cat_income': return l10n.categoryIncome;
+      case 'cat_transport': return l10n.categoryTransport;
+      case 'cat_entertainment': return l10n.categoryEntertainment;
+      case 'cat_bills': return l10n.categoryBills;
+      case 'cat_health': return l10n.categoryHealth;
+      case 'cat_education': return l10n.categoryEducation;
+      case 'cat_shopping': return l10n.categoryShopping;
+      case 'cat_food': return l10n.categoryFoodDining;
+      case 'cat_gifts': return l10n.categoryGifts;
+      case 'cat_travel': return l10n.categoryTravel;
+      case 'cat_family': return l10n.categoryFamily;
+      case 'cat_pet': return l10n.categoryPets;
+      case 'cat_investments': return l10n.categoryInvestments;
+      case 'cat_utilities': return l10n.categoryUtilities;
+      case 'cat_insurance': return l10n.categoryInsurance;
+      case 'cat_subscriptions': return l10n.categorySubscriptions;
+      case 'cat_donations': return l10n.categoryDonations;
+      case 'cat_personal_care': return l10n.categoryPersonalCare;
+      case 'cat_supplier_payment': return l10n.categorySupplierPayment;
+      case 'cat_sales_revenue': return l10n.categorySalesRevenue;
+      case 'cat_cogs': return l10n.categoryCogs;
+      case 'cat_shipping': return l10n.categoryShippingFees;
+      case 'cat_loan_received': return l10n.categoryLoanReceived;
+      case 'cat_loan_repayment': return l10n.categoryLoanRepayment;
+      case 'cat_equity_injection': return l10n.categoryCapitalInjection;
+      case 'cat_owner_withdrawal': return l10n.categoryOwnerWithdrawal;
+      case 'cat_other': return l10n.categoryOther;
+      case 'cat_uncategorized': return l10n.categoryUncategorized;
+      case 'cat_tax_payable': return l10n.categoryTaxPayable;
+      default: return name;
+    }
+  }
 }
 
 /// Sentinel value used by [CategoryData.copyWith] to distinguish
@@ -467,5 +506,46 @@ extension CategoryDataUIExt on CategoryData {
     if (icon == Icons.savings_rounded) return 'savings';
     if (icon == Icons.output_rounded) return 'output';
     return 'grid_view';
+  }
+}
+
+/// Maps system category IDs to localized display names.
+/// Custom (user-created) categories keep their stored name unchanged.
+extension CategoryDataL10n on CategoryData {
+  String localizedName(AppLocalizations l10n) {
+    if (userId != 'system') return name;
+    switch (id) {
+      case 'cat_groceries': return l10n.catGroceries;
+      case 'cat_income': return l10n.catIncome;
+      case 'cat_transport': return l10n.catTransport;
+      case 'cat_entertainment': return l10n.catEntertainment;
+      case 'cat_bills': return l10n.catBills;
+      case 'cat_health': return l10n.catHealth;
+      case 'cat_education': return l10n.catEducation;
+      case 'cat_shopping': return l10n.catShopping;
+      case 'cat_food': return l10n.catFoodDining;
+      case 'cat_gifts': return l10n.catGifts;
+      case 'cat_travel': return l10n.catTravel;
+      case 'cat_family': return l10n.catFamily;
+      case 'cat_pet': return l10n.catPets;
+      case 'cat_investments': return l10n.catInvestments;
+      case 'cat_utilities': return l10n.catUtilities;
+      case 'cat_insurance': return l10n.catInsurance;
+      case 'cat_subscriptions': return l10n.catSubscriptions;
+      case 'cat_donations': return l10n.catDonations;
+      case 'cat_personal_care': return l10n.catPersonalCare;
+      case 'cat_supplier_payment': return l10n.catSupplierPayment;
+      case 'cat_sales_revenue': return l10n.catSalesRevenue;
+      case 'cat_cogs': return l10n.catCostOfGoodsSold;
+      case 'cat_shipping': return l10n.catShippingFees;
+      case 'cat_loan_received': return l10n.catLoanReceived;
+      case 'cat_loan_repayment': return l10n.catLoanRepayment;
+      case 'cat_equity_injection': return l10n.catCapitalInjection;
+      case 'cat_owner_withdrawal': return l10n.catOwnerWithdrawal;
+      case 'cat_other': return l10n.catOther;
+      case 'cat_uncategorized': return l10n.catUncategorized;
+      case 'cat_tax_payable': return l10n.catTaxPayable;
+      default: return name;
+    }
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/hub_settings_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../l10n/app_localizations.dart';
 import 'pinned_actions_screen.dart';
 
 /// Hub Settings — layout, dashboard customization, notifications for the Manage hub.
@@ -16,14 +17,20 @@ class HubSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
-  static const _tabOptions = ['Hub Overview', 'Inventory', 'Suppliers'];
+  List<String> _tabOptions(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return [l10n.hubOverview, l10n.inventoryTitle, l10n.suppliersTitle];
+  }
 
   // Pinned actions (preview list)
-  static const _pinnedActions = [
-    {'icon': Icons.add_box_rounded, 'label': 'Add Product'},
-    {'icon': Icons.local_shipping_rounded, 'label': 'New Supplier'},
-    {'icon': Icons.receipt_long_rounded, 'label': 'Add Transaction'},
-  ];
+  List<Map<String, dynamic>> _pinnedActionsList(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return [
+      {'icon': Icons.add_box_rounded, 'label': l10n.addProduct},
+      {'icon': Icons.local_shipping_rounded, 'label': l10n.newSupplier},
+      {'icon': Icons.receipt_long_rounded, 'label': l10n.addTransaction},
+    ];
+  }
 
   HubSettingsNotifier get _notifier => ref.read(hubSettingsProvider.notifier);
 
@@ -46,7 +53,7 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ═══  LAYOUT PREFERENCES  ═══
-                    _sectionTitle('Layout Preferences')
+                    _sectionTitle(AppLocalizations.of(context)!.layoutPreferences)
                         .animate().fadeIn(duration: 250.ms),
                     const SizedBox(height: 10),
                     _buildLayoutSection()
@@ -55,7 +62,7 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
                     const SizedBox(height: 24),
 
                     // ═══  DASHBOARD CUSTOMIZATION  ═══
-                    _sectionTitle('Dashboard Customization')
+                    _sectionTitle(AppLocalizations.of(context)!.dashboardCustomization)
                         .animate().fadeIn(duration: 250.ms, delay: 60.ms),
                     const SizedBox(height: 10),
                     _buildDashboardSection()
@@ -64,7 +71,7 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
                     const SizedBox(height: 24),
 
                     // ═══  NOTIFICATIONS & BADGES  ═══
-                    _sectionTitle('Notifications & Badges')
+                    _sectionTitle(AppLocalizations.of(context)!.notificationsAndBadges)
                         .animate().fadeIn(duration: 250.ms, delay: 100.ms),
                     const SizedBox(height: 10),
                     _buildNotificationsSection()
@@ -106,7 +113,7 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
           ),
           Expanded(
             child: Text(
-              'Hub Settings',
+              AppLocalizations.of(context)!.hubSettings,
               style: AppTypography.h2.copyWith(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w800,
@@ -151,7 +158,7 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hub Layout',
+                AppLocalizations.of(context)!.hubLayout,
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w600,
@@ -161,9 +168,9 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: _layoutOption(0, 'Grid (2×2)', s.layoutIndex)),
+                  Expanded(child: _layoutOption(0, AppLocalizations.of(context)!.gridLayout, s.layoutIndex)),
                   const SizedBox(width: 10),
-                  Expanded(child: _layoutOption(1, 'List', s.layoutIndex)),
+                  Expanded(child: _layoutOption(1, AppLocalizations.of(context)!.listLayout, s.layoutIndex)),
                 ],
               ),
             ],
@@ -171,15 +178,15 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
         ),
         _divider(),
         _toggleRow(
-          title: 'Show Quick Actions',
-          subtitle: 'Shortcuts below main cards',
+          title: AppLocalizations.of(context)!.showQuickActions,
+          subtitle: AppLocalizations.of(context)!.showQuickActionsSubtitle,
           value: s.showQuickActions,
           onChanged: (v) => _notifier.setShowQuickActions(v),
         ),
         _divider(),
         _toggleRow(
-          title: 'Show Insights Banner',
-          subtitle: 'Weekly summaries & tips',
+          title: AppLocalizations.of(context)!.showInsightsBanner,
+          subtitle: AppLocalizations.of(context)!.showInsightsBannerSubtitle,
           value: s.showInsightsBanner,
           onChanged: (v) => _notifier.setShowInsightsBanner(v),
         ),
@@ -308,7 +315,7 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Default Manage Tab',
+                AppLocalizations.of(context)!.defaultManageTab,
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w600,
@@ -334,10 +341,10 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
                     fontSize: 14,
                   ),
                   items: List.generate(
-                    _tabOptions.length,
+                    _tabOptions(context).length,
                     (i) => DropdownMenuItem(
                       value: i,
-                      child: Text(_tabOptions[i]),
+                      child: Text(_tabOptions(context)[i]),
                     ),
                   ),
                   onChanged: (v) {
@@ -358,7 +365,7 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Pinned Actions',
+                    AppLocalizations.of(context)!.pinnedActions,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.primaryNavy,
                       fontWeight: FontWeight.w600,
@@ -375,7 +382,7 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
                       );
                     },
                     child: Text(
-                      'Edit',
+                      AppLocalizations.of(context)!.editAction,
                       style: TextStyle(
                         color: const Color(0xFFE67E22),
                         fontWeight: FontWeight.w700,
@@ -387,8 +394,8 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
               ),
               const SizedBox(height: 12),
               // Preview of pinned actions
-              ...List.generate(_pinnedActions.length, (i) {
-                final action = _pinnedActions[i];
+              ...List.generate(_pinnedActionsList(context).length, (i) {
+                final action = _pinnedActionsList(context)[i];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Container(
@@ -454,22 +461,22 @@ class _HubSettingsScreenState extends ConsumerState<HubSettingsScreen> {
     return _card(
       children: [
         _toggleRow(
-          title: 'Low Stock Alerts',
-          subtitle: 'Notify when items hit minimum',
+          title: AppLocalizations.of(context)!.lowStockAlertsToggle,
+          subtitle: AppLocalizations.of(context)!.lowStockAlertsSubtitle,
           value: s.lowStockAlerts,
           onChanged: (v) => _notifier.setLowStockAlerts(v),
         ),
         _divider(),
         _toggleRow(
-          title: 'Payment Due Reminders',
-          subtitle: 'Alerts for upcoming vendor payments',
+          title: AppLocalizations.of(context)!.paymentDueReminders,
+          subtitle: AppLocalizations.of(context)!.paymentDueRemindersSubtitle,
           value: s.paymentDueReminders,
           onChanged: (v) => _notifier.setPaymentDueReminders(v),
         ),
         _divider(),
         _toggleRow(
-          title: 'Show Stat Badges on Cards',
-          subtitle: 'Display mini-stats on hub cards',
+          title: AppLocalizations.of(context)!.showStatBadges,
+          subtitle: AppLocalizations.of(context)!.showStatBadgesSubtitle,
           value: s.showStatBadges,
           onChanged: (v) => _notifier.setShowStatBadges(v),
         ),

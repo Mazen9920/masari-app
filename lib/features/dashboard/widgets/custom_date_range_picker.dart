@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
+import '../../../l10n/app_localizations.dart';
 import '../providers/dashboard_state_provider.dart';
 
 /// Result from the date-range sheet.
@@ -142,7 +143,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
             child: Row(
               children: [
                 Text(
-                  'Date range',
+                  AppLocalizations.of(context)!.dateRange,
                   style: AppTypography.h3.copyWith(
                     color: AppColors.textPrimary,
                   ),
@@ -167,7 +168,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
                   widget.currentPeriod == DashboardPeriod.custom &&
                           widget.currentRange != null
                       ? widget.currentRange!.formattedRange
-                      : widget.currentPeriod.label,
+                      : widget.currentPeriod.localizedLabel(AppLocalizations.of(context)!),
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textTertiary,
                   ),
@@ -196,7 +197,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
         // "Fixed dates" row → opens calendar
         _buildActionTile(
           icon: Icons.calendar_today_rounded,
-          title: 'Fixed dates',
+          title: AppLocalizations.of(context)!.fixedDates,
           subtitle: _calStart != null && _calEnd != null
               ? '${DateFormat('MMM d').format(_calStart!)} – ${DateFormat('MMM d').format(_calEnd!)}'
               : null,
@@ -264,6 +265,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
   }
 
   Widget _buildPresetTile(DashboardPeriod p, bool isActive) {
+    final l10n = AppLocalizations.of(context)!;
     return InkWell(
       onTap: () => _selectPreset(p),
       child: Padding(
@@ -272,7 +274,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
           children: [
             Expanded(
               child: Text(
-                p.label,
+                p.localizedLabel(l10n),
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
@@ -302,8 +304,8 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
               _calStart != null && _calEnd != null
                   ? '${DateFormat('MMM d, yyyy').format(_calStart!)} – ${DateFormat('MMM d, yyyy').format(_calEnd!)}'
                   : _calStart != null
-                      ? '${DateFormat('MMM d, yyyy').format(_calStart!)} – Select end'
-                      : 'Select start date',
+                      ? '${DateFormat('MMM d, yyyy').format(_calStart!)} – ${AppLocalizations.of(context)!.selectEnd}'
+                      : AppLocalizations.of(context)!.selectStartDate,
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.secondaryBlue,
                 fontWeight: FontWeight.w600,
@@ -379,11 +381,16 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
   }
 
   Widget _buildWeekdayHeader() {
-    const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    // Use intl for localized single-letter weekday abbreviations
+    final now = DateTime(2024, 1, 7); // a known Sunday
+    final localizedDays = List.generate(7, (i) {
+      final day = now.add(Duration(days: i));
+      return DateFormat.E(Localizations.localeOf(context).languageCode).format(day).substring(0, 1);
+    });
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
-        children: days
+        children: localizedDays
             .map((d) => Expanded(
                   child: Center(
                     child: Text(d,
@@ -482,7 +489,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
             ),
           ),
           child: Text(
-            'Apply',
+            AppLocalizations.of(context)!.apply,
             style: AppTypography.labelLarge.copyWith(
               color: canApply ? Colors.white : AppColors.textTertiary,
             ),

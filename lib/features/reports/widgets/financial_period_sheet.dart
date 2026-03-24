@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 
@@ -142,7 +143,7 @@ class _FinancialPeriodSheetState extends State<_FinancialPeriodSheet> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
             child: Text(
-              'Select Period',
+              AppLocalizations.of(context)!.selectPeriod,
               style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
             ),
           ),
@@ -157,8 +158,8 @@ class _FinancialPeriodSheetState extends State<_FinancialPeriodSheet> {
               padding: const EdgeInsets.all(3),
               child: Row(
                 children: [
-                  _buildTab('Month End', FinancialPeriodType.monthEnd),
-                  _buildTab('Year End', FinancialPeriodType.yearEnd),
+                  _buildTab(AppLocalizations.of(context)!.monthEnd, FinancialPeriodType.monthEnd),
+                  _buildTab(AppLocalizations.of(context)!.yearEnd, FinancialPeriodType.yearEnd),
                 ],
               ),
             ),

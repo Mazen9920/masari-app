@@ -26,6 +26,7 @@ class BalanceSheetScreen extends ConsumerStatefulWidget {
 
 class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
   bool _showTrend = false;
+  bool _sharing = false;
   FinancialPeriodResult _period = FinancialPeriodResult(
     type: FinancialPeriodType.monthEnd,
     range: DateTimeRange(
@@ -1140,8 +1141,9 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-      onPressed: () async {
+      onPressed: _sharing ? null : () async {
         HapticFeedback.mediumImpact();
+        setState(() => _sharing = true);
         final origin = ShareService.originFrom(context);
         final l10n = AppLocalizations.of(context)!;
         try {
@@ -1215,10 +1217,14 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.somethingWentWrong), backgroundColor: Colors.red));
           }
+        } finally {
+          if (mounted) setState(() => _sharing = false);
         }
       },
-      icon: const Icon(Icons.ios_share_rounded, size: 18),
-      label: Text(AppLocalizations.of(context)!.shareReport, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      icon: _sharing
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+          : const Icon(Icons.ios_share_rounded, size: 18),
+      label: Text(_sharing ? AppLocalizations.of(context)!.preparingReport : AppLocalizations.of(context)!.shareReport, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.primaryNavy,
         foregroundColor: Colors.white,

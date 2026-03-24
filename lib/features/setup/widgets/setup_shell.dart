@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/widgets/form_components.dart';
 
 /// Shared layout shell for all 3 business setup steps.
@@ -40,7 +41,7 @@ class SetupShell extends StatelessWidget {
         child: Column(
           children: [
             // ─── Top: back + step + progress ───
-            _buildTopSection(),
+            _buildTopSection(context),
 
             // ─── Scrollable content ───
             Expanded(
@@ -81,7 +82,7 @@ class SetupShell extends StatelessWidget {
     );
   }
 
-  Widget _buildTopSection() {
+  Widget _buildTopSection(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, AppSpacing.screenHorizontal, 16),
       child: Column(
@@ -96,7 +97,7 @@ class SetupShell extends StatelessWidget {
                 color: AppColors.textPrimary,
               ),
               Text(
-                'Step $currentStep of $totalSteps',
+                AppLocalizations.of(context)!.setupStepOf(currentStep, totalSteps),
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.textSecondary,
                 ),

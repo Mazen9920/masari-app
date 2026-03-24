@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../l10n/app_localizations.dart';
 
 class AiChatScreen extends StatefulWidget {
   final String contextType;
@@ -23,35 +24,34 @@ class _AiChatScreenState extends State<AiChatScreen> {
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
   
-  final List<_ChatMessage> _messages = [
-    _ChatMessage(text: "Hi there! I'm your Masari AI Assistant. How can I help you analyze your finances today?", isUser: false),
-  ];
+  final List<_ChatMessage> _messages = [];
+  bool _initialized = false;
 
-  List<String> get _suggestions {
+  List<String> _suggestions(AppLocalizations l10n) {
     switch (widget.contextType) {
       case 'CashFlow':
         return [
-          'Analyze my cash flow this month',
-          'Why is my cash balance low?',
-          'Forecast next month\'s expenses',
+          l10n.aiSuggestCashFlow1,
+          l10n.aiSuggestCashFlow2,
+          l10n.aiSuggestCashFlow3,
         ];
       case 'ProfitLoss':
         return [
-          'Where am I overspending?',
-          'How can I increase my net profit?',
-          'Compare last month\'s revenue',
+          l10n.aiSuggestProfit1,
+          l10n.aiSuggestProfit2,
+          l10n.aiSuggestProfit3,
         ];
       case 'Categories':
         return [
-          'Which category breaks my budget?',
-          'Suggest limits for my expenses',
-          'Create a category report',
+          l10n.aiSuggestCategory1,
+          l10n.aiSuggestCategory2,
+          l10n.aiSuggestCategory3,
         ];
       default:
         return [
-          'Give me a financial summary',
-          'How to reduce operating costs?',
-          'Show me my top expenses',
+          l10n.aiSuggestDefault1,
+          l10n.aiSuggestDefault2,
+          l10n.aiSuggestDefault3,
         ];
     }
   }
@@ -71,7 +71,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       if (mounted) {
         setState(() {
           _messages.add(_ChatMessage(
-            text: "I'm currently in preview mode. When connected to a real AI backend, I'll be able to analyze your Masari financial data and provide deep insights. Stay tuned!",
+            text: AppLocalizations.of(context)!.aiPreviewResponse,
             isUser: false,
           ));
         });
@@ -101,6 +101,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    if (!_initialized) {
+      _initialized = true;
+      _messages.add(_ChatMessage(text: l10n.aiGreeting, isUser: false));
+    }
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -109,7 +114,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
           children: [
             const Icon(Icons.auto_awesome, color: Color(0xFFE67E22), size: 20),
             const SizedBox(width: 8),
-            Text('Masari AI', style: AppTypography.h3),
+            Text(l10n.aiTitle, style: AppTypography.h3),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -117,8 +122,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
                 color: const Color(0xFFE67E22).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Text(
-                'Preview',
+              child: Text(
+                l10n.aiPreview,
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
@@ -161,10 +166,10 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
-                  itemCount: _suggestions.length,
+                  itemCount: _suggestions(l10n).length,
                   separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
-                    final suggestion = _suggestions[index];
+                    final suggestion = _suggestions(l10n)[index];
                     return ActionChip(
                       label: Text(suggestion, style: const TextStyle(fontSize: 13)),
                       backgroundColor: Colors.white,
@@ -200,8 +205,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
                           Expanded(
                             child: TextField(
                               controller: _msgCtrl,
-                              decoration: const InputDecoration(
-                                hintText: 'Ask Masari AI...',
+                              decoration: InputDecoration(
+                                hintText: l10n.aiHint,
                                 border: InputBorder.none,
                                 isDense: true,
                               ),
@@ -212,7 +217,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                           IconButton(
                             icon: const Icon(Icons.mic_none_rounded, color: Colors.grey),
                             onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Voice input coming soon')));
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.aiVoiceSoon)));
                             },
                           ),
                         ],

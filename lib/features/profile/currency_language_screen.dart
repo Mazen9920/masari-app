@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class CurrencyLanguageScreen extends ConsumerWidget {
   const CurrencyLanguageScreen({super.key});
@@ -22,6 +23,7 @@ class CurrencyLanguageScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final settings = ref.watch(appSettingsProvider);
     final notifier = ref.read(appSettingsProvider.notifier);
     final selectedCurrency = settings.currency;
@@ -35,7 +37,7 @@ class CurrencyLanguageScreen extends ConsumerWidget {
           onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
-        title: Text('Currency & Language', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
+        title: Text(l10n.currencyLanguageTitle, style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -45,7 +47,7 @@ class CurrencyLanguageScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Currency Section
-            _sectionTitle('CURRENCY'),
+            _sectionTitle(l10n.currencySection),
             const SizedBox(height: 10),
             Container(
               decoration: BoxDecoration(
@@ -60,27 +62,25 @@ class CurrencyLanguageScreen extends ConsumerWidget {
                 children: [
                   for (int i = 0; i < _currencies.length; i++) ...[
                     _buildCurrencyTile(
-                      _currencies[i],
-                      isSelected: selectedCurrency == _currencies[i]['code'],
+                      _currencies[i],                      localizedName: _localizedCurrencyName(l10n, _currencies[i]['code']!),                      isSelected: selectedCurrency == _currencies[i]['code'],
                       onTap: () async {
                         final code = _currencies[i]['code']!;
                         if (selectedCurrency == code) return;
                         final confirmed = await showDialog<bool>(
                           context: context,
                           builder: (ctx) => AlertDialog(
-                            title: const Text('Change Currency?'),
+                            title: Text(l10n.currencyChangeTitle),
                             content: Text(
-                              'Switching to $code will update all displayed '
-                              'amounts. Existing data will not be converted.',
+                              l10n.currencyChangeMessage(code),
                             ),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.of(ctx).pop(false),
-                                child: const Text('Cancel'),
+                                child: Text(l10n.cancel),
                               ),
                               TextButton(
                                 onPressed: () => Navigator.of(ctx).pop(true),
-                                child: const Text('Change'),
+                                child: Text(l10n.currencyChangeBtn),
                               ),
                             ],
                           ),
@@ -99,7 +99,7 @@ class CurrencyLanguageScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 28),
             // Language Section
-            _sectionTitle('LANGUAGE'),
+            _sectionTitle(l10n.languageSection),
             const SizedBox(height: 10),
             Container(
               decoration: BoxDecoration(
@@ -148,8 +148,19 @@ class CurrencyLanguageScreen extends ConsumerWidget {
     );
   }
 
+  String _localizedCurrencyName(AppLocalizations l10n, String code) => switch (code) {
+    'EGP' => l10n.currencyEgp,
+    'USD' => l10n.currencyUsd,
+    'EUR' => l10n.currencyEur,
+    'SAR' => l10n.currencySar,
+    'AED' => l10n.currencyAed,
+    'GBP' => l10n.currencyGbp,
+    _ => code,
+  };
+
   Widget _buildCurrencyTile(
     Map<String, String> currency, {
+    required String localizedName,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
@@ -192,7 +203,7 @@ class CurrencyLanguageScreen extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      currency['name']!,
+                      localizedName,
                       style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
                     ),
                   ],

@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../core/providers/app_settings_provider.dart';
 import '../providers/shopify_connection_provider.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// A banner that appears when the Shopify connection has an error/disconnected
 /// status but the user has a Growth subscription (which includes Shopify).
@@ -40,6 +41,7 @@ class ShopifyReconnectBanner extends ConsumerWidget {
 class _SetupBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       padding: const EdgeInsets.all(14),
@@ -75,7 +77,7 @@ class _SetupBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Shopify integration ready',
+                  l10n.shopifyIntegrationReady,
                   style: AppTypography.labelSmall.copyWith(
                     color: AppColors.shopifyPurple,
                     fontWeight: FontWeight.w700,
@@ -83,7 +85,7 @@ class _SetupBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Tap to connect your store and start syncing.',
+                  l10n.shopifyTapToConnect,
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textSecondary,
                     fontSize: 12,
@@ -102,7 +104,7 @@ class _SetupBanner extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Setup',
+                l10n.shopifySetupButton,
                 style: AppTypography.labelSmall.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -124,12 +126,13 @@ class _ReconnectBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final color = hasError ? AppColors.danger : AppColors.warning;
     final icon = hasError ? Icons.error_outline_rounded : Icons.link_off_rounded;
-    final title = hasError ? 'Shopify connection error' : 'Shopify disconnected';
+    final title = hasError ? l10n.shopifyConnectionErrorTitle : l10n.shopifyDisconnectedTitle;
     final subtitle = hasError
-        ? 'Re-authorize "$shopName" to resume syncing.'
-        : '"$shopName" was disconnected. Reconnect to resume.';
+        ? l10n.shopifyReauthorize(shopName)
+        : l10n.shopifyReconnectMessage(shopName);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -190,7 +193,7 @@ class _ReconnectBanner extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Fix',
+                l10n.shopifyFixButton,
                 style: AppTypography.labelSmall.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../core/navigation/app_router.dart';
 import '../../../core/services/shopify_sync_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -31,6 +32,7 @@ class ShopifyConnectScreen extends ConsumerStatefulWidget {
 class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
     with WidgetsBindingObserver {
 
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   DateTime? _lastAutoRefreshAt;
 
   @override
@@ -111,7 +113,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
           ),
           const Spacer(),
           Text(
-            'Shopify',
+            l10n.shopifyTitle,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.primaryNavy,
               fontWeight: FontWeight.w700,
@@ -166,7 +168,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
               ),
           const SizedBox(height: 28),
           Text(
-            'Connect Your Shopify Store',
+            l10n.shopifyConnectTitle,
             style: AppTypography.h2.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
@@ -174,7 +176,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
           ).animate().fadeIn(duration: 300.ms, delay: 100.ms),
           const SizedBox(height: 10),
           Text(
-            'Set up a one-time connection between Masari\nand Shopify. Orders will sync automatically\nand inventory sync is available on-demand.',
+            l10n.shopifyConnectSubtitle,
             textAlign: TextAlign.center,
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textSecondary,
@@ -204,7 +206,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
                   const Icon(Icons.rocket_launch_rounded, size: 20),
                   const SizedBox(width: 10),
                   Text(
-                    'Start Setup Wizard',
+                    l10n.shopifyStartSetupWizard,
                     style: AppTypography.labelLarge.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -220,30 +222,26 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
           // Info cards
           _InfoCard(
             icon: Icons.sync_rounded,
-            title: 'Always-On Order Sync',
-            description:
-                'Shopify orders automatically become Masari sales in real-time via webhooks.',
+            title: l10n.shopifyAlwaysOnOrderSync,
+            description: l10n.shopifyAlwaysOnOrderSyncDesc,
           ).animate().fadeIn(duration: 250.ms, delay: 300.ms),
           const SizedBox(height: 10),
           _InfoCard(
             icon: Icons.inventory_2_rounded,
-            title: 'On-Demand Inventory',
-            description:
-                'Pull stock from Shopify or push your Masari stock levels to Shopify anytime.',
+            title: l10n.shopifyOnDemandInventory,
+            description: l10n.shopifyOnDemandInventoryDesc,
           ).animate().fadeIn(duration: 250.ms, delay: 350.ms),
           const SizedBox(height: 10),
           _InfoCard(
             icon: Icons.security_rounded,
-            title: 'Secure OAuth 2.0',
-            description:
-                'Industry-standard authentication. Tokens are encrypted server-side.',
+            title: l10n.shopifySecureOAuth,
+            description: l10n.shopifySecureOAuthDesc,
           ).animate().fadeIn(duration: 250.ms, delay: 400.ms),
           const SizedBox(height: 10),
           _InfoCard(
             icon: Icons.link_off_rounded,
-            title: 'Disconnect Anytime',
-            description:
-                'You can disconnect your Shopify store at any time from settings.',
+            title: l10n.shopifyDisconnectAnytime,
+            description: l10n.shopifyDisconnectAnytimeDesc,
           ).animate().fadeIn(duration: 250.ms, delay: 450.ms),
         ],
       ),
@@ -253,6 +251,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
   // ── Connected view ──────────────────────────────────────
 
   Widget _buildConnectedView(ShopifyConnection conn) {
+    final l10n = AppLocalizations.of(context)!;
     final dateFmt = DateFormat('MMM dd, yyyy');
 
     return SingleChildScrollView(
@@ -269,7 +268,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
 
           // Connection info
           Text(
-            'CONNECTION',
+            l10n.shopifySectionConnection,
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textTertiary,
               fontWeight: FontWeight.w700,
@@ -280,30 +279,30 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
           const SizedBox(height: 10),
           _DetailCard(children: [
             _DetailRow(
-              label: 'Store',
+              label: l10n.shopifyStore,
               value: conn.shopName,
               icon: Icons.store_rounded,
             ),
             _DetailRow(
-              label: 'Domain',
+              label: l10n.shopifyDomain,
               value: conn.shopDomain,
               icon: Icons.language_rounded,
             ),
             _DetailRow(
-              label: 'Connected',
+              label: l10n.shopifyConnectedLabel,
               value: dateFmt.format(conn.connectedAt),
               icon: Icons.calendar_today_rounded,
             ),
             if (conn.lastOrderSyncAt != null)
               _DetailRow(
-                label: 'Last Order Sync',
-                value: _timeAgo(conn.lastOrderSyncAt!),
+                label: l10n.shopifyLastOrderSync,
+                value: _timeAgo(l10n, conn.lastOrderSyncAt!),
                 icon: Icons.sync_rounded,
               ),
             if (conn.lastInventorySyncAt != null)
               _DetailRow(
-                label: 'Last Inventory Sync',
-                value: _timeAgo(conn.lastInventorySyncAt!),
+                label: l10n.shopifyLastInventorySync,
+                value: _timeAgo(l10n, conn.lastInventorySyncAt!),
                 icon: Icons.inventory_rounded,
               ),
           ]).animate().fadeIn(duration: 250.ms, delay: 60.ms),
@@ -311,7 +310,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
 
           // Sync info (always-on)
           Text(
-            'SYNC SETTINGS',
+            l10n.shopifySectionSyncSettings,
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textTertiary,
               fontWeight: FontWeight.w700,
@@ -322,9 +321,9 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
           const SizedBox(height: 10),
           _DetailCard(children: [
             _SyncInfoRow(
-              label: 'Order Sync',
-              subtitle: 'Shopify orders → Masari sales',
-              status: 'Always on',
+              label: l10n.shopifyOrderSync,
+              subtitle: l10n.shopifyOrderSyncDesc,
+              status: l10n.shopifyAlwaysOn,
               statusColor: AppColors.success,
             ),
             Divider(
@@ -336,13 +335,13 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
                 bottom: Radius.circular(16),
               ),
               child: _SyncInfoRow(
-                label: 'Inventory Sync',
+                label: l10n.shopifyInventorySync,
                 subtitle: conn.inventorySyncMode == 'always'
-                    ? 'Auto-syncs on every refresh'
-                    : 'Sync manually via sync bar',
+                    ? l10n.shopifyInvAutoSyncDesc
+                    : l10n.shopifyInvManualSyncDesc,
                 status: conn.inventorySyncMode == 'always'
-                    ? 'Always on'
-                    : 'On demand',
+                    ? l10n.shopifyAlwaysOn
+                    : l10n.shopifyOnDemand,
                 statusColor: conn.inventorySyncMode == 'always'
                     ? AppColors.success
                     : AppColors.shopifyPurple,
@@ -353,7 +352,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
 
           // Location picker
           Text(
-            'SHOPIFY LOCATION',
+            l10n.shopifySectionLocation,
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textTertiary,
               fontWeight: FontWeight.w700,
@@ -369,7 +368,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
 
           // Quick actions
           Text(
-            'ACTIONS',
+            l10n.shopifySectionActions,
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textTertiary,
               fontWeight: FontWeight.w700,
@@ -380,35 +379,35 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
           const SizedBox(height: 10),
           _ActionButton(
             icon: Icons.link_rounded,
-            label: 'Product Mappings',
-            subtitle: 'Link Shopify ↔ Masari products',
+            label: l10n.shopifyProductMappings,
+            subtitle: l10n.shopifyProductMappingsDesc,
             onTap: () =>
                 context.push(AppRoutes.shopifyProductMappings),
           ).animate().fadeIn(duration: 250.ms, delay: 160.ms),
           const SizedBox(height: 8),
           _ActionButton(
             icon: Icons.download_rounded,
-            label: 'Re-import Historical Orders',
-            subtitle: 'Import past Shopify orders',
+            label: l10n.shopifyReimportOrders,
+            subtitle: l10n.shopifyReimportOrdersDesc,
             onTap: () => context.push(AppRoutes.shopifyImport),
           ).animate().fadeIn(duration: 250.ms, delay: 200.ms),
           const SizedBox(height: 8),
           _ActionButton(
             icon: Icons.sync_rounded,
             label: conn.inventorySyncMode == 'always'
-                ? 'Inventory Sync (Auto)'
-                : 'Inventory Sync (Manual)',
+                ? l10n.shopifyInvSyncAuto
+                : l10n.shopifyInvSyncManual,
             subtitle: conn.inventorySyncMode == 'always'
-                ? 'Auto-syncing every 30 s — tap for manual push/pull'
-                : 'Pull or push stock levels manually',
+                ? l10n.shopifyInvSyncAutoDesc
+                : l10n.shopifyInvSyncManualDesc,
             onTap: () =>
                 context.push(AppRoutes.shopifyInventorySync),
           ).animate().fadeIn(duration: 250.ms, delay: 240.ms),
           const SizedBox(height: 8),
           _ActionButton(
             icon: Icons.history_rounded,
-            label: 'Sync History',
-            subtitle: 'View sync activity log',
+            label: l10n.shopifySyncHistoryLabel,
+            subtitle: l10n.shopifySyncHistoryDesc,
             onTap: () =>
                 context.push(AppRoutes.shopifySyncHistory),
           ).animate().fadeIn(duration: 250.ms, delay: 280.ms),
@@ -420,7 +419,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
             child: TextButton.icon(
               onPressed: () => _confirmDisconnect(conn),
               icon: const Icon(Icons.link_off_rounded, size: 18),
-              label: const Text('Disconnect Shopify'),
+              label: Text(l10n.shopifyDisconnectButton),
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.danger,
                 textStyle: AppTypography.labelMedium.copyWith(
@@ -452,7 +451,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
                 child: Text(
-                  'Inventory Sync Mode',
+                  AppLocalizations.of(ctx)!.shopifyInvSyncMode,
                   style: AppTypography.h3.copyWith(
                     color: AppColors.primaryNavy,
                     fontWeight: FontWeight.w800,
@@ -465,9 +464,9 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
               ),
               _syncModeOption(
                 ctx,
-                title: 'Always On',
+                title: AppLocalizations.of(ctx)!.shopifyModeAlwaysOn,
                 subtitle:
-                    'Inventory auto-syncs on every refresh — no manual intervention',
+                    AppLocalizations.of(ctx)!.shopifyModeAlwaysOnDesc,
                 icon: Icons.sync_rounded,
                 isSelected: current == 'always',
                 onTap: () async {
@@ -477,9 +476,9 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
               ),
               _syncModeOption(
                 ctx,
-                title: 'On Demand',
+                title: AppLocalizations.of(ctx)!.shopifyModeOnDemand,
                 subtitle:
-                    'Persistent sync bar in inventory — pull or push manually',
+                    AppLocalizations.of(ctx)!.shopifyModeOnDemandDesc,
                 icon: Icons.touch_app_rounded,
                 isSelected: current == 'on_demand',
                 onTap: () async {
@@ -569,8 +568,8 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
       SnackBar(
         content: Text(
           mode == 'always'
-              ? 'Inventory sync set to Always On'
-              : 'Inventory sync set to On Demand',
+              ? AppLocalizations.of(context)!.shopifyInvSyncSetAlwaysOn
+              : AppLocalizations.of(context)!.shopifyInvSyncSetOnDemand,
         ),
         backgroundColor: AppColors.primaryNavy,
         behavior: SnackBarBehavior.floating,
@@ -582,6 +581,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
   }
 
   Future<void> _confirmDisconnect(ShopifyConnection conn) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -589,15 +589,13 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
           borderRadius: BorderRadius.circular(16),
         ),
         title: Text(
-          'Disconnect Shopify?',
+          l10n.shopifyDisconnectConfirm,
           style: AppTypography.h3.copyWith(
             color: AppColors.textPrimary,
           ),
         ),
         content: Text(
-          'This will remove the connection to "${conn.shopName}" '
-          'and delete all product mappings. '
-          'Your existing sales and inventory data will be kept.',
+          l10n.shopifyDisconnectMessage(conn.shopName),
           style: AppTypography.bodyMedium.copyWith(
             color: AppColors.textSecondary,
             height: 1.5,
@@ -607,7 +605,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
-              'Cancel',
+              l10n.cancel,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -621,7 +619,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            child: const Text('Disconnect'),
+            child: Text(l10n.shopifyDisconnectButton),
           ),
         ],
       ),
@@ -637,7 +635,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Shopify disconnected'),
+          content: Text(AppLocalizations.of(context)!.shopifyDisconnected),
           backgroundColor: AppColors.primaryNavy,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -647,12 +645,12 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
     }
   }
 
-  String _timeAgo(DateTime dt) {
+  String _timeAgo(AppLocalizations l10n, DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    if (diff.inMinutes < 1) return l10n.justNow;
+    if (diff.inMinutes < 60) return l10n.shopifyTimeMinAgo(diff.inMinutes);
+    if (diff.inHours < 24) return l10n.shopifyTimeHoursAgo(diff.inHours);
+    if (diff.inDays < 7) return l10n.shopifyTimeDaysAgo(diff.inDays);
     return DateFormat('MMM dd').format(dt);
   }
 }
@@ -736,21 +734,22 @@ class _StatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     Color statusColor;
     String statusLabel;
     IconData statusIcon;
 
     if (connection.isActive) {
       statusColor = AppColors.success;
-      statusLabel = 'Connected';
+      statusLabel = l10n.shopifyStatusConnected;
       statusIcon = Icons.check_circle_rounded;
     } else if (connection.hasError) {
       statusColor = AppColors.danger;
-      statusLabel = 'Error';
+      statusLabel = l10n.shopifyStatusError;
       statusIcon = Icons.error_rounded;
     } else {
       statusColor = AppColors.warning;
-      statusLabel = 'Disconnected';
+      statusLabel = l10n.shopifyStatusDisconnected;
       statusIcon = Icons.link_off_rounded;
     }
 
@@ -1041,6 +1040,7 @@ class _LocationPicker extends ConsumerStatefulWidget {
 }
 
 class _LocationPickerState extends ConsumerState<_LocationPicker> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   List<Map<String, dynamic>>? _locations;
   bool _loading = false;
   String? _error;
@@ -1114,6 +1114,7 @@ class _LocationPickerState extends ConsumerState<_LocationPicker> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx)!;
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1123,7 +1124,7 @@ class _LocationPickerState extends ConsumerState<_LocationPicker> {
                 child: Row(
                   children: [
                     Text(
-                      'Select Location',
+                      l10n.shopifySelectLocation,
                       style: AppTypography.h3.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w700,
@@ -1238,8 +1239,8 @@ class _LocationPickerState extends ConsumerState<_LocationPicker> {
                     Text(
                       hasLocation
                           ? (conn.shopifyLocationName ??
-                              'Location set')
-                          : 'No location selected',
+                              l10n.shopifyLocationSet)
+                          : l10n.shopifyNoLocationSelected,
                       style: AppTypography.labelMedium.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
@@ -1248,8 +1249,8 @@ class _LocationPickerState extends ConsumerState<_LocationPicker> {
                     const SizedBox(height: 2),
                     Text(
                       hasLocation
-                          ? 'Tap to change location'
-                          : 'Select which Shopify location to sync',
+                          ? l10n.shopifyTapToChangeLocation
+                          : l10n.shopifySelectLocationToSync,
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.textSecondary,
                         fontSize: 12,

@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
-import '../../../core/navigation/app_router.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../core/navigation/app_router.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/app_settings_provider.dart';
 import '../../../shared/models/category_data.dart';
@@ -64,7 +64,7 @@ class RecentTransactions extends ConsumerWidget {
               icon: cat.iconData,
               iconBgColor: cat.displayBgColor,
               iconColor: cat.displayColor,
-              category: cat.name,
+              category: cat.localizedName(AppLocalizations.of(context)!),
             );
             return Padding(
               padding: EdgeInsets.only(

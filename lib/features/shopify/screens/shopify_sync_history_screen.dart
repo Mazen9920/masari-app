@@ -35,7 +35,7 @@ class ShopifySyncHistoryScreen extends ConsumerWidget {
                 ),
                 error: (e, _) => Center(
                   child: Text(
-                     'Failed to load sync history:\n$e',
+                     AppLocalizations.of(context)!.shopifyFailedLoadSyncHistory('$e'),
                     textAlign: TextAlign.center,
                     style: AppTypography.bodyMedium.copyWith(
                       color: AppColors.danger,
@@ -43,7 +43,7 @@ class ShopifySyncHistoryScreen extends ConsumerWidget {
                   ),
                 ),
                 data: (logs) {
-                  if (logs.isEmpty) return _buildEmpty();
+                  if (logs.isEmpty) return _buildEmpty(context);
                   return RefreshIndicator(
                     color: AppColors.primaryNavy,
                     onRefresh: () => ref
@@ -95,7 +95,7 @@ class ShopifySyncHistoryScreen extends ConsumerWidget {
           ),
           const Spacer(),
           Text(
-             'Sync History',
+             l10n.shopifySyncHistoryLabel,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.primaryNavy,
               fontWeight: FontWeight.w700,
@@ -132,7 +132,8 @@ class ShopifySyncHistoryScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmpty() {
+  Widget _buildEmpty(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -141,15 +142,14 @@ class ShopifySyncHistoryScreen extends ConsumerWidget {
               size: 48, color: AppColors.textTertiary),
           const SizedBox(height: 16),
           Text(
-             'No Sync History',
+             l10n.shopifyNoSyncHistory,
             style: AppTypography.h3.copyWith(
               color: AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-             'Sync actions will appear here once\n'
-            'you sync orders or inventory.',
+             l10n.shopifyNoSyncHistoryMessage,
             textAlign: TextAlign.center,
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textTertiary,
@@ -169,8 +169,8 @@ class ShopifySyncHistoryScreen extends ConsumerWidget {
         shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16)),
         title: Text(l10n.clearSyncHistory),
-        content: const Text(
-             'This will delete all sync log entries. This cannot be undone.'),
+        content: Text(
+             l10n.shopifyClearLogsMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -221,9 +221,9 @@ class _LogTile extends StatelessWidget {
 
     final timeFmt = DateFormat( 'MMM dd, HH:mm');
     final directionLabel = entry.direction == 'shopify_to_masari'
-        ? 'Shopify → Masari'
+        ? l10n.shopifyDirectionToMasari
         : entry.direction == 'masari_to_shopify'
-            ? 'Masari → Shopify'
+            ? l10n.shopifyDirectionToShopify
             : entry.direction;
 
     return Container(
@@ -247,7 +247,7 @@ class _LogTile extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _actionLabel(entry.action),
+                  _actionLabel(l10n, entry.action),
                   style: AppTypography.labelMedium.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
@@ -331,9 +331,9 @@ class _LogTile extends StatelessWidget {
             Text(
               [
                 if (entry.shopifyOrderId != null)
-                  'Shopify #${entry.shopifyOrderId}',
+                  l10n.shopifyRefId(entry.shopifyOrderId!),
                 if (entry.masariSaleId != null)
-                  'Sale ${entry.masariSaleId!.substring(0, 8)}…',
+                  l10n.shopifySaleRef(entry.masariSaleId!.substring(0, 8)),
               ].join(' · '),
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textTertiary,
@@ -346,26 +346,26 @@ class _LogTile extends StatelessWidget {
     );
   }
 
-  String _actionLabel(String action) {
+  String _actionLabel(AppLocalizations l10n, String action) {
     switch (action) {
       case 'order_import':
-        return  'Order Imported';
+        return l10n.shopifyActionOrderImported;
       case 'order_updated':
-        return  'Order Updated';
+        return l10n.shopifyActionOrderUpdated;
       case 'order_cancelled':
-        return  'Order Cancelled';
+        return l10n.shopifyActionOrderCancelled;
       case 'order_push':
-        return  'Order Push';
+        return l10n.shopifyActionOrderPush;
       case 'inventory_pull':
-        return  'Inventory Pull';
+        return l10n.shopifyActionInventoryPull;
       case 'inventory_push':
-        return  'Inventory Push';
+        return l10n.shopifyActionInventoryPush;
       case 'product_update':
-        return 'Product Updated';
+        return l10n.shopifyActionProductUpdated;
       case 'inventory_level_update':
-        return  'Stock Level Update';
+        return l10n.shopifyActionStockLevelUpdate;
       case 'refund_processed':
-        return  'Refund Processed';
+        return l10n.shopifyActionRefundProcessed;
       default:
         return action.replaceAll('_', ' ');
     }

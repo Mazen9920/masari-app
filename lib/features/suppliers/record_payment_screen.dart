@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
@@ -26,6 +27,18 @@ class RecordPaymentScreen extends ConsumerStatefulWidget {
 }
 
 class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
+  String _localizedMethodName(String method) {
+    final map = {
+      'Cash': l10n.cash,
+      'Bank Transfer': l10n.bankTransfer,
+      'InstaPay': l10n.instaPay,
+      'Vodafone Cash': l10n.vodafoneCash,
+    };
+    return map[method] ?? method;
+  }
+
   String? _selectedSupplierId;
   final _amountCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
@@ -98,29 +111,29 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
     final fmt = NumberFormat('#,##0', 'en');
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Payment Exceeds Outstanding'),
-        content: Text(
-          'The payment amount exceeds the total outstanding '
-          '(${fmt.format(totalOutstanding)}) on the selected purchases. '
-          'The excess will be applied to the supplier balance.\n\n'
-          'Do you want to proceed?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+      builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx)!;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(l10n.paymentExceedsOutstanding),
+          content: Text(
+            l10n.paymentExceedsOutstandingBody(fmt.format(totalOutstanding)),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _performSave();
-            },
-            child: Text('Proceed', style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(l10n.cancel, style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _performSave();
+              },
+              child: Text(l10n.proceedAction, style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -128,29 +141,29 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
     final fmt = NumberFormat('#,##0', 'en');
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Payment Exceeds Balance'),
-        content: Text(
-          'This payment exceeds the supplier\'s current balance '
-          '(${fmt.format(balance)}). The balance will become negative '
-          '(advance/credit).\n\n'
-          'Do you want to proceed?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+      builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx)!;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(l10n.paymentExceedsBalance),
+          content: Text(
+            l10n.paymentExceedsBalanceBody(fmt.format(balance)),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _performSave();
-            },
-            child: Text('Proceed', style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(l10n.cancel, style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _performSave();
+              },
+              child: Text(l10n.proceedAction, style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -250,7 +263,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
         Transaction(
           id: txId,
           userId: '',
-          title: 'Supplier Payment — $supplierName',
+          title: l10n.supplierPaymentTitle(supplierName),
           amount: -_payAmount,
           dateTime: _paymentDate,
           categoryId: 'cat_supplier_payment',
@@ -267,7 +280,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Payment recorded'),
+        content: Text(l10n.paymentRecorded),
         backgroundColor: AppColors.primaryNavy,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -288,7 +301,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Select Supplier',
+                l10n.selectSupplierTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -314,7 +327,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                       if (s.hasDue) ...[
                         const SizedBox(width: 8),
                         Text(
-                          '${ref.read(currencyProvider)} ${NumberFormat('#,##0').format(s.balance)} due',
+                          l10n.balanceDueSuffix('${ref.read(currencyProvider)} ${NumberFormat('#,##0').format(s.balance)}'),
                           style: const TextStyle(
                             color: AppColors.accentOrange,
                             fontSize: 11,
@@ -340,7 +353,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                 child: const Icon(Icons.add_rounded,
                     color: AppColors.accentOrange, size: 20),
               ),
-              title: const Text('+ Add New Supplier',
+              title: Text(l10n.addNewSupplierPlus,
                   style: TextStyle(
                       color: AppColors.accentOrange,
                       fontWeight: FontWeight.w600)),
@@ -444,8 +457,8 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  'Confirm Payment',
+                Text(
+                  l10n.confirmPayment,
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -529,7 +542,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'PAYING TO',
+                              l10n.payingTo,
                               style: TextStyle(
                                 color: AppColors.textTertiary,
                                 fontSize: 10,
@@ -549,7 +562,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                         ),
                       ),
                       Text(
-                        'Change',
+                        l10n.changeAction,
                         style: TextStyle(
                           color: const Color(0xFF3498DB),
                           fontWeight: FontWeight.w600,
@@ -571,7 +584,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        'Total Balance Due',
+                        l10n.totalBalanceDue,
                         style: TextStyle(
                           color: AppColors.textTertiary,
                           fontSize: 13,
@@ -606,7 +619,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Select a supplier',
+                      l10n.selectASupplier,
                       style: TextStyle(
                         color: AppColors.textTertiary,
                         fontSize: 15,
@@ -644,7 +657,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
           Expanded(
             child: Center(
               child: Text(
-                'Record Payment',
+                l10n.recordPaymentTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -659,7 +672,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Text(
-                'Save',
+                l10n.save,
                 style: TextStyle(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w600,
@@ -682,7 +695,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
       children: [
         // Amount input
         Text(
-          'Amount to Pay',
+          l10n.amountToPay,
           style: TextStyle(
             color: AppColors.textTertiary,
             fontSize: 13,
@@ -741,7 +754,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Payment Date',
+              l10n.paymentDateLabel,
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 14,
@@ -793,7 +806,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
             color: AppColors.borderLight.withValues(alpha: 0.3)),
         // Payment method
         Text(
-          'Payment Method',
+          l10n.paymentMethodLabel,
           style: TextStyle(
             color: AppColors.textTertiary,
             fontSize: 13,
@@ -841,7 +854,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _methods[i].label,
+                      _localizedMethodName(_methods[i].label),
                       style: TextStyle(
                         color: selected
                             ? AppColors.primaryNavy
@@ -864,7 +877,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
   // ─── OPEN INVOICES SECTION ───
   Widget _buildInvoices(NumberFormat fmt, List<Purchase> openPurchases, String currency) {
     return _Card(
-      headerTitle: 'Open Invoices',
+      headerTitle: l10n.openInvoices,
       headerTrailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
@@ -872,7 +885,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
-          '${openPurchases.length} Open',
+          l10n.nOpenBadge(openPurchases.length),
           style: const TextStyle(
             color: Color(0xFFD97706),
             fontSize: 11,
@@ -883,11 +896,11 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
       noPadding: true,
       children: [
         if (openPurchases.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(20),
+          Padding(
+            padding: const EdgeInsets.all(20),
             child: Center(
               child: Text(
-                'No open invoices for this supplier',
+                l10n.noOpenInvoices,
                 style: TextStyle(color: AppColors.textTertiary),
               ),
             ),
@@ -1000,7 +1013,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                                           BorderRadius.circular(4),
                                     ),
                                     child: Text(
-                                      purchase.statusLabel,
+                                      purchase.localizedStatusLabel(l10n),
                                       style: TextStyle(
                                         color: isUnpaid
                                             ? const Color(0xFFEA580C)
@@ -1032,7 +1045,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
     return _Card(
       children: [
         Text(
-          'Notes',
+          l10n.notes,
           style: TextStyle(
             color: AppColors.textTertiary,
             fontSize: 13,
@@ -1044,7 +1057,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
           controller: _notesCtrl,
           maxLines: 3,
           decoration: InputDecoration(
-            hintText: 'Add payment reference details...',
+            hintText: l10n.paymentRefHint,
             hintStyle:
                 TextStyle(color: AppColors.textTertiary, fontSize: 14),
             filled: true,
@@ -1090,7 +1103,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                     color: AppColors.textSecondary, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'Upload Receipt',
+                  l10n.uploadReceipt,
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w600,

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../shared/models/transaction_model.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/category_data.dart';
 
 /// Search delegate for transactions.
@@ -11,9 +12,9 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
   final List<Transaction> transactions;
   final String currency;
 
-  TransactionSearchDelegate({required this.transactions, this.currency = 'SAR'})
+  TransactionSearchDelegate({required this.transactions, this.currency = 'SAR', String searchHint = 'Search transactions...'})
       : super(
-          searchFieldLabel: 'Search transactions...',
+          searchFieldLabel: searchHint,
           searchFieldStyle: AppTypography.bodyMedium.copyWith(
             color: AppColors.textPrimary,
           ),
@@ -60,18 +61,18 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
 
   @override
   Widget buildResults(BuildContext context) {
-    return _buildSearchResults();
+    return _buildSearchResults(context);
   }
 
   @override
   Widget buildSuggestions(BuildContext context) {
     if (query.isEmpty) {
-      return _buildRecentSearches();
+      return _buildRecentSearches(context);
     }
-    return _buildSearchResults();
+    return _buildSearchResults(context);
   }
 
-  Widget _buildSearchResults() {
+  Widget _buildSearchResults(BuildContext context) {
     final results = transactions.where((tx) {
       if (tx.saleId != null) return false;
       final q = query.toLowerCase();
@@ -84,7 +85,7 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
     }).toList();
 
     if (results.isEmpty) {
-      return _buildEmptySearch();
+      return _buildEmptySearch(context);
     }
 
     return Container(
@@ -106,8 +107,9 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
     );
   }
 
-  Widget _buildRecentSearches() {
-    final recent = ['Groceries', 'Netflix', 'Uber', 'Income'];
+  Widget _buildRecentSearches(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final recent = [l10n.searchSuggestionGroceries, l10n.searchSuggestionNetflix, l10n.searchSuggestionUber, l10n.income];
 
     return Container(
       color: AppColors.backgroundLight,
@@ -117,7 +119,7 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'SUGGESTED',
+              AppLocalizations.of(context)!.suggestedLabel,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
                 fontWeight: FontWeight.w700,
@@ -175,7 +177,7 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
     );
   }
 
-  Widget _buildEmptySearch() {
+  Widget _buildEmptySearch(BuildContext context) {
     return Container(
       color: AppColors.backgroundLight,
       child: Center(
@@ -197,7 +199,7 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
             ),
             const SizedBox(height: 16),
             Text(
-              'No results found',
+              AppLocalizations.of(context)!.noResultsFound,
               style: AppTypography.h3.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -205,7 +207,7 @@ class TransactionSearchDelegate extends SearchDelegate<Transaction?> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Try a different search term',
+              AppLocalizations.of(context)!.tryDifferentSearchTerm,
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textTertiary,
               ),
@@ -259,7 +261,9 @@ class _SearchResultTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        transaction.title,
+                        transaction.title == CategoryData.findById(transaction.categoryId).name
+                            ? CategoryData.findById(transaction.categoryId).localizedName(AppLocalizations.of(context)!)
+                            : transaction.title,
                         style: AppTypography.labelMedium.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w700,
@@ -267,7 +271,7 @@ class _SearchResultTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        CategoryData.findById(transaction.categoryId).name,
+                        CategoryData.findById(transaction.categoryId).localizedName(AppLocalizations.of(context)!),
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textTertiary,
                         ),

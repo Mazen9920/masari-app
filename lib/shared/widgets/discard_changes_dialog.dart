@@ -10,9 +10,7 @@ Future<bool> showDiscardChangesDialog(BuildContext context) async {
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(l10n.discardChanges),
-      content: const Text(
-         'You have unsaved changes. Are you sure you want to leave?',
-      ),
+      content: Text(l10n.unsavedChangesMessage),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),

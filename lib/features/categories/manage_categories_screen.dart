@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../shared/models/category_data.dart';
+import '../../l10n/app_localizations.dart';
 import 'add_category_sheet.dart';
 import 'category_detail_screen.dart';
 
@@ -54,8 +55,8 @@ class _ManageCategoriesScreenState
                       left: 16,
                       right: 16,
                       child: _AiSuggestionBanner(
-                        categoryA: categories.isNotEmpty ? categories[0].name : '',
-                        categoryB: categories.length > 3 ? categories[3].name : (categories.length > 1 ? categories[1].name : ''),
+                        categoryA: categories.isNotEmpty ? categories[0].localizedName(AppLocalizations.of(context)!) : '',
+                        categoryB: categories.length > 3 ? categories[3].localizedName(AppLocalizations.of(context)!) : (categories.length > 1 ? categories[1].localizedName(AppLocalizations.of(context)!) : ''),
                         onDismiss: () =>
                             setState(() => _showAiSuggestion = false),
                       )
@@ -96,7 +97,7 @@ class _ManageCategoriesScreenState
           Expanded(
             child: Center(
               child: Text(
-                'Budget & Categories',
+                AppLocalizations.of(context)!.budgetAndCategories,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -113,7 +114,7 @@ class _ManageCategoriesScreenState
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               child: Text(
-                '+ Add',
+                AppLocalizations.of(context)!.addLabel,
                 style: TextStyle(
                   color: const Color(0xFFE67E22),
                   fontWeight: FontWeight.w700,
@@ -171,13 +172,13 @@ class _ManageCategoriesScreenState
             ref.read(categoriesProvider.notifier).removeCategory(cat.id);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('${cat.name} archived'),
+                content: Text(AppLocalizations.of(context)!.categoryArchived(cat.localizedName(AppLocalizations.of(context)!))),
                 backgroundColor: AppColors.primaryNavy,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
                 action: SnackBarAction(
-                  label: 'Undo',
+                  label: AppLocalizations.of(context)!.undoLabel,
                   textColor: const Color(0xFFE67E22),
                   onPressed: () {
                     // Re-add the category to undo
@@ -205,7 +206,7 @@ class _ManageCategoriesScreenState
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Delete "${cat.name}"?',
+          AppLocalizations.of(context)!.deleteCategoryTitle(cat.localizedName(AppLocalizations.of(context)!)),
           style: AppTypography.h2.copyWith(
             color: AppColors.textPrimary,
             fontSize: 18,
@@ -214,8 +215,8 @@ class _ManageCategoriesScreenState
         ),
         content: Text(
           txCount > 0
-              ? 'This category has $txCount transaction${txCount == 1 ? '' : 's'}. Deleting it will mark them as uncategorized.'
-              : 'This will permanently remove this category.',
+              ? AppLocalizations.of(context)!.deleteCategoryHasTx(txCount)
+              : AppLocalizations.of(context)!.deleteCategoryEmpty,
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.textSecondary,
             fontSize: 13,
@@ -225,7 +226,7 @@ class _ManageCategoriesScreenState
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'Cancel',
+              AppLocalizations.of(context)!.cancelLabel,
               style: TextStyle(color: AppColors.textTertiary, fontSize: 14),
             ),
           ),
@@ -235,7 +236,7 @@ class _ManageCategoriesScreenState
               ref.read(categoriesProvider.notifier).removeCategory(cat.id);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('${cat.name} deleted'),
+                  content: Text(AppLocalizations.of(context)!.categoryDeleted(cat.localizedName(AppLocalizations.of(context)!))),
                   backgroundColor: const Color(0xFFDC2626),
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
@@ -243,8 +244,8 @@ class _ManageCategoriesScreenState
                 ),
               );
             },
-            child: const Text(
-              'Delete',
+            child: Text(
+              AppLocalizations.of(context)!.deleteAction,
               style: TextStyle(
                   color: Color(0xFFDC2626),
                   fontWeight: FontWeight.w700,
@@ -381,7 +382,7 @@ class _CategoryTileState extends State<_CategoryTile>
                                   color: Colors.white, size: 20),
                               const SizedBox(height: 2),
                               Text(
-                                'Archive',
+                                AppLocalizations.of(context)!.archiveAction,
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 9,
@@ -415,7 +416,7 @@ class _CategoryTileState extends State<_CategoryTile>
                                   color: Colors.white, size: 20),
                               const SizedBox(height: 2),
                               Text(
-                                'Delete',
+                                AppLocalizations.of(context)!.deleteAction,
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 9,
@@ -499,7 +500,7 @@ class _CategoryTileState extends State<_CategoryTile>
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                widget.category.name,
+                                widget.category.localizedName(AppLocalizations.of(context)!),
                                 style: AppTypography.labelMedium.copyWith(
                                   color: AppColors.primaryNavy,
                                   fontWeight: FontWeight.w600,
@@ -510,7 +511,7 @@ class _CategoryTileState extends State<_CategoryTile>
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${widget.itemCount} items',
+                                AppLocalizations.of(context)!.nItems(widget.itemCount),
                                 style: AppTypography.captionSmall.copyWith(
                                   color: AppColors.textTertiary,
                                   fontSize: 11,
@@ -618,7 +619,7 @@ class _AiSuggestionBanner extends StatelessWidget {
                           height: 1.5,
                         ),
                         children: [
-                          const TextSpan(text: 'AI suggests merging '),
+                          TextSpan(text: AppLocalizations.of(context)!.aiSuggestsMerging),
                           TextSpan(
                             text: '"$categoryA"',
                             style: const TextStyle(
@@ -626,7 +627,7 @@ class _AiSuggestionBanner extends StatelessWidget {
                               color: Colors.white,
                             ),
                           ),
-                          const TextSpan(text: ' and '),
+                          TextSpan(text: AppLocalizations.of(context)!.andWord),
                           TextSpan(
                             text: '"$categoryB"',
                             style: const TextStyle(
@@ -634,9 +635,9 @@ class _AiSuggestionBanner extends StatelessWidget {
                               color: Colors.white,
                             ),
                           ),
-                          const TextSpan(
+                          TextSpan(
                               text:
-                                  ' to simplify your tracking.'),
+                                  AppLocalizations.of(context)!.toSimplifyTracking),
                         ],
                       ),
                     ),
@@ -666,7 +667,7 @@ class _AiSuggestionBanner extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      'Review Suggestion',
+                      AppLocalizations.of(context)!.reviewSuggestion,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,

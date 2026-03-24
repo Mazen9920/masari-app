@@ -15,6 +15,7 @@ import '../../shared/models/conversion_order_model.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
 import '../shopify/widgets/shopify_badges.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final String productId;
@@ -27,6 +28,7 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   int _adjustQuantity = 0;
   String _adjustReason = 'Correction';
   bool _showAdjustment = false;
@@ -47,13 +49,21 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     'Restock',
   ];
 
+  String _reasonLabel(String key) => {
+    'Correction': l10n.correctionReason,
+    'Damage': l10n.damageReason,
+    'Loss': l10n.lossReason,
+    'Return': l10n.returnReason,
+    'Restock': l10n.restockReason2,
+  }[key] ?? key;
+
   @override
   Widget build(BuildContext context) {
     final products = ref.watch(inventoryProvider).value ?? [];
     if (products.isEmpty) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: AppColors.backgroundLight,
-        body: Center(child: Text('Product not found')),
+        body: Center(child: Text(l10n.productNotFound)),
       );
     }
     final product = products.cast<Product?>().firstWhere(
@@ -67,11 +77,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Product not found'),
+              Text(l10n.productNotFound),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => context.safePop(),
-                child: const Text('Go Back'),
+                child: Text(l10n.goBack),
               ),
             ],
           ),
@@ -159,7 +169,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           ),
           const Spacer(),
           Text(
-            'Product Details',
+            l10n.productDetails,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.primaryNavy,
               fontWeight: FontWeight.w700,
@@ -173,7 +183,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               context.pushNamed('EditProductScreen', extra: {'productId': widget.productId});
             },
             child: Text(
-              'Edit',
+              l10n.edit,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.accentOrange,
                 fontWeight: FontWeight.w600,
@@ -209,7 +219,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           size: 20, color: AppColors.accentOrange),
                       const SizedBox(width: 6),
                       Text(
-                        'Add Stock',
+                        l10n.addStock,
                         style: AppTypography.labelMedium.copyWith(
                           color: AppColors.accentOrange,
                           fontWeight: FontWeight.w700,
@@ -248,7 +258,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           size: 20, color: Colors.white),
                       const SizedBox(width: 6),
                       Text(
-                        'Adjust Stock',
+                        l10n.adjustStock,
                         style: AppTypography.labelMedium.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -292,7 +302,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       size: 20, color: Colors.white),
                   const SizedBox(width: 6),
                   Text(
-                    'Break Down',
+                    l10n.breakDown,
                     style: AppTypography.labelMedium.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -318,20 +328,18 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 final confirmed = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    title: const Text('Replace cost layers?'),
-                    content: const Text(
-                      'Output variants already have cost layers. '
-                      'Recalculating will replace them with a single '
-                      'layer at the current breakdown cost.',
+                    title: Text(l10n.replaceCostLayers),
+                    content: Text(
+                      l10n.replaceCostLayersDesc,
                     ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.of(ctx).pop(false),
-                        child: const Text('Cancel'),
+                        child: Text(l10n.cancel),
                       ),
                       TextButton(
                         onPressed: () => Navigator.of(ctx).pop(true),
-                        child: const Text('Recalculate'),
+                        child: Text(l10n.recalculateOutputCosts),
                       ),
                     ],
                   ),
@@ -349,7 +357,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(error ?? 'Output costs recalculated'),
+                  content: Text(error ?? l10n.outputCostsRecalculated),
                   backgroundColor:
                       error != null ? AppColors.danger : AppColors.success,
                 ),
@@ -372,7 +380,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       size: 18, color: AppColors.primaryNavy),
                   const SizedBox(width: 6),
                   Text(
-                    'Recalculate Output Costs',
+                    l10n.recalculateOutputCosts,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.primaryNavy,
                       fontWeight: FontWeight.w600,
@@ -425,7 +433,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Quick Adjustment',
+                    l10n.quickAdjustment,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -434,7 +442,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 ],
               ),
               Text(
-                'Manual Correction',
+                l10n.manualCorrection,
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontSize: 10,
@@ -462,7 +470,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       .map((v) => DropdownMenuItem(
                             value: v.id,
                             child: Text(
-                              '${v.displayName}  (${v.currentStock})',
+                              '${v.localizedDisplayName(l10n)}  (${v.currentStock})',
                               style: AppTypography.labelMedium.copyWith(
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
@@ -557,7 +565,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           .map((r) => DropdownMenuItem(
                                 value: r,
                                 child: Text(
-                                  r,
+                                  _reasonLabel(r),
                                   style: AppTypography.labelMedium
                                       .copyWith(
                                     color: AppColors.textPrimary,
@@ -588,19 +596,18 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                         final proceed = await showDialog<bool>(
                           context: context,
                           builder: (ctx) => AlertDialog(
-                            title: const Text('Negative stock'),
+                            title: Text(l10n.negativeStockTitle),
                             content: Text(
-                              'This adjustment will bring stock to '
-                              '${variant.currentStock + _adjustQuantity}. Continue?',
+                              l10n.negativeStockWillBring(variant.currentStock + _adjustQuantity),
                             ),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.of(ctx).pop(false),
-                                child: const Text('Cancel'),
+                                child: Text(l10n.cancel),
                               ),
                               TextButton(
                                 onPressed: () => Navigator.of(ctx).pop(true),
-                                child: const Text('Continue'),
+                                child: Text(l10n.continueAction),
                               ),
                             ],
                           ),
@@ -618,7 +625,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       if (!result.isSuccess) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(result.error ?? 'Adjustment failed'),
+                            content: Text(result.error ?? l10n.adjustmentFailed),
                             backgroundColor: AppColors.danger,
                           ),
                         );
@@ -644,7 +651,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 ),
               ),
               child: Text(
-                'Save Adjustment',
+                l10n.saveAdjustment,
                 style: AppTypography.labelMedium.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -723,7 +730,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               ),
               const SizedBox(width: 10),
               Text(
-                'Add Stock',
+                l10n.addStock,
                 style: AppTypography.h3.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -753,7 +760,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           .map((v) => DropdownMenuItem(
                                 value: v.id,
                                 child: Text(
-                                  '${v.displayName}  (${v.currentStock})',
+                                  '${v.localizedDisplayName(l10n)}  (${v.currentStock})',
                                   style: AppTypography.bodySmall.copyWith(
                                       color: AppColors.textPrimary),
                                 ),
@@ -773,7 +780,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 const SizedBox(height: 14),
               ],
               Text(
-                'How many units to restock?',
+                l10n.howManyUnitsToRestock,
                 style: AppTypography.bodySmall
                     .copyWith(color: AppColors.textSecondary),
               ),
@@ -883,7 +890,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                   fontWeight: FontWeight.w600,
                 ),
                 decoration: InputDecoration(
-                  labelText: 'Unit Cost',
+                  labelText: l10n.unitCost,
                   prefixText: '$currency ',
                   filled: true,
                   fillColor: AppColors.backgroundLight,
@@ -908,7 +915,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text(
-                'Cancel',
+                l10n.cancel,
                 style: AppTypography.labelMedium
                     .copyWith(color: AppColors.textTertiary),
               ),
@@ -920,8 +927,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           double.tryParse(unitCostCtrl.text.trim()) ?? 0;
                       if (unitCost <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Enter a valid unit cost'),
+                          SnackBar(
+                            content: Text(l10n.enterValidUnitCost),
                             backgroundColor: AppColors.danger,
                           ),
                         );
@@ -942,7 +949,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       if (!result.isSuccess && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(result.error ?? 'Restock failed'),
+                            content: Text(result.error ?? l10n.restockFailed),
                             backgroundColor: AppColors.danger,
                           ),
                         );
@@ -962,7 +969,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     horizontal: 20, vertical: 10),
               ),
               child: Text(
-                'Restock +$quantity',
+                l10n.restockPlus(quantity),
                 style: AppTypography.labelMedium.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -991,10 +998,11 @@ class _ProductHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final statusLabel = switch (product.status) {
-      StockStatus.inStock => 'In Stock',
-      StockStatus.lowStock => 'Low Stock',
-      StockStatus.outOfStock => 'Out of Stock',
+      StockStatus.inStock => l10n.inStock,
+      StockStatus.lowStock => l10n.lowStock,
+      StockStatus.outOfStock => l10n.outOfStock,
     };
     final statusColor = switch (product.status) {
       StockStatus.inStock => AppColors.success,
@@ -1063,7 +1071,7 @@ class _ProductHeader extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'SKU: ${product.sku}',
+                l10n.skuLabel(product.sku),
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontWeight: FontWeight.w500,
@@ -1088,6 +1096,7 @@ class _StockOverviewCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -1121,7 +1130,7 @@ class _StockOverviewCard extends ConsumerWidget {
           Column(
             children: [
               Text(
-                'CURRENT INVENTORY',
+                l10n.currentInventory,
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontWeight: FontWeight.w700,
@@ -1153,7 +1162,7 @@ class _StockOverviewCard extends ConsumerWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'Units',
+                    l10n.unitsLabel,
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w500,
@@ -1177,7 +1186,7 @@ class _StockOverviewCard extends ConsumerWidget {
                       child: Column(
                         children: [
                           Text(
-                            'Total Value',
+                            l10n.totalValueLabel,
                             style: AppTypography.captionSmall.copyWith(
                               color: AppColors.textTertiary,
                               fontSize: 11,
@@ -1204,7 +1213,7 @@ class _StockOverviewCard extends ConsumerWidget {
                       child: Column(
                         children: [
                           Text(
-                            'Reorder Point',
+                            l10n.reorderPoint,
                             style: AppTypography.captionSmall.copyWith(
                               color: AppColors.textTertiary,
                               fontSize: 11,
@@ -1245,6 +1254,7 @@ class _PricingCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -1257,7 +1267,7 @@ class _PricingCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'PRICING',
+            l10n.pricing,
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textTertiary,
               fontWeight: FontWeight.w700,
@@ -1268,11 +1278,11 @@ class _PricingCard extends ConsumerWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              _priceItem('Cost', '${ref.watch(appSettingsProvider).currency} ${NumberFormat('#,##0.00').format(product.costPrice)}'),
+              _priceItem(l10n.cost, '${ref.watch(appSettingsProvider).currency} ${NumberFormat('#,##0.00').format(product.costPrice)}'),
               _priceItem(
-                  'Selling', '${ref.watch(appSettingsProvider).currency} ${NumberFormat('#,##0.00').format(product.sellingPrice)}'),
+                  l10n.selling, '${ref.watch(appSettingsProvider).currency} ${NumberFormat('#,##0.00').format(product.sellingPrice)}'),
               _priceItem(
-                'Margin',
+                l10n.margin,
                 '${product.profitMargin.toStringAsFixed(1)}%',
                 color: product.profitMargin >= 0 ? AppColors.success : AppColors.danger,
               ),
@@ -1318,13 +1328,14 @@ class _CostOverviewCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(appSettingsProvider).currency;
     final valMethod = ref.watch(appSettingsProvider).valuationMethod;
     final valLabel = {
-      'fifo': 'FIFO',
-      'lifo': 'LIFO',
-      'average': 'Average',
-    }[valMethod] ?? 'FIFO';
+      'fifo': l10n.fifoLabel,
+      'lifo': l10n.lifoLabel,
+      'average': l10n.averageLabel,
+    }[valMethod] ?? l10n.fifoLabel;
 
     // Collect restock movements with unitCost across all variants
     final restocks = <StockMovement>[];
@@ -1366,7 +1377,7 @@ class _CostOverviewCard extends ConsumerWidget {
           Row(
             children: [
               Text(
-                'COST OVERVIEW',
+                l10n.costOverview,
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontWeight: FontWeight.w700,
@@ -1395,9 +1406,9 @@ class _CostOverviewCard extends ConsumerWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              _costItem('Avg Cost', '$currency ${fmt.format(avgCost)}'),
+              _costItem(l10n.avgCost, '$currency ${fmt.format(avgCost)}'),
               _costItem(
-                'Last Cost',
+                l10n.lastCost,
                 '$currency ${fmt.format(lastCost)}',
                 trailing: costUp
                     ? const Icon(Icons.arrow_upward_rounded,
@@ -1407,7 +1418,7 @@ class _CostOverviewCard extends ConsumerWidget {
                             size: 12, color: Color(0xFF10B981))
                         : null,
               ),
-              _costItem('Lowest', '$currency ${fmt.format(lowestCost)}'),
+              _costItem(l10n.lowestCost, '$currency ${fmt.format(lowestCost)}'),
             ],
           ),
           if (restocks.length > 1) ...[
@@ -1415,7 +1426,7 @@ class _CostOverviewCard extends ConsumerWidget {
             Divider(height: 1, color: AppColors.borderLight.withValues(alpha: 0.5)),
             const SizedBox(height: 10),
             Text(
-              'RECENT COST HISTORY',
+              l10n.recentCostHistory,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
                 fontWeight: FontWeight.w700,
@@ -1448,7 +1459,7 @@ class _CostOverviewCard extends ConsumerWidget {
                       ),
                       const Spacer(),
                       Text(
-                        '${m.quantity} units',
+                        l10n.unitsCount(m.quantity),
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textTertiary,
                           fontSize: 11,
@@ -1505,6 +1516,7 @@ class _VariantsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(currencyProvider);
     final fmt = NumberFormat('#,##0.00', 'en');
 
@@ -1530,7 +1542,7 @@ class _VariantsSection extends ConsumerWidget {
               Icon(Icons.style_rounded, size: 18, color: AppColors.primaryNavy),
               const SizedBox(width: 8),
               Text(
-                'Variants',
+                l10n.variantsLabel,
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -1576,7 +1588,7 @@ class _VariantsSection extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          v.displayName,
+                          v.localizedDisplayName(l10n),
                           style: AppTypography.labelMedium.copyWith(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w700,
@@ -1593,7 +1605,7 @@ class _VariantsSection extends ConsumerWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${v.currentStock} units',
+                        l10n.unitsCount(v.currentStock),
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
@@ -1604,7 +1616,7 @@ class _VariantsSection extends ConsumerWidget {
                   if (v.sku.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'SKU: ${v.sku}',
+                      l10n.skuLabel(v.sku),
                       style: AppTypography.captionSmall.copyWith(
                         color: AppColors.textTertiary,
                       ),
@@ -1613,12 +1625,12 @@ class _VariantsSection extends ConsumerWidget {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      _priceChip('Cost', '$currency ${fmt.format(v.costPrice)}'),
+                      _priceChip(l10n.cost, '$currency ${fmt.format(v.costPrice)}'),
                       const SizedBox(width: 8),
                       _priceChip(
-                          'Price', '$currency ${fmt.format(v.sellingPrice)}'),
+                          l10n.selling, '$currency ${fmt.format(v.sellingPrice)}'),
                       const SizedBox(width: 8),
-                      _priceChip('Value',
+                      _priceChip(l10n.valueLabel,
                           '$currency ${fmt.format(v.totalValue)}'),
                     ],
                   ),
@@ -1670,11 +1682,12 @@ class _MovementHistory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'RECENT MOVEMENTS',
+          l10n.recentMovements,
           style: AppTypography.captionSmall.copyWith(
             color: AppColors.textTertiary,
             fontWeight: FontWeight.w700,
@@ -1684,7 +1697,7 @@ class _MovementHistory extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         if (movements.isEmpty)
-          _buildEmpty()
+          _buildEmpty(context)
         else
           Container(
             decoration: BoxDecoration(
@@ -1712,7 +1725,8 @@ class _MovementHistory extends StatelessWidget {
     );
   }
 
-  Widget _buildEmpty() {
+  Widget _buildEmpty(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(32),
       width: double.infinity,
@@ -1729,7 +1743,7 @@ class _MovementHistory extends StatelessWidget {
               color: AppColors.textTertiary.withValues(alpha: 0.4)),
           const SizedBox(height: 10),
           Text(
-            'No movements yet',
+            l10n.noMovementsYet,
             style: AppTypography.bodySmall
                 .copyWith(color: AppColors.textTertiary),
           ),
@@ -1812,7 +1826,7 @@ class _MovementTile extends StatelessWidget {
                 ),
               ),
               Text(
-                'Units',
+                AppLocalizations.of(context)!.unitsLabel,
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontSize: 10,
@@ -1841,9 +1855,8 @@ class _SupplierCostCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(currencyProvider);
+    final l10n = AppLocalizations.of(context)!;
     final fmt = NumberFormat('#,##0.##');
-
-    // Gather all restock movements that have a supplier name
     final restockMovements = product.movements
         .where((m) => m.type == 'Restock' && m.supplierName != null && m.unitCost != null)
         .toList();
@@ -1896,7 +1909,7 @@ class _SupplierCostCard extends ConsumerWidget {
               Icon(Icons.store_rounded, size: 16, color: AppColors.primaryNavy),
               const SizedBox(width: 6),
               Text(
-                'Cost by Supplier',
+                l10n.costBySupplier,
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -1912,25 +1925,25 @@ class _SupplierCostCard extends ConsumerWidget {
               children: [
                 Expanded(
                   flex: 3,
-                  child: Text('SUPPLIER', style: AppTypography.captionSmall.copyWith(
+                  child: Text(l10n.supplierHeader, style: AppTypography.captionSmall.copyWith(
                     color: AppColors.textTertiary, fontWeight: FontWeight.w600,
                     letterSpacing: 0.6, fontSize: 9,
                   )),
                 ),
                 Expanded(
-                  child: Text('AVG', style: AppTypography.captionSmall.copyWith(
+                  child: Text(l10n.avgHeader, style: AppTypography.captionSmall.copyWith(
                     color: AppColors.textTertiary, fontWeight: FontWeight.w600,
                     letterSpacing: 0.6, fontSize: 9,
                   ), textAlign: TextAlign.center),
                 ),
                 Expanded(
-                  child: Text('LAST', style: AppTypography.captionSmall.copyWith(
+                  child: Text(l10n.lastHeader, style: AppTypography.captionSmall.copyWith(
                     color: AppColors.textTertiary, fontWeight: FontWeight.w600,
                     letterSpacing: 0.6, fontSize: 9,
                   ), textAlign: TextAlign.center),
                 ),
                 Expanded(
-                  child: Text('ORDERS', style: AppTypography.captionSmall.copyWith(
+                  child: Text(l10n.ordersHeader, style: AppTypography.captionSmall.copyWith(
                     color: AppColors.textTertiary, fontWeight: FontWeight.w600,
                     letterSpacing: 0.6, fontSize: 9,
                   ), textAlign: TextAlign.end),
@@ -1994,7 +2007,7 @@ class _SupplierCostCard extends ConsumerWidget {
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    'BEST',
+                                    l10n.bestLabel,
                                     style: TextStyle(
                                       fontSize: 8,
                                       fontWeight: FontWeight.w800,
@@ -2006,7 +2019,7 @@ class _SupplierCostCard extends ConsumerWidget {
                             ],
                           ),
                           Text(
-                            'Last: ${DateFormat('MMM d').format(lastDate)}',
+                            l10n.lastDateLabel(DateFormat('MMM d').format(lastDate)),
                             style: AppTypography.captionSmall.copyWith(
                               color: AppColors.textTertiary,
                               fontSize: 10,
@@ -2071,7 +2084,7 @@ class _SupplierCostCard extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Text(
-              'Avg & Last cost in $currency',
+              l10n.avgLastCostIn(currency),
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
                 fontSize: 10,
@@ -2096,6 +2109,7 @@ class _ConversionHistorySection extends ConsumerWidget {
     final async = ref.watch(conversionOrdersForProductProvider(productId));
     final currency = ref.watch(currencyProvider);
     final fmt = NumberFormat('#,##0.##');
+    final l10n = AppLocalizations.of(context)!;
 
     return async.when(
       loading: () => const SizedBox.shrink(),
@@ -2127,7 +2141,7 @@ class _ConversionHistorySection extends ConsumerWidget {
                       size: 16, color: AppColors.primaryNavy),
                   const SizedBox(width: 6),
                   Text(
-                    'Breakdown History',
+                    l10n.breakdownHistory,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -2159,7 +2173,7 @@ class _ConversionHistorySection extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    '+${orders.length - 5} more',
+                    l10n.moreCount(orders.length - 5),
                     style: AppTypography.captionSmall
                         .copyWith(color: AppColors.textTertiary),
                   ),
@@ -2185,6 +2199,7 @@ class _ConversionOrderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final dateStr = DateFormat('MMM d, yyyy').format(order.date);
 
     return Container(
@@ -2209,7 +2224,7 @@ class _ConversionOrderTile extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '${order.sourceQuantity.toInt()} units → ${order.outputs.length} output${order.outputs.length == 1 ? '' : 's'}',
+                l10n.conversionSummary(order.sourceQuantity.toInt(), order.outputs.length),
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w600,
@@ -2221,7 +2236,7 @@ class _ConversionOrderTile extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Source cost: $currency ${fmt.format(order.sourceTotalCost)}',
+                l10n.sourceCostValue(currency, fmt.format(order.sourceTotalCost)),
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textSecondary,
                 ),

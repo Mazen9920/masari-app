@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../shared/models/supplier_model.dart';
+import '../../shared/models/category_data.dart';
 
 /// Edit Supplier — pre-filled form for modifying existing supplier data.
 class EditSupplierScreen extends ConsumerStatefulWidget {
@@ -18,6 +20,8 @@ class EditSupplierScreen extends ConsumerStatefulWidget {
 }
 
 class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
   late final TextEditingController _nameCtrl;
   late final TextEditingController _idCtrl;
   late final TextEditingController _phoneCtrl;
@@ -32,7 +36,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
   int _currencyIdx = 0;
 
   final _paymentTerms = ['On Receipt', 'Net 15', 'Net 30', 'Net 60'];
-  final _currencies = ['EGP - Egyptian Pound', 'USD - US Dollar', 'EUR - Euro'];
+  List<String> get _currencies => [l10n.currencyEgpDisplay, l10n.currencyUsdDisplay, l10n.currencyEurDisplay];
 
   bool get _canSave => _nameCtrl.text.trim().isNotEmpty;
 
@@ -72,7 +76,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
     if (email.isNotEmpty && !_emailRegex.hasMatch(email)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please enter a valid email address'),
+          content: Text(l10n.invalidEmailValidation),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -85,7 +89,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
     if (phone.isNotEmpty && phone.replaceAll(RegExp(r'[^0-9]'), '').length < 7) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Phone number must have at least 7 digits'),
+          content: Text(l10n.phoneMinDigitsValidation),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -113,7 +117,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${_nameCtrl.text.trim()} updated'),
+        content: Text(l10n.supplierUpdatedMsg(_nameCtrl.text.trim())),
         backgroundColor: AppColors.primaryNavy,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -125,30 +129,33 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
     HapticFeedback.heavyImpact();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Supplier'),
-        content: Text(
-          'Are you sure you want to delete "${widget.supplier.name}"? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary)),
+      builder: (ctx) {
+        final l10n = AppLocalizations.of(ctx)!;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(l10n.deleteSupplierTitle),
+          content: Text(
+            l10n.deleteSupplierConfirmation(widget.supplier.name),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              ref.read(suppliersProvider.notifier).removeSupplier(widget.supplier.id);
-              Navigator.of(context).pop();
-            },
-            child: const Text('Delete',
-                style: TextStyle(
-                    color: AppColors.chartRed, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(l10n.cancel,
+                  style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                ref.read(suppliersProvider.notifier).removeSupplier(widget.supplier.id);
+                Navigator.of(context).pop();
+              },
+              child: Text(l10n.delete,
+                  style: TextStyle(
+                      color: AppColors.chartRed, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -202,10 +209,10 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
                     // Delete button
                     GestureDetector(
                       onTap: _confirmDelete,
-                      child: const Padding(
-                        padding: EdgeInsets.only(bottom: 40),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 40),
                         child: Text(
-                          'Delete Supplier',
+                          l10n.deleteSupplierTitle,
                           style: TextStyle(
                             color: AppColors.chartRed,
                             fontWeight: FontWeight.w600,
@@ -242,7 +249,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
           GestureDetector(
             onTap: () => Navigator.of(context).pop(),
             child: Text(
-              'Cancel',
+              l10n.cancel,
               style: TextStyle(
                 color: AppColors.primaryNavy,
                 fontSize: 15,
@@ -252,7 +259,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
           Expanded(
             child: Center(
               child: Text(
-                'Edit Supplier',
+                l10n.editSupplierTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w600,
@@ -264,7 +271,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
           GestureDetector(
             onTap: _canSave ? _save : null,
             child: Text(
-              'Save',
+              l10n.save,
               style: TextStyle(
                 color:
                     _canSave ? AppColors.accentOrange : AppColors.textTertiary,
@@ -333,25 +340,25 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
   // ═══════════════════════════════════════════════════════
   Widget _buildBusinessInfo() {
     return _card(
-      title: 'BUSINESS INFO',
+      title: l10n.businessInfoSection,
       children: [
-        _fieldRow('Business Name', TextField(
+        _fieldRow(l10n.businessName, TextField(
           controller: _nameCtrl,
           onChanged: (_) => setState(() {}),
           style: _valueStyle,
           decoration: _minimalDeco(),
         )),
         _sep(),
-        _fieldRow('Category', Builder(
+        _fieldRow(l10n.category, Builder(
           builder: (context) {
             final categories = ref.watch(categoriesProvider).value ?? [];
-            final categoryNames = categories.map((c) => c.name).toList();
+            final categoryNames = categories.map((c) => c.localizedName(AppLocalizations.of(context)!)).toList();
             if (categoryNames.isEmpty) {
-              categoryNames.addAll(['Packaging', 'Raw Materials', 'Logistics', 'Wholesale']);
+              categoryNames.addAll([l10n.supplierCategoryPackaging, l10n.supplierCategoryRawMaterials, l10n.supplierCategoryLogistics, l10n.supplierCategoryWholesale]);
             }
             return GestureDetector(
               onTap: () => _showPicker(
-                'Select Category',
+                l10n.selectCategory,
                 categoryNames,
                 categoryNames.indexOf(_category),
                 (i) => setState(() => _category = categoryNames[i]),
@@ -360,7 +367,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      _category.isEmpty ? 'Select' : _category,
+                      _category.isEmpty ? l10n.selectLabel : _category,
                       style: _valueStyle,
                     ),
                   ),
@@ -372,10 +379,10 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
           },
         )),
         _sep(),
-        _fieldRow('Supplier ID', TextField(
+        _fieldRow(l10n.supplierIdField, TextField(
           controller: _idCtrl,
           style: _valueStyle,
-          decoration: _minimalDeco(hint: 'e.g. SUP-001'),
+          decoration: _minimalDeco(hint: l10n.supplierIdHint),
         ), optional: true),
       ],
     );
@@ -386,9 +393,9 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
   // ═══════════════════════════════════════════════════════
   Widget _buildContactDetails() {
     return _card(
-      title: 'CONTACT DETAILS',
+      title: l10n.contactDetailsSection,
       children: [
-        _fieldRow('Phone Number', Row(
+        _fieldRow(l10n.phoneNumber, Row(
           children: [
             const Text('🇪🇬', style: TextStyle(fontSize: 16)),
             const SizedBox(width: 8),
@@ -397,17 +404,17 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
                 controller: _phoneCtrl,
                 keyboardType: TextInputType.phone,
                 style: _valueStyle,
-                decoration: _minimalDeco(hint: '+20 xxx xxx xxxx'),
+                decoration: _minimalDeco(hint: l10n.phoneHint),
               ),
             ),
           ],
         )),
         _sep(),
-        _fieldRow('Email', TextField(
+        _fieldRow(l10n.emailAddress, TextField(
           controller: _emailCtrl,
           keyboardType: TextInputType.emailAddress,
           style: _valueStyle,
-          decoration: _minimalDeco(hint: 'supplier@example.com'),
+          decoration: _minimalDeco(hint: l10n.supplierEmailHint),
         )),
         _sep(),
         Padding(
@@ -419,7 +426,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'WhatsApp Available',
+                  l10n.whatsAppAvailable,
                   style: TextStyle(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w500,
@@ -447,18 +454,21 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
   // ═══════════════════════════════════════════════════════
   Widget _buildFinancials() {
     return _card(
-      title: 'FINANCIALS',
+      title: l10n.financialsSection,
       children: [
-        _fieldRow('Default Terms', GestureDetector(
-          onTap: () => _showPicker(
-            'Select Terms',
-            _paymentTerms,
-            _paymentTermIdx,
-            (i) => setState(() => _paymentTermIdx = i),
-          ),
+        _fieldRow(l10n.defaultTerms, GestureDetector(
+          onTap: () {
+            final localizedTerms = [l10n.onReceipt, l10n.net15, l10n.net30, l10n.net60];
+            _showPicker(
+              l10n.selectTerms,
+              localizedTerms,
+              _paymentTermIdx,
+              (i) => setState(() => _paymentTermIdx = i),
+            );
+          },
           child: Row(
             children: [
-              Expanded(child: Text(_paymentTerms[_paymentTermIdx],
+              Expanded(child: Text([l10n.onReceipt, l10n.net15, l10n.net30, l10n.net60][_paymentTermIdx],
                   style: _valueStyle)),
               Icon(Icons.expand_more_rounded,
                   color: AppColors.textTertiary, size: 22),
@@ -466,9 +476,9 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
           ),
         )),
         _sep(),
-        _fieldRow('Currency', GestureDetector(
+        _fieldRow(l10n.currencyLabel, GestureDetector(
           onTap: () => _showPicker(
-            'Select Currency',
+            l10n.selectCurrency,
             _currencies,
             _currencyIdx,
             (i) => setState(() => _currencyIdx = i),
@@ -489,7 +499,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'Track Payables',
+                  l10n.trackPayables,
                   style: TextStyle(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w500,
@@ -517,13 +527,13 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
   // ═══════════════════════════════════════════════════════
   Widget _buildLocation() {
     return _card(
-      title: 'LOCATION',
+      title: l10n.locationSection,
       children: [
-        _fieldRow('Office Address', TextField(
+        _fieldRow(l10n.officeAddress, TextField(
           controller: _addressCtrl,
           maxLines: 3,
           style: _valueStyle.copyWith(height: 1.5),
-          decoration: _minimalDeco(hint: 'Street, Building, City'),
+          decoration: _minimalDeco(hint: l10n.addressHint),
         )),
       ],
     );
@@ -590,7 +600,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
               if (optional) ...[
                 const SizedBox(width: 4),
                 Text(
-                  '(Optional)',
+                  l10n.optionalLabel,
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 11,

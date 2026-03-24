@@ -3,10 +3,12 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/notifications_provider.dart';
 import '../../core/providers/user_profile_provider.dart';
 import '../../l10n/app_localizations.dart';
@@ -113,6 +115,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
 
+              // ─── Growth Upgrade Card (Launch users only) ───
+              if (!ref.watch(isGrowthProvider))
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(20, 18, 20, 0),
+                    child: _GrowthUpgradeCard(),
+                  ),
+                ),
+
               // ─── Dynamic sections (user-configurable) ───
               ..._buildConfigurableSections(),
 
@@ -154,7 +165,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               children: [
                 // Bell with red dot
                 Semantics(
-                  label: 'Notifications',
+                  label: AppLocalizations.of(context)!.notifications,
                   button: true,
                   child: GestureDetector(
                     onTap: () {
@@ -206,7 +217,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 const SizedBox(width: 10),
                 // Avatar
                 Semantics(
-                  label: 'Profile',
+                  label: AppLocalizations.of(context)!.profile,
                   button: true,
                   child: GestureDetector(
                     onTap: () {
@@ -278,7 +289,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (period == DashboardPeriod.custom) {
       displayLabel = ds.range.formattedRange;
     } else {
-      displayLabel = period.shortLabel;
+      displayLabel = period.localizedLabel(AppLocalizations.of(context)!);
     }
 
     return Padding(
@@ -419,6 +430,19 @@ class _DashboardEditSheetState extends ConsumerState<_DashboardEditSheet> {
         ref.read(dashboardConfigProvider).sections.map((s) => s.copy()).toList();
   }
 
+  String _localizedSectionLabel(BuildContext context, String id) {
+    final l10n = AppLocalizations.of(context)!;
+    return switch (id) {
+      'profit_margins' => l10n.profitMargins,
+      'top_products' => l10n.topProducts,
+      'inventory_valuation' => l10n.inventoryValuation,
+      'low_stock' => l10n.lowStockAlerts,
+      'accounts' => l10n.accountsArAp,
+      'recent_transactions' => l10n.recentTransactions,
+      _ => id,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -519,7 +543,7 @@ class _DashboardEditSheetState extends ConsumerState<_DashboardEditSheet> {
                       size: 22,
                     ),
                     title: Text(
-                      section.label,
+                      _localizedSectionLabel(context, section.id),
                       style: AppTypography.bodyMedium.copyWith(
                         color: section.visible
                             ? AppColors.textPrimary
@@ -552,6 +576,157 @@ class _DashboardEditSheetState extends ConsumerState<_DashboardEditSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Growth upgrade card — shown on dashboard for Launch users
+// ═══════════════════════════════════════════════════════════
+class _GrowthUpgradeCard extends ConsumerStatefulWidget {
+  const _GrowthUpgradeCard();
+
+  @override
+  ConsumerState<_GrowthUpgradeCard> createState() => _GrowthUpgradeCardState();
+}
+
+class _GrowthUpgradeCardState extends ConsumerState<_GrowthUpgradeCard> {
+  bool _dismissed = false;
+
+  static const _prefKey = 'growth_upgrade_dismissed_at';
+
+  @override
+  void initState() {
+    super.initState();
+    _checkDismissed();
+  }
+
+  Future<void> _checkDismissed() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ts = prefs.getInt(_prefKey);
+    if (ts != null) {
+      final dismissedAt = DateTime.fromMillisecondsSinceEpoch(ts);
+      if (DateTime.now().difference(dismissedAt).inDays < 7) {
+        if (mounted) setState(() => _dismissed = true);
+      }
+    }
+  }
+
+  Future<void> _dismiss() async {
+    setState(() => _dismissed = true);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefKey, DateTime.now().millisecondsSinceEpoch);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_dismissed) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.accentOrange.withValues(alpha: 0.08),
+            AppColors.accentOrange.withValues(alpha: 0.02),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.accentOrange.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.accentOrange.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.rocket_launch_rounded, color: AppColors.accentOrange, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.unlockGrowthTitle,
+                  style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.primaryNavy,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: _dismiss,
+                child: const Icon(Icons.close_rounded, size: 18, color: AppColors.textTertiary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 46),
+            child: Text(
+              l10n.unlockGrowthSubtitle,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.only(left: 46),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _featurePill(l10n.featureSalesCogs),
+                _featurePill(l10n.featureSupplierManagement),
+                _featurePill(l10n.featureFullCashFlow),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.only(left: 46),
+            child: SizedBox(
+              height: 36,
+              child: ElevatedButton(
+                onPressed: () => context.push('/profile/subscription'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accentOrange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+                child: Text(l10n.upgradeToGrowth, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _featurePill(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.accentOrange.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.captionSmall.copyWith(
+          color: AppColors.accentOrange,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

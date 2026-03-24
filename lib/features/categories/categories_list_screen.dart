@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
@@ -14,6 +15,7 @@ import 'categories_filter_sheet.dart';
 import '../../shared/widgets/async_value_widget.dart';
 import 'categorize_transactions_sheet.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class CategoriesListScreen extends ConsumerStatefulWidget {
   const CategoriesListScreen({super.key});
@@ -97,11 +99,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
   }
 
   String get _monthLabel {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return '${months[_selectedMonth.month - 1]} ${_selectedMonth.year}';
+    return DateFormat.yMMMM().format(_selectedMonth);
   }
 
   String? get _topCategoryName =>
@@ -240,7 +238,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
             child: Padding(
               padding: EdgeInsets.only(left: canPop ? 0 : 8),
               child: Text(
-                'Budget & Categories',
+                AppLocalizations.of(context)!.budgetAndCategories,
                 style: AppTypography.h1.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w800,
@@ -412,8 +410,8 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
         ),
         child: Row(
           children: [
-            Expanded(child: _toggleButton('Expense', true)),
-            Expanded(child: _toggleButton('Income', false)),
+            Expanded(child: _toggleButton(AppLocalizations.of(context)!.expenseLabel, true)),
+            Expanded(child: _toggleButton(AppLocalizations.of(context)!.incomeLabel, false)),
           ],
         ),
       ),
@@ -485,7 +483,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'THIS MONTH',
+                  AppLocalizations.of(context)!.thisMonth,
                   style: AppTypography.captionSmall.copyWith(
                     color: AppColors.textTertiary,
                     fontWeight: FontWeight.w700,
@@ -500,7 +498,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                     borderRadius: BorderRadius.circular(50),
                   ),
                   child: Text(
-                    'DETAILS',
+                    AppLocalizations.of(context)!.detailsLabel,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -532,7 +530,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
               Row(
                 children: [
                   Text(
-                    'Top category: ',
+                    AppLocalizations.of(context)!.topCategory,
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textTertiary,
                     ),
@@ -596,7 +594,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '$uncategorizedCount Uncategorized',
+                            AppLocalizations.of(context)!.nUncategorized(uncategorizedCount),
                             style: AppTypography.labelMedium.copyWith(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w700,
@@ -604,7 +602,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Please review these transactions',
+                            AppLocalizations.of(context)!.pleaseReviewTransactions,
                             style: AppTypography.captionSmall.copyWith(
                               color: AppColors.textTertiary,
                               fontSize: 11,
@@ -628,7 +626,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                '$saved ${saved == 1 ? 'transaction' : 'transactions'} categorized',
+                                AppLocalizations.of(context)!.nTransactionsCategorized(saved),
                               ),
                               backgroundColor: AppColors.success,
                               behavior: SnackBarBehavior.floating,
@@ -655,7 +653,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                           ),
                         ),
                         child: Text(
-                          'Review',
+                          AppLocalizations.of(context)!.reviewLabel,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -739,7 +737,8 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
       }
     }
 
-    final catName = top.category.name;
+    final l10n = AppLocalizations.of(context)!;
+    final catName = top.category.localizedName(l10n);
 
     // No previous data — show share insight
     if (prevCatTotal == 0 && top.totalAmount > 0) {
@@ -819,9 +818,9 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                         height: 1.5,
                       ),
                       children: [
-                        const TextSpan(
-                          text: 'Insight: ',
-                          style: TextStyle(
+                        TextSpan(
+                          text: AppLocalizations.of(context)!.insightLabel,
+                          style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             color: AppColors.primaryNavy,
                           ),
@@ -834,14 +833,14 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
                   GestureDetector(
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('AI Insights — coming soon!')),
+                        SnackBar(content: Text(AppLocalizations.of(context)!.aiInsightsComingSoon)),
                       );
                     },
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Ask AI (Coming Soon)',
+                          AppLocalizations.of(context)!.askAiComingSoon,
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
@@ -886,7 +885,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'No Categories Yet',
+            AppLocalizations.of(context)!.noCategoriesYet,
             style: AppTypography.h3.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -894,7 +893,7 @@ class _CategoriesListScreenState extends ConsumerState<CategoriesListScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Add transactions to see category breakdowns',
+            AppLocalizations.of(context)!.addTransactionsToSeeBreakdown,
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textTertiary,
             ),
@@ -1006,7 +1005,7 @@ class _CategoryCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      breakdown.category.name,
+                      breakdown.category.localizedName(AppLocalizations.of(context)!),
                       style: AppTypography.labelMedium.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w700,

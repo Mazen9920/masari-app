@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/category_data.dart';
 
 class EditCategoryScreen extends ConsumerStatefulWidget {
@@ -94,14 +95,14 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
         if (budgetLimit == null || budgetLimit <= 0) {
           HapticFeedback.heavyImpact();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please enter a valid budget amount')),
+            SnackBar(content: Text(AppLocalizations.of(context)!.invalidBudgetAmount)),
           );
           return;
         }
         if (budgetLimit > 10000000) {
           HapticFeedback.heavyImpact();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Budget limit cannot exceed 10,000,000')),
+            SnackBar(content: Text(AppLocalizations.of(context)!.budgetExceedsMax)),
           );
           return;
         }
@@ -138,19 +139,19 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          'Delete Category',
+          AppLocalizations.of(context)!.deleteCategory,
           style: AppTypography.h3
               .copyWith(fontWeight: FontWeight.w700, color: AppColors.danger),
         ),
         content: Text(
-          'Are you sure you want to delete "${widget.category.name}"? This action cannot be undone.',
+          AppLocalizations.of(context)!.deleteCategoryConfirm(widget.category.name),
           style: AppTypography.bodySmall
               .copyWith(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel',
+            child: Text(AppLocalizations.of(context)!.cancel,
                 style: AppTypography.labelMedium
                     .copyWith(color: AppColors.textTertiary)),
           ),
@@ -173,7 +174,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Delete'),
+            child: Text(AppLocalizations.of(context)!.delete),
           ),
         ],
       ),
@@ -232,7 +233,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
           TextButton(
             onPressed: () => context.pop(),
             child: Text(
-              'Cancel',
+              AppLocalizations.of(context)!.cancel,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.textTertiary,
                 fontWeight: FontWeight.w500,
@@ -242,7 +243,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
           ),
           const Spacer(),
           Text(
-            'Edit Category',
+            AppLocalizations.of(context)!.editCategory,
             style: AppTypography.h3.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -253,7 +254,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
           TextButton(
             onPressed: _save,
             child: Text(
-              'Save',
+              AppLocalizations.of(context)!.save,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.accentOrange,
                 fontWeight: FontWeight.w700,
@@ -339,7 +340,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
         children: [
           // ── Name ──
           _field(
-            label: 'CATEGORY NAME',
+            label: AppLocalizations.of(context)!.categoryName.toUpperCase(),
             child: TextField(
               controller: _nameController,
               style: TextStyle(
@@ -347,9 +348,9 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                 fontWeight: FontWeight.w600,
                 color: AppColors.primaryNavy,
               ),
-              decoration: const InputDecoration(
-                hintText: 'e.g. Groceries',
-                hintStyle: TextStyle(
+              decoration: InputDecoration(
+                hintText: AppLocalizations.of(context)!.egGroceries,
+                hintStyle: const TextStyle(
                     color: AppColors.textTertiary, fontWeight: FontWeight.w400),
                 border: InputBorder.none,
                 isDense: true,
@@ -361,7 +362,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
 
           // ── Type toggle ──
           _field(
-            label: 'TYPE',
+            label: AppLocalizations.of(context)!.type.toUpperCase(),
             child: Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
@@ -370,8 +371,8 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
               ),
               child: Row(
                 children: [
-                  _typeTab('Expense', true),
-                  _typeTab('Income', false),
+                  _typeTab(AppLocalizations.of(context)!.expense, true),
+                  _typeTab(AppLocalizations.of(context)!.income, false),
                 ],
               ),
             ),
@@ -381,7 +382,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
           // ── Monthly Limit (expense only) ──
           if (_isExpense)
           _field(
-            label: 'MONTHLY LIMIT',
+            label: AppLocalizations.of(context)!.monthlyLimit.toUpperCase(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -389,7 +390,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Enable Monthly Budget',
+                      AppLocalizations.of(context)!.enableMonthlyBudget,
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -444,7 +445,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              'We will alert you when you reach 80% of this budget.',
+                              AppLocalizations.of(context)!.budgetAlertHint,
                               style: AppTypography.captionSmall.copyWith(
                                 color: AppColors.textTertiary,
                                 fontSize: 10,
@@ -464,7 +465,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
 
           // ── Icon picker ──
           _field(
-            label: 'ICON',
+            label: AppLocalizations.of(context)!.icon.toUpperCase(),
             child: GridView.count(
               crossAxisCount: 6,
               shrinkWrap: true,
@@ -505,7 +506,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
 
           // ── Color picker ──
           _field(
-            label: 'COLOR',
+            label: AppLocalizations.of(context)!.color.toUpperCase(),
             child: Wrap(
               spacing: 16,
               runSpacing: 12,
@@ -560,7 +561,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
       icon: const Icon(Icons.delete_outline_rounded,
           size: 20, color: AppColors.danger),
       label: Text(
-        'Delete Category',
+        AppLocalizations.of(context)!.deleteCategory,
         style: AppTypography.labelMedium.copyWith(
           color: AppColors.danger,
           fontWeight: FontWeight.w600,
@@ -622,7 +623,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
         _budgetController.clear();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Budget removed — income categories don\'t have budgets')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.budgetRemovedNotice)),
       );
     } else {
       setState(() => _isExpense = newIsExpense);

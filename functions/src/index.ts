@@ -30,6 +30,9 @@ export {shopifyProxy} from "./shopify-proxy.js";
 export {shopifyHealthCheck} from "./shopify-health.js";
 export {shopifyDisconnect} from "./shopify-disconnect.js";
 
+// ── Account Management ─────────────────────────────────────
+export {deleteUserData} from "./delete-user-data.js";
+
 initializeApp();
 const db = getFirestore();
 

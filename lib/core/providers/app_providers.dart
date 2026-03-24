@@ -13,6 +13,7 @@ import '../../shared/models/sale_model.dart';
 import '../../shared/models/goods_receipt_model.dart';
 import '../repositories/sale_repository.dart' show StockDeduction;
 import '../services/result.dart';
+import '../utils/connectivity_helper.dart';
 import '../../shared/models/balance_sheet_entries.dart';
 import '../../shared/models/conversion_order_model.dart';
 import 'auth_provider.dart';
@@ -1169,8 +1170,21 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
     final repo = ref.read(saleRepositoryProvider);
     final Result<Sale> result;
     if (stockDeductions.isNotEmpty) {
-      result = await repo.createSaleWithTransactionsAndStock(
-          sale, transactions, stockDeductions);
+      final online = await hasConnectivity();
+      if (online) {
+        // Prefer atomic transaction when online; fall back to batch on timeout.
+        result = await repo
+            .createSaleWithTransactionsAndStock(
+                sale, transactions, stockDeductions)
+            .timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => repo.createSaleWithTransactionsAndStockBatch(
+              sale, transactions, stockDeductions),
+        );
+      } else {
+        result = await repo.createSaleWithTransactionsAndStockBatch(
+            sale, transactions, stockDeductions);
+      }
     } else {
       result = await repo.createSaleWithTransactions(sale, transactions);
     }

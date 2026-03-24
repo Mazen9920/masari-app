@@ -57,7 +57,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.errorWithDetails(e.toString()))),
         );
       }
     } finally {
@@ -129,7 +129,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
     if (filtered.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No transactions in selected range')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.noTransactionsInRange)),
         );
       }
       return;
@@ -226,13 +226,13 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Select Date Range', style: AppTypography.h3),
+                  Text(AppLocalizations.of(context)!.selectDateRange, style: AppTypography.h3),
                   const SizedBox(height: 24),
                   Row(
                     children: [
                       Expanded(
                         child: _buildDateInput(
-                          label: 'FROM',
+                          label: AppLocalizations.of(context)!.fromLabel,
                           date: _fromDate,
                           onTap: () async {
                             final DateTime? picked = await showDatePicker(
@@ -251,7 +251,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: _buildDateInput(
-                          label: 'TO',
+                          label: AppLocalizations.of(context)!.toLabel,
                           date: _toDate,
                           onTap: () async {
                             final DateTime? picked = await showDatePicker(
@@ -278,7 +278,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
                       minimumSize: const Size(double.infinity, 52),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: const Text('Confirm Filter', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(AppLocalizations.of(context)!.confirmFilter, style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -337,7 +337,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
         title: Text(
-          'Export & Share',
+          AppLocalizations.of(context)!.exportAndShare,
           style: AppTypography.h3.copyWith(fontWeight: FontWeight.bold, color: AppColors.primaryNavy),
         ),
         centerTitle: true,
@@ -419,10 +419,10 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Monthly Financial Report', style: AppTypography.labelLarge),
+                    Text(AppLocalizations.of(context)!.monthlyFinancialReport, style: AppTypography.labelLarge),
                     const SizedBox(height: 4),
                     Text(
-                      'P&L, cash flow, sales & inventory summary',
+                      AppLocalizations.of(context)!.monthlyReportSubtitle,
                       style: AppTypography.captionSmall.copyWith(color: AppColors.textTertiary, fontSize: 11),
                     ),
                   ],
@@ -481,7 +481,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
             ),
             icon: const Icon(Icons.auto_fix_high_rounded, size: 20),
-            label: const Text('Generate & Share PDF', style: TextStyle(fontWeight: FontWeight.w700)),
+            label: Text(AppLocalizations.of(context)!.generateSharePdf, style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -510,10 +510,10 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Transaction Data', style: AppTypography.labelLarge),
+                    Text(AppLocalizations.of(context)!.transactionData, style: AppTypography.labelLarge),
                     const SizedBox(height: 4),
                     Text(
-                      'All transactions in CSV spreadsheet format',
+                      AppLocalizations.of(context)!.transactionDataSubtitle,
                       style: AppTypography.captionSmall.copyWith(color: AppColors.textTertiary, fontSize: 11),
                     ),
                   ],
@@ -538,7 +538,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('FROM', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade500)),
+                        Text(AppLocalizations.of(context)!.fromLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade500)),
                         const SizedBox(height: 4),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -566,7 +566,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('TO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade500)),
+                        Text(AppLocalizations.of(context)!.toLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade500)),
                         const SizedBox(height: 4),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -596,7 +596,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
             ),
             icon: const Icon(Icons.file_download_rounded, size: 20),
-            label: const Text('Export CSV', style: TextStyle(fontWeight: FontWeight.w600)),
+            label: Text(AppLocalizations.of(context)!.exportCsv, style: TextStyle(fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -624,10 +624,10 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Profit & Loss Statement', style: AppTypography.labelLarge),
+                    Text(AppLocalizations.of(context)!.profitLossStatement, style: AppTypography.labelLarge),
                     const SizedBox(height: 4),
                     Text(
-                      'Detailed P&L breakdown PDF',
+                      AppLocalizations.of(context)!.pnlSubtitle,
                       style: AppTypography.captionSmall.copyWith(color: AppColors.textTertiary, fontSize: 11),
                     ),
                   ],
@@ -645,9 +645,9 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
             ),
             child: Row(
               children: [
-                Expanded(child: _buildSegmentButton('Monthly', 0, _profitLossPeriodIdx, (i) => setState(() => _profitLossPeriodIdx = i))),
-                Expanded(child: _buildSegmentButton('Quarterly', 1, _profitLossPeriodIdx, (i) => setState(() => _profitLossPeriodIdx = i))),
-                Expanded(child: _buildSegmentButton('Annual', 2, _profitLossPeriodIdx, (i) => setState(() => _profitLossPeriodIdx = i))),
+                Expanded(child: _buildSegmentButton(AppLocalizations.of(context)!.monthlyPeriod, 0, _profitLossPeriodIdx, (i) => setState(() => _profitLossPeriodIdx = i))),
+                Expanded(child: _buildSegmentButton(AppLocalizations.of(context)!.quarterlyPeriod, 1, _profitLossPeriodIdx, (i) => setState(() => _profitLossPeriodIdx = i))),
+                Expanded(child: _buildSegmentButton(AppLocalizations.of(context)!.annualPeriod, 2, _profitLossPeriodIdx, (i) => setState(() => _profitLossPeriodIdx = i))),
               ],
             ),
           ),
@@ -663,7 +663,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
             ),
             icon: const Icon(Icons.file_download_rounded, size: 20),
-            label: const Text('Export PDF', style: TextStyle(fontWeight: FontWeight.w700)),
+            label: Text(AppLocalizations.of(context)!.exportPdf, style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),

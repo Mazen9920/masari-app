@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/business_profile_provider.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class BusinessInfoScreen extends ConsumerStatefulWidget {
   const BusinessInfoScreen({super.key});
@@ -54,8 +55,8 @@ class _BusinessInfoScreenState extends ConsumerState<BusinessInfoScreen> {
     }
   }
 
-  @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -65,7 +66,7 @@ class _BusinessInfoScreenState extends ConsumerState<BusinessInfoScreen> {
           onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
-        title: Text('Business Info', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
+        title: Text(l10n.businessInfoTitle, style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
         actions: [
           TextButton(
@@ -73,7 +74,7 @@ class _BusinessInfoScreenState extends ConsumerState<BusinessInfoScreen> {
             child: _saving
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : Text(
-                    'Save',
+                    l10n.save,
                     style: TextStyle(color: AppColors.accentOrange, fontWeight: FontWeight.bold, fontSize: 15),
                   ),
           ),
@@ -118,15 +119,15 @@ class _BusinessInfoScreenState extends ConsumerState<BusinessInfoScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Text('Upload Logo', style: TextStyle(fontSize: 12, color: AppColors.accentOrange, fontWeight: FontWeight.w600)),
+            Text(l10n.businessInfoUploadLogo, style: TextStyle(fontSize: 12, color: AppColors.accentOrange, fontWeight: FontWeight.w600)),
             const SizedBox(height: 28),
-            _buildField('Business Name', _businessNameController, Icons.storefront_rounded),
+            _buildField(l10n.businessInfoName, _businessNameController, Icons.storefront_rounded),
             const SizedBox(height: 16),
-            _buildField('Business Type', _businessTypeController, Icons.category_rounded),
+            _buildField(l10n.businessInfoType, _businessTypeController, Icons.category_rounded),
             const SizedBox(height: 16),
-            _buildField('Address', _addressController, Icons.location_on_outlined),
+            _buildField(l10n.businessInfoAddress, _addressController, Icons.location_on_outlined),
             const SizedBox(height: 16),
-            _buildField('Tax ID / VAT Number', _taxIdController, Icons.receipt_long_rounded),
+            _buildField(l10n.businessInfoTaxId, _taxIdController, Icons.receipt_long_rounded),
             const SizedBox(height: 32),
             // Tax Info Card
             Container(
@@ -142,7 +143,7 @@ class _BusinessInfoScreenState extends ConsumerState<BusinessInfoScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Tax ID is required for generating official invoices and receipts.',
+                      l10n.businessInfoTaxNote,
                       style: TextStyle(fontSize: 12, color: AppColors.accentOrangeDark, fontWeight: FontWeight.w500),
                     ),
                   ),

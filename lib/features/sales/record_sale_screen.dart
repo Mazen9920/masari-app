@@ -17,6 +17,7 @@ import '../../shared/models/product_model.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/widgets/discard_changes_dialog.dart';
 import '../shopify/providers/shopify_sync_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/utils/safe_pop.dart';
 
 /// Screen to record a new sale (Growth tier).
@@ -31,6 +32,7 @@ class RecordSaleScreen extends ConsumerStatefulWidget {
 
 class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
   bool get _isEditing => widget.existingSale != null;
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
 
   final _customerCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -247,7 +249,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           Expanded(
             child: Center(
               child: Text(
-                _isEditing ? 'Edit Sale' : 'Record Sale',
+                _isEditing ? l10n.editSale : l10n.recordSale,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -257,13 +259,13 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           ),
           Semantics(
             button: true,
-            label: 'Save sale',
+            label: l10n.saveSale,
             child: GestureDetector(
             onTap: _save,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Text(
-                'Save',
+                l10n.saveSaleButton,
                 style: AppTypography.labelLarge.copyWith(
                   color: AppColors.accentOrange,
                   fontWeight: FontWeight.w700,
@@ -281,11 +283,11 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
 
   Widget _buildCustomerSection() {
     return _Card(
-      title: 'Customer',
+      title: l10n.customer,
       children: [
         _textField(
           controller: _customerCtrl,
-          hint: 'Customer name (optional)',
+          hint: l10n.customerNameOptional,
           icon: Icons.person_rounded,
         ),
         const SizedBox(height: 10),
@@ -294,7 +296,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
             Expanded(
               child: _textField(
                 controller: _phoneCtrl,
-                hint: 'Phone',
+                hint: l10n.phone,
                 icon: Icons.phone_rounded,
                 keyboardType: TextInputType.phone,
               ),
@@ -303,7 +305,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
             Expanded(
               child: _textField(
                 controller: _emailCtrl,
-                hint: 'Email',
+                hint: l10n.email,
                 icon: Icons.email_rounded,
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -320,7 +322,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
 
   Widget _buildShippingSection() {
     return _Card(
-      title: 'Shipping',
+      title: l10n.shipping,
       trailing: GestureDetector(
         onTap: () => setState(() => _showShipping = !_showShipping),
         child: Container(
@@ -341,7 +343,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
               ),
               const SizedBox(width: 4),
               Text(
-                _showShipping ? 'On' : 'Off',
+                _showShipping ? l10n.on : l10n.off,
                 style: AppTypography.labelSmall.copyWith(
                   color: _showShipping ? AppColors.primaryNavy : AppColors.textTertiary,
                   fontWeight: FontWeight.w600,
@@ -354,13 +356,13 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       children: [
         if (!_showShipping)
           Text(
-            'Toggle on to add shipping details',
+            l10n.toggleShippingHint,
             style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
           )
         else ...[
           _textField(
             controller: _shippingAddressCtrl,
-            hint: 'Shipping address',
+            hint: l10n.shippingAddress,
             icon: Icons.location_on_rounded,
             maxLines: 2,
           ),
@@ -370,7 +372,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
               Expanded(
                 child: _textField(
                   controller: _shippingCostCtrl,
-                  hint: 'Shipping cost',
+                  hint: l10n.shippingCost,
                   prefixText: ref.watch(currencyProvider),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (_) => setState(() {}),
@@ -380,7 +382,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
               Expanded(
                 child: _textField(
                   controller: _shippingMethodCtrl,
-                  hint: 'Method (e.g. Aramex)',
+                  hint: l10n.shippingMethodHint,
                   icon: Icons.local_shipping_rounded,
                 ),
               ),
@@ -389,7 +391,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           const SizedBox(height: 10),
           _textField(
             controller: _trackingCtrl,
-            hint: 'Tracking number or link',
+            hint: l10n.trackingNumberOrLink,
             icon: Icons.qr_code_rounded,
           ),
           const SizedBox(height: 10),
@@ -407,7 +409,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  _showShippingAdvanced ? 'Less details' : 'More details',
+                  _showShippingAdvanced ? l10n.lessDetails : l10n.moreDetails,
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 12,
@@ -421,14 +423,14 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
             const SizedBox(height: 10),
             _textField(
               controller: _shippingNotesCtrl,
-              hint: 'Shipping notes (optional)',
+              hint: l10n.shippingNotesOptional,
               icon: Icons.notes_rounded,
             ),
             const SizedBox(height: 10),
             // Delivery status chips
             Row(
               children: List.generate(3, (i) {
-                final labels = ['Pending', 'Shipped', 'Delivered'];
+                final labels = [l10n.pending, l10n.shipped, l10n.delivered];
                 final colors = [AppColors.warning, const Color(0xFF3B82F6), AppColors.success];
                 final isSelected = _deliveryStatusIdx == i;
                 return Expanded(
@@ -514,7 +516,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
 
   Widget _buildLineItemsSection(String currency) {
     return _Card(
-      title: 'Items',
+      title: l10n.items,
       trailing: GestureDetector(
         onTap: _addLineItem,
         child: Container(
@@ -529,7 +531,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
               Icon(Icons.add_rounded,
                   size: 16, color: AppColors.accentOrange),
               const SizedBox(width: 4),
-              Text('Add Item',
+              Text(l10n.addItem,
                   style: AppTypography.labelSmall
                       .copyWith(color: AppColors.accentOrange, fontWeight: FontWeight.w600)),
             ],
@@ -556,7 +558,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
             Expanded(
               child: _textField(
                 controller: li.nameCtrl,
-                hint: 'Product / item name',
+                hint: l10n.productItemName,
                 icon: Icons.shopping_bag_rounded,
               ),
             ),
@@ -600,7 +602,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
             Expanded(
               child: _textField(
                 controller: li.qtyCtrl,
-                hint: 'Qty',
+                hint: l10n.qty,
                 icon: Icons.tag_rounded,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -612,7 +614,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
               flex: 2,
               child: _textField(
                 controller: li.priceCtrl,
-                hint: 'Unit price',
+                hint: l10n.unitPrice,
                 prefixText: currency,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -654,7 +656,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
               size: 14, color: Color(0xFF7C3AED)),
           const SizedBox(width: 8),
           Text(
-            'Cost: $currency ${fmt.format(li.costPrice)}',
+            l10n.costLabel(currency, fmt.format(li.costPrice)),
             style: const TextStyle(
               color: Color(0xFF7C3AED),
               fontWeight: FontWeight.w600,
@@ -664,7 +666,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           if (product != null) ...[
             const SizedBox(width: 12),
             Text(
-              'Stock: ${product.currentStock}',
+              l10n.stockLabel(product.currentStock),
               style: TextStyle(
                 color: product.currentStock > 0
                     ? AppColors.textSecondary
@@ -696,7 +698,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
     final sellable = products.where((p) => !p.isMaterial).toList();
     if (sellable.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('No products in inventory. Add products first.'),
+        content: Text(l10n.noProductsInInventory),
         backgroundColor: AppColors.primaryNavy,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -743,7 +745,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                     ),
                   ),
                   Text(
-                    'Select Product',
+                    l10n.selectProduct,
                     style: AppTypography.h2.copyWith(
                       color: AppColors.primaryNavy,
                       fontWeight: FontWeight.w700,
@@ -754,7 +756,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                   TextField(
                     onChanged: (v) => setSheetState(() => searchQuery = v),
                     decoration: InputDecoration(
-                      hintText: 'Search products…',
+                      hintText: l10n.searchProducts,
                       hintStyle: AppTypography.bodySmall
                           .copyWith(color: AppColors.textTertiary),
                       prefixIcon: const Icon(Icons.search_rounded,
@@ -787,7 +789,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                     child: filtered.isEmpty
                         ? Center(
                             child: Text(
-                              'No products found',
+                              l10n.noProductsFound,
                               style: TextStyle(
                                   color: AppColors.textTertiary,
                                   fontSize: 14),
@@ -873,8 +875,8 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                                 ),
                                 subtitle: Text(
                                   isMultiVariant
-                                      ? '${product.variants.length} variants · Stock: ${product.currentStock}'
-                                      : 'Sell: $currency ${fmt.format(product.sellingPrice)} · Cost: $currency ${fmt.format(product.costPrice)} · Stock: ${product.currentStock}',
+                                      ? l10n.variantsStockInfo(product.variants.length, product.currentStock)
+                                      : l10n.productPriceInfo(currency, fmt.format(product.sellingPrice), currency, fmt.format(product.costPrice), product.currentStock),
                                   style: TextStyle(
                                     color: AppColors.textTertiary,
                                     fontSize: 11,
@@ -945,7 +947,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Select Variant — ${product.name}',
+                l10n.selectVariant(product.name),
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -964,20 +966,20 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                   final v = product.variants[i];
                   return ListTile(
                     title: Text(
-                      v.displayName,
+                      v.localizedDisplayName(l10n),
                       style: AppTypography.labelMedium.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     subtitle: Text(
-                      '$currency ${v.sellingPrice.toStringAsFixed(2)} · ${v.currentStock} in stock',
+                      l10n.variantPriceStock(currency, v.sellingPrice.toStringAsFixed(2), v.currentStock),
                       style: AppTypography.captionSmall.copyWith(
                         color: AppColors.textSecondary,
                       ),
                     ),
                     trailing: v.currentStock <= 0
-                        ? Text('Out of stock',
+                        ? Text(l10n.outOfStock,
                             style: AppTypography.captionSmall
                                 .copyWith(color: AppColors.danger))
                         : null,
@@ -990,7 +992,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                             v.isDefault ? null : v.displayName;
                         _items[idx].nameCtrl.text = v.isDefault
                             ? product.name
-                            : '${product.name} — ${v.displayName}';
+                            : '${product.name} — ${v.localizedDisplayName(l10n)}';
                         _items[idx].priceCtrl.text =
                             v.sellingPrice.toString();
                         _items[idx].costPrice = v.costPrice;
@@ -1011,14 +1013,14 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
   Widget _buildTotalsSection(String currency) {
     final fmt = NumberFormat('#,##0.00', 'en');
     return _Card(
-      title: 'Summary',
+      title: l10n.summary,
       children: [
         Row(
           children: [
             Expanded(
               child: _textField(
                 controller: _taxCtrl,
-                hint: 'Tax',
+                hint: l10n.tax,
                 prefixText: currency,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -1029,7 +1031,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
             Expanded(
               child: _textField(
                 controller: _discountCtrl,
-                hint: 'Discount',
+                hint: l10n.discount,
                 prefixText: currency,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -1049,24 +1051,24 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           ),
           child: Column(
             children: [
-              _summaryRow('Subtotal', '$currency ${fmt.format(_subtotal)}'),
+              _summaryRow(l10n.subtotal, '$currency ${fmt.format(_subtotal)}'),
               if (_tax > 0) ...[
                 const SizedBox(height: 6),
-                _summaryRow('Tax', '+ $currency ${fmt.format(_tax)}'),
+                _summaryRow(l10n.tax, '+ $currency ${fmt.format(_tax)}'),
               ],
               if (_discount > 0) ...[
                 const SizedBox(height: 6),
                 _summaryRow(
-                    'Discount', '- $currency ${fmt.format(_discount)}'),
+                    l10n.discount, '- $currency ${fmt.format(_discount)}'),
               ],
               if (_shippingCost > 0) ...[
                 const SizedBox(height: 6),
                 _summaryRow(
-                    'Shipping', '+ $currency ${fmt.format(_shippingCost)}'),
+                    l10n.shipping, '+ $currency ${fmt.format(_shippingCost)}'),
               ],
               const Divider(height: 16),
               _summaryRow(
-                'Total',
+                l10n.total,
                 '$currency ${fmt.format(_total)}',
                 bold: true,
               ),
@@ -1100,12 +1102,12 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
 
   Widget _buildPaymentSection() {
     return _Card(
-      title: 'Payment',
+      title: l10n.payment,
       children: [
         // Status chips
         Row(
           children: List.generate(3, (i) {
-            final labels = ['Unpaid', 'Partial', 'Paid'];
+            final labels = [l10n.unpaid, l10n.partial, l10n.paid];
             final colors = [AppColors.danger, AppColors.warning, AppColors.success];
             final isSelected = _statusIdx == i;
             return Expanded(
@@ -1155,7 +1157,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
             controller: _amountPaidCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
-              labelText: 'Amount Paid',
+              labelText: l10n.amountPaidLabel,
               hintText: '0.00',
               prefixIcon: const Icon(Icons.attach_money_rounded, size: 20),
               border: OutlineInputBorder(
@@ -1204,7 +1206,13 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        m.label,
+                        switch (m.label) {
+                          'Cash' => l10n.cash,
+                          'Bank Transfer' => l10n.bankTransfer,
+                          'InstaPay' => l10n.instaPay,
+                          'Vodafone Cash' => l10n.vodafoneCash,
+                          _ => m.label,
+                        },
                         style: AppTypography.captionSmall.copyWith(
                           color: isSelected
                               ? Colors.white
@@ -1228,11 +1236,11 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
 
   Widget _buildNotesSection() {
     return _Card(
-      title: 'Notes',
+      title: l10n.notes,
       children: [
         _textField(
           controller: _notesCtrl,
-          hint: 'Add notes (optional)',
+          hint: l10n.addNotesOptional,
           icon: Icons.notes_rounded,
           maxLines: 3,
         ),
@@ -1257,7 +1265,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       ),
       child: Semantics(
         button: true,
-        label: _isEditing ? 'Update Sale' : 'Confirm Sale',
+        label: _isEditing ? l10n.updateSale : l10n.confirmSale,
         child: GestureDetector(
         onTap: _save,
         child: Container(
@@ -1275,8 +1283,8 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           ),
           child: Text(
             _isEditing
-                ? 'Update Sale'
-                : 'Confirm Sale · $currency ${fmt.format(_total)}',
+                ? l10n.updateSale
+                : l10n.confirmSaleTotal(currency, fmt.format(_total)),
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
@@ -1305,12 +1313,12 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
     }
 
     if (!hasValidItem) {
-      _showError('Add at least one item with a name, quantity, and price');
+      _showError(l10n.errorAddItem);
       return;
     }
 
     if (_total <= 0) {
-      _showError('Sale total must be greater than zero');
+      _showError(l10n.errorTotalZero);
       return;
     }
 
@@ -1318,11 +1326,11 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
     if (_statusIdx == 1) {
       final partialAmount = double.tryParse(_amountPaidCtrl.text) ?? 0;
       if (partialAmount <= 0) {
-        _showError('Partial payment amount must be greater than zero');
+        _showError(l10n.errorPartialZero);
         return;
       }
       if (partialAmount >= _total) {
-        _showError('Partial amount must be less than the total. Use "Paid" for full payment.');
+        _showError(l10n.errorPartialExceedsTotal);
         return;
       }
     }
@@ -1369,7 +1377,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
     }
 
     if (saleItems.isEmpty) {
-      _showError('No valid items — each item needs a name, quantity, and price');
+      _showError(l10n.errorNoValidItems);
       return;
     }
 
@@ -1410,20 +1418,18 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Insufficient Stock'),
+          title: Text(l10n.insufficientStock),
           content: Text(
-            'The following items exceed available stock:\n\n'
-            '${stockWarnings.join('\n')}\n\n'
-            'Continue anyway?',
+            l10n.insufficientStockMsg(stockWarnings.join('\n')),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l10n.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Continue'),
+              child: Text(l10n.continueAction),
             ),
           ],
         ),
@@ -1436,21 +1442,19 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Below-Cost Price'),
+          title: Text(l10n.belowCostPrice),
           content: Text(
-            'You are selling below cost price:\n\n'
-            '${costWarnings.join('\n')}\n\n'
-            'This will result in a loss. Continue?',
+            l10n.belowCostMsg(costWarnings.join('\n')),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l10n.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(true),
               style: TextButton.styleFrom(foregroundColor: Colors.orange),
-              child: const Text('Sell Anyway'),
+              child: Text(l10n.sellAnyway),
             ),
           ],
         ),
@@ -1526,25 +1530,20 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
         final proceed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Shopify Order Warning'),
-            content: const Text(
-              'This sale is linked to a Shopify order.\n\n'
-              'Line-item changes (quantities, prices, products) '
-              'will NOT sync back to Shopify — only payment status, '
-              'fulfillment, tracking, and notes are pushed.\n\n'
-              'Edit the line items on Shopify directly for financial '
-              'accuracy.\n\nContinue with local-only changes?',
+            title: Text(l10n.shopifyOrderWarning),
+            content: Text(
+              l10n.shopifyOrderWarningMsg,
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
+                child: Text(l10n.cancel),
               ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
                 style:
                     TextButton.styleFrom(foregroundColor: Colors.orange),
-                child: const Text('Save Anyway'),
+                child: Text(l10n.saveAnyway),
               ),
             ],
           ),
@@ -1717,7 +1716,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       );
 
       if (!success) {
-        if (mounted) _showError('Failed to save sale. Please try again.');
+        if (mounted) _showError(l10n.failedToSaveSale);
         return;
       }
       if (!mounted) return;
@@ -1739,7 +1738,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
     context.safePop();
     messenger.showSnackBar(SnackBar(
       content: Text(
-          '${_isEditing ? "Updated" : "Recorded"} sale of $currency ${fmt.format(sale.total)}'),
+          _isEditing ? l10n.saleUpdated(currency, fmt.format(sale.total)) : l10n.saleRecorded(currency, fmt.format(sale.total))),
       backgroundColor: AppColors.primaryNavy,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

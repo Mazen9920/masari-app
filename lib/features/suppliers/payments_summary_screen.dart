@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/payment_model.dart';
 import '../../shared/models/supplier_model.dart';
 import 'payment_detail_screen.dart';
@@ -14,11 +15,23 @@ import '../transactions/transactions_list_screen.dart';
 import '../../shared/models/transaction_model.dart';
 
 /// Payments Summary Dashboard — overview of supplier payment activity.
+
+String _localizedMethodName(String method, AppLocalizations l10n) {
+  switch (method) {
+    case 'Cash': return l10n.cash;
+    case 'Bank Transfer': return l10n.bankTransfer;
+    case 'InstaPay': return l10n.instaPay;
+    case 'Vodafone Cash': return l10n.vodafoneCash;
+    default: return method;
+  }
+}
+
 class PaymentsSummaryScreen extends ConsumerWidget {
   const PaymentsSummaryScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(currencyProvider);
     final payments = ref.watch(paymentsProvider).value ?? [];
     final purchases = ref.watch(purchasesProvider).value ?? [];
@@ -51,7 +64,7 @@ class PaymentsSummaryScreen extends ConsumerWidget {
         bottom: false,
         child: Column(
           children: [
-            _buildHeader(context),
+            _buildHeader(context, l10n),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -89,7 +102,7 @@ class PaymentsSummaryScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
       decoration: BoxDecoration(
@@ -109,7 +122,7 @@ class PaymentsSummaryScreen extends ConsumerWidget {
           Expanded(
             child: Center(
               child: Text(
-                'Payments Summary',
+                l10n.paymentsSummary,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -136,6 +149,7 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -186,7 +200,7 @@ class _HeroCard extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.7), size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    'Total Payments (${DateFormat('MMM').format(DateTime.now())})',
+                    l10n.totalPaymentsMonth(DateFormat('MMM').format(DateTime.now())),
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.8),
                       fontWeight: FontWeight.w500,
@@ -220,7 +234,7 @@ class _HeroCard extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.9), size: 14),
                     const SizedBox(width: 6),
                     Text(
-                      'This month',
+                      l10n.periodThisMonth,
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.9),
                         fontWeight: FontWeight.w500,
@@ -250,12 +264,13 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
-        Expanded(child: _statCard('Paid', paid,
+        Expanded(child: _statCard(l10n.paidLabel, paid,
             AppColors.success, Icons.check_circle_rounded, fmt)),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('Outstanding', outstanding,
+        Expanded(child: _statCard(l10n.outstanding, outstanding,
             AppColors.accentOrange, Icons.pending_rounded, fmt)),
       ],
     );
@@ -327,6 +342,7 @@ class _TrendsChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final monthLabels = <String>[];
     final monthTotals = <double>[];
@@ -363,7 +379,7 @@ class _TrendsChart extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Payment Trends',
+                l10n.paymentTrends,
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -371,7 +387,7 @@ class _TrendsChart extends StatelessWidget {
                 ),
               ),
               Text(
-                'Last 6 Months',
+                l10n.lastSixMonths,
                 style: TextStyle(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w500,
@@ -460,6 +476,7 @@ class _PaymentMethods extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final methods = methodCounts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
@@ -469,7 +486,7 @@ class _PaymentMethods extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 2, bottom: 10),
           child: Text(
-            'Payment Methods',
+            l10n.paymentMethodsLabel,
             style: TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -480,7 +497,7 @@ class _PaymentMethods extends StatelessWidget {
         SizedBox(
           height: 100,
           child: methods.isEmpty
-              ? Center(child: Text('No data', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)))
+              ? Center(child: Text(l10n.noDataLabel, style: TextStyle(color: AppColors.textTertiary, fontSize: 13)))
               : ListView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
@@ -492,7 +509,7 @@ class _PaymentMethods extends StatelessWidget {
               final color = _colorFor(e.key);
               return Padding(
                 padding: EdgeInsets.only(right: e.key < methods.length - 1 ? 10 : 0),
-                child: _methodCard(method, '$pct%', progress, _iconFor(method), color),
+                child: _methodCard(_localizedMethodName(method, l10n), '$pct%', progress, _iconFor(method), color),
               );
             }).toList(),
           ),
@@ -580,6 +597,7 @@ class _RecentPayments extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final suppliers = ref.watch(suppliersProvider).value ?? <Supplier>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -590,7 +608,7 @@ class _RecentPayments extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Recent Payments',
+                l10n.recentPayments,
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -602,9 +620,9 @@ class _RecentPayments extends ConsumerWidget {
                   HapticFeedback.lightImpact();
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const TransactionsListScreen(
+                      builder: (_) => TransactionsListScreen(
                         showBackButton: true,
-                        pageTitle: 'All Payments',
+                        pageTitle: l10n.allPayments,
                         initialFilter: TransactionFilter(
                           type: TransactionType.expense,
                           onlySuppliers: true,
@@ -614,7 +632,7 @@ class _RecentPayments extends ConsumerWidget {
                   );
                 },
                 child: Text(
-                  'See All',
+                  l10n.seeAllLabel,
                   style: TextStyle(
                     color: AppColors.primaryNavy,
                     fontWeight: FontWeight.w500,
@@ -646,7 +664,7 @@ class _RecentPayments extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.all(20),
                       child: Text(
-                        'No payments yet',
+                        l10n.noPaymentsYet,
                         style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
                       ),
                     ),
@@ -706,7 +724,7 @@ class _RecentPayments extends ConsumerWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${DateFormat('MMM dd').format(p.date)} • ${p.method}',
+                              '${DateFormat('MMM dd').format(p.date)} • ${_localizedMethodName(p.method, l10n)}',
                               style: TextStyle(
                                 color: AppColors.textTertiary,
                                 fontSize: 12,

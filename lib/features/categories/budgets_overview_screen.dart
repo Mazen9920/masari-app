@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/category_data.dart';
+import '../../l10n/app_localizations.dart';
 import 'category_detail_screen.dart';
 
 /// Budget Overview — shows spending health across all categories.
@@ -175,7 +177,7 @@ class _Header extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              'Budget Overview',
+              AppLocalizations.of(context)!.budgetOverview,
               style: AppTypography.h2.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w800,
@@ -204,12 +206,8 @@ class _Header extends StatelessWidget {
   }
 
   String _monthName() {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
     final now = DateTime.now();
-    return '${months[now.month - 1]} ${now.year}';
+    return DateFormat.yMMM().format(now);
   }
 }
 
@@ -266,7 +264,7 @@ class _SummaryCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Monthly Budget',
+                AppLocalizations.of(context)!.monthlyBudgetLabel,
                 style: AppTypography.labelMedium.copyWith(
                   color: Colors.white.withValues(alpha: 0.8),
                   fontWeight: FontWeight.w500,
@@ -280,7 +278,7 @@ class _SummaryCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(50),
                 ),
                 child: Text(
-                  isOver ? 'Over Budget' : '${(ratio * 100).toInt()}% Used',
+                  isOver ? AppLocalizations.of(context)!.overBudget : AppLocalizations.of(context)!.nPercentUsed((ratio * 100).toInt()),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 11,
@@ -335,8 +333,8 @@ class _SummaryCard extends StatelessWidget {
           // Remaining
           Text(
             isOver
-                ? 'Over by $currency ${_fmt(totalSpent - totalBudget)}'
-                : '$currency ${_fmt(remaining)} remaining',
+                ? AppLocalizations.of(context)!.overBy(currency, _fmt(totalSpent - totalBudget))
+                : AppLocalizations.of(context)!.amountRemaining(currency, _fmt(remaining)),
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.75),
               fontSize: 12,
@@ -367,13 +365,13 @@ class _StatusChips extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _chip(Icons.error_rounded, '$overCount Over', const Color(0xFFDC2626),
+        _chip(Icons.error_rounded, '${overCount} ${AppLocalizations.of(context)!.overStatus}', const Color(0xFFDC2626),
             const Color(0xFFFEF2F2)),
         const SizedBox(width: 8),
-        _chip(Icons.warning_rounded, '$nearCount Near', const Color(0xFFD97706),
+        _chip(Icons.warning_rounded, '${nearCount} ${AppLocalizations.of(context)!.nearStatus}', const Color(0xFFD97706),
             const Color(0xFFFFFBEB)),
         const SizedBox(width: 8),
-        _chip(Icons.check_circle_rounded, '$safeCount Safe',
+        _chip(Icons.check_circle_rounded, '${safeCount} ${AppLocalizations.of(context)!.safeStatus}',
             const Color(0xFF16A34A), const Color(0xFFF0FDF4)),
       ],
     );
@@ -466,7 +464,7 @@ class _BudgetCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          item.category.name,
+                          item.category.localizedName(AppLocalizations.of(context)!),
                           style: AppTypography.labelMedium.copyWith(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w700,
@@ -499,10 +497,10 @@ class _BudgetCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         item.isOver
-                            ? 'Over'
+                            ? AppLocalizations.of(context)!.overStatus
                             : item.isNear
-                                ? 'Near limit'
-                                : 'On track',
+                                ? AppLocalizations.of(context)!.nearLimitStatus
+                                : AppLocalizations.of(context)!.onTrackStatus,
                         style: TextStyle(
                           color: item.statusColor,
                           fontSize: 10,
@@ -532,7 +530,7 @@ class _BudgetCard extends StatelessWidget {
                         size: 13, color: item.statusColor),
                     const SizedBox(width: 4),
                     Text(
-                      'Over by $currency ${_fmt(item.spent - item.budget)}',
+                      AppLocalizations.of(context)!.overBy(currency, _fmt(item.spent - item.budget)),
                       style: TextStyle(
                         color: item.statusColor,
                         fontSize: 11,

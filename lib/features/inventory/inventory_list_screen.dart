@@ -22,6 +22,7 @@ import '../shopify/providers/shopify_connection_provider.dart';
 import '../shopify/providers/shopify_sync_provider.dart';
 import '../../core/navigation/app_router.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 // Persistent filter state — survives navigation via Notifier providers
 class _TabNotifier extends Notifier<int> {
@@ -56,6 +57,7 @@ class InventoryListScreen extends ConsumerStatefulWidget {
 
 class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
     with WidgetsBindingObserver {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   // Filter state persisted via providers (survives navigation)
   int get _selectedFilter => ref.read(_inventoryTabProvider);
   set _selectedFilter(int v) => ref.read(_inventoryTabProvider.notifier).set(v);
@@ -365,7 +367,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
             color: AppColors.primaryNavy,
           ),
           Text(
-            'Inventory',
+            l10n.inventoryTitle,
             style: AppTypography.h2.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
@@ -493,7 +495,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Sync inventory with Shopify',
+                    l10n.syncInventoryWithShopify,
                     style: AppTypography.labelSmall.copyWith(
                       color: AppColors.shopifyPurple,
                       fontWeight: FontWeight.w600,
@@ -522,7 +524,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
           });
         },
         decoration: InputDecoration(
-          hintText: 'Search products, SKU...',
+          hintText: l10n.searchProductsSku,
           hintStyle: AppTypography.bodySmall
               .copyWith(color: AppColors.textTertiary),
           prefixIcon:
@@ -602,14 +604,14 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '$missingCount product${missingCount == 1 ? '' : 's'} missing cost',
+                      l10n.productsMissingCost(missingCount),
                       style: AppTypography.labelSmall.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
-                      'Tap to record cost prices',
+                      l10n.tapToRecordCostPrices,
                       style: AppTypography.caption.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -637,7 +639,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
         children: [
           _QuickActionButton(
             icon: Icons.add_rounded,
-            label: _isMaterialsView ? 'Add Material' : 'Add Product',
+            label: _isMaterialsView ? l10n.addMaterial : l10n.addProduct,
             isPrimary: true,
             color: _isMaterialsView ? const Color(0xFF795548) : null,
             onTap: () {
@@ -645,6 +647,13 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
               if (_isMaterialsView) {
                 context.pushNamed("AddMaterialScreen");
               } else {
+                final tier = ref.read(tierProvider);
+                final limit = tier.productLimit;
+                final products = ref.read(inventoryProvider).value ?? [];
+                if (limit != null && products.where((p) => !p.isMaterial).length >= limit) {
+                  _showProductLimitDialog();
+                  return;
+                }
                 context.pushNamed("AddProductScreen");
               }
             },
@@ -652,19 +661,19 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
           const SizedBox(width: 10),
           _QuickActionButton(
             icon: Icons.inventory_2_rounded,
-            label: 'Add Stock',
+            label: l10n.addStock,
             onTap: () {
               HapticFeedback.lightImpact();
-              _showStockActionSheet(context, ref, 'Add Stock', 'Restock', _isMaterialsView);
+              _showStockActionSheet(context, ref, l10n.addStock, 'Restock', _isMaterialsView);
             },
           ),
           const SizedBox(width: 10),
           _QuickActionButton(
             icon: Icons.tune_rounded,
-            label: 'Adjust Stock',
+            label: l10n.adjustStock,
             onTap: () {
               HapticFeedback.lightImpact();
-              _showStockActionSheet(context, ref, 'Adjust Stock', 'Correction', _isMaterialsView);
+              _showStockActionSheet(context, ref, l10n.adjustStock, 'Correction', _isMaterialsView);
             },
           ),
         ],
@@ -689,10 +698,10 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
         child: Row(
           children: [
             Expanded(
-              child: _toggleOption('Products', false),
+              child: _toggleOption(l10n.products, false),
             ),
             Expanded(
-              child: _toggleOption('Raw Materials', true),
+              child: _toggleOption(l10n.rawMaterials, true),
             ),
           ],
         ),
@@ -738,9 +747,9 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
   // ═══════════════════════════════════════════════════
   Widget _buildFilterChips(int total, int lowStock, int outOfStock) {
     final chips = [
-      _FilterChipData('All ($total)', 0),
-      _FilterChipData('Low stock ($lowStock)', 1),
-      _FilterChipData('Out of stock ($outOfStock)', 2),
+      _FilterChipData(l10n.allCount(total), 0),
+      _FilterChipData(l10n.lowStockCount(lowStock), 1),
+      _FilterChipData(l10n.outOfStockCount(outOfStock), 2),
     ];
 
     return SingleChildScrollView(
@@ -839,16 +848,16 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
             const SizedBox(height: 16),
             Text(
               hasSearch || hasFilters
-                  ? 'No products match your search'
-                  : 'No products found',
+                  ? l10n.noProductsMatchSearch
+                  : l10n.noProductsFound,
               style: AppTypography.labelMedium
                   .copyWith(color: AppColors.textTertiary),
             ),
             const SizedBox(height: 6),
             Text(
               hasSearch || hasFilters
-                  ? 'Try changing your search or filters'
-                  : 'Add your first product to get started',
+                  ? l10n.tryChangingSearchOrFilters
+                  : l10n.addFirstProductToGetStarted,
               style: AppTypography.captionSmall
                   .copyWith(color: AppColors.textTertiary, fontSize: 11),
             ),
@@ -863,7 +872,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                   });
                 },
                 icon: const Icon(Icons.clear_rounded, size: 16),
-                label: const Text('Clear filters'),
+                label: Text(l10n.clearFilters),
               ),
             ],
           ],
@@ -888,7 +897,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       if (bytes == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not read file'), backgroundColor: AppColors.danger),
+            SnackBar(content: Text(l10n.couldNotReadFile), backgroundColor: AppColors.danger),
           );
         }
         return;
@@ -898,7 +907,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       if (bytes.length > 5 * 1024 * 1024) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('CSV file exceeds 5 MB limit'), backgroundColor: AppColors.danger),
+            SnackBar(content: Text(l10n.csvExceeds5Mb), backgroundColor: AppColors.danger),
           );
         }
         return;
@@ -919,7 +928,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       if (rows.length < 2) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('CSV file is empty or has no data rows'), backgroundColor: AppColors.danger),
+            SnackBar(content: Text(l10n.csvEmptyOrNoData), backgroundColor: AppColors.danger),
           );
         }
         return;
@@ -941,7 +950,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       if (iName < 0) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('CSV must have a "Name" column'), backgroundColor: AppColors.danger),
+            SnackBar(content: Text(l10n.csvMustHaveNameColumn), backgroundColor: AppColors.danger),
           );
         }
         return;
@@ -1018,7 +1027,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
           id: prodId,
           userId: uid,
           name: name,
-          category: cellStr(first, iCategory).isNotEmpty ? cellStr(first, iCategory) : 'Imported',
+          category: cellStr(first, iCategory).isNotEmpty ? cellStr(first, iCategory) : l10n.importedCategory,
           supplier: cellStr(first, iSupplier),
           unitOfMeasure: cellStr(first, iUnit).isNotEmpty ? cellStr(first, iUnit) : defaultUnit,
           variants: variants,
@@ -1035,8 +1044,8 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
           SnackBar(
             content: Text(
               skippedDuplicates > 0
-                  ? 'Imported $imported product(s), skipped $skippedDuplicates duplicate(s)'
-                  : 'Imported $imported product(s) from CSV',
+                  ? l10n.importedSkippedDuplicates(imported, skippedDuplicates)
+                  : l10n.importedProductsFromCsv(imported),
             ),
             backgroundColor: AppColors.success,
           ),
@@ -1046,7 +1055,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       debugPrint('CSV import error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to import CSV. Check file format.'), backgroundColor: AppColors.danger),
+          SnackBar(content: Text(l10n.failedToImportCsv), backgroundColor: AppColors.danger),
         );
       }
     }
@@ -1080,7 +1089,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Inventory Options',
+                      l10n.inventoryOptions,
                       style: AppTypography.h3.copyWith(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w800,
@@ -1106,7 +1115,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                     _overflowItem(
                       ctx,
                       icon: Icons.upload_file_rounded,
-                      label: 'Import from CSV',
+                      label: l10n.importFromCsv,
                       onTap: () {
                         Navigator.pop(ctx);
                         HapticFeedback.lightImpact();
@@ -1116,7 +1125,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                     _overflowItem(
                       ctx,
                       icon: Icons.download_rounded,
-                      label: 'Export Inventory',
+                      label: l10n.exportInventory,
                       onTap: () async {
                         Navigator.pop(ctx);
                         HapticFeedback.lightImpact();
@@ -1131,7 +1140,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                         } catch (e) {
                           debugPrint('Inventory export error: $e');
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Something went wrong. Please try again.'), backgroundColor: AppColors.danger));
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.somethingWentWrong), backgroundColor: AppColors.danger));
                           }
                         }
                       },
@@ -1142,7 +1151,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                       _overflowItem(
                         ctx,
                         icon: Icons.storefront_rounded,
-                        label: 'Import from Shopify',
+                        label: l10n.importFromShopify,
                         onTap: () {
                           Navigator.pop(ctx);
                           HapticFeedback.lightImpact();
@@ -1156,7 +1165,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                       _overflowItem(
                         ctx,
                         icon: Icons.sync_rounded,
-                        label: 'Sync Inventory',
+                        label: l10n.syncInventory,
                         onTap: () {
                           Navigator.pop(ctx);
                           HapticFeedback.lightImpact();
@@ -1166,7 +1175,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                     _overflowItem(
                       ctx,
                       icon: Icons.settings_rounded,
-                      label: 'Inventory Settings',
+                      label: l10n.inventorySettings,
                       onTap: () {
                         Navigator.pop(ctx);
                         HapticFeedback.lightImpact();
@@ -1228,6 +1237,51 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
     );
   }
 
+  void _showProductLimitDialog() {
+    final limit = ref.read(tierProvider).productLimit ?? 20;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: Container(
+          width: 56, height: 56,
+          decoration: BoxDecoration(
+            color: AppColors.accentOrange.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.inventory_2_rounded, color: AppColors.accentOrange, size: 28),
+        ),
+        title: Text(l10n.productLimitReachedTitle, style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
+        content: Text(
+          l10n.productLimitReachedBody(limit),
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.cancel),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.push('/profile/subscription');
+            },
+            icon: const Icon(Icons.rocket_launch_rounded, size: 16),
+            label: Text(l10n.upgradeToGrowth),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accentOrange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ═══════════════════════════════════════════════════
   void _showStockActionSheet(
     BuildContext context,
@@ -1245,11 +1299,21 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
     String? selectedVariantId;
     int quantity = 0;
     String reason = defaultReason;
-    final bool isAddStock = title == 'Add Stock';
+    final l10n = AppLocalizations.of(context)!;
+    final bool isAddStock = title == l10n.addStock;
 
     final reasons = isAddStock
         ? ['Restock', 'Return', 'Correction']
         : ['Correction', 'Damage', 'Loss', 'Return', 'Sale'];
+
+    final reasonLabels = {
+      'Restock': l10n.restockReason2,
+      'Return': l10n.returnReason,
+      'Correction': l10n.correctionReason,
+      'Damage': l10n.damageReason,
+      'Loss': l10n.lossReason,
+      'Sale': l10n.saleReasonLabel,
+    };
 
     final quantityCtrl = TextEditingController(text: '0');
     final notifier = ref.read(inventoryProvider.notifier);
@@ -1325,7 +1389,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
 
                 // Product picker
                 Text(
-                  'SELECT PRODUCT',
+                  l10n.selectProductUpper,
                   style: AppTypography.captionSmall.copyWith(
                     color: AppColors.textTertiary,
                     fontWeight: FontWeight.w600,
@@ -1347,7 +1411,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                     child: DropdownButton<String>(
                       value: selectedProductId,
                       hint: Text(
-                        'Choose a raw material...',
+                        l10n.chooseARawMaterial,
                         style: AppTypography.bodySmall
                             .copyWith(color: AppColors.textTertiary),
                       ),
@@ -1389,7 +1453,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                     materials.firstWhere((p) => p.id == selectedProductId).variants.length > 1) ...[
                   const SizedBox(height: 12),
                   Text(
-                    'SELECT VARIANT',
+                    l10n.selectVariantUpper,
                     style: AppTypography.captionSmall.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w600,
@@ -1411,7 +1475,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                       child: DropdownButton<String>(
                         value: selectedVariantId,
                         hint: Text(
-                          'Choose a variant...',
+                          l10n.chooseAVariant,
                           style: AppTypography.bodySmall
                               .copyWith(color: AppColors.textTertiary),
                         ),
@@ -1424,7 +1488,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                             .map((v) => DropdownMenuItem(
                                   value: v.id,
                                   child: Text(
-                                    '${v.displayName}  (${v.currentStock})',
+                                    '${v.localizedDisplayName(l10n)}  (${v.currentStock})',
                                     style: AppTypography.bodySmall.copyWith(
                                         color: AppColors.textPrimary),
                                   ),
@@ -1440,7 +1504,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
 
                 // Quantity stepper
                 Text(
-                  'QUANTITY',
+                  l10n.quantityLabel,
                   style: AppTypography.captionSmall.copyWith(
                     color: AppColors.textTertiary,
                     fontWeight: FontWeight.w600,
@@ -1555,7 +1619,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
 
                 // Reason picker
                 Text(
-                  'REASON',
+                  l10n.reasonLabel,
                   style: AppTypography.captionSmall.copyWith(
                     color: AppColors.textTertiary,
                     fontWeight: FontWeight.w600,
@@ -1583,7 +1647,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                           .map((r) => DropdownMenuItem(
                                 value: r,
                                 child: Text(
-                                  r,
+                                  reasonLabels[r] ?? r,
                                   style: AppTypography.bodySmall.copyWith(
                                       color: AppColors.textPrimary),
                                 ),
@@ -1629,7 +1693,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                     ),
                     child: Text(
                       selectedProductId != null && quantity != 0
-                          ? '$title ($quantity units)'
+                          ? l10n.stockActionUnits(title, quantity)
                           : title,
                       style: AppTypography.labelMedium.copyWith(
                         color: Colors.white,
@@ -1666,6 +1730,7 @@ class _StockStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1687,7 +1752,7 @@ class _StockStatusCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Stock Status',
+                l10n.stockStatus,
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -1702,7 +1767,7 @@ class _StockStatusCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(50),
                 ),
                 child: Text(
-                  'Real-time',
+                  l10n.realTimeLabel,
                   style: AppTypography.captionSmall.copyWith(
                     color: AppColors.textTertiary,
                     fontWeight: FontWeight.w600,
@@ -1717,19 +1782,19 @@ class _StockStatusCard extends StatelessWidget {
             children: [
               _StatusColumn(
                 count: inStock,
-                label: 'In Stock',
+                label: l10n.inStock,
                 color: AppColors.success,
               ),
               _divider(),
               _StatusColumn(
                 count: lowStock,
-                label: 'Low Stock',
+                label: l10n.lowStock,
                 color: AppColors.warning,
               ),
               _divider(),
               _StatusColumn(
                 count: outOfStock,
-                label: 'Out Stock',
+                label: l10n.outStock,
                 color: AppColors.danger,
               ),
             ],
@@ -1804,6 +1869,7 @@ class _StockValueCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1856,7 +1922,7 @@ class _StockValueCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Inventory Cost Value',
+                    l10n.inventoryCostValue,
                     style: AppTypography.bodySmall.copyWith(
                       color: Colors.white.withValues(alpha: 0.75),
                       fontWeight: FontWeight.w500,
@@ -1881,7 +1947,7 @@ class _StockValueCard extends ConsumerWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Retail: ${ref.watch(appSettingsProvider).currency} ${_formatNumber(sellingValue)}',
+                        l10n.retailWithValue(ref.watch(appSettingsProvider).currency, _formatNumber(sellingValue)),
                         style: AppTypography.captionSmall.copyWith(
                           color: Colors.white.withValues(alpha: 0.6),
                           fontWeight: FontWeight.w500,
@@ -2001,6 +2067,7 @@ class _ProductCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final isOutOfStock = product.status == StockStatus.outOfStock;
 
     return Container(
@@ -2088,7 +2155,7 @@ class _ProductCard extends ConsumerWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'SKU: ${product.sku}${product.category.isNotEmpty && !{'shopify import', 'shopify_import'}.contains(product.category.toLowerCase()) ? ' • ${product.category}' : ''}',
+                              '${l10n.skuLabel(product.sku)}${product.category.isNotEmpty && !{'shopify import', 'shopify_import'}.contains(product.category.toLowerCase()) ? ' • ${product.category}' : ''}',
                               style: AppTypography.captionSmall.copyWith(
                                 color: AppColors.textTertiary,
                                 fontSize: 11,
@@ -2099,7 +2166,7 @@ class _ProductCard extends ConsumerWidget {
                               children: [
                                 if (product.supplier.isNotEmpty && product.supplier.toLowerCase() != 'shopify')
                                   Text(
-                                    'Supplier: ${product.supplier}',
+                                    l10n.supplierInfoLabel(product.supplier),
                                     style: AppTypography.captionSmall.copyWith(
                                       color: AppColors.textTertiary.withValues(alpha: 0.7),
                                       fontSize: 10,
@@ -2114,7 +2181,7 @@ class _ProductCard extends ConsumerWidget {
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
-                                      'Shopify',
+                                      l10n.shopifyBadge,
                                       style: AppTypography.captionSmall.copyWith(
                                         color: const Color(0xFF5E8E3E),
                                         fontSize: 9,
@@ -2145,7 +2212,7 @@ class _ProductCard extends ConsumerWidget {
                       _StatusBadge(status: product.status),
                       Text(
                         product.isMaterial
-                            ? 'Cost: ${ref.watch(appSettingsProvider).currency} ${product.costPrice.toStringAsFixed(2)}'
+                            ? l10n.costLabel(ref.watch(appSettingsProvider).currency, product.costPrice.toStringAsFixed(2))
                             : '${ref.watch(appSettingsProvider).currency} ${product.sellingPrice.toStringAsFixed(2)}',
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textTertiary,
@@ -2192,9 +2259,9 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      StockStatus.inStock => ('In stock', AppColors.success),
-      StockStatus.lowStock => ('Low stock', AppColors.warning),
-      StockStatus.outOfStock => ('Out of stock', AppColors.danger),
+      StockStatus.inStock => (AppLocalizations.of(context)!.inStock, AppColors.success),
+      StockStatus.lowStock => (AppLocalizations.of(context)!.lowStock, AppColors.warning),
+      StockStatus.outOfStock => (AppLocalizations.of(context)!.outOfStock, AppColors.danger),
     };
 
     return Container(

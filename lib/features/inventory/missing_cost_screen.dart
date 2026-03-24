@@ -130,7 +130,7 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
       if (savedCount > 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text( 'Updated $savedCount product${savedCount > 1 ? 's' : ''}'),
+            content: Text(l10n.productsUpdatedCount(savedCount)),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -178,7 +178,7 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
                     )
                   : const Icon(Icons.save_rounded, color: Colors.white),
               label: Text(
-                 'Save All',
+                 l10n.saveAll,
                 style: AppTypography.labelMedium
                     .copyWith(color: Colors.white, fontWeight: FontWeight.w700),
               ),
@@ -212,14 +212,14 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                   'Missing Costs',
+                   l10n.missingCosts,
                   style: AppTypography.h2.copyWith(
                     color: AppColors.primaryNavy,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 Text(
-                  '${_entries.length} product${_entries.length == 1 ? '' : 's'} need pricing',
+                  l10n.productsNeedPricing(_entries.length),
                   style: AppTypography.caption.copyWith(
                     color: AppColors.textSecondary,
                   ),
@@ -251,7 +251,7 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-             'All products have costs!',
+             l10n.allProductsHaveCosts,
             style: AppTypography.h3.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -259,7 +259,7 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-             'Every product and variant has a recorded cost price.',
+             l10n.allProductsHaveCostsDesc,
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textSecondary,
             ),
@@ -317,7 +317,7 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
                       ),
                       Text(
                         product.hasVariants
-                            ? '${entry.variantRows.length} variant${entry.variantRows.length == 1 ? '' : 's'} missing cost'
+                            ? l10n.variantsMissingCost(entry.variantRows.length)
                             : l10n.noCostRecorded,
                         style: AppTypography.caption.copyWith(
                           color: AppColors.warning,
@@ -336,7 +336,7 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                       'Price: $currency ${fmt.format(product.sellingPrice)}',
+                       l10n.priceLabel(currency, fmt.format(product.sellingPrice)),
                       style: AppTypography.caption.copyWith(
                         color: AppColors.success,
                         fontWeight: FontWeight.w600,
@@ -381,7 +381,7 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                         'Same cost for all variants',
+                         l10n.sameCostForAllVariants,
                         style: AppTypography.labelSmall.copyWith(
                           color: entry.applyToAll
                               ? AppColors.primaryNavy
@@ -416,8 +416,8 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
                   child: _costField(
                     controller: row.costCtrl,
                     label: isMultiVariant
-                        ? row.variant.displayName
-                        :  'Cost Price',
+                        ? row.variant.localizedDisplayName(l10n)
+                        : l10n.costPrice,
                     currency: currency,
                   ),
                 )),

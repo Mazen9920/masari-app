@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../core/providers/app_settings_provider.dart';
 import '../models/recurring_transaction_model.dart';
 import '../providers/scheduled_transactions_provider.dart';
 import '../widgets/add_recurring_sheet.dart';
@@ -15,10 +17,12 @@ class ScheduledTransactionsScreen extends ConsumerWidget {
     final transactions = ref.watch(scheduledTransactionsProvider);
     final fmt = NumberFormat('#,##0', 'en');
 
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
-        title: Text('Scheduled Transactions', style: AppTypography.h3),
+        title: Text(l10n.scheduledTransactions, style: AppTypography.h3),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
@@ -29,7 +33,7 @@ class ScheduledTransactionsScreen extends ConsumerWidget {
         ),
       ),
       body: transactions.isEmpty
-          ? _buildEmptyState()
+          ? _buildEmptyState(context)
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: transactions.length,
@@ -43,12 +47,12 @@ class ScheduledTransactionsScreen extends ConsumerWidget {
         onPressed: () => _showAddSheet(context),
         backgroundColor: AppColors.primaryNavy,
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Recurrence'),
+        label: Text(l10n.addRecurrence),
       ),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -56,12 +60,12 @@ class ScheduledTransactionsScreen extends ConsumerWidget {
           Icon(Icons.update_rounded, size: 64, color: AppColors.textTertiary.withValues(alpha: 0.5)),
           const SizedBox(height: 16),
           Text(
-            'No Scheduled Transactions',
+            AppLocalizations.of(context)!.noScheduledTransactions,
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 8),
           Text(
-            'Add rent, salaries, or subscriptions\nto automate your cash flow forecast.',
+            AppLocalizations.of(context)!.scheduledTransactionsEmpty,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: AppColors.textTertiary),
           ),
@@ -120,7 +124,7 @@ class ScheduledTransactionsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${t.frequency.name.toUpperCase()} • Next: ${DateFormat('MMM d').format(t.nextDueDate)}',
+                      '${t.frequency.name.toUpperCase()} • ${AppLocalizations.of(context)!.nextLabel} ${DateFormat('MMM d').format(t.nextDueDate)}',
                       style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
                     ),
                   ],
@@ -135,7 +139,7 @@ class ScheduledTransactionsScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                    Text(
-                    '${t.isIncome ? '+' : '-'} EGP ${fmt.format(t.amount)}',
+                    '${t.isIncome ? '+' : '-'} ${ref.watch(appSettingsProvider).currency} ${fmt.format(t.amount)}',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -150,7 +154,7 @@ class ScheduledTransactionsScreen extends ConsumerWidget {
                         color: Colors.grey.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text('PAUSED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                      child: Text(AppLocalizations.of(context)!.pausedBadge, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
                     )
                    else
                     SizedBox(

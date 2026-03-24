@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
@@ -10,6 +11,7 @@ import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/image_upload_service.dart';
 import '../../shared/models/product_model.dart';
+import '../../shared/models/category_data.dart';
 import '../../shared/widgets/image_source_picker.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
@@ -20,6 +22,8 @@ class AddProductScreen extends ConsumerStatefulWidget {
 }
 
 class _AddProductScreenState extends ConsumerState<AddProductScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
   final _nameController = TextEditingController();
   final _skuController = TextEditingController();
   final _costController = TextEditingController();
@@ -49,6 +53,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     'pcs',
     'kg',
     'liters',
+    'meters',
     'boxes',
   ];
 
@@ -65,7 +70,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   void initState() {
     super.initState();
     final settings = ref.read(appSettingsProvider);
-    _selectedUom = settings.defaultUnit;
+    _selectedUom = _uomOptions.contains(settings.defaultUnit) ? settings.defaultUnit : 'pcs';
     _reorderController.text = settings.alertThreshold.toString();
   }
 
@@ -159,8 +164,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       final stock = int.tryParse(_stockController.text) ?? 0;
       if (cost < 0 || price < 0 || stock < 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cost, price, and stock must not be negative'),
+          SnackBar(
+            content: Text(l10n.costPriceStockNotNegative),
             backgroundColor: AppColors.danger,
           ),
         );
@@ -174,7 +179,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         if (cost < 0 || price < 0 || stock < 0) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${row.displayName}: cost, price, and stock must not be negative'),
+              content: Text(l10n.variantNegativeError(row.displayName)),
               backgroundColor: AppColors.danger,
             ),
           );
@@ -203,21 +208,22 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Cost exceeds selling price'),
-          content: const Text(
-            'One or more variants have a cost price higher than '
-            'the selling price. This means you would sell at a loss. '
-            'Continue anyway?',
+          title: Text(l10n.costExceedsSellingPrice),
+          content: Text(
+            l10n.costExceedsDesc(
+              _costController.text,
+              _priceController.text,
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l10n.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(true),
               style: TextButton.styleFrom(foregroundColor: Colors.orange),
-              child: const Text('Save Anyway'),
+              child: Text(l10n.saveAnyway),
             ),
           ],
         ),
@@ -237,16 +243,16 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         final proceed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Duplicate SKU'),
-            content: Text('SKU "$skuToCheck" is already used by another product. Save anyway?'),
+            title: Text(l10n.duplicateSku),
+            content: Text(l10n.duplicateSkuDesc),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
+                child: Text(l10n.cancel),
               ),
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Save Anyway'),
+                child: Text(l10n.saveAnyway),
               ),
             ],
           ),
@@ -316,7 +322,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       id: productId,
       userId: '', // set by provider/repository
       name: _nameController.text.trim(),
-      category: _selectedCategory.isEmpty ? 'Uncategorized' : _selectedCategory,
+      category: _selectedCategory.isEmpty ? l10n.uncategorized : _selectedCategory,
       supplier: _selectedSupplier,
       unitOfMeasure: _selectedUom,
       imageUrl: imageUrl,
@@ -329,7 +335,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.error ?? 'Failed to save product'),
+            content: Text(result.error ?? l10n.failedToSaveProduct),
             backgroundColor: AppColors.danger,
           ),
         );
@@ -356,7 +362,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
         ),
         title: Text(
-          'Add New Product',
+          l10n.addNewProduct,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -369,7 +375,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             child: TextButton(
               onPressed: _canSave ? _save : null,
               child: Text(
-                'Save',
+                l10n.save,
                 style: AppTypography.labelMedium.copyWith(
                   color: _canSave
                       ? AppColors.primaryNavy
@@ -391,7 +397,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 children: [
                   // Subtitle
                   Text(
-                    'Basics first — you can add details later.',
+                    l10n.basicsFirst,
                     style: AppTypography.bodySmall
                         .copyWith(color: AppColors.textTertiary),
                   ),
@@ -514,7 +520,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          hasImage ? 'Change Photo' : 'Upload Product Photo',
+          hasImage ? l10n.changePhoto : l10n.uploadProductPhoto,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.primaryNavy,
             fontWeight: FontWeight.w600,
@@ -540,8 +546,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           ),
           child: Row(
             children: [
-              _typeToggle('Physical', _isPhysical),
-              _typeToggle('Service', !_isPhysical),
+              _typeToggle(l10n.physical, _isPhysical),
+              _typeToggle(l10n.service, !_isPhysical),
             ],
           ),
         ),
@@ -550,8 +556,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         // Product name
         _inputField(
           controller: _nameController,
-          label: 'Product Name',
-          hint: 'e.g. Figure-8 Straps',
+          label: l10n.productName,
+          hint: l10n.egFigure8Straps,
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 14),
@@ -561,7 +567,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'SKU',
+              l10n.skuUpperOnly,
               style: _labelStyle,
             ),
             GestureDetector(
@@ -576,7 +582,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                   ),
                 ),
                 child: Text(
-                  'Auto-generate',
+                  l10n.autoGenerate,
                   style: AppTypography.captionSmall.copyWith(
                     color: AppColors.primaryNavy,
                     fontWeight: FontWeight.w700,
@@ -588,22 +594,22 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           ],
         ),
         const SizedBox(height: 6),
-        _textField(_skuController, 'SKU-123456'),
+        _textField(_skuController, l10n.skuPlaceholder),
         const SizedBox(height: 14),
 
         // Category
         _inputField(
-          label: 'Category',
+          label: l10n.category,
           child: Builder(
             builder: (_) {
               final categoriesAsync = ref.watch(categoriesProvider);
               final categoryNames = categoriesAsync.value
-                      ?.map((c) => c.name)
+                      ?.map((c) => c.localizedName(AppLocalizations.of(context)!))
                       .toList() ??
                   [];
               return _dropdown(
                 value: _selectedCategory.isEmpty ? null : _selectedCategory,
-                hint: 'Select a category',
+                hint: l10n.selectACategory,
                 items: categoryNames,
                 onChanged: (v) => setState(() => _selectedCategory = v ?? ''),
               );
@@ -620,7 +626,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   Widget _buildSupplierSection() {
     return _card(
       children: [
-        Text('SUPPLIER (OPTIONAL)', style: _labelStyle),
+        Text(l10n.supplierOptional, style: _labelStyle),
         const SizedBox(height: 8),
         GestureDetector(
           onTap: _showSupplierPicker,
@@ -652,7 +658,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 Expanded(
                   child: Text(
                     _selectedSupplier.isEmpty
-                        ? 'Choose supplier'
+                        ? l10n.chooseSupplier
                         : _selectedSupplier,
                     style: AppTypography.labelMedium.copyWith(
                       color: _selectedSupplier.isEmpty
@@ -687,7 +693,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     if (suppliers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('No suppliers found. Add one first.'),
+          content: Text(l10n.noSuppliersYetLabel),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -713,7 +719,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Select Supplier',
+                      l10n.selectSupplier,
                       style: AppTypography.h3.copyWith(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w800,
@@ -787,7 +793,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             Expanded(
               child: _inputField(
                 controller: _costController,
-                label: 'Cost (per unit)',
+                label: l10n.costPricePerUnit,
                 hint: '0.00',
                 prefix: currency,
                 keyboardType: TextInputType.number,
@@ -797,7 +803,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             Expanded(
               child: _inputField(
                 controller: _priceController,
-                label: 'Selling Price',
+                label: l10n.sellingPrice,
                 hint: '0.00',
                 prefix: currency,
                 keyboardType: TextInputType.number,
@@ -812,7 +818,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 size: 12, color: AppColors.textTertiary),
             const SizedBox(width: 4),
             Text(
-              'Profit margin will be calculated automatically.',
+              l10n.profitMarginAuto,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
                 fontSize: 10,
@@ -834,7 +840,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('PRODUCT VARIANTS', style: _labelStyle),
+            Text(l10n.productVariants, style: _labelStyle),
             if (_options.length < 3)
               GestureDetector(
                 onTap: _showAddOptionDialog,
@@ -851,7 +857,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       Icon(Icons.add_rounded, size: 14, color: AppColors.primaryNavy),
                       const SizedBox(width: 4),
                       Text(
-                        'Add Option',
+                        l10n.addOption,
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.primaryNavy,
                           fontWeight: FontWeight.w700,
@@ -867,7 +873,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         if (_options.isEmpty) ...[
           const SizedBox(height: 8),
           Text(
-            'Add options like Color, Size to create variants.',
+            l10n.addOptionsHint,
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textTertiary,
               fontSize: 11,
@@ -943,7 +949,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                             children: [
                               Icon(Icons.add, size: 14, color: AppColors.accentOrange),
                               const SizedBox(width: 4),
-                              Text('Add', style: TextStyle(color: AppColors.accentOrange, fontSize: 12, fontWeight: FontWeight.w600)),
+                              Text(l10n.add, style: TextStyle(color: AppColors.accentOrange, fontSize: 12, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -962,7 +968,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               Icon(Icons.style_rounded, size: 16, color: AppColors.accentOrange),
               const SizedBox(width: 6),
               Text(
-                '${_variantRows.length} variant${_variantRows.length == 1 ? '' : 's'} generated',
+                l10n.variantsGenerated(_variantRows.length),
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -985,18 +991,18 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               children: [
                 Text(row.displayName, style: AppTypography.labelMedium.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
-                _inputField(label: 'SKU', controller: row.skuCtrl),
+                _inputField(label: l10n.skuUpperOnly, controller: row.skuCtrl),
                 const SizedBox(height: 8),
                 Row(children: [
-                  Expanded(child: _inputField(label: 'COST PRICE', controller: row.costCtrl, prefix: currency, keyboardType: TextInputType.number)),
+                  Expanded(child: _inputField(label: l10n.costPrice, controller: row.costCtrl, prefix: currency, keyboardType: TextInputType.number)),
                   const SizedBox(width: 10),
-                  Expanded(child: _inputField(label: 'SELLING PRICE', controller: row.priceCtrl, prefix: currency, keyboardType: TextInputType.number)),
+                  Expanded(child: _inputField(label: l10n.sellingPrice, controller: row.priceCtrl, prefix: currency, keyboardType: TextInputType.number)),
                 ]),
                 const SizedBox(height: 8),
                 Row(children: [
-                  Expanded(child: _inputField(label: 'START STOCK', controller: row.stockCtrl, keyboardType: TextInputType.number)),
+                  Expanded(child: _inputField(label: l10n.startStock, controller: row.stockCtrl, keyboardType: TextInputType.number)),
                   const SizedBox(width: 10),
-                  Expanded(child: _inputField(label: 'REORDER POINT', controller: row.reorderCtrl, keyboardType: TextInputType.number)),
+                  Expanded(child: _inputField(label: l10n.reorderPoint, controller: row.reorderCtrl, keyboardType: TextInputType.number)),
                 ]),
               ],
             ),
@@ -1013,13 +1019,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Add Option', style: AppTypography.h3),
+        title: Text(l10n.addOption, style: AppTypography.h3),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
-            hintText: 'e.g. Color, Size, Material',
+            hintText: l10n.optionNameHint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
@@ -1027,7 +1033,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: AppColors.textTertiary)),
+            child: Text(l10n.cancel, style: TextStyle(color: AppColors.textTertiary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -1043,7 +1049,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               }
               Navigator.pop(ctx);
             },
-            child: const Text('Add', style: TextStyle(color: Colors.white)),
+            child: Text(l10n.add, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1057,13 +1063,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Add ${_options[optionIndex].name} Value', style: AppTypography.h3),
+        title: Text(l10n.addValueTitle(_options[optionIndex].name), style: AppTypography.h3),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
-            hintText: 'e.g. Red, Large, Cotton',
+            hintText: l10n.valueHint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
@@ -1071,7 +1077,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: AppColors.textTertiary)),
+            child: Text(l10n.cancel, style: TextStyle(color: AppColors.textTertiary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -1091,7 +1097,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               }
               Navigator.pop(ctx);
             },
-            child: const Text('Add', style: TextStyle(color: Colors.white)),
+            child: Text(l10n.add, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1105,10 +1111,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     return _card(
       children: [
         _inputField(
-          label: 'Unit of Measure',
+          label: l10n.unitOfMeasure,
           child: _dropdown(
             value: _selectedUom,
-            hint: 'Select',
+            hint: l10n.selectUom,
             items: _uomOptions,
             onChanged: (v) => setState(() => _selectedUom = v ?? 'pcs'),
           ),
@@ -1119,7 +1125,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             Expanded(
               child: _inputField(
                 controller: _stockController,
-                label: 'Starting Stock',
+                label: l10n.startingStockLabel,
                 hint: '0',
                 keyboardType: TextInputType.number,
               ),
@@ -1128,7 +1134,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
             Expanded(
               child: _inputField(
                 controller: _reorderController,
-                label: 'Reorder Point',
+                label: l10n.reorderPoint,
                 hint: '10',
                 keyboardType: TextInputType.number,
               ),
@@ -1145,13 +1151,13 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   Widget _buildRawMaterialSection() {
     return _card(
       children: [
-        Text('RAW MATERIALS (OPTIONAL)', style: _labelStyle),
+        Text(l10n.rawMaterialsOptional, style: _labelStyle),
         const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'This is a raw material',
+              l10n.thisIsRawMaterial,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w500,
@@ -1204,12 +1210,12 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                     color: AppColors.borderLight.withValues(alpha: 0.5)),
                 const SizedBox(height: 10),
                 _inputField(
-                  label: 'Select Base Material Type',
+                  label: l10n.selectBaseMaterialType,
                   child: _dropdown(
                     value: _baseMaterialType.isEmpty
                         ? null
                         : _baseMaterialType,
-                    hint: 'Select type...',
+                    hint: l10n.selectType,
                     items: _materialTypes,
                     onChanged: (v) =>
                         setState(() => _baseMaterialType = v ?? ''),
@@ -1218,7 +1224,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 const SizedBox(height: 14),
                 _inputField(
                   controller: _wasteController,
-                  label: 'Waste Percentage estimate',
+                  label: l10n.wastePercentageEstimate,
                   hint: '0',
                   suffix: '%',
                   keyboardType: TextInputType.number,
@@ -1253,7 +1259,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Optional details',
+              l10n.optionalDetails,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w500,
@@ -1314,7 +1320,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                 shadowColor: AppColors.accentOrange.withValues(alpha: 0.3),
               ),
               child: Text(
-                'Save Product',
+                l10n.saveProduct,
                 style: AppTypography.labelMedium.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -1329,7 +1335,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
               // Optionally reset form for another
             },
             child: Text(
-              'Save & Add Another',
+              l10n.saveAndAddAnother,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w500,
@@ -1510,7 +1516,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       child: GestureDetector(
         onTap: () {
           HapticFeedback.lightImpact();
-          setState(() => _isPhysical = label == 'Physical');
+          setState(() => _isPhysical = label == l10n.physical);
         },
         child: AnimatedContainer(
           duration: 200.ms,

@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/purchase_model.dart';
 import '../../shared/models/supplier_model.dart';
 import '../transactions/transactions_list_screen.dart';
@@ -19,6 +20,7 @@ class PurchasesSummaryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(currencyProvider);
     final purchases = ref.watch(purchasesProvider).value ?? [];
     final fmt = NumberFormat('#,##0');
@@ -42,7 +44,7 @@ class PurchasesSummaryScreen extends ConsumerWidget {
         bottom: false,
         child: Column(
           children: [
-            _buildHeader(context),
+            _buildHeader(context, l10n),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -76,7 +78,7 @@ class PurchasesSummaryScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
       decoration: BoxDecoration(
@@ -96,7 +98,7 @@ class PurchasesSummaryScreen extends ConsumerWidget {
           Expanded(
             child: Center(
               child: Text(
-                'Purchases Summary',
+                l10n.purchasesSummary,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -123,6 +125,7 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -173,7 +176,7 @@ class _HeroCard extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.7), size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    'Total Purchases (${DateFormat('MMM').format(DateTime.now())})',
+                    l10n.totalPurchasesMonth(DateFormat('MMM').format(DateTime.now())),
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.8),
                       fontWeight: FontWeight.w500,
@@ -207,7 +210,7 @@ class _HeroCard extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.9), size: 14),
                     const SizedBox(width: 6),
                     Text(
-                      'This month',
+                      l10n.periodThisMonth,
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.9),
                         fontWeight: FontWeight.w500,
@@ -237,12 +240,13 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
-        Expanded(child: _statCard('Items Ordered', totalItems.toDouble(), '',
+        Expanded(child: _statCard(l10n.itemsOrdered, totalItems.toDouble(), '',
             AppColors.primaryNavy, Icons.inventory_2_rounded, fmt, isCurrency: false)),
         const SizedBox(width: 12),
-        Expanded(child: _statCard('Avg. Order', avgOrder, '',
+        Expanded(child: _statCard(l10n.avgOrder, avgOrder, '',
             AppColors.success, Icons.receipt_rounded, fmt, isCurrency: true)),
       ],
     );
@@ -325,6 +329,7 @@ class _TrendsChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     // Compute last 6 months of totals
     final now = DateTime.now();
     final monthLabels = <String>[];
@@ -362,7 +367,7 @@ class _TrendsChart extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Purchase Volume',
+                l10n.purchaseVolume,
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -370,7 +375,7 @@ class _TrendsChart extends StatelessWidget {
                 ),
               ),
               Text(
-                'Last 6 Months',
+                l10n.lastSixMonths,
                 style: TextStyle(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w500,
@@ -445,6 +450,7 @@ class _RecentPurchases extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final suppliers = ref.watch(suppliersProvider).value ?? <Supplier>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -455,7 +461,7 @@ class _RecentPurchases extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Recent Purchases',
+                l10n.recentPurchases,
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -467,9 +473,9 @@ class _RecentPurchases extends ConsumerWidget {
                   HapticFeedback.lightImpact();
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const TransactionsListScreen(
+                      builder: (_) => TransactionsListScreen(
                         showBackButton: true,
-                        pageTitle: 'All Purchases',
+                        pageTitle: l10n.allPurchases,
                         initialFilter: TransactionFilter(
                           type: TransactionType.expense,
                           onlySuppliers: true,
@@ -479,7 +485,7 @@ class _RecentPurchases extends ConsumerWidget {
                   );
                 },
                 child: Text(
-                  'See All',
+                  l10n.seeAllLabel,
                   style: TextStyle(
                     color: AppColors.primaryNavy,
                     fontWeight: FontWeight.w500,
@@ -511,7 +517,7 @@ class _RecentPurchases extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.all(20),
                       child: Text(
-                        'No purchases yet',
+                        l10n.noPurchasesYet,
                         style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
                       ),
                     ),

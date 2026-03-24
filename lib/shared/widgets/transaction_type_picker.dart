@@ -45,7 +45,7 @@ class _PickerBody extends StatelessWidget {
               ),
             ),
             Text(
-               'New Transaction',
+               l10n.newTransaction,
               style: AppTypography.h2.copyWith(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w800,
@@ -54,7 +54,7 @@ class _PickerBody extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-               'What would you like to record?',
+               l10n.whatWouldYouLikeToRecord,
               style: TextStyle(
                 color: AppColors.textTertiary,
                 fontSize: 13,

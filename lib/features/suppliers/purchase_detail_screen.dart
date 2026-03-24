@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_settings_provider.dart';
@@ -70,6 +71,7 @@ class PurchaseDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
       decoration: BoxDecoration(
@@ -89,7 +91,7 @@ class PurchaseDetailScreen extends ConsumerWidget {
           Expanded(
             child: Center(
               child: Text(
-                'Purchase Details',
+                l10n.purchaseDetailsTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -105,14 +107,14 @@ class PurchaseDetailScreen extends ConsumerWidget {
               final p = purchase!;
               final dateFmt = DateFormat('dd MMM yyyy');
               final items = p.items.map((i) => '  • ${i.name} ×${i.qty}').join('\n');
-              final status = p.paymentStatus == 2 ? 'Paid' : (p.paymentStatus == 1 ? 'Partial' : 'Unpaid');
-              final text = 'Purchase #${p.referenceNo}\n'
-                  'Date: ${dateFmt.format(p.date)}\n'
-                  '${supplier != null ? 'Supplier: ${supplier!.name}\n' : ''}'
-                  'Status: $status\n'
-                  'Total: ${p.total.toStringAsFixed(2)}\n'
-                  '${p.items.isNotEmpty ? '\nItems:\n$items' : ''}';
-              Share.share(text, subject: 'Purchase #${p.referenceNo}');
+              final status = p.paymentStatus == 2 ? l10n.paid : (p.paymentStatus == 1 ? l10n.partial : l10n.unpaid);
+              final text = '${l10n.purchaseRefTitle(p.referenceNo)}\n'
+                  '${l10n.shareDateLabel(dateFmt.format(p.date))}\n'
+                  '${supplier != null ? '${l10n.shareSupplierLabel(supplier!.name)}\n' : ''}'
+                  '${l10n.shareStatusLabel(status)}\n'
+                  '${l10n.shareTotalLabel(p.total.toStringAsFixed(2))}\n'
+                  '${p.items.isNotEmpty ? '\n${l10n.shareItemsLabel}\n$items' : ''}';
+              Share.share(text, subject: l10n.purchaseRefTitle(p.referenceNo));
             },
             icon: const Icon(Icons.ios_share_rounded),
             color: AppColors.primaryNavy,
@@ -134,6 +136,7 @@ class _StatusHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
@@ -168,7 +171,7 @@ class _StatusHero extends StatelessWidget {
               // Status badge
               Builder(builder: (_) {
                 final status = purchase?.paymentStatus ?? 0;
-                final label = purchase?.statusLabel.toUpperCase() ?? 'UNPAID';
+                final label = purchase?.localizedStatusLabel(l10n).toUpperCase() ?? l10n.unpaid.toUpperCase();
                 final color = status == 2
                     ? AppColors.success
                     : status == 1
@@ -212,7 +215,7 @@ class _StatusHero extends StatelessWidget {
               const SizedBox(height: 14),
               // Amount label
               Text(
-                'Total Amount',
+                l10n.totalAmountLabel,
                 style: TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 13,
@@ -272,6 +275,7 @@ class _SupplierInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -320,7 +324,7 @@ class _SupplierInfo extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Supplier',
+                      l10n.supplier,
                       style: TextStyle(
                         color: AppColors.textTertiary,
                         fontSize: 11,
@@ -349,7 +353,7 @@ class _SupplierInfo extends StatelessWidget {
                   }
                 },
                 child: Text(
-                  'View Profile',
+                  l10n.viewProfile,
                   style: TextStyle(
                     color: const Color(0xFF3498DB),
                     fontWeight: FontWeight.w600,
@@ -373,7 +377,7 @@ class _SupplierInfo extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Date Issued',
+                      l10n.dateIssued,
                       style: TextStyle(
                         color: AppColors.textTertiary,
                         fontSize: 11,
@@ -403,7 +407,7 @@ class _SupplierInfo extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Category',
+                      l10n.category,
                       style: TextStyle(
                         color: AppColors.textTertiary,
                         fontSize: 11,
@@ -447,6 +451,7 @@ class _ItemsBreakdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final items = purchase?.items ?? [];
     final subtotal = purchase?.subtotal ?? 0;
     final tax = purchase?.tax ?? 0;
@@ -485,7 +490,7 @@ class _ItemsBreakdown extends StatelessWidget {
               ),
             ),
             child: Text(
-              'Items Breakdown',
+              l10n.itemsBreakdown,
               style: TextStyle(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w700,
@@ -547,15 +552,15 @@ class _ItemsBreakdown extends StatelessWidget {
             ),
             child: Column(
               children: [
-                _totalRow('Subtotal', '$currency ${fmt.format(subtotal)}', false),
+                _totalRow(l10n.subtotal, '$currency ${fmt.format(subtotal)}', false),
                 const SizedBox(height: 8),
-                _totalRow('Tax', '$currency ${fmt.format(tax)}', false),
+                _totalRow(l10n.taxLabel, '$currency ${fmt.format(tax)}', false),
                 const SizedBox(height: 10),
                 Divider(
                     height: 1,
                     color: AppColors.borderLight.withValues(alpha: 0.5)),
                 const SizedBox(height: 10),
-                _totalRow('Total', '$currency ${fmt.format(total)}', true),
+                _totalRow(l10n.totalLabel, '$currency ${fmt.format(total)}', true),
               ],
             ),
           ),
@@ -598,8 +603,16 @@ class _PaymentTermsCard extends StatelessWidget {
   const _PaymentTermsCard({this.purchase, this.supplier});
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final dueDate = purchase?.dueDate;
     final terms = supplier?.paymentTerms ?? 'On Receipt';
+    final localizedTermsMap = {
+      'On Receipt': l10n.onReceipt,
+      'Net 15': l10n.net15,
+      'Net 30': l10n.net30,
+      'Net 60': l10n.net60,
+    };
+    final localizedTerms = localizedTermsMap[terms] ?? terms;
     final isPaid = (purchase?.paymentStatus ?? 0) == 2;
     final isOverdue = !isPaid && dueDate != null && dueDate.isBefore(DateTime.now());
     final dueDateColor = isOverdue ? const Color(0xFFC0392B) : AppColors.primaryNavy;
@@ -623,7 +636,7 @@ class _PaymentTermsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Payment Terms',
+            l10n.paymentTermsLabel,
             style: TextStyle(
               color: AppColors.primaryNavy,
               fontWeight: FontWeight.w700,
@@ -638,7 +651,7 @@ class _PaymentTermsCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Due Date',
+                      l10n.dueDateLabel,
                       style: TextStyle(
                         color: AppColors.textTertiary,
                         fontSize: 11,
@@ -651,7 +664,7 @@ class _PaymentTermsCard extends StatelessWidget {
                             color: dueDateColor, size: 15),
                         const SizedBox(width: 4),
                         Text(
-                          dueDate != null ? DateFormat('MM/dd/yyyy').format(dueDate) : 'N/A',
+                          dueDate != null ? DateFormat('MM/dd/yyyy').format(dueDate) : l10n.notAvailableLabel,
                           style: TextStyle(
                             color: dueDateColor,
                             fontWeight: FontWeight.w600,
@@ -668,7 +681,7 @@ class _PaymentTermsCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Terms',
+                      l10n.termsLabel,
                       style: TextStyle(
                         color: AppColors.textTertiary,
                         fontSize: 11,
@@ -676,7 +689,7 @@ class _PaymentTermsCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      terms,
+                      localizedTerms,
                       style: TextStyle(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w600,
@@ -702,8 +715,8 @@ class _PaymentTermsCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   terms == 'On Receipt'
-                      ? 'Payment is due upon receipt of goods.'
-                      : 'Payment is due within ${terms.replaceAll('Net ', '')} days of receipt date.',
+                      ? l10n.paymentDueOnReceipt
+                      : l10n.paymentDueWithinDays(terms.replaceAll('Net ', '')),
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 12,
@@ -729,6 +742,7 @@ class _BottomActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(
@@ -768,12 +782,12 @@ class _BottomActions extends StatelessWidget {
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
+                  children: [
                     Icon(Icons.payments_rounded,
                         color: AppColors.accentOrange, size: 20),
                     SizedBox(width: 8),
                     Text(
-                      'Record Payment',
+                      l10n.recordPaymentAction,
                       style: TextStyle(
                         color: AppColors.accentOrange,
                         fontWeight: FontWeight.w700,
@@ -814,12 +828,12 @@ class _BottomActions extends StatelessWidget {
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
+                  children: [
                     Icon(Icons.edit_rounded,
                         color: Colors.white, size: 20),
                     SizedBox(width: 8),
                     Text(
-                      'Edit Purchase',
+                      l10n.editPurchase,
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,

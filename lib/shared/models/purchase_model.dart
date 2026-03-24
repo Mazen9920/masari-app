@@ -1,5 +1,6 @@
 // Purchase model — one recorded purchase from a supplier.
 
+import '../../l10n/app_localizations.dart';
 import '../utils/money_utils.dart';
 
 class Purchase {
@@ -60,6 +61,19 @@ class Purchase {
         return 'Paid';
       default:
         return 'Unknown';
+    }
+  }
+
+  String localizedStatusLabel(AppLocalizations l10n) {
+    switch (paymentStatus) {
+      case 0:
+        return l10n.unpaid;
+      case 1:
+        return l10n.partial;
+      case 2:
+        return l10n.paid;
+      default:
+        return l10n.unknownStatus;
     }
   }
 

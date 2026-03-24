@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../utils/money_utils.dart';
 
 /// Stock status of a product or variant
@@ -213,6 +214,12 @@ class ProductVariant {
   /// Human-readable name, e.g. "Red / M" or "Default".
   String get displayName {
     if (optionValues.isEmpty) return 'Default';
+    return optionValues.values.join(' / ');
+  }
+
+  /// Localized display name for the variant.
+  String localizedDisplayName(AppLocalizations l10n) {
+    if (optionValues.isEmpty) return l10n.defaultVariantName;
     return optionValues.values.join(' / ');
   }
 

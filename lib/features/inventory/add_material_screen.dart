@@ -27,7 +27,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
   final _costController = TextEditingController();
   final _stockController = TextEditingController();
   final _reorderController = TextEditingController(text: '10');
-  final _uomController = TextEditingController(text:  'Kilograms (kg)');
+  final _uomController = TextEditingController(text: 'kg');
   final _supplierCustomController = TextEditingController();
   final _wasteController = TextEditingController();
   final _notesController = TextEditingController();
@@ -56,6 +56,16 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
      'Paper',
      'Other',
   ];
+
+  Map<String, String> get _materialTypeLabels => {
+    'Fabric': l10n.materialFabric,
+    'Plastic': l10n.materialPlastic,
+    'Wood': l10n.materialWood,
+    'Metal': l10n.materialMetal,
+    'Liquid': l10n.materialLiquid,
+    'Paper': l10n.materialPaper,
+    'Other': l10n.materialOther,
+  };
 
   bool get _canSave => _nameController.text.trim().isNotEmpty;
 
@@ -106,7 +116,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
 
   String get _resolvedUom => _uomController.text.trim().isNotEmpty
       ? _uomController.text.trim()
-      :  'Kilograms (kg)';
+      :  'kg';
 
   String get _resolvedSupplier {
     if (_showSupplierCustom) return _supplierCustomController.text.trim();
@@ -196,7 +206,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
               const Icon(Icons.close_rounded, color: AppColors.textSecondary),
         ),
         title: Text(
-           'Add Raw Material',
+           l10n.addRawMaterial,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -207,7 +217,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
           TextButton(
             onPressed: _canSave ? _save : null,
             child: Text(
-               'Save',
+               l10n.save,
               style: AppTypography.labelMedium.copyWith(
                 color:
                     _canSave ? AppColors.primaryNavy : AppColors.textTertiary,
@@ -226,7 +236,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
               child: Column(
                 children: [
                   Text(
-                     'Add a raw material to track inventory consumption.',
+                     l10n.addMaterialDesc,
                     style: AppTypography.bodySmall
                         .copyWith(color: AppColors.textTertiary),
                     textAlign: TextAlign.center,
@@ -283,7 +293,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
             GestureDetector(
               onTap: _autoGenerateSku,
               child: Text(
-                'Auto-generate',
+                l10n.autoGenerate,
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -294,7 +304,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
           ],
         ),
         const SizedBox(height: 6),
-        _textField(_skuController, 'e.g. MAT-COT-4832'),
+        _textField(_skuController, l10n.egMatCot),
         const SizedBox(height: 14),
 
         // Category — free-text
@@ -320,7 +330,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
 
         Row(
           children: [
-            _pillToggle( 'From List', !_showSupplierCustom, () {
+            _pillToggle(l10n.fromList, !_showSupplierCustom, () {
               setState(() => _showSupplierCustom = false);
             }),
             SizedBox(width: 8),
@@ -346,7 +356,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
               child: DropdownButton<String>(
                 value: _selectedSupplierId,
                 hint: Text(
-                  suppliers.isEmpty ? l10n.noSuppliersYet :  'Choose supplier',
+                  suppliers.isEmpty ? l10n.noSuppliersYet : l10n.chooseSupplier,
                   style: AppTypography.bodySmall
                       .copyWith(color: AppColors.textTertiary),
                 ),
@@ -391,7 +401,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
                 size: 12, color: AppColors.textTertiary),
             const SizedBox(width: 4),
             Text(
-               'Cost price is used to calculate total material value.',
+               l10n.costPriceInfo,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
                 fontSize: 10,
@@ -411,7 +421,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
       children: [
         Text(l10n.unitOfMeasure, style: _labelStyle),
         const SizedBox(height: 8),
-        _textField(_uomController, 'e.g. Kilograms, Liters...'),
+        _textField(_uomController, l10n.egKilogramsLiters),
         const SizedBox(height: 8),
 
         // Preset chips
@@ -504,7 +514,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
                 child: DropdownButton<String>(
                   value: _baseMaterialType.isEmpty ? null : _baseMaterialType,
                   hint: Text(
-                     'Select material type...',
+                     l10n.selectMaterialType,
                     style: AppTypography.bodySmall
                         .copyWith(color: AppColors.textTertiary),
                   ),
@@ -515,7 +525,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
                       .map((t) => DropdownMenuItem(
                             value: t,
                             child: Text(
-                              t,
+                              _materialTypeLabels[t] ?? t,
                               style: AppTypography.bodySmall
                                   .copyWith(color: AppColors.textPrimary),
                             ),
@@ -569,7 +579,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
                         size: 18, color: const Color(0xFF795548)),
                     const SizedBox(width: 10),
                     Text(
-                       'Optional Details',
+                       l10n.optionalDetails,
                       style: AppTypography.labelMedium.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
@@ -658,7 +668,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
                 ),
               ),
               child: Text(
-                 'Save Material',
+                 l10n.saveMaterial,
                 style: AppTypography.labelMedium.copyWith(
                   color: _canSave ? Colors.white : AppColors.textTertiary,
                   fontWeight: FontWeight.w700,
@@ -670,7 +680,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
           TextButton(
             onPressed: _canSave ? _save : null,
             child: Text(
-               'Save & Add Another',
+               l10n.saveAndAddAnother,
               style: AppTypography.labelMedium.copyWith(
                 color: _canSave ? const Color(0xFF795548) : AppColors.textTertiary,
                 fontWeight: FontWeight.w500,

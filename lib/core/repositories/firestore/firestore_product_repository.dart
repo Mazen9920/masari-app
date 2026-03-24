@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../shared/models/product_model.dart';
 import '../../services/result.dart';
+import '../../utils/connectivity_helper.dart';
+import '../../utils/stock_computation.dart';
 import '../product_repository.dart';
 
 /// Firestore implementation of [ProductRepository].
@@ -133,6 +135,85 @@ class FirestoreProductRepository implements ProductRepository {
 
   @override
   Future<Result<Product>> adjustStock(
+      String id, String variantId, int delta, String reason,
+      {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
+    final online = await hasConnectivity();
+    if (online) {
+      return _adjustStockTransaction(
+          id, variantId, delta, reason,
+          unitCost: unitCost,
+          valuationMethod: valuationMethod,
+          supplierName: supplierName,
+          clearLegacyLayers: clearLegacyLayers,
+          skipCostLayer: skipCostLayer)
+        .timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => _adjustStockBatch(
+              id, variantId, delta, reason,
+              unitCost: unitCost,
+              valuationMethod: valuationMethod,
+              supplierName: supplierName,
+              clearLegacyLayers: clearLegacyLayers,
+              skipCostLayer: skipCostLayer),
+        );
+    }
+    return _adjustStockBatch(
+        id, variantId, delta, reason,
+        unitCost: unitCost,
+        valuationMethod: valuationMethod,
+        supplierName: supplierName,
+        clearLegacyLayers: clearLegacyLayers,
+        skipCostLayer: skipCostLayer);
+  }
+
+  /// Batch-based stock adjustment that works offline.
+  Future<Result<Product>> _adjustStockBatch(
+      String id, String variantId, int delta, String reason,
+      {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
+    try {
+      final docRef = _collection.doc(id);
+      final snapshot = await docRef.get();
+      if (!snapshot.exists) return Result.failure('Product not found');
+
+      final data = snapshot.data()!;
+      data['id'] = snapshot.id;
+      final product = Product.fromJson(data);
+
+      final result = computeStockChange(
+        product: product,
+        variantId: variantId,
+        delta: delta,
+        valuationMethod: valuationMethod,
+        reason: reason,
+        unitCost: unitCost,
+        supplierName: supplierName,
+        clearLegacyLayers: clearLegacyLayers,
+        skipCostLayer: skipCostLayer,
+      );
+
+      final updatedProduct = result.updatedProduct;
+      final json = updatedProduct.toJson();
+      json.remove('id');
+      json['updated_at'] = DateTime.now().toIso8601String();
+      json['_last_modified_by'] = 'masari';
+
+      final updatedVariant = updatedProduct.variants
+          .firstWhere((v) => v.id == variantId);
+      json['_last_inventory_push'] = {
+        'variant_id': variantId,
+        'stock': updatedVariant.currentStock,
+        'at': DateTime.now().toIso8601String(),
+      };
+
+      await docRef.update(json);
+      return Result.success(updatedProduct);
+    } catch (e) {
+      return Result.failure('Failed to adjust stock: $e');
+    }
+  }
+
+  /// Transaction-based stock adjustment (original implementation).
+  Future<Result<Product>> _adjustStockTransaction(
       String id, String variantId, int delta, String reason,
       {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
     try {

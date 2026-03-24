@@ -41,6 +41,16 @@ abstract class SaleRepository {
       List<models.Transaction> transactions,
       List<StockDeduction> stockDeductions);
 
+  /// Offline-safe version of [createSaleWithTransactionsAndStock] that uses
+  /// batch writes instead of a Firestore transaction. Reads product documents
+  /// from the local cache and writes sale + transactions + stock updates via
+  /// `batch.commit()`. Not truly atomic (reads are not locked) but allows the
+  /// operation to complete while offline.
+  Future<Result<Sale>> createSaleWithTransactionsAndStockBatch(
+      Sale sale,
+      List<models.Transaction> transactions,
+      List<StockDeduction> stockDeductions);
+
   /// Updates an existing sale.
   Future<Result<Sale>> updateSale(String id, Sale updated);
 

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/utils/safe_pop.dart';
 
 // ─── FeatureGate Widget ──────────────────────────────────────────────────────
@@ -95,7 +96,7 @@ class _FullUpgradePrompt extends StatelessWidget {
 
             // Feature name
             Text(
-              feature.displayName,
+              feature.localizedDisplayName(AppLocalizations.of(context)!),
               style: AppTypography.h2.copyWith(color: AppColors.primaryNavy),
               textAlign: TextAlign.center,
             ),
@@ -103,7 +104,7 @@ class _FullUpgradePrompt extends StatelessWidget {
 
             // Description
             Text(
-              feature.description,
+              feature.localizedDescription(AppLocalizations.of(context)!),
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 15,
@@ -122,7 +123,7 @@ class _FullUpgradePrompt extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                '${requiredTier.label} Mode Feature',
+                AppLocalizations.of(context)!.tierModeFeature(requiredTier.localizedLabel(AppLocalizations.of(context)!)),
                 style: TextStyle(
                   color: AppColors.accentOrange,
                   fontSize: 13,
@@ -157,7 +158,7 @@ class _FullUpgradePrompt extends StatelessWidget {
                     const Icon(Icons.trending_up_rounded, size: 20),
                     const SizedBox(width: 8),
                     Text(
-                       'Upgrade to Growth',
+                       AppLocalizations.of(context)!.upgradeToGrowth,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -176,7 +177,7 @@ class _FullUpgradePrompt extends StatelessWidget {
                 context.pushNamed('ManageSubscriptionScreen');
               },
               child: Text(
-                 'Compare all plans',
+                 AppLocalizations.of(context)!.compareAllPlans,
                 style: TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 13,
@@ -240,7 +241,7 @@ class _InlineUpgradeCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      feature.displayName,
+                      feature.localizedDisplayName(AppLocalizations.of(context)!),
                       style: TextStyle(
                         color: AppColors.primaryNavy,
                         fontSize: 15,
@@ -249,7 +250,7 @@ class _InlineUpgradeCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${requiredTier.label} Mode',
+                      AppLocalizations.of(context)!.tierMode(requiredTier.localizedLabel(AppLocalizations.of(context)!)),
                       style: TextStyle(
                         color: AppColors.accentOrange,
                         fontSize: 12,
@@ -263,7 +264,7 @@ class _InlineUpgradeCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            feature.description,
+            feature.localizedDescription(AppLocalizations.of(context)!),
             style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13,
@@ -287,7 +288,7 @@ class _InlineUpgradeCard extends StatelessWidget {
                 ),
               ),
               child: Text(
-                 'Upgrade to Growth',
+                 AppLocalizations.of(context)!.upgradeToGrowth,
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               ),
             ),
@@ -336,7 +337,7 @@ class FeatureGateScreen extends ConsumerWidget {
           ),
         ),
         title: Text(
-          appBarTitle ?? feature.displayName,
+          appBarTitle ?? feature.localizedDisplayName(AppLocalizations.of(context)!),
           style: AppTypography.h3.copyWith(color: AppColors.primaryNavy),
         ),
         centerTitle: true,

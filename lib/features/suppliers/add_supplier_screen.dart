@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/supplier_model.dart';
 
 /// Add New Supplier — multi-section form.
@@ -17,6 +18,7 @@ class AddSupplierScreen extends ConsumerStatefulWidget {
 }
 
 class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   final _nameCtrl = TextEditingController();
   final _idCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -61,7 +63,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
     if (email.isNotEmpty && !_emailRegex.hasMatch(email)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please enter a valid email address'),
+          content: Text(l10n.invalidEmailValidation),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -74,7 +76,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
     if (phone.isNotEmpty && phone.replaceAll(RegExp(r'[^0-9]'), '').length < 7) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Phone number must have at least 7 digits'),
+          content: Text(l10n.phoneMinDigitsValidation),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -102,7 +104,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${supplier.name} added'),
+        content: Text(l10n.supplierAddedMsg(supplier.name)),
         backgroundColor: AppColors.primaryNavy,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -205,7 +207,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                     color: Colors.white, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'Save Supplier',
+                  l10n.saveSupplier,
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -243,7 +245,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
               Expanded(
                 child: Center(
                   child: Text(
-                    'Add New Supplier',
+                    l10n.addNewSupplier,
                     style: AppTypography.h2.copyWith(
                       color: AppColors.primaryNavy,
                       fontWeight: FontWeight.w700,
@@ -258,7 +260,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Text(
-                    'Save',
+                    l10n.save,
                     style: TextStyle(
                       color: _canSave
                           ? AppColors.primaryNavy
@@ -274,7 +276,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              'Set up your supplier to start tracking purchases.',
+              l10n.addSupplierSubtitle,
               style: TextStyle(
                 color: AppColors.textTertiary,
                 fontSize: 12,
@@ -349,26 +351,39 @@ class _SupplierBasicsSectionState extends State<_SupplierBasicsSection> {
         .toList();
   }
 
+  String _localizedCategoryName(String cat, AppLocalizations l10n) {
+    switch (cat) {
+      case 'Packaging': return l10n.supplierCategoryPackaging;
+      case 'Raw Materials': return l10n.supplierCategoryRawMaterials;
+      case 'Logistics': return l10n.supplierCategoryLogistics;
+      case 'Maintenance': return l10n.supplierCategoryMaintenance;
+      case 'Wholesale': return l10n.supplierCategoryWholesale;
+      case 'General': return l10n.supplierCategoryGeneral;
+      default: return cat;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final suggestions = _filteredSuggestions;
 
     return _FormSection(
-      title: 'SUPPLIER BASICS',
+      title: l10n.supplierBasics,
       children: [
         _FormField(
-          label: 'Business Name',
+          label: l10n.businessName,
           required: true,
           child: TextField(
             controller: widget.nameCtrl,
             onChanged: (_) => widget.onChanged(),
-            decoration: _inputDecoration('e.g. Al-Amal Supplies'),
+            decoration: _inputDecoration(l10n.supplierNameHint),
             style: _inputStyle,
           ),
         ),
         const SizedBox(height: 16),
         _FormField(
-          label: 'Category',
+          label: l10n.category,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -379,7 +394,7 @@ class _SupplierBasicsSectionState extends State<_SupplierBasicsSection> {
                   widget.onCategoryChanged(v.trim());
                   setState(() {});
                 },
-                decoration: _inputDecoration('e.g. Packaging').copyWith(
+                decoration: _inputDecoration(l10n.categoryHint).copyWith(
                   suffixIcon: _catCtrl.text.isNotEmpty
                       ? GestureDetector(
                           onTap: () {
@@ -420,7 +435,7 @@ class _SupplierBasicsSectionState extends State<_SupplierBasicsSection> {
                           ),
                         ),
                         child: Text(
-                          c,
+                          _localizedCategoryName(c, l10n),
                           style: TextStyle(
                             color: AppColors.primaryNavy,
                             fontSize: 13,
@@ -437,11 +452,11 @@ class _SupplierBasicsSectionState extends State<_SupplierBasicsSection> {
         ),
         const SizedBox(height: 16),
         _FormField(
-          label: 'Supplier ID',
+          label: l10n.supplierIdField,
           optional: true,
           child: TextField(
             controller: widget.idCtrl,
-            decoration: _inputDecoration('e.g. SUP-001'),
+            decoration: _inputDecoration(l10n.supplierIdHint),
             style: _inputStyle,
           ),
         ),
@@ -468,11 +483,12 @@ class _ContactInfoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return _FormSection(
-      title: 'CONTACT INFO',
+      title: l10n.contactInfoSection,
       children: [
         _FormField(
-          label: 'Phone Number',
+          label: l10n.phoneNumber,
           child: Row(
             children: [
               // Country code
@@ -544,13 +560,13 @@ class _ContactInfoSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         _FormField(
-          label: 'Email Address',
+          label: l10n.emailAddressField,
           optional: true,
           child: TextField(
             controller: emailCtrl,
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
-              hintText: 'supplier@example.com',
+              hintText: l10n.supplierEmailHint,
               hintStyle:
                   TextStyle(color: AppColors.textTertiary, fontSize: 14),
               prefixIcon: Icon(Icons.mail_outline_rounded,
@@ -587,7 +603,7 @@ class _ContactInfoSection extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'WhatsApp Available',
+                    l10n.whatsAppAvailable,
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 14,
@@ -596,7 +612,7 @@ class _ContactInfoSection extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Can communicate via WhatsApp?',
+                    l10n.canCommunicateWhatsApp,
                     style: TextStyle(
                       color: AppColors.textTertiary,
                       fontSize: 11,
@@ -640,11 +656,18 @@ class _PaymentDetailsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final localizedTerms = {
+      'On Receipt': l10n.onReceipt,
+      'Net 15': l10n.net15,
+      'Net 30': l10n.net30,
+      'Net 60': l10n.net60,
+    };
     return _FormSection(
-      title: 'PAYMENT DETAILS',
+      title: l10n.paymentDetailsSection,
       children: [
         _FormField(
-          label: 'Payment Terms',
+          label: l10n.paymentTermsLabel,
           child: Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -671,7 +694,7 @@ class _PaymentDetailsSection extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    paymentTerms[i],
+                    localizedTerms[paymentTerms[i]] ?? paymentTerms[i],
                     style: TextStyle(
                       color: selected
                           ? AppColors.primaryNavy
@@ -688,7 +711,7 @@ class _PaymentDetailsSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         _FormField(
-          label: 'Starting Balance (Debt)',
+          label: l10n.startingBalanceDebt,
           child: TextField(
             controller: balanceCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -752,16 +775,17 @@ class _LocationNotesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return _FormSection(
-      title: 'LOCATION & NOTES',
+      title: l10n.locationAndNotes,
       children: [
         _FormField(
-          label: 'Address',
+          label: l10n.addressField,
           child: TextField(
             controller: addressCtrl,
             maxLines: 2,
             decoration: InputDecoration(
-              hintText: 'Street, Building No, City',
+              hintText: l10n.addressHint,
               hintStyle:
                   TextStyle(color: AppColors.textTertiary, fontSize: 14),
               prefixIcon: Padding(
@@ -795,12 +819,12 @@ class _LocationNotesSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         _FormField(
-          label: 'Notes',
+          label: l10n.notesField,
           optional: true,
           child: TextField(
             controller: notesCtrl,
             maxLines: 3,
-            decoration: _inputDecoration('Add any additional details here...'),
+            decoration: _inputDecoration(l10n.additionalDetailsHint),
             style: _inputStyle,
           ),
         ),
@@ -889,7 +913,7 @@ class _FormField extends StatelessWidget {
                   style: TextStyle(color: AppColors.badgeTextNegative, fontSize: 13)),
             if (optional)
               Text(
-                ' (Optional)',
+                ' ${AppLocalizations.of(context)!.optionalLabel}',
                 style: TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 12,

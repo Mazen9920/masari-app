@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/navigation/app_router.dart';
+import '../../l10n/app_localizations.dart';
 import '../auth/widgets/form_components.dart';
 import 'widgets/setup_shell.dart';
 
@@ -18,24 +19,24 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
   String? _selectedIndustry;
   int _selectedStageIndex = -1;
 
-  final List<String> _industries = [
-    'Food & Beverage',
-    'Retail & Fashion',
-    'Technology',
-    'Professional Services',
-    'E-Commerce',
-    'Healthcare',
-    'Education',
-    'Real Estate',
-    'Manufacturing',
-    'Other',
+  final List<String> _industryKeys = [
+    'industryFoodBeverage',
+    'industryRetailFashion',
+    'industryTechnology',
+    'industryProfessionalServices',
+    'industryEcommerce',
+    'industryHealthcare',
+    'industryEducation',
+    'industryRealEstate',
+    'industryManufacturing',
+    'industryOther',
   ];
 
-  final List<String> _stages = [
-    'Just an idea',
-    'Less than 6 months',
-    '1–3 years',
-    '3+ years',
+  final List<String> _stageKeys = [
+    'stageJustAnIdea',
+    'stageLessThan6Months',
+    'stage1To3Years',
+    'stage3PlusYears',
   ];
 
   @override
@@ -50,7 +51,7 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please enter your business name',
+            AppLocalizations.of(context)!.pleaseEnterBusinessName,
             style: AppTypography.bodySmall.copyWith(color: Colors.white),
           ),
           backgroundColor: AppColors.danger,
@@ -65,38 +66,38 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SetupShell(
       currentStep: 1,
-      title: 'Tell us about your business',
-      subtitle:
-          'Help Masari tailor your financial experience to your specific needs.',
-      buttonText: 'Continue',
+      title: l10n.tellUsAboutBusiness,
+      subtitle: l10n.setupStep1Subtitle,
+      buttonText: l10n.continueButton,
       onBack: () => context.pop(),
       onContinue: _onContinue,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ─── Business Name ───
-          _buildSectionLabel('Business Name'),
+          _buildSectionLabel(l10n.businessName),
           const SizedBox(height: 8),
           MasariTextField(
-            label: 'Business Name',
+            label: l10n.businessName,
             icon: Icons.storefront_outlined,
             controller: _businessNameController,
-            hint: 'e.g. Cairo Coffee House',
+            hint: l10n.egCairoCoffeeHouse,
           ),
 
           const SizedBox(height: 24),
 
           // ─── Industry ───
-          _buildSectionLabel('Industry'),
+          _buildSectionLabel(l10n.industry),
           const SizedBox(height: 8),
           _buildIndustryDropdown(),
 
           const SizedBox(height: 24),
 
           // ─── Business Stage ───
-          _buildSectionLabel('What stage is your business in?'),
+          _buildSectionLabel(l10n.businessStageQuestion),
           const SizedBox(height: 12),
           _buildStageChips(),
 
@@ -105,14 +106,40 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
           // ─── Country & Currency (auto-filled, read-only) ───
           Row(
             children: [
-              Expanded(child: _buildReadOnlyField('COUNTRY', 'Egypt', '🇪🇬')),
+              Expanded(child: _buildReadOnlyField(l10n.country.toUpperCase(), 'Egypt', '🇪🇬')),
               const SizedBox(width: 16),
-              Expanded(child: _buildReadOnlyField('CURRENCY', 'EGP', null, Icons.lock_outline)),
+              Expanded(child: _buildReadOnlyField(l10n.currency.toUpperCase(), 'EGP', null, Icons.lock_outline)),
             ],
           ),
         ],
       ),
     );
+  }
+
+  String _localizedIndustry(String key, AppLocalizations l10n) {
+    return switch (key) {
+      'industryFoodBeverage' => l10n.industryFoodBeverage,
+      'industryRetailFashion' => l10n.industryRetailFashion,
+      'industryTechnology' => l10n.industryTechnology,
+      'industryProfessionalServices' => l10n.industryProfessionalServices,
+      'industryEcommerce' => l10n.industryEcommerce,
+      'industryHealthcare' => l10n.industryHealthcare,
+      'industryEducation' => l10n.industryEducation,
+      'industryRealEstate' => l10n.industryRealEstate,
+      'industryManufacturing' => l10n.industryManufacturing,
+      'industryOther' => l10n.industryOther,
+      _ => key,
+    };
+  }
+
+  String _localizedStage(String key, AppLocalizations l10n) {
+    return switch (key) {
+      'stageJustAnIdea' => l10n.stageJustAnIdea,
+      'stageLessThan6Months' => l10n.stageLessThan6Months,
+      'stage1To3Years' => l10n.stage1To3Years,
+      'stage3PlusYears' => l10n.stage3PlusYears,
+      _ => key,
+    };
   }
 
   Widget _buildSectionLabel(String text) {
@@ -138,7 +165,7 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
           value: _selectedIndustry,
           isExpanded: true,
           hint: Text(
-            'Select Industry',
+            AppLocalizations.of(context)!.selectIndustry,
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textTertiary,
             ),
@@ -152,10 +179,10 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
           ),
           dropdownColor: AppColors.surfaceLight,
           borderRadius: AppRadius.cardRadius,
-          items: _industries.map((industry) {
+          items: _industryKeys.map((key) {
             return DropdownMenuItem(
-              value: industry,
-              child: Text(industry),
+              value: key,
+              child: Text(_localizedIndustry(key, AppLocalizations.of(context)!)),
             );
           }).toList(),
           onChanged: (value) {
@@ -170,7 +197,7 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
     return Wrap(
       spacing: 10,
       runSpacing: 10,
-      children: List.generate(_stages.length, (index) {
+      children: List.generate(_stageKeys.length, (index) {
         final isSelected = _selectedStageIndex == index;
         return GestureDetector(
           onTap: () => setState(() => _selectedStageIndex = index),
@@ -190,7 +217,7 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
               ),
             ),
             child: Text(
-              _stages[index],
+              _localizedStage(_stageKeys[index], AppLocalizations.of(context)!),
               style: AppTypography.labelMedium.copyWith(
                 color: isSelected
                     ? AppColors.accentOrange

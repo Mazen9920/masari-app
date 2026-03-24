@@ -7,6 +7,7 @@ import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/category_data.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Shows the Add Category bottom sheet. Call this from anywhere.
 Future<void> showAddCategorySheet(BuildContext context) {
@@ -85,7 +86,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
       HapticFeedback.heavyImpact();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('A category named "$name" already exists'),
+          content: Text(AppLocalizations.of(context)!.categoryAlreadyExists(name)),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -101,7 +102,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
         HapticFeedback.heavyImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Please enter a valid budget amount'),
+            content: Text(AppLocalizations.of(context)!.invalidBudgetAmount),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -112,7 +113,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
         HapticFeedback.heavyImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Budget limit cannot be negative'),
+            content: Text(AppLocalizations.of(context)!.budgetCannotBeNegative),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -123,7 +124,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
         HapticFeedback.heavyImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Budget limit cannot exceed 10,000,000'),
+            content: Text(AppLocalizations.of(context)!.budgetExceedsMax),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -186,7 +187,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'New Category',
+                  AppLocalizations.of(context)!.newCategory,
                   style: AppTypography.h2.copyWith(
                     color: AppColors.primaryNavy,
                     fontWeight: FontWeight.w800,
@@ -209,12 +210,12 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSectionLabel('Category Name'),
+                  _buildSectionLabel(AppLocalizations.of(context)!.categoryName),
                   const SizedBox(height: 8),
                   _buildNameField(),
                   const SizedBox(height: 24),
 
-                  _buildSectionLabel('Type'),
+                  _buildSectionLabel(AppLocalizations.of(context)!.type),
                   const SizedBox(height: 8),
                   _buildTypeToggle(),
                   const SizedBox(height: 24),
@@ -224,12 +225,12 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
                     const SizedBox(height: 24),
                   ],
 
-                  _buildSectionLabel('Icon'),
+                  _buildSectionLabel(AppLocalizations.of(context)!.icon),
                   const SizedBox(height: 10),
                   _buildIconPicker(),
                   const SizedBox(height: 24),
 
-                  _buildSectionLabel('Color Tag'),
+                  _buildSectionLabel(AppLocalizations.of(context)!.colorTag),
                   const SizedBox(height: 10),
                   _buildColorPicker(),
                   const SizedBox(height: 16),
@@ -274,7 +275,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
         fontWeight: FontWeight.w600,
       ),
       decoration: InputDecoration(
-        hintText: 'e.g. Consulting',
+        hintText: AppLocalizations.of(context)!.egConsulting,
         hintStyle: AppTypography.labelLarge.copyWith(
           color: AppColors.textTertiary,
           fontWeight: FontWeight.w400,
@@ -303,8 +304,8 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
       ),
       child: Row(
         children: [
-          Expanded(child: _typeButton('Expense', true)),
-          Expanded(child: _typeButton('Income', false)),
+          Expanded(child: _typeButton(AppLocalizations.of(context)!.expense, true)),
+          Expanded(child: _typeButton(AppLocalizations.of(context)!.income, false)),
         ],
       ),
     );
@@ -353,7 +354,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildSectionLabel('Monthly Limit'),
+            _buildSectionLabel(AppLocalizations.of(context)!.monthlyLimit),
             Switch.adaptive(
               value: _hasLimit,
               onChanged: (v) {
@@ -404,7 +405,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      'We will alert you when you reach 80% of this budget.',
+                      AppLocalizations.of(context)!.budgetAlertHint,
                       style: AppTypography.captionSmall.copyWith(
                         color: AppColors.textTertiary,
                         fontSize: 10,
@@ -534,7 +535,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
             ),
           ),
           child: Text(
-            'Save Category',
+            AppLocalizations.of(context)!.saveCategory,
             style: AppTypography.labelLarge.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w800,

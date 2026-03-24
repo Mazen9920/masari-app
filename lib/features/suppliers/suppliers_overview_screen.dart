@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/models/supplier_model.dart';
 import 'add_supplier_screen.dart';
 import 'record_purchase_screen.dart';
@@ -27,6 +28,7 @@ class SuppliersOverviewScreen extends ConsumerStatefulWidget {
 
 class _SuppliersOverviewScreenState
     extends ConsumerState<SuppliersOverviewScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
   int _filterIndex = 0; // 0=All, 1=Balance due, 2=Overdue, 3=Recently used
 
   // ── Advanced filter state ──
@@ -251,7 +253,7 @@ class _SuppliersOverviewScreenState
                       children: [
                         Expanded(
                           child: Text(
-                            'Filter & Sort',
+                            l10n.filterAndSort,
                             style: TextStyle(
                               color: AppColors.primaryNavy,
                               fontWeight: FontWeight.w700,
@@ -281,7 +283,7 @@ class _SuppliersOverviewScreenState
                         children: [
                           // ── SORT BY ──
                           Text(
-                            'Sort By',
+                            l10n.sortBy,
                             style: TextStyle(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w600,
@@ -352,7 +354,7 @@ class _SuppliersOverviewScreenState
 
                           // ── SUPPLIER STATUS ──
                           Text(
-                            'Supplier Status',
+                            l10n.supplierStatusLabel,
                             style: TextStyle(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w600,
@@ -407,7 +409,7 @@ class _SuppliersOverviewScreenState
 
                           // ── CATEGORY ──
                           Text(
-                            'Category',
+                            l10n.category,
                             style: TextStyle(
                               color: AppColors.textPrimary,
                               fontWeight: FontWeight.w600,
@@ -484,7 +486,7 @@ class _SuppliersOverviewScreenState
                             text: TextSpan(
                               children: [
                                 TextSpan(
-                                  text: 'Outstanding Balance Range ',
+                                  text: '${l10n.outstandingBalanceRange} ',
                                   style: TextStyle(
                                     color: AppColors.textPrimary,
                                     fontWeight: FontWeight.w600,
@@ -492,7 +494,7 @@ class _SuppliersOverviewScreenState
                                   ),
                                 ),
                                 TextSpan(
-                                  text: '(EGP)',
+                                  text: '(${ref.read(currencyProvider)})',
                                   style: TextStyle(
                                     color: AppColors.textTertiary,
                                     fontWeight: FontWeight.w400,
@@ -510,7 +512,7 @@ class _SuppliersOverviewScreenState
                                   controller: tempMinCtrl,
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
-                                    hintText: 'Min',
+                                    hintText: l10n.minLabel,
                                     hintStyle: TextStyle(
                                       color: AppColors.textTertiary,
                                       fontSize: 14,
@@ -558,7 +560,7 @@ class _SuppliersOverviewScreenState
                                   controller: tempMaxCtrl,
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
-                                    hintText: 'Max',
+                                    hintText: l10n.maxLabel,
                                     hintStyle: TextStyle(
                                       color: AppColors.textTertiary,
                                       fontSize: 14,
@@ -646,9 +648,9 @@ class _SuppliersOverviewScreenState
                                 ),
                               ],
                             ),
-                            child: const Center(
+                            child: Center(
                               child: Text(
-                                'Apply Filters',
+                                l10n.applyFilters,
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w700,
@@ -674,7 +676,7 @@ class _SuppliersOverviewScreenState
                           },
                           child: Center(
                             child: Text(
-                              'Reset',
+                              l10n.reset,
                               style: TextStyle(
                                 color: AppColors.textTertiary,
                                 fontWeight: FontWeight.w500,
@@ -695,14 +697,14 @@ class _SuppliersOverviewScreenState
     );
   }
 
-  static const _sortOptions = [
-    'Recent Activity',
-    'Balance (High to Low)',
-    'A-Z',
-    'Overdue Amount',
+  List<String> get _sortOptions => [
+    l10n.recentActivity,
+    l10n.balanceHighToLow,
+    l10n.alphabetical,
+    l10n.overdueAmount,
   ];
 
-  static const _statusOptions = ['All', 'Has Balance Due', 'Overdue', 'Paid'];
+  List<String> get _statusOptions => [l10n.all, l10n.hasBalanceDue, l10n.overdue, l10n.paidLabel];
 
   // ═══════════════════════════════════════════════════════
   //  HEADER
@@ -726,7 +728,7 @@ class _SuppliersOverviewScreenState
           ),
           Expanded(
             child: Text(
-              'Suppliers',
+              l10n.suppliersLabel,
               style: AppTypography.h1.copyWith(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w800,
@@ -790,7 +792,7 @@ class _SuppliersOverviewScreenState
             children: [
               Expanded(
                 child: _summaryNavCard(
-                  title: 'Payments',
+                  title: l10n.paymentsLabel,
                   subtitle: _compactAmount(currency, totalPayments),
                   icon: Icons.payments_rounded,
                   color: AppColors.primaryNavy,
@@ -807,7 +809,7 @@ class _SuppliersOverviewScreenState
               const SizedBox(width: 12),
               Expanded(
                 child: _summaryNavCard(
-                  title: 'Purchases',
+                  title: l10n.purchasesLabel,
                   subtitle: _compactAmount(currency, totalPurchases),
                   icon: Icons.shopping_bag_rounded,
                   color: AppColors.accentOrange,
@@ -825,7 +827,7 @@ class _SuppliersOverviewScreenState
           ),
           const SizedBox(height: 12),
           _summaryNavCard(
-            title: 'Received Goods',
+            title: l10n.receivedGoods,
             subtitle: _compactAmount(currency, totalReceived),
             icon: Icons.inventory_2_rounded,
             color: const Color(0xFF16A34A),
@@ -922,7 +924,7 @@ class _SuppliersOverviewScreenState
           children: [
             _quickActionPill(
               icon: Icons.add_rounded,
-              label: 'Add Supplier',
+              label: l10n.addSupplier,
               filled: true,
               onTap: () {
                 HapticFeedback.lightImpact();
@@ -935,7 +937,7 @@ class _SuppliersOverviewScreenState
             const SizedBox(width: 10),
             _quickActionPill(
               icon: Icons.shopping_cart_rounded,
-              label: 'Record Purchase',
+              label: l10n.recordPurchaseAction,
               onTap: () {
                 HapticFeedback.lightImpact();
                 Navigator.of(context).push(
@@ -947,7 +949,7 @@ class _SuppliersOverviewScreenState
             const SizedBox(width: 10),
             _quickActionPill(
               icon: Icons.payments_rounded,
-              label: 'Record Payment',
+              label: l10n.recordPaymentAction,
               onTap: () {
                 HapticFeedback.lightImpact();
                 Navigator.of(context).push(
@@ -959,7 +961,7 @@ class _SuppliersOverviewScreenState
             const SizedBox(width: 10),
             _quickActionPill(
               icon: Icons.inventory_2_rounded,
-              label: 'Received Goods',
+              label: l10n.receivedGoods,
               onTap: () {
                 HapticFeedback.lightImpact();
                 Navigator.of(context).push(
@@ -1026,10 +1028,10 @@ class _SuppliersOverviewScreenState
   // ═══════════════════════════════════════════════════════
   Widget _buildFilterChips(int overdueCount) {
     final chips = [
-      'All',
-      'With balance due',
-      'Overdue ($overdueCount)',
-      'Recently used',
+      l10n.all,
+      l10n.withBalanceDue,
+      l10n.overdueWithCount(overdueCount),
+      l10n.recentlyUsed,
     ];
 
     return Padding(
@@ -1115,6 +1117,7 @@ class _SummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final fmt = NumberFormat('#,##0', 'en');
 
     return Padding(
@@ -1135,15 +1138,15 @@ class _SummaryStrip extends StatelessWidget {
         child: IntrinsicHeight(
           child: Row(
             children: [
-              _stat('Suppliers', '$totalSuppliers', null),
+              _stat(l10n.suppliersLabel, '$totalSuppliers', null),
               VerticalDivider(
                   color: AppColors.borderLight.withValues(alpha: 0.5),
                   width: 1),
-              _stat('Outstanding', fmt.format(totalOutstanding), currency),
+              _stat(l10n.outstanding, fmt.format(totalOutstanding), currency),
               VerticalDivider(
                   color: AppColors.borderLight.withValues(alpha: 0.5),
                   width: 1),
-              _stat('Overdue', '$overdueCount', null,
+              _stat(l10n.overdue, '$overdueCount', null,
                   valueColor: overdueCount > 0
                       ? AppColors.badgeTextNegative
                       : null),
@@ -1204,6 +1207,7 @@ class _SupplierCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final dateFormatter = DateFormat('MMM dd');
 
     return Material(
@@ -1294,7 +1298,7 @@ class _SupplierCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Last: ${dateFormatter.format(supplier.lastTransaction)}',
+                          l10n.lastDateLabel(dateFormatter.format(supplier.lastTransaction)),
                           style: TextStyle(
                             color: AppColors.textTertiary,
                             fontSize: 12,
@@ -1321,8 +1325,8 @@ class _SupplierCard extends StatelessWidget {
                     ),
                     child: Text(
                       supplier.isPaid
-                          ? 'Paid'
-                          : '$currency ${NumberFormat('#,##0').format(supplier.balance)} due',
+                          ? l10n.paidLabel
+                          : l10n.amountDue('$currency ${NumberFormat('#,##0').format(supplier.balance)}'),
                       style: TextStyle(
                         color: supplier.isPaid
                             ? AppColors.textTertiary
@@ -1335,7 +1339,7 @@ class _SupplierCard extends StatelessWidget {
                   if (supplier.isOverdue) ...[
                     const SizedBox(height: 3),
                     Text(
-                      'Overdue ${supplier.daysOverdue}d',
+                      l10n.overdueDays(supplier.daysOverdue),
                       style: const TextStyle(
                         color: AppColors.badgeTextNegative,
                         fontSize: 9,

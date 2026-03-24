@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../l10n/app_localizations.dart';
 
 const _kPinnedActions = 'pinned_actions_order';
 
@@ -23,6 +24,17 @@ class PinnedAction {
     required this.iconBg,
     required this.iconColor,
   });
+
+  /// Returns the localized label for this action.
+  String localizedLabel(AppLocalizations l10n) => switch (id) {
+    'add_product'     => l10n.addProduct,
+    'new_supplier'    => l10n.newSupplier,
+    'record_purchase' => l10n.recordPurchaseAction,
+    'create_category' => l10n.createCategory,
+    'record_payment'  => l10n.recordPaymentAction,
+    'adjust_stock'    => l10n.adjustStock,
+    _                 => label,
+  };
 }
 
 /// Default ordered list of all available actions.

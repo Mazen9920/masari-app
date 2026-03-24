@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../l10n/app_localizations.dart';
 import 'widgets/form_components.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
@@ -27,17 +29,33 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   String _selectedCountryCode = '+20';
 
   final List<Map<String, String>> _countryCodes = [
-    {'code': '+20', 'flag': '🇪🇬', 'name': 'Egypt'},
-    {'code': '+966', 'flag': '🇸🇦', 'name': 'Saudi Arabia'},
-    {'code': '+971', 'flag': '🇦🇪', 'name': 'UAE'},
-    {'code': '+965', 'flag': '🇰🇼', 'name': 'Kuwait'},
-    {'code': '+973', 'flag': '🇧🇭', 'name': 'Bahrain'},
-    {'code': '+974', 'flag': '🇶🇦', 'name': 'Qatar'},
-    {'code': '+968', 'flag': '🇴🇲', 'name': 'Oman'},
-    {'code': '+962', 'flag': '🇯🇴', 'name': 'Jordan'},
-    {'code': '+1', 'flag': '🇺🇸', 'name': 'US'},
-    {'code': '+44', 'flag': '🇬🇧', 'name': 'UK'},
+    {'code': '+20', 'flag': '🇪🇬', 'key': 'egypt'},
+    {'code': '+966', 'flag': '🇸🇦', 'key': 'saudiArabia'},
+    {'code': '+971', 'flag': '🇦🇪', 'key': 'uae'},
+    {'code': '+965', 'flag': '🇰🇼', 'key': 'kuwait'},
+    {'code': '+973', 'flag': '🇧🇭', 'key': 'bahrain'},
+    {'code': '+974', 'flag': '🇶🇦', 'key': 'qatar'},
+    {'code': '+968', 'flag': '🇴🇲', 'key': 'oman'},
+    {'code': '+962', 'flag': '🇯🇴', 'key': 'jordan'},
+    {'code': '+1', 'flag': '🇺🇸', 'key': 'us'},
+    {'code': '+44', 'flag': '🇬🇧', 'key': 'uk'},
   ];
+
+  String _localizedCountryName(AppLocalizations l10n, String key) {
+    switch (key) {
+      case 'egypt': return l10n.countryEgypt;
+      case 'saudiArabia': return l10n.countrySaudiArabia;
+      case 'uae': return l10n.countryUAE;
+      case 'kuwait': return l10n.countryKuwait;
+      case 'bahrain': return l10n.countryBahrain;
+      case 'qatar': return l10n.countryQatar;
+      case 'oman': return l10n.countryOman;
+      case 'jordan': return l10n.countryJordan;
+      case 'us': return l10n.countryUS;
+      case 'uk': return l10n.countryUK;
+      default: return key;
+    }
+  }
 
   @override
   void dispose() {
@@ -54,7 +72,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please agree to the Terms of Service',
+            AppLocalizations.of(context)!.agreeToTermsError,
             style: AppTypography.bodySmall.copyWith(color: Colors.white),
           ),
           backgroundColor: AppColors.danger,
@@ -87,7 +105,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       );
       context.go(AppRoutes.setupStep1);
     } else {
-      final error = ref.read(authProvider).error ?? 'Sign up failed';
+      final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.signUpFailed;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error),
         backgroundColor: AppColors.danger,
@@ -106,7 +124,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     if (success) {
       context.go(AppRoutes.home);
     } else {
-      final error = ref.read(authProvider).error ?? 'Google sign-in failed';
+      final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.googleSignInFailed;
       if (error.contains('cancelled')) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error),
@@ -126,7 +144,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     if (success) {
       context.go(AppRoutes.home);
     } else {
-      final error = ref.read(authProvider).error ?? 'Apple sign-in failed';
+      final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.appleSignInFailed;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error),
         backgroundColor: AppColors.danger,
@@ -159,7 +177,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               _buildTermsCheckbox(),
               const SizedBox(height: 24),
               MasariPrimaryButton(
-                text: _isLoading ? 'Creating account…' : 'Sign Up',
+                text: _isLoading ? AppLocalizations.of(context)!.creatingAccount : AppLocalizations.of(context)!.signUp,
                 icon: Icons.arrow_forward_rounded,
                 onPressed: _isLoading ? null : _onSignUp,
               ),
@@ -196,12 +214,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         ),
         const SizedBox(height: 16),
         Text(
-          'Create Your Account',
+          AppLocalizations.of(context)!.createYourAccount,
           style: AppTypography.h1.copyWith(color: AppColors.textPrimary),
         ),
         const SizedBox(height: 6),
         Text(
-          'Start managing your business finances with AI.',
+          AppLocalizations.of(context)!.signUpSubtitle,
           style: AppTypography.bodyMedium.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -217,26 +235,26 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       child: Column(
         children: [
           MasariTextField(
-            label: 'Full Name',
+            label: AppLocalizations.of(context)!.fullName,
             icon: Icons.person_outline_rounded,
             controller: _nameController,
             keyboardType: TextInputType.name,
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
-                return 'Please enter your name';
+                return AppLocalizations.of(context)!.pleaseEnterName;
               }
               return null;
             },
           ),
           const SizedBox(height: 16),
           MasariTextField(
-            label: 'Work Email',
+            label: AppLocalizations.of(context)!.workEmail,
             icon: Icons.email_outlined,
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
               if (value == null || !value.contains('@')) {
-                return 'Please enter a valid email';
+                return AppLocalizations.of(context)!.pleaseEnterValidEmail;
               }
               return null;
             },
@@ -253,7 +271,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: MasariTextField(
-                  label: 'Phone Number',
+                  label: AppLocalizations.of(context)!.phoneNumber,
                   icon: Icons.phone_iphone_rounded,
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
@@ -263,13 +281,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           ),
           const SizedBox(height: 16),
           MasariTextField(
-            label: 'Password',
+            label: AppLocalizations.of(context)!.password,
             icon: Icons.lock_outline_rounded,
             controller: _passwordController,
             obscureText: true,
             validator: (value) {
               if (value == null || value.length < 6) {
-                return 'Password must be at least 6 characters';
+                return AppLocalizations.of(context)!.passwordMinLength;
               }
               return null;
             },
@@ -348,7 +366,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Select Country',
+                  AppLocalizations.of(context)!.selectCountry,
                   style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
                 ),
                 const SizedBox(height: 8),
@@ -360,7 +378,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       return ListTile(
                         leading: Text(country['flag']!, style: const TextStyle(fontSize: 24)),
                         title: Text(
-                          '${country['name']} (${country['code']})',
+                          '${_localizedCountryName(AppLocalizations.of(context)!, country['key']!)} (${country['code']})',
                           style: AppTypography.bodyMedium.copyWith(
                             color: AppColors.textPrimary,
                             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
@@ -412,23 +430,27 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 fontSize: 12,
               ),
               children: [
-                const TextSpan(text: 'I agree to the '),
+                TextSpan(text: AppLocalizations.of(context)!.iAgreeTo),
                 TextSpan(
-                  text: 'Terms of Service',
+                  text: AppLocalizations.of(context)!.termsOfService,
                   style: const TextStyle(
                     color: AppColors.accentOrange,
                     fontWeight: FontWeight.w600,
                   ),
-                  recognizer: TapGestureRecognizer()..onTap = () {},
+                  recognizer: TapGestureRecognizer()..onTap = () {
+                    launchUrl(Uri.parse('https://masari.app/terms.html'), mode: LaunchMode.externalApplication);
+                  },
                 ),
-                const TextSpan(text: ' and '),
+                TextSpan(text: AppLocalizations.of(context)!.andWord),
                 TextSpan(
-                  text: 'Privacy Policy',
+                  text: AppLocalizations.of(context)!.privacyPolicy,
                   style: const TextStyle(
                     color: AppColors.accentOrange,
                     fontWeight: FontWeight.w600,
                   ),
-                  recognizer: TapGestureRecognizer()..onTap = () {},
+                  recognizer: TapGestureRecognizer()..onTap = () {
+                    launchUrl(Uri.parse('https://masari.app/privacy.html'), mode: LaunchMode.externalApplication);
+                  },
                 ),
                 const TextSpan(text: '.'),
               ],
@@ -446,9 +468,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           color: AppColors.textSecondary,
         ),
         children: [
-          const TextSpan(text: 'Already have an account? '),
+          TextSpan(text: AppLocalizations.of(context)!.alreadyHaveAccount),
           TextSpan(
-            text: 'Log In',
+            text: AppLocalizations.of(context)!.logIn,
             style: const TextStyle(
               color: AppColors.secondaryBlue,
               fontWeight: FontWeight.w700,

@@ -17,6 +17,7 @@ import '../../shared/widgets/feature_gate.dart';
 import '../../shared/widgets/image_source_picker.dart';
 import '../../shared/widgets/discard_changes_dialog.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class EditProductScreen extends ConsumerStatefulWidget {
   final String productId;
@@ -28,6 +29,8 @@ class EditProductScreen extends ConsumerStatefulWidget {
 }
 
 class _EditProductScreenState extends ConsumerState<EditProductScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _skuController = TextEditingController();
   final TextEditingController _categoryController = TextEditingController();
@@ -60,11 +63,11 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
   // ── Manufacturing mode state ────────────────────────────
   bool _isManufactured = false;
 
-  static const _storageOptions = [
-    'Warehouse A - Shelf 3',
-    'Warehouse A - Shelf 4',
-    'Warehouse B',
-    'Display Store',
+  List<String> get _storageOptions => [
+    l10n.warehouseAShelf3,
+    l10n.warehouseAShelf4,
+    l10n.warehouseBLabel,
+    l10n.displayStoreLabel,
   ];
 
   @override
@@ -85,7 +88,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Product not found')),
+            SnackBar(content: Text(l10n.productNotFound)),
           );
           context.safePop();
         }
@@ -179,7 +182,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Set Cost for All Variants',
+          l10n.setCostForAllVariants,
           style: AppTypography.h3.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -193,7 +196,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
             FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
           ],
           decoration: InputDecoration(
-            labelText: 'Cost Price',
+            labelText: l10n.costPrice,
             prefixText: '$currency ',
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10)),
@@ -202,14 +205,14 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel',
+            child: Text(l10n.cancel,
                 style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx, ctrl.text.trim());
             },
-            child: Text('Apply',
+            child: Text(l10n.apply,
                 style: TextStyle(
                     color: AppColors.primaryNavy,
                     fontWeight: FontWeight.w700)),
@@ -244,7 +247,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
       HapticFeedback.heavyImpact();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Product name is required'),
+          content: Text(l10n.productNameRequired),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -261,7 +264,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     if (original == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Product not found')),
+          SnackBar(content: Text(l10n.productNotFound)),
         );
         context.safePop();
       }
@@ -338,8 +341,8 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
       if (!sourceExists) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Breakdown source variant no longer exists'),
+            SnackBar(
+              content: Text(l10n.breakdownSourceNotExist),
               backgroundColor: AppColors.danger,
             ),
           );
@@ -394,7 +397,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.error ?? 'Failed to update product'),
+            content: Text(result.error ?? l10n.failedToUpdateProduct),
             backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -415,14 +418,14 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Delete Product?',
+          l10n.deleteProductConfirm,
           style: AppTypography.h3.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
           ),
         ),
         content: Text(
-          'This action cannot be undone. The product and its movement history will be permanently removed.',
+          l10n.deleteProductDesc,
           style: AppTypography.bodySmall
               .copyWith(color: AppColors.textSecondary),
         ),
@@ -430,7 +433,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
-              'Cancel',
+              l10n.cancel,
               style: AppTypography.labelMedium
                   .copyWith(color: AppColors.textTertiary),
             ),
@@ -448,7 +451,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
               });
             },
             child: Text(
-              'Delete',
+              l10n.delete,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w700,
@@ -478,7 +481,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
         leading: TextButton(
           onPressed: () => context.safePop(),
           child: Text(
-            'Cancel',
+            l10n.cancel,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.textTertiary,
               fontWeight: FontWeight.w500,
@@ -487,7 +490,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
         ),
         leadingWidth: 80,
         title: Text(
-          'Edit Product',
+          l10n.editProduct,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.primaryNavy,
             fontWeight: FontWeight.w700,
@@ -499,7 +502,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
           TextButton(
             onPressed: _save,
             child: Text(
-              'Save',
+              l10n.save,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.accentOrange,
                 fontWeight: FontWeight.w600,
@@ -567,7 +570,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     return _card(
       children: [
         Text(
-          'Product Media',
+          l10n.productMedia,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -615,7 +618,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                             color: AppColors.textTertiary.withValues(alpha: 0.4)),
                         const SizedBox(height: 8),
                         Text(
-                          'Product Image',
+                          l10n.productImage,
                           style: AppTypography.captionSmall.copyWith(
                             color: AppColors.textTertiary,
                             fontSize: 12,
@@ -659,7 +662,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                                 size: 16, color: AppColors.textPrimary),
                             const SizedBox(width: 6),
                             Text(
-                              hasImage ? 'Change Photo' : 'Add Photo',
+                              hasImage ? l10n.changePhoto : l10n.addPhotoLabel,
                               style: AppTypography.labelMedium.copyWith(
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
@@ -698,7 +701,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     return _card(
       children: [
         Text(
-          'Basic Information',
+          l10n.basicInformation,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -706,21 +709,21 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
         ),
         const SizedBox(height: 16),
         _inputField(
-          label: 'PRODUCT NAME',
+          label: l10n.productNameUpperLabel,
           controller: _nameController,
           onChanged: (_) => _markChanged(),
         ),
         const SizedBox(height: 14),
         _inputField(
-          label: 'SKU',
+          label: l10n.skuUpperLabel,
           controller: _skuController,
           onChanged: (_) => _markChanged(),
         ),
         const SizedBox(height: 14),
         _inputField(
-          label: 'CATEGORY',
+          label: l10n.categoryUpperLabel,
           controller: _categoryController,
-          hint: 'e.g. Gym Gear, Supplements...',
+          hint: l10n.egGymGear,
           onChanged: (_) => _markChanged(),
         ),
       ],
@@ -734,7 +737,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     return _card(
       children: [
         Text(
-          'Pricing Strategy',
+          l10n.pricingStrategy,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -745,7 +748,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
           children: [
             Expanded(
               child: _inputField(
-                label: 'COST PRICE',
+                label: l10n.costPriceUpperLabel,
                 controller: _costController,
                 prefix: ref.watch(appSettingsProvider).currency,
                 keyboardType: TextInputType.number,
@@ -755,7 +758,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
             const SizedBox(width: 14),
             Expanded(
               child: _inputField(
-                label: 'SELLING PRICE',
+                label: l10n.sellingPriceUpperLabel,
                 controller: _priceController,
                 prefix: ref.watch(appSettingsProvider).currency,
                 keyboardType: TextInputType.number,
@@ -780,7 +783,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
             Icon(Icons.style_rounded, size: 18, color: AppColors.accentOrange),
             const SizedBox(width: 8),
             Text(
-              'Variant Pricing',
+              l10n.variantPricing,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -788,7 +791,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
             ),
             const Spacer(),
             Text(
-              '${_editVariantRows.length} variant${_editVariantRows.length == 1 ? '' : 's'}',
+              l10n.variantCount(_editVariantRows.length),
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
                 fontWeight: FontWeight.w600,
@@ -817,7 +820,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                     Icon(Icons.copy_all_rounded, size: 18, color: AppColors.primaryNavy),
                     const SizedBox(width: 8),
                     Text(
-                      'Apply cost to all variants',
+                      l10n.applyCostToAllVariants,
                       style: AppTypography.labelSmall.copyWith(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w700,
@@ -865,7 +868,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        '${row.currentStock} in stock',
+                        l10n.inStockCount(row.currentStock),
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.primaryNavy,
                           fontWeight: FontWeight.w600,
@@ -876,7 +879,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                 ),
                 const SizedBox(height: 8),
                 _inputField(
-                  label: 'SKU',
+                  label: l10n.skuUpperLabel,
                   controller: row.skuCtrl,
                   onChanged: (_) => _markChanged(),
                 ),
@@ -885,7 +888,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                   children: [
                     Expanded(
                       child: _inputField(
-                        label: isOutput ? 'COST PRICE (from breakdown)' : 'COST PRICE',
+                        label: isOutput ? l10n.costPriceFromBreakdown : l10n.costPriceUpperLabel,
                         controller: row.costCtrl,
                         prefix: currency,
                         keyboardType: const TextInputType.numberWithOptions(
@@ -897,7 +900,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _inputField(
-                        label: 'SELLING PRICE',
+                        label: l10n.sellingPriceUpperLabel,
                         controller: row.priceCtrl,
                         prefix: currency,
                         keyboardType: const TextInputType.numberWithOptions(
@@ -909,7 +912,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                 ),
                 const SizedBox(height: 8),
                 _inputField(
-                  label: 'REORDER POINT',
+                  label: l10n.reorderPointUpperLabel,
                   controller: row.reorderCtrl,
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _markChanged(),
@@ -929,7 +932,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     return _card(
       children: [
         Text(
-          'Stock Configuration',
+          l10n.stockConfiguration,
           style: AppTypography.labelMedium.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -940,7 +943,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
           children: [
             Expanded(
               child: _inputField(
-                label: 'UNIT',
+                label: l10n.unitLabel,
                 controller: _unitController,
                 onChanged: (_) => _markChanged(),
               ),
@@ -948,7 +951,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
             const SizedBox(width: 14),
             Expanded(
               child: _inputField(
-                label: 'REORDER POINT',
+                label: l10n.reorderPointUpperLabel,
                 controller: _reorderController,
                 keyboardType: TextInputType.number,
                 onChanged: (_) => _markChanged(),
@@ -958,9 +961,9 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
         ),
         const SizedBox(height: 14),
         _dropdownField(
-          label: 'STORAGE LOCATION',
+          label: l10n.storageLocationLabel,
           value: _storageLocation,
-          hint: 'Select location',
+          hint: l10n.selectLocation,
           items: _storageOptions,
           onChanged: (v) {
             setState(() => _storageLocation = v ?? _storageLocation);
@@ -989,7 +992,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Breakdown Recipe',
+                l10n.breakdownRecipe,
                 style: AppTypography.labelMedium.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -1018,7 +1021,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              'Define how one variant breaks down into others',
+              l10n.defineBreakdownDesc,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
               ),
@@ -1027,7 +1030,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
         if (_hasBreakdownRecipe) ...[
           const SizedBox(height: 12),
           Text(
-            'SOURCE VARIANT',
+            l10n.sourceVariant,
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textTertiary,
               fontWeight: FontWeight.w600,
@@ -1049,7 +1052,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                 value: _breakdownSourceVariantId,
                 isExpanded: true,
                 hint: Text(
-                  'Select source variant',
+                  l10n.selectSourceVariant,
                   style: AppTypography.bodySmall
                       .copyWith(color: AppColors.textTertiary),
                 ),
@@ -1071,7 +1074,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
           if (_breakdownSourceVariantId != null) ...[
             const SizedBox(height: 16),
             Text(
-              'OUTPUT VARIANTS (qty per 1 source unit)',
+              l10n.outputVariantsQty,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
                 fontWeight: FontWeight.w600,
@@ -1104,7 +1107,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                       child: _inputField(
                         label: '',
                         controller: _breakdownOutputQtys[row.variantId]!,
-                        hint: 'Qty',
+                        hint: l10n.qtyHint,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
                         onChanged: (_) => _markChanged(),
@@ -1151,7 +1154,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Advanced Settings',
+                    l10n.advancedSettings,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -1186,7 +1189,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                   const SizedBox(height: 14),
                   // Supplier — live list + custom toggle
                   Text(
-                    'SUPPLIER',
+                    l10n.supplierLabel,
                     style: AppTypography.captionSmall.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w600,
@@ -1197,11 +1200,11 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      _pillToggle('From List', !_showSupplierCustom, () {
+                      _pillToggle(l10n.fromList, !_showSupplierCustom, () {
                         setState(() => _showSupplierCustom = false);
                       }),
                       const SizedBox(width: 8),
-                      _pillToggle('Custom', _showSupplierCustom, () {
+                      _pillToggle(l10n.custom, _showSupplierCustom, () {
                         setState(() => _showSupplierCustom = true);
                       }),
                     ],
@@ -1214,7 +1217,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                         controller: _supplierCustomController,
                         onChanged: (_) => _markChanged(),
                         decoration: InputDecoration(
-                          hintText: 'Type supplier name...',
+                          hintText: l10n.typeSupplierNameField,
                           hintStyle: AppTypography.bodySmall
                               .copyWith(color: AppColors.textTertiary),
                           filled: true,
@@ -1257,8 +1260,8 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                           value: _selectedSupplierId,
                           hint: Text(
                             suppliers.isEmpty
-                                ? 'No suppliers yet'
-                                : 'Choose supplier',
+                                ? l10n.noSuppliersYetLabel
+                                : l10n.chooseSupplier,
                             style: AppTypography.bodySmall
                                 .copyWith(color: AppColors.textTertiary),
                           ),
@@ -1316,7 +1319,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Manufactured Product',
+                                  l10n.manufacturedProduct,
                                   style: AppTypography.labelMedium.copyWith(
                                     color: AppColors.textPrimary,
                                     fontWeight: FontWeight.w600,
@@ -1324,7 +1327,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Goods receipts adjust stock only — cost is managed separately',
+                                  l10n.manufacturedDesc,
                                   style: TextStyle(
                                     color: AppColors.textTertiary,
                                     fontSize: 11,
@@ -1370,7 +1373,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                 size: 18, color: AppColors.danger),
             const SizedBox(width: 6),
             Text(
-              'Delete Product',
+              l10n.deleteProduct,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,

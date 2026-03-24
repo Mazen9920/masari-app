@@ -13,12 +13,14 @@ import '../../core/providers/app_settings_provider.dart';
 import '../../core/navigation/app_router.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final userProfile     = ref.watch(userProfileProvider);
     final businessProfile  = ref.watch(businessProfileProvider);
     final appSettings      = ref.watch(appSettingsProvider);
@@ -39,12 +41,12 @@ class ProfileScreen extends ConsumerWidget {
           physics: const BouncingScrollPhysics(),
           slivers: [
             // ── Header ──
-            SliverToBoxAdapter(child: _buildHeader(context)),
+            SliverToBoxAdapter(child: _buildHeader(context, l10n)),
             // ── Profile Card ──
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                child: _buildProfileCard(context, userProfile.initials, userProfile.name, businessProfile.businessName, userProfile.avatarUrl, appSettings.tier)
+                child: _buildProfileCard(context, l10n, userProfile.initials, userProfile.name, businessProfile.businessName, userProfile.avatarUrl, appSettings.tier)
                     .animate()
                     .fadeIn(duration: 300.ms)
                     .slideY(begin: 0.05),
@@ -56,29 +58,29 @@ class ProfileScreen extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
                 child: _buildSection(
                   context,
-                  'ACCOUNT',
+                  l10n.profileSectionAccount,
                   [
                     _SettingItem(
                       icon: Icons.person_outline_rounded,
                       iconBg: const Color(0xFFEFF6FF),
                       iconColor: const Color(0xFF3B82F6),
-                      title: 'Edit Profile',
-                      subtitle: 'Name, email, phone',
+                      title: l10n.profileEditProfile,
+                      subtitle: l10n.profileEditProfileSubtitle,
                       onTap: () => context.pushNamed('EditProfileScreen'),
                     ),
                     _SettingItem(
                       icon: Icons.business_rounded,
                       iconBg: const Color(0xFFF0FDF4),
                       iconColor: const Color(0xFF22C55E),
-                      title: 'Business Info',
-                      subtitle: 'Company details & tax ID',
+                      title: l10n.profileBusinessInfo,
+                      subtitle: l10n.profileBusinessInfoSubtitle,
                       onTap: () => context.pushNamed('BusinessInfoScreen'),
                     ),
                     _SettingItem(
                       icon: Icons.language_rounded,
                       iconBg: const Color(0xFFFFF7ED),
                       iconColor: AppColors.accentOrange,
-                      title: 'Currency & Language',
+                      title: l10n.profileCurrencyLanguage,
                       subtitle: currencyLangText,
                       onTap: () => context.pushNamed('CurrencyLanguageScreen'),
                     ),
@@ -86,8 +88,8 @@ class ProfileScreen extends ConsumerWidget {
                       icon: Icons.workspace_premium_outlined,
                       iconBg: const Color(0xFFFEF2F2),
                       iconColor: const Color(0xFFEF4444),
-                      title: 'Manage Subscription',
-                      subtitle: 'Current plan: ${appSettings.tier.label}',
+                      title: l10n.profileManageSubscription,
+                      subtitle: l10n.profileCurrentPlan(appSettings.tier.localizedLabel(l10n)),
                       onTap: () => context.pushNamed('ManageSubscriptionScreen'),
                     ),
                   ],
@@ -100,14 +102,14 @@ class ProfileScreen extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
                 child: _buildSection(
                   context,
-                  'APP',
+                  l10n.profileSectionApp,
                   [
                     _SettingItem(
                       icon: Icons.notifications_outlined,
                       iconBg: const Color(0xFFFEF2F2),
                       iconColor: const Color(0xFFEF4444),
-                      title: 'Notification Preferences',
-                      subtitle: 'Push, email & alerts',
+                      title: l10n.profileNotificationPreferences,
+                      subtitle: l10n.profileNotificationPrefSubtitle,
                       onTap: () => context.pushNamed('NotificationPreferencesScreen'),
                     ),
                     if (hasShopifyAccess)
@@ -115,24 +117,24 @@ class ProfileScreen extends ConsumerWidget {
                         icon: Icons.store_rounded,
                         iconBg: const Color(0xFFF5F3FF),
                         iconColor: const Color(0xFF7C3AED),
-                        title: 'Shopify Integration',
-                        subtitle: isShopifyConnected ? 'Connected' : 'Not connected',
+                        title: l10n.profileShopifyIntegration,
+                        subtitle: isShopifyConnected ? l10n.profileShopifyConnected : l10n.profileShopifyNotConnected,
                         onTap: () => context.push(AppRoutes.shopify),
                       ),
                     _SettingItem(
                       icon: Icons.lock_outline_rounded,
                       iconBg: const Color(0xFFF5F3FF),
                       iconColor: const Color(0xFF8B5CF6),
-                      title: 'Security & PIN',
-                      subtitle: 'Biometrics, password',
+                      title: l10n.profileSecurityPin,
+                      subtitle: l10n.profileSecuritySubtitle,
                       onTap: () => context.pushNamed('SecurityScreen'),
                     ),
                     _SettingItem(
                       icon: Icons.cloud_upload_outlined,
                       iconBg: const Color(0xFFF0F9FF),
                       iconColor: const Color(0xFF0EA5E9),
-                      title: 'Data & Backup',
-                      subtitle: 'Export, restore, auto-backup',
+                      title: l10n.profileDataBackup,
+                      subtitle: l10n.profileDataBackupSubtitle,
                       onTap: () => context.pushNamed('DataBackupScreen'),
                     ),
                   ],
@@ -145,22 +147,22 @@ class ProfileScreen extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
                 child: _buildSection(
                   context,
-                  'SUPPORT',
+                  l10n.profileSectionSupport,
                   [
                     _SettingItem(
                       icon: Icons.help_outline_rounded,
                       iconBg: const Color(0xFFFFFBEB),
                       iconColor: const Color(0xFFF59E0B),
-                      title: 'Help Center',
-                      subtitle: 'FAQ & contact support',
+                      title: l10n.profileHelpCenter,
+                      subtitle: l10n.profileHelpCenterSubtitle,
                       onTap: () => context.pushNamed('HelpCenterScreen'),
                     ),
                     _SettingItem(
                       icon: Icons.info_outline_rounded,
                       iconBg: const Color(0xFFF1F5F9),
                       iconColor: const Color(0xFF64748B),
-                      title: 'About Masari',
-                      subtitle: 'Version 1.0.0',
+                      title: l10n.profileAboutMasari,
+                      subtitle: l10n.profileVersionInfo,
                       onTap: () => context.pushNamed('AboutScreen'),
                     ),
                   ],
@@ -171,7 +173,7 @@ class ProfileScreen extends ConsumerWidget {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
-                child: _buildSignOutButton(context, ref)
+                child: _buildSignOutButton(context, ref, l10n)
                     .animate()
                     .fadeIn(duration: 300.ms, delay: 400.ms),
               ),
@@ -183,7 +185,7 @@ class ProfileScreen extends ConsumerWidget {
   }
 
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 4, 16, 0),
       child: Row(
@@ -195,7 +197,7 @@ class ProfileScreen extends ConsumerWidget {
           ),
           Expanded(
             child: Text(
-              'Profile',
+              l10n.profileTitle,
               style: AppTypography.h2.copyWith(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w800,
@@ -208,7 +210,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildProfileCard(BuildContext context, String initials, String userName, String businessName, String? avatarUrl, SubscriptionTier tier) {
+  Widget _buildProfileCard(BuildContext context, AppLocalizations l10n, String initials, String userName, String businessName, String? avatarUrl, SubscriptionTier tier) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -283,7 +285,7 @@ class ProfileScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  businessName.isNotEmpty ? businessName : 'My Business',
+                  businessName.isNotEmpty ? businessName : l10n.profileMyBusiness,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
                     fontSize: 14,
@@ -298,7 +300,7 @@ class ProfileScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    '${tier.label} Plan',
+                    l10n.profileTierPlan(tier.localizedLabel(l10n)),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
@@ -418,19 +420,19 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSignOutButton(BuildContext context, WidgetRef ref) {
+  Widget _buildSignOutButton(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     return OutlinedButton.icon(
       onPressed: () {
         HapticFeedback.mediumImpact();
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: Text('Sign Out', style: AppTypography.h3),
-            content: const Text('Are you sure you want to sign out?'),
+            title: Text(l10n.signOut, style: AppTypography.h3),
+            content: Text(l10n.signOutConfirm),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
+                child: Text(l10n.cancel),
               ),
               FilledButton(
                 onPressed: () async {
@@ -438,7 +440,7 @@ class ProfileScreen extends ConsumerWidget {
                   await ref.read(authProvider.notifier).signOut();
                 },
                 style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-                child: const Text('Sign Out'),
+                child: Text(l10n.signOut),
               ),
             ],
           ),
@@ -451,7 +453,7 @@ class ProfileScreen extends ConsumerWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       icon: const Icon(Icons.logout_rounded, size: 20),
-      label: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+      label: Text(l10n.signOut, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
     );
   }
 }

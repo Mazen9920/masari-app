@@ -32,7 +32,7 @@ Future<ImageSource?> showImageSourcePicker(BuildContext context) {
               ),
             ),
             Text(
-               'Upload Photo',
+               l10n.uploadPhoto,
               style: TextStyle(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w700,

@@ -16,6 +16,7 @@ import '../../shared/models/purchase_model.dart';
 import '../../shared/models/supplier_model.dart';
 import '../../shared/widgets/discard_changes_dialog.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Screen to receive goods against a purchase order (Growth tier).
 class ReceiveGoodsScreen extends ConsumerStatefulWidget {
@@ -34,6 +35,8 @@ class ReceiveGoodsScreen extends ConsumerStatefulWidget {
 }
 
 class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
   static const List<String> _variantNameSeparators = [' \u2014 ', ' \u2013 ', ' - '];
 
   final _notesCtrl = TextEditingController();
@@ -196,7 +199,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
           Expanded(
             child: Center(
               child: Text(
-                'Receive Goods',
+                l10n.receiveGoods,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -206,14 +209,14 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
           ),
           Semantics(
             button: true,
-            label: 'Save goods receipt',
+            label: l10n.saveGoodsReceipt,
             child: GestureDetector(
             onTap: _save,
             child: Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Text(
-                'Save',
+                l10n.save,
                 style: AppTypography.labelLarge.copyWith(
                   color: AppColors.accentOrange,
                   fontWeight: FontWeight.w700,
@@ -237,7 +240,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
         : <Purchase>[];
 
     return _Card(
-      title: 'Supplier & Purchase',
+      title: l10n.supplierAndPurchase,
       children: [
         GestureDetector(
           onTap: () => _pickSupplier(suppliers),
@@ -257,7 +260,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    _selectedSupplierName ?? 'Select Supplier',
+                    _selectedSupplierName ?? l10n.selectSupplier,
                     style: AppTypography.bodyMedium.copyWith(
                       color: _selectedSupplierName != null
                           ? AppColors.textPrimary
@@ -295,8 +298,8 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                   Expanded(
                     child: Text(
                       _selectedPurchaseId != null
-                          ? 'PO ${supplierPurchases.firstWhere((p) => p.id == _selectedPurchaseId, orElse: () => supplierPurchases.first).referenceNo.isNotEmpty ? supplierPurchases.firstWhere((p) => p.id == _selectedPurchaseId, orElse: () => supplierPurchases.first).referenceNo : _selectedPurchaseId!.substring(0, 8)}'
-                          : 'Link to Purchase Order (optional)',
+                          ? (supplierPurchases.firstWhere((p) => p.id == _selectedPurchaseId, orElse: () => supplierPurchases.first).referenceNo.isNotEmpty ? l10n.poPrefix(supplierPurchases.firstWhere((p) => p.id == _selectedPurchaseId, orElse: () => supplierPurchases.first).referenceNo) : _selectedPurchaseId!.substring(0, 8))
+                          : l10n.linkToPurchaseOrderOptional,
                       style: AppTypography.bodyMedium.copyWith(
                         color: _selectedPurchaseId != null
                             ? AppColors.textPrimary
@@ -330,7 +333,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(
                   horizontal: 16, vertical: 8),
-              child: Text('Choose Supplier',
+              child: Text(l10n.chooseSupplier,
                   style: AppTypography.h3.copyWith(
                       color: AppColors.primaryNavy,
                       fontWeight: FontWeight.w700)),
@@ -379,7 +382,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text('Link to Purchase Order',
+              child: Text(l10n.linkToPurchaseOrder,
                   style: AppTypography.h3.copyWith(
                       color: AppColors.primaryNavy,
                       fontWeight: FontWeight.w700)),
@@ -390,7 +393,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                 backgroundColor: Color(0xFFF1F5F9),
                 child: Icon(Icons.edit_note_rounded, size: 20),
               ),
-              title: const Text('Manual entry (no PO)'),
+              title: Text(l10n.manualEntryNoPO),
               trailing: _selectedPurchaseId == null
                   ? const Icon(Icons.check_rounded, color: AppColors.success)
                   : null,
@@ -412,8 +415,8 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                 ),
                 title: Text(
                   p.referenceNo.isNotEmpty
-                      ? 'PO ${p.referenceNo}'
-                      : 'Purchase ${p.id.substring(0, 8)}',
+                      ? l10n.poPrefix(p.referenceNo)
+                      : l10n.purchaseFallback(p.id.substring(0, 8)),
                 ),
                 subtitle: Text(
                   '${p.items.length} items · $currency ${fmt.format(p.total)} · ${DateFormat('MMM dd').format(p.date)}',
@@ -559,7 +562,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
   Widget _buildItemsSection(String currency) {
     return _Card(
-      title: 'Items Received',
+      title: l10n.itemsReceived,
       trailing: GestureDetector(
         onTap: _addLine,
         child: Container(
@@ -575,7 +578,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
               Icon(Icons.add_rounded,
                   size: 16, color: AppColors.accentOrange),
               const SizedBox(width: 4),
-              Text('Add',
+              Text(l10n.add,
                   style: AppTypography.labelSmall.copyWith(
                       color: AppColors.accentOrange,
                       fontWeight: FontWeight.w600)),
@@ -648,7 +651,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
             Expanded(
               child: _compactField(
                 controller: li.orderedCtrl,
-                label: 'Ordered',
+                label: l10n.ordered,
                 keyboardType: const TextInputType.numberWithOptions(
                     decimal: true),
               ),
@@ -657,7 +660,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
             Expanded(
               child: _compactField(
                 controller: li.receivedCtrl,
-                label: 'Received',
+                label: l10n.received,
                 keyboardType: const TextInputType.numberWithOptions(decimal: false),
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 onChanged: (_) => setState(() {}),
@@ -667,7 +670,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
             Expanded(
               child: _compactField(
                 controller: li.costCtrl,
-                label: 'Unit cost',
+                label: l10n.unitCost,
                 prefix: currency,
                 keyboardType: const TextInputType.numberWithOptions(
                     decimal: true),
@@ -696,7 +699,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('Total Cost',
+          Text(l10n.totalCost,
               style: AppTypography.labelMedium.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700)),
@@ -739,7 +742,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Update Inventory Stock',
+                    l10n.updateInventoryStock,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w600,
@@ -747,7 +750,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Increase product quantities by received amounts',
+                    l10n.increaseProductQuantities,
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondary,
                       fontSize: 12,
@@ -772,11 +775,11 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
   Widget _buildNotesSection() {
     return _Card(
-      title: 'Notes',
+      title: l10n.notes,
       children: [
         _textField(
           controller: _notesCtrl,
-          hint: 'Delivery notes (optional)',
+          hint: l10n.deliveryNotesOptional,
           icon: Icons.notes_rounded,
           maxLines: 3,
         ),
@@ -818,20 +821,20 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
             ],
           ),
           child: _isSaving
-              ? const Row(
+              ? Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    SizedBox(
+                    const SizedBox(
                       width: 18, height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     ),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Text(
-                      'Saving...',
-                      style: TextStyle(
+                      l10n.saving,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
@@ -840,7 +843,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                   ],
                 )
               : Text(
-                  'Confirm Receipt · $currency ${fmt.format(_totalCost)}',
+                  l10n.confirmReceiptTotal(currency, fmt.format(_totalCost)),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
@@ -868,7 +871,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
   Future<void> _doSave() async {
     if (_selectedSupplierId == null) {
-      _showError('Please select a supplier');
+      _showError(l10n.pleaseSelectSupplier);
       return;
     }
 
@@ -882,7 +885,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
     }
 
     if (!hasValid) {
-      _showError('Add at least one item with a received quantity');
+      _showError(l10n.addAtLeastOneItem);
       return;
     }
 
@@ -894,7 +897,11 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
         if (received <= 0) continue;
         if (ordered > 0 && received.toDouble() > ordered) {
           _showError(
-            '${li.nameCtrl.text.trim()}: received qty ($received) exceeds ordered qty ($ordered)',
+            l10n.receivedExceedsOrdered(
+              li.nameCtrl.text.trim(),
+              received.toString(),
+              ordered.toString(),
+            ),
           );
           return;
         }
@@ -939,7 +946,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
     final receiptResult =
         await ref.read(goodsReceiptsProvider.notifier).addReceipt(receipt);
     if (!receiptResult.isSuccess) {
-      _showError(receiptResult.error ?? 'Failed to save goods receipt');
+      _showError(receiptResult.error ?? l10n.failedToSaveGoodsReceipt);
       return;
     }
 
@@ -1006,7 +1013,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
       if (syncErrors > 0 && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('$syncErrors item(s) could not be synced to inventory'),
+          content: Text(l10n.itemsCouldNotSync(syncErrors)),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1072,7 +1079,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
     } else {
       messenger.showSnackBar(SnackBar(
         content: Text(
-            'Received goods worth $currency ${fmt.format(receipt.totalCost)}'),
+            l10n.receivedGoodsWorth(currency, fmt.format(receipt.totalCost))),
         backgroundColor: AppColors.primaryNavy,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -1092,7 +1099,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                 color: AppColors.accentOrange, size: 22),
             const SizedBox(width: 8),
             Text(
-              'Price Change Alert',
+              l10n.priceChangeAlert,
               style: AppTypography.h3.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -1105,7 +1112,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'The following items have a significant cost change (≥10%):',
+              l10n.significantCostChange,
               style: AppTypography.bodySmall
                   .copyWith(color: AppColors.textSecondary),
             ),
@@ -1133,7 +1140,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
-              'Got It',
+              l10n.gotIt,
               style: AppTypography.labelMedium.copyWith(
                 color: AppColors.primaryNavy,
                 fontWeight: FontWeight.w700,
@@ -1291,7 +1298,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Select Variant — ${product.name}',
+                l10n.selectVariantTitle(product.name),
                 style: AppTypography.h3.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -1312,7 +1319,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                   final isDefault =
                       !product.hasVariants || product.variants.length == 1;
                   final variantLabel =
-                      isDefault ? product.name : '${product.name} — ${v.displayName}';
+                      isDefault ? product.name : '${product.name} — ${v.localizedDisplayName(l10n)}';
                   return ListTile(
                     title: Text(
                       variantLabel,
@@ -1322,7 +1329,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                       ),
                     ),
                     subtitle: Text(
-                      'Cost: ${v.costPrice.toStringAsFixed(2)} · Stock: ${v.currentStock}',
+                      l10n.costStockInfo(v.costPrice.toStringAsFixed(2), v.currentStock.toString()),
                       style: AppTypography.bodySmall
                           .copyWith(color: AppColors.textTertiary),
                     ),
@@ -1334,7 +1341,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                               color: AppColors.danger.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text('Out',
+                            child: Text(l10n.outLabel,
                                 style: AppTypography.caption
                                     .copyWith(color: AppColors.danger)),
                           )
@@ -1401,7 +1408,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
             }
           },
           decoration: InputDecoration(
-            hintText: 'Search product or material',
+            hintText: l10n.searchProductOrMaterial,
             hintStyle: AppTypography.bodySmall
                 .copyWith(color: AppColors.textTertiary),
             prefixIcon: const Icon(Icons.search_rounded,

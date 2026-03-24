@@ -75,7 +75,7 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
                     const SizedBox(height: 16),
                     Center(
                       child: Text(
-                         'Import Shopify Orders',
+                         l10n.shopifyImportTitle,
                         style: AppTypography.h2.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w800,
@@ -85,7 +85,7 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
                     const SizedBox(height: 8),
                     Center(
                       child: Text(
-                         'Import historical orders from your Shopify store.\nMaximum 3 months back.',
+                         l10n.shopifyImportSubtitle,
                         textAlign: TextAlign.center,
                         style: AppTypography.bodyMedium.copyWith(
                           color: AppColors.textSecondary,
@@ -175,7 +175,7 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
                                       const SizedBox(width: 10),
                                       Text(
                                         syncStatus.message ??
-                                            'Importing…',
+                                            l10n.shopifyImporting,
                                         style: AppTypography
                                             .labelMedium
                                             .copyWith(
@@ -425,7 +425,7 @@ class _RangeInfo extends StatelessWidget {
               size: 16, color: AppColors.primaryNavy),
           const SizedBox(width: 8),
           Text(
-             'Range: $days day${days == 1 ? '' : 's'}',
+             AppLocalizations.of(context)!.shopifyRangeDays(days),
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.primaryNavy,
               fontWeight: FontWeight.w600,
@@ -475,7 +475,7 @@ class _ResultBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isError ? 'Import Failed' : l10n.importComplete,
+                  isError ? l10n.shopifyImportFailed : l10n.importComplete,
                   style: AppTypography.labelMedium.copyWith(
                     color: isError ? AppColors.danger : AppColors.success,
                     fontWeight: FontWeight.w700,

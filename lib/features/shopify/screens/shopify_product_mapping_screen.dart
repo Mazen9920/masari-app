@@ -8,6 +8,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/product_model.dart';
 import '../../../shared/models/shopify_product_mapping_model.dart';
 import '../providers/shopify_product_mappings_provider.dart';
@@ -70,7 +71,7 @@ class _ShopifyProductMappingScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Auto-linked ${result.data} existing product(s)',
+            AppLocalizations.of(context)!.shopifyAutoLinked(result.data!),
           ),
           backgroundColor: AppColors.primaryNavy,
           behavior: SnackBarBehavior.floating,
@@ -109,7 +110,7 @@ class _ShopifyProductMappingScreenState
                             size: 48, color: AppColors.danger),
                         const SizedBox(height: 16),
                         Text(
-                          'Failed to load Shopify products',
+                          AppLocalizations.of(context)!.shopifyFailedLoadProducts,
                           style: AppTypography.h3.copyWith(
                             color: AppColors.textPrimary,
                           ),
@@ -128,7 +129,7 @@ class _ShopifyProductMappingScreenState
                               .read(shopifyProductsProvider.notifier)
                               .refresh(),
                           icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Retry'),
+                          label: Text(AppLocalizations.of(context)!.shopifyRetry),
                         ),
                       ],
                     ),
@@ -167,7 +168,7 @@ class _ShopifyProductMappingScreenState
           ),
           const Spacer(),
           Text(
-            'Shopify Products',
+            AppLocalizations.of(context)!.shopifyProductsTitle,
             style: AppTypography.labelMedium.copyWith(
               color: AppColors.primaryNavy,
               fontWeight: FontWeight.w700,
@@ -187,6 +188,7 @@ class _ShopifyProductMappingScreenState
     List<Map<String, dynamic>> shopifyProducts,
     List<ShopifyProductMapping> mappings,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     // Auto-relink existing products on first load after reconnect
     if (!_didAutoRelink) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -219,19 +221,19 @@ class _ShopifyProductMappingScreenState
               Row(
                 children: [
                   _MiniStat(
-                    label: 'Mapped',
+                    label: l10n.shopifyMapped,
                     count: mapped.length,
                     color: AppColors.success,
                   ),
                   const SizedBox(width: 16),
                   _MiniStat(
-                    label: 'Unmapped',
+                    label: l10n.shopifyUnmapped,
                     count: unmapped.length,
                     color: AppColors.warning,
                   ),
                   const Spacer(),
                   _ActionChip(
-                    label: 'Auto-Match',
+                    label: l10n.shopifyAutoMatch,
                     icon: Icons.auto_fix_high_rounded,
                     loading: _autoMatching,
                     onTap: _autoMatching ? null : _onAutoMatch,
@@ -276,7 +278,7 @@ class _ShopifyProductMappingScreenState
                                     size: 18, color: Colors.white),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Import All ${unmapped.length} Products to Masari',
+                                  l10n.shopifyImportAllProducts(unmapped.length),
                                   style: AppTypography.labelSmall.copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w700,
@@ -330,6 +332,7 @@ class _ShopifyProductMappingScreenState
   }
 
   Widget _buildEmptyState() {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -338,14 +341,14 @@ class _ShopifyProductMappingScreenState
               size: 56, color: AppColors.textTertiary),
           const SizedBox(height: 16),
           Text(
-            'No Shopify products',
+            l10n.shopifyNoProducts,
             style: AppTypography.h3.copyWith(
               color: AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Your Shopify store has no products yet.\nAdd products in Shopify first.',
+            l10n.shopifyNoProductsDesc,
             textAlign: TextAlign.center,
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textTertiary,
@@ -359,6 +362,7 @@ class _ShopifyProductMappingScreenState
   // ── Import single Shopify product into Masari ───────────
 
   Future<void> _importSingle(Map<String, dynamic> shopifyProduct) async {
+    final l10n = AppLocalizations.of(context)!;
     HapticFeedback.mediumImpact();
     setState(() => _importing = true);
 
@@ -368,7 +372,7 @@ class _ShopifyProductMappingScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Imported "${shopifyProduct['title'] ?? 'Product'}"',
+            l10n.shopifyImportedProduct(shopifyProduct['title'] ?? 'Product'),
           ),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
@@ -380,7 +384,7 @@ class _ShopifyProductMappingScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Import failed: $e'),
+          content: Text(l10n.shopifyImportFailedError('$e')),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -399,6 +403,7 @@ class _ShopifyProductMappingScreenState
     Map<String, List<ShopifyProductMapping>> existingMappings,
   ) async {
     HapticFeedback.mediumImpact();
+    final l10n = AppLocalizations.of(context)!;
 
     // Confirm with the user
     final confirm = await showDialog<bool>(
@@ -408,15 +413,13 @@ class _ShopifyProductMappingScreenState
           borderRadius: BorderRadius.circular(16),
         ),
         title: Text(
-          'Import ${unmapped.length} Products',
+          l10n.shopifyImportCountTitle(unmapped.length),
           style: AppTypography.h3.copyWith(
             color: AppColors.textPrimary,
           ),
         ),
         content: Text(
-          'This will create ${unmapped.length} new product(s) in your '
-          'Masari inventory from Shopify and link them automatically.\n\n'
-          'Variants, SKUs, prices, and stock levels will be imported.',
+          l10n.shopifyImportAllConfirmMessage(unmapped.length),
           style: AppTypography.bodyMedium.copyWith(
             color: AppColors.textSecondary,
             height: 1.5,
@@ -425,14 +428,14 @@ class _ShopifyProductMappingScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primaryNavy,
             ),
-            child: const Text('Import All'),
+            child: Text(l10n.shopifyImportAll),
           ),
         ],
       ),
@@ -452,7 +455,7 @@ class _ShopifyProductMappingScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Successfully imported $importedCount product(s)'),
+          content: Text(l10n.shopifyImportedCount(importedCount)),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -464,7 +467,7 @@ class _ShopifyProductMappingScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Imported $importedCount of ${unmapped.length}. Error: $e',
+            l10n.shopifyImportPartial(importedCount, unmapped.length, '$e'),
           ),
           backgroundColor: AppColors.warning,
           behavior: SnackBarBehavior.floating,
@@ -742,8 +745,8 @@ class _ShopifyProductMappingScreenState
     if (products.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            'No Masari products yet — use Import instead',
+          content: Text(
+            AppLocalizations.of(context)!.shopifyNoMasariProducts,
           ),
           backgroundColor: AppColors.warning,
           behavior: SnackBarBehavior.floating,
@@ -809,7 +812,7 @@ class _ShopifyProductMappingScreenState
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Linked "$title" → "${masariProduct.name}"'),
+        content: Text(AppLocalizations.of(context)!.shopifyLinked(title, masariProduct.name)),
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -823,6 +826,7 @@ class _ShopifyProductMappingScreenState
   Future<void> _onAutoMatch() async {
     setState(() => _autoMatching = true);
     HapticFeedback.mediumImpact();
+    final l10n = AppLocalizations.of(context)!;
 
     final result = await ref
         .read(shopifyMappingsProvider.notifier)
@@ -836,8 +840,8 @@ class _ShopifyProductMappingScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(count > 0
-              ? 'Matched $count product(s) by SKU'
-              : 'No new matches found — SKUs don\'t match'),
+              ? l10n.shopifyMatchedBySku(count)
+              : l10n.shopifyNoMatchesBySku),
           backgroundColor: AppColors.primaryNavy,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -847,7 +851,7 @@ class _ShopifyProductMappingScreenState
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result.error ?? 'Auto-match failed'),
+          content: Text(result.error ?? l10n.shopifyAutoMatchFailed),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -869,7 +873,7 @@ class _ShopifyProductMappingScreenState
     if (result.isSuccess) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Mapping removed'),
+          content: Text(AppLocalizations.of(context)!.shopifyMappingRemoved),
           backgroundColor: AppColors.primaryNavy,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -1003,6 +1007,7 @@ class _ShopifyProductTileState extends State<_ShopifyProductTile> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final title =
         widget.shopifyProduct['title']?.toString() ?? 'Untitled';
     final variants =
@@ -1060,8 +1065,8 @@ class _ShopifyProductTileState extends State<_ShopifyProductTile> {
                         const SizedBox(height: 2),
                         Text(
                           widget.isMapped
-                              ? '${widget.mappings.length} variant(s) linked'
-                              : '${variants.length} variant(s) • Not imported',
+                              ? l10n.shopifyVariantsLinked(widget.mappings.length)
+                              : l10n.shopifyVariantsNotImported(variants.length),
                           style: AppTypography.bodySmall.copyWith(
                             color: widget.isMapped
                                 ? AppColors.success
@@ -1089,14 +1094,14 @@ class _ShopifyProductTileState extends State<_ShopifyProductTile> {
                   if (!widget.isMapped) ...[
                     const SizedBox(width: 4),
                     _SmallButton(
-                      label: 'Import',
+                      label: l10n.shopifyImportButton,
                       icon: Icons.download_rounded,
                       color: AppColors.primaryNavy,
                       onTap: widget.onImport,
                     ),
                     const SizedBox(width: 6),
                     _SmallButton(
-                      label: 'Link',
+                      label: l10n.shopifyLinkButton,
                       icon: Icons.link_rounded,
                       color: AppColors.textTertiary,
                       onTap: widget.onLink,
@@ -1290,7 +1295,7 @@ class _VariantMappingRow extends StatelessWidget {
               children: [
                 Text(
                   mapping.shopifyTitle.isEmpty
-                      ? 'Shopify Variant'
+                      ? AppLocalizations.of(context)!.shopifyVariantLabel
                       : mapping.shopifyTitle,
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textPrimary,
@@ -1356,6 +1361,7 @@ class _MasariProductPickerSheetState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final filtered = widget.masariProducts.where((p) {
       if (_search.isEmpty) return true;
       final q = _search.toLowerCase();
@@ -1395,14 +1401,14 @@ class _MasariProductPickerSheetState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Link to Masari Product',
+                  l10n.shopifyLinkToMasari,
                   style: AppTypography.h3.copyWith(
                     color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Link "$shopifyTitle" to an existing Masari product',
+                  l10n.shopifyLinkSubtitle(shopifyTitle),
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textTertiary,
                   ),
@@ -1416,7 +1422,7 @@ class _MasariProductPickerSheetState
             child: TextField(
               onChanged: (v) => setState(() => _search = v),
               decoration: InputDecoration(
-                hintText: 'Search by name or SKU...',
+                hintText: l10n.shopifySearchHint,
                 prefixIcon: const Icon(Icons.search_rounded, size: 20),
                 filled: true,
                 fillColor: AppColors.backgroundLight,
@@ -1435,7 +1441,7 @@ class _MasariProductPickerSheetState
                 ? Padding(
                     padding: const EdgeInsets.all(32),
                     child: Text(
-                      'No matching products',
+                      l10n.shopifyNoMatchingProducts,
                       style: AppTypography.bodyMedium.copyWith(
                         color: AppColors.textTertiary,
                       ),

@@ -94,7 +94,7 @@ class ShareService {
   Future<void> shareMultipleFiles(List<XFile> files,
       {String? subject, Rect? origin}) async {
     await Share.shareXFiles(files,
-        subject: subject ??  'Masari Export',
+        subject: subject ?? 'Masari Export',
         sharePositionOrigin: origin);
   }
 

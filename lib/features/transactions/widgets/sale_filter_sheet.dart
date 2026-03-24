@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 import '../../../shared/models/sale_model.dart';
+import '../../../l10n/app_localizations.dart';
 
 // ═════════════════════════════════════════════════════════
 //  Sale Filter Model
@@ -143,7 +144,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Filter Sales',
+                  AppLocalizations.of(context)!.filterSales,
                   style: AppTypography.h2.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w800,
@@ -153,7 +154,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
                 GestureDetector(
                   onTap: _reset,
                   child: Text(
-                    'Reset',
+                    AppLocalizations.of(context)!.resetLabel,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.accentOrange,
                       fontWeight: FontWeight.w700,
@@ -214,7 +215,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      'Apply Filters',
+                      AppLocalizations.of(context)!.applyFilters,
                       style: AppTypography.labelLarge.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -259,19 +260,20 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Payment Status'),
+        _sectionLabel(AppLocalizations.of(context)!.paymentStatus),
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [null, ...PaymentStatus.values].map((status) {
             final isSelected = _paymentStatus == status;
+            final l10n = AppLocalizations.of(context)!;
             final label = switch (status) {
-              null => 'All',
-              PaymentStatus.unpaid => 'Unpaid',
-              PaymentStatus.partial => 'Partial',
-              PaymentStatus.paid => 'Paid',
-              PaymentStatus.refunded => 'Refunded',
+              null => l10n.all,
+              PaymentStatus.unpaid => l10n.unpaid,
+              PaymentStatus.partial => l10n.partial,
+              PaymentStatus.paid => l10n.paid,
+              PaymentStatus.refunded => l10n.refunded,
             };
             final color = switch (status) {
               null => AppColors.textPrimary,
@@ -319,18 +321,19 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Fulfillment Status'),
+        _sectionLabel(AppLocalizations.of(context)!.fulfillmentStatus),
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [null, ...FulfillmentStatus.values].map((status) {
             final isSelected = _fulfillmentStatus == status;
+            final l10n = AppLocalizations.of(context)!;
             final label = switch (status) {
-              null => 'All',
-              FulfillmentStatus.unfulfilled => 'Unfulfilled',
-              FulfillmentStatus.partial => 'Partial',
-              FulfillmentStatus.fulfilled => 'Fulfilled',
+              null => l10n.all,
+              FulfillmentStatus.unfulfilled => l10n.unfulfilled,
+              FulfillmentStatus.partial => l10n.partial,
+              FulfillmentStatus.fulfilled => l10n.fulfilled,
             };
             return GestureDetector(
               onTap: () {
@@ -378,7 +381,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _sectionLabel('Amount Range'),
+            _sectionLabel(AppLocalizations.of(context)!.amountRange),
             Text(
               '${widget.currency}${_amountRange.start.toInt()} - ${widget.currency}${_amountRange.end.toInt() >= 10000 ? '10k+' : _amountRange.end.toInt().toString()}',
               style: AppTypography.labelMedium.copyWith(

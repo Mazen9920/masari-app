@@ -5,12 +5,14 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/security_settings_provider.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class SecurityScreen extends ConsumerWidget {
   const SecurityScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final settings = ref.watch(securitySettingsProvider);
     final notifier = ref.read(securitySettingsProvider.notifier);
 
@@ -23,7 +25,7 @@ class SecurityScreen extends ConsumerWidget {
           onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
-        title: Text('Security', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
+        title: Text(l10n.securityTitle, style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -60,7 +62,7 @@ class SecurityScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Security Status', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                        Text(l10n.securityStatus, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                         const SizedBox(height: 4),
                         Row(
                           children: [
@@ -73,7 +75,7 @@ class SecurityScreen extends ConsumerWidget {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              settings.appLock ? 'Protected' : 'Basic',
+                              settings.appLock ? l10n.securityProtected : l10n.securityBasic,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -89,14 +91,14 @@ class SecurityScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 24),
-            _sectionTitle('AUTHENTICATION'),
+            _sectionTitle(l10n.securitySectionAuth),
             const SizedBox(height: 10),
             _buildCard([
               _buildToggleRow(
                 icon: Icons.pin_outlined,
                 iconColor: const Color(0xFF3B82F6),
-                title: 'App Lock (PIN)',
-                subtitle: 'Require PIN to open app',
+                title: l10n.securityAppLock,
+                subtitle: l10n.securityAppLockSubtitle,
                 value: settings.appLock,
                 onChanged: (v) {
                   HapticFeedback.lightImpact();
@@ -107,8 +109,8 @@ class SecurityScreen extends ConsumerWidget {
               _buildToggleRow(
                 icon: Icons.fingerprint_rounded,
                 iconColor: const Color(0xFF22C55E),
-                title: 'Biometric Login',
-                subtitle: 'Face ID / Touch ID',
+                title: l10n.securityBiometric,
+                subtitle: l10n.securityBiometricSubtitle,
                 value: settings.biometrics,
                 onChanged: (v) {
                   HapticFeedback.lightImpact();
@@ -117,59 +119,59 @@ class SecurityScreen extends ConsumerWidget {
               ),
             ]),
             const SizedBox(height: 24),
-            _sectionTitle('PASSWORD'),
+            _sectionTitle(l10n.securitySectionPassword),
             const SizedBox(height: 10),
             _buildCard([
               _buildActionRow(
                 icon: Icons.key_rounded,
                 iconColor: const Color(0xFFF59E0B),
-                title: 'Change Password',
-                subtitle: 'Last changed 30 days ago',
+                title: l10n.securityChangePassword,
+                subtitle: l10n.securityPasswordLastChanged,
                 onTap: () {
                   HapticFeedback.lightImpact();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Password change flow coming soon')),
+                    SnackBar(content: Text(l10n.securityPasswordComingSoon)),
                   );
                 },
               ),
             ]),
             const SizedBox(height: 24),
-            _sectionTitle('SESSIONS'),
+            _sectionTitle(l10n.securitySectionSessions),
             const SizedBox(height: 10),
             _buildCard([
               _buildActionRow(
                 icon: Icons.devices_rounded,
                 iconColor: const Color(0xFF0EA5E9),
-                title: 'Active Sessions',
-                subtitle: '1 device currently active',
+                title: l10n.securityActiveSessions,
+                subtitle: l10n.securityActiveDevices,
                 onTap: () {
                   HapticFeedback.lightImpact();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('1 active session on this device')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.securityOneActiveSession)));
                 },
               ),
               _divider(),
               _buildActionRow(
                 icon: Icons.logout_rounded,
                 iconColor: AppColors.danger,
-                title: 'Sign Out All Devices',
-                subtitle: 'End all other sessions',
+                title: l10n.securitySignOutAll,
+                subtitle: l10n.securitySignOutAllSubtitle,
                 onTap: () {
                   HapticFeedback.mediumImpact();
                   showDialog(
                     context: context,
                     builder: (ctx) => AlertDialog(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      title: Text('Sign Out All Devices?', style: AppTypography.h3),
-                      content: const Text('This will end all sessions on other devices. You will stay logged in on this device.'),
+                      title: Text(l10n.securitySignOutAllTitle, style: AppTypography.h3),
+                      content: Text(l10n.securitySignOutAllMessage),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                        TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
                         FilledButton(
                           onPressed: () {
                             Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('All other sessions ended')));
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.securityAllSessionsEnded)));
                           },
                           style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-                          child: const Text('Sign Out All'),
+                          child: Text(l10n.securitySignOutAllButton),
                         ),
                       ],
                     ),

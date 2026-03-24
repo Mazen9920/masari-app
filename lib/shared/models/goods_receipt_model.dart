@@ -4,6 +4,8 @@
 /// adjusted upward automatically.
 library;
 
+import '../../l10n/app_localizations.dart';
+
 /// Status of a goods receipt.
 enum ReceiptStatus {
   pending,   // 0 – created but not confirmed
@@ -131,6 +133,17 @@ class GoodsReceipt {
         return 'Confirmed';
       case ReceiptStatus.rejected:
         return 'Rejected';
+    }
+  }
+
+  String localizedStatusLabel(AppLocalizations l10n) {
+    switch (status) {
+      case ReceiptStatus.pending:
+        return l10n.pending;
+      case ReceiptStatus.confirmed:
+        return l10n.confirmed;
+      case ReceiptStatus.rejected:
+        return l10n.rejectedLabel;
     }
   }
 

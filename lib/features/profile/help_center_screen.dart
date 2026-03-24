@@ -3,12 +3,13 @@ import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../l10n/app_localizations.dart';
 
 class HelpCenterScreen extends StatelessWidget {
   const HelpCenterScreen({super.key});
 
-  @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -18,7 +19,7 @@ class HelpCenterScreen extends StatelessWidget {
           onPressed: () => context.safePop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
-        title: Text('Help Center', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
+        title: Text(l10n.helpCenterTitle, style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -36,32 +37,32 @@ class HelpCenterScreen extends StatelessWidget {
                 border: Border.all(color: AppColors.borderLight),
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8)],
               ),
-              child: const TextField(
+              child: TextField(
                 decoration: InputDecoration(
-                  hintText: 'Search for help...',
-                  hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 14),
-                  prefixIcon: Icon(Icons.search_rounded, color: AppColors.textTertiary),
+                  hintText: l10n.helpCenterSearchHint,
+                  hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
+                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
             ),
             const SizedBox(height: 28),
             // Quick Help Categories
-            _sectionTitle('QUICK HELP'),
+            _sectionTitle(l10n.helpCenterSectionQuickHelp),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _buildQuickHelpCard(context, Icons.play_circle_outline_rounded, 'Getting\nStarted', const Color(0xFF3B82F6))),
+                Expanded(child: _buildQuickHelpCard(context, Icons.play_circle_outline_rounded, l10n.helpCenterGettingStarted, const Color(0xFF3B82F6))),
                 const SizedBox(width: 12),
-                Expanded(child: _buildQuickHelpCard(context, Icons.receipt_long_rounded, 'Transactions\nHelp', const Color(0xFF22C55E))),
+                Expanded(child: _buildQuickHelpCard(context, Icons.receipt_long_rounded, l10n.helpCenterTransactionsHelp, const Color(0xFF22C55E))),
                 const SizedBox(width: 12),
-                Expanded(child: _buildQuickHelpCard(context, Icons.bar_chart_rounded, 'Reports\nGuide', const Color(0xFF8B5CF6))),
+                Expanded(child: _buildQuickHelpCard(context, Icons.bar_chart_rounded, l10n.helpCenterReportsGuide, const Color(0xFF8B5CF6))),
               ],
             ),
             const SizedBox(height: 28),
             // FAQ
-            _sectionTitle('FREQUENTLY ASKED'),
+            _sectionTitle(l10n.helpCenterSectionFaq),
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
@@ -72,21 +73,21 @@ class HelpCenterScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  _buildFAQItem('How do I add a new transaction?', 'Tap the + button at the bottom of the screen to add income or expense transactions.'),
+                  _buildFAQItem(l10n.helpCenterFaqAddTransactionQ, l10n.helpCenterFaqAddTransactionA),
                   _faqDivider(),
-                  _buildFAQItem('How do I export my reports?', 'Go to Reports > Tap the share icon in the top right to access the Export & Share center.'),
+                  _buildFAQItem(l10n.helpCenterFaqExportQ, l10n.helpCenterFaqExportA),
                   _faqDivider(),
-                  _buildFAQItem('How do I manage my inventory?', 'Navigate to the Manage tab > Inventory to view, add, and track your products and materials.'),
+                  _buildFAQItem(l10n.helpCenterFaqInventoryQ, l10n.helpCenterFaqInventoryA),
                   _faqDivider(),
-                  _buildFAQItem('How do I set up recurring transactions?', 'Go to Cash Flow > Coming Up section > Tap "Manage" to add scheduled transactions.'),
+                  _buildFAQItem(l10n.helpCenterFaqRecurringQ, l10n.helpCenterFaqRecurringA),
                   _faqDivider(),
-                  _buildFAQItem('Can I change my currency?', 'Yes! Go to Profile > Currency & Language to change your default currency.'),
+                  _buildFAQItem(l10n.helpCenterFaqCurrencyQ, l10n.helpCenterFaqCurrencyA),
                 ],
               ),
             ),
             const SizedBox(height: 32),
             // Contact Support
-            _sectionTitle('NEED MORE HELP?'),
+            _sectionTitle(l10n.helpCenterSectionMoreHelp),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(20),
@@ -114,9 +115,9 @@ class HelpCenterScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Contact Support', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                            Text(l10n.helpCenterContactSupport, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
-                        Text('We\'re here to help 24/7', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
+                        Text(l10n.helpCenterSupportSubtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
                       ],
                     ),
                   ),
@@ -126,7 +127,7 @@ class HelpCenterScreen extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text('Chat', style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.bold, fontSize: 13)),
+                    child: Text(l10n.helpCenterChat, style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
                 ],
               ),

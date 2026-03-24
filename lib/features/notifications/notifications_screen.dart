@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/notifications_provider.dart';
+import '../../l10n/app_localizations.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -78,14 +79,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primaryNavy),
         ),
-        title: Text('Notifications', style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
+        title: Text(AppLocalizations.of(context)!.notifications, style: AppTypography.h3.copyWith(color: AppColors.primaryNavy)),
         centerTitle: true,
         actions: [
           if (hasUnread)
             TextButton(
               onPressed: () => _markAllRead(notifications),
               child: Text(
-                'Read All',
+                AppLocalizations.of(context)!.readAll,
                 style: TextStyle(
                   color: AppColors.secondaryBlue,
                   fontSize: 13,
@@ -144,9 +145,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
           children: [
             Icon(Icons.notifications_off_outlined, size: 48, color: AppColors.textTertiary.withValues(alpha: 0.5)),
             const SizedBox(height: 12),
-            Text('No notifications', style: TextStyle(fontSize: 15, color: AppColors.textTertiary, fontWeight: FontWeight.w600)),
+            Text(AppLocalizations.of(context)!.noNotifications, style: TextStyle(fontSize: 15, color: AppColors.textTertiary, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text('You\'re all caught up!', style: TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+            Text(AppLocalizations.of(context)!.allCaughtUp, style: TextStyle(fontSize: 13, color: AppColors.textTertiary)),
           ],
         ),
       );
@@ -162,7 +163,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       physics: const BouncingScrollPhysics(),
       children: [
         if (today.isNotEmpty) ...[
-          _groupTitle('TODAY'),
+          _groupTitle(AppLocalizations.of(context)!.todayLabel),
           const SizedBox(height: 8),
           ...today.asMap().entries.map((e) =>
             _buildNotificationTile(e.value, readIds.contains(e.value.id))
@@ -173,7 +174,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
         ],
         if (earlier.isNotEmpty) ...[
           const SizedBox(height: 20),
-          _groupTitle('EARLIER'),
+          _groupTitle(AppLocalizations.of(context)!.earlierLabel),
           const SizedBox(height: 8),
           ...earlier.asMap().entries.map((e) =>
             _buildNotificationTile(e.value, readIds.contains(e.value.id))
@@ -236,7 +237,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                       children: [
                         Expanded(
                           child: Text(
-                            item.title,
+                            item.localizedTitle(AppLocalizations.of(context)!),
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: isRead ? FontWeight.w500 : (isAlert ? FontWeight.w700 : FontWeight.w600),
@@ -264,7 +265,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      item.subtitle,
+                      item.localizedSubtitle(AppLocalizations.of(context)!),
                       style: TextStyle(
                         fontSize: 12,
                         color: isRead ? AppColors.textTertiary : AppColors.textSecondary,

@@ -69,6 +69,7 @@ class _ReceivedGoodsSummaryScreenState
   }
 
   Widget _buildDateRangeChip(BuildContext context, DateFormat dateFmt) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
@@ -77,7 +78,7 @@ class _ReceivedGoodsSummaryScreenState
             avatar: const Icon(Icons.date_range_rounded, size: 16),
             label: Text(
               _dateRange == null
-                  ? 'All dates'
+                  ? l10n.allDates
                   : '${dateFmt.format(_dateRange!.start)} – ${dateFmt.format(_dateRange!.end)}',
               style: AppTypography.captionSmall.copyWith(
                 fontWeight: FontWeight.w600,
@@ -387,9 +388,9 @@ class _HeroCard extends StatelessWidget {
                 spacing: 8,
                 children: [
                   _chip(Icons.receipt_long_rounded,
-                      '$receiptCount Receipt${receiptCount == 1 ? '' : 's'}'),
+                      l10n.receiptCountLabel(receiptCount)),
                   if (pendingCount > 0)
-                    _chip(Icons.pending_rounded, '$pendingCount Pending'),
+                    _chip(Icons.pending_rounded, l10n.pendingCountLabel(pendingCount)),
                 ],
               ),
             ],
@@ -437,22 +438,23 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         Expanded(
             child: _statCard(
-           'Confirmed',
+           l10n.confirmedLabel,
           '$confirmedCount',
-           'Receipts verified',
+           l10n.receiptsVerified,
           AppColors.success,
           Icons.check_circle_rounded,
         )),
         const SizedBox(width: 12),
         Expanded(
             child: _statCard(
-           'Pending',
+           l10n.pendingLabel,
           '$pendingCount',
-          pendingCount == 0 ? 'All confirmed ✓' :  'Awaiting review',
+          pendingCount == 0 ? l10n.allConfirmed :  l10n.awaitingReview,
           pendingCount > 0
               ? AppColors.accentOrange
               : AppColors.success,
@@ -603,7 +605,7 @@ class _PurchaseReceiptCard extends StatelessWidget {
                     children: [
                       Text(
                         purchase.referenceNo.isNotEmpty
-                            ? 'PO #${purchase.referenceNo} – ${purchase.supplierName}'
+                            ? l10n.poRefSupplier(purchase.referenceNo, purchase.supplierName)
                             : '${purchase.items.map((i) => i.name).take(2).join(', ')}${purchase.items.length > 2 ? ' +${purchase.items.length - 2}' : ''}',
                         style: TextStyle(
                             color: AppColors.textPrimary,
@@ -657,7 +659,7 @@ class _PurchaseReceiptCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '$totalReceived / $totalOrdered items received',
+                      l10n.itemsReceivedProgress(totalReceived, totalOrdered),
                       style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 12),
                     ),
@@ -723,7 +725,7 @@ class _PurchaseReceiptCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        r.statusLabel,
+                        r.localizedStatusLabel(l10n),
                         style: TextStyle(
                             color: statusColor,
                             fontSize: 10,
@@ -795,7 +797,7 @@ class _PurchaseReceiptCard extends StatelessWidget {
                         size: 16, color: AppColors.chartPurple),
                     const SizedBox(width: 6),
                     Text(
-                       'Receive Items',
+                       l10n.receiveItemsAction,
                       style: TextStyle(
                           color: AppColors.chartPurple,
                           fontWeight: FontWeight.w600,
@@ -879,7 +881,7 @@ void _showReceivedItemsSheet(
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                       'Received Items',
+                       l10n.receivedItemsLabel,
                       style: TextStyle(
                         color: AppColors.primaryNavy,
                         fontWeight: FontWeight.w700,
@@ -919,7 +921,7 @@ void _showReceivedItemsSheet(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        isComplete ? 'Fully received' :  'Awaiting receipt',
+                        isComplete ? l10n.fullyReceivedLabel :  l10n.awaitingReceipt,
                         style: TextStyle(
                             color: AppColors.textSecondary, fontSize: 12),
                       ),
@@ -947,7 +949,7 @@ void _showReceivedItemsSheet(
                 children: [
                   // Ordered items with received status
                   Text(
-                     'Ordered Items',
+                     l10n.orderedItems,
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -991,7 +993,7 @@ void _showReceivedItemsSheet(
                           ),
                           const SizedBox(height: 4),
                           Text(
-                             'Received ${item.receivedQty} of ${item.qty} · $currency ${fmt.format(item.unitPrice)} ea',
+                             l10n.receivedOfOrdered('${item.receivedQty}', '${item.qty}', '$currency ${fmt.format(item.unitPrice)}'),
                             style: TextStyle(
                                 color: AppColors.textTertiary, fontSize: 12),
                           ),
@@ -1015,7 +1017,7 @@ void _showReceivedItemsSheet(
                   if (receipts.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
-                       'Receipts',
+                       l10n.receiptsLabel,
                       style: TextStyle(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w700,
@@ -1050,7 +1052,7 @@ void _showReceivedItemsSheet(
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          '${totalItems.toInt()} item${totalItems.toInt() == 1 ? '' : 's'} received',
+                                          l10n.itemsReceivedCount(totalItems.toInt()),
                                           style: TextStyle(
                                             color: AppColors.primaryNavy,
                                             fontWeight: FontWeight.w600,
@@ -1075,7 +1077,7 @@ void _showReceivedItemsSheet(
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      r.statusLabel,
+                                      r.localizedStatusLabel(l10n),
                                       style: TextStyle(
                                           color: color,
                                           fontSize: 10,
@@ -1138,16 +1140,16 @@ void _showReceivedItemsSheet(
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 11),
-                                      child: const Row(
+                                      child: Row(
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: [
-                                          Icon(Icons.edit_rounded,
+                                          const Icon(Icons.edit_rounded,
                                               size: 14,
                                               color: Color(0xFFEA580C)),
-                                          SizedBox(width: 5),
+                                          const SizedBox(width: 5),
                                           Text(
-                                             'Edit',
+                                             l10n.editLabel,
                                             style: TextStyle(
                                               color: Color(0xFFEA580C),
                                               fontSize: 12,
@@ -1185,14 +1187,14 @@ void _showReceivedItemsSheet(
                           color: AppColors.chartPurple,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_rounded,
+                            const Icon(Icons.add_rounded,
                                 color: Colors.white, size: 18),
-                            SizedBox(width: 6),
+                            const SizedBox(width: 6),
                             Text(
-                               'Receive Items',
+                               l10n.receiveItemsAction,
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -1311,7 +1313,7 @@ class _ReceiptRow extends StatelessWidget {
                 decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6)),
-                child: Text(receipt.statusLabel,
+                child: Text(receipt.localizedStatusLabel(l10n),
                     style: TextStyle(
                         color: statusColor,
                         fontSize: 10,

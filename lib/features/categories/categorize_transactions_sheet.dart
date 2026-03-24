@@ -147,7 +147,7 @@ class _CategorizeTransactionsSheetState
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${widget.uncategorized.length} transactions need a category',
+                        l10n.nTransactionsNeedCategory(widget.uncategorized.length),
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textTertiary,
                         ),
@@ -240,7 +240,7 @@ class _CategorizeTransactionsSheetState
                             color: AppColors.borderLight.withValues(alpha: 0.8)),
                       ),
                       child: Text(
-                         'Cancel',
+                         l10n.cancelLabel,
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w600,
@@ -274,7 +274,7 @@ class _CategorizeTransactionsSheetState
                               ),
                             )
                           : Text(
-                               'Save $_assignedCount ${_assignedCount == 1 ? 'Change' : 'Changes'}',
+                               l10n.saveNChanges(_assignedCount),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
@@ -405,7 +405,7 @@ class _TransactionCategoryRow extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      chosenCategory?.name ?? l10n.setCategory,
+                      chosenCategory?.localizedName(l10n) ?? l10n.setCategory,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -521,7 +521,7 @@ class _CategoryPickerSheet extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          cat.name,
+                          cat.localizedName(AppLocalizations.of(context)!),
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,

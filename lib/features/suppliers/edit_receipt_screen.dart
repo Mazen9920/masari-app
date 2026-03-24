@@ -242,10 +242,10 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
                   child: Center(
                     child: Text(
                       s == ReceiptStatus.pending
-                          ? 'Pending'
+                          ? l10n.pendingLabel
                           : s == ReceiptStatus.confirmed
-                              ? 'Confirmed'
-                              : 'Rejected',
+                              ? l10n.confirmedLabel
+                              : l10n.rejectedLabel,
                       style: TextStyle(
                         color: selected
                             ? colors.$2
@@ -357,7 +357,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                     'Update Inventory Stock',
+                     l10n.updateInventoryStock,
                     style: AppTypography.labelMedium.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w600,
@@ -365,7 +365,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                     'Adjust stock for quantity changes',
+                     l10n.adjustStockForQuantityChanges,
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondary,
                       fontSize: 12,
@@ -435,7 +435,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
             ],
           ),
           child: Text(
-             'Save Changes · $currency ${fmt.format(_totalCost)}',
+             l10n.saveChangesWithTotal('$currency ${fmt.format(_totalCost)}'),
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
@@ -575,8 +575,8 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
                   variantId,
                   delta,
                   delta > 0
-                      ? 'Receipt edit \u2013 added'
-                      :  'Receipt edit \u2013 reduced',
+                      ? l10n.receiptEditAdded
+                      :  l10n.receiptEditReduced,
                   valuationMethod: ref.read(appSettingsProvider).valuationMethod,
                 );
           }
