@@ -406,7 +406,7 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     } else {
       // Clean up any Shopify product mappings for this product
       final mappingRepo = ref.read(shopifyProductMappingRepositoryProvider);
-      mappingRepo.deleteMappingsByMasariProductId(id);
+      mappingRepo.deleteMappingsByRevvoProductId(id);
     }
   }
 

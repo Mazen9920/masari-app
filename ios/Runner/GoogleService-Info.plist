@@ -3,9 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>686452990628-tblkqh5lquus1g26fvisce7t0nh0ne54.apps.googleusercontent.com</string>
+	<string>686452990628-0in6r7i6gpfu4slg3io56jed46f44phj.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.686452990628-tblkqh5lquus1g26fvisce7t0nh0ne54</string>
+	<string>com.googleusercontent.apps.686452990628-0in6r7i6gpfu4slg3io56jed46f44phj</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>686452990628-jbvfr05nl7f1c9mg29qaeucjsb45ft0o.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
 	<string>AIzaSyCpNdbXmGx0SvrskLn6xI9Z6B8SgEOBgoQ</string>
 	<key>GCM_SENDER_ID</key>
@@ -13,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.masari.masariApp</string>
+	<string>com.revvo.app</string>
 	<key>PROJECT_ID</key>
 	<string>massari-574ff</string>
 	<key>STORAGE_BUCKET</key>
@@ -29,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:686452990628:ios:041d29008a8ec139a9bc31</string>
+	<string>1:686452990628:ios:fa073c81209a8a83a9bc31</string>
 </dict>
 </plist>

@@ -18,12 +18,12 @@ import '../../../shared/utils/safe_pop.dart';
 /// Shopify-centric product mapping & import screen.
 ///
 /// Shows ALL Shopify products with their mapping status:
-/// - Green = already linked to a Masari product
+/// - Green = already linked to a Revvo product
 /// - Orange = unmapped — tap to import or link
 ///
 /// Features:
-/// - "Import All" — bulk-import all unmapped Shopify products into Masari
-/// - Tap unmapped → import single product or link to existing Masari product
+/// - "Import All" — bulk-import all unmapped Shopify products into Revvo
+/// - Tap unmapped → import single product or link to existing Revvo product
 /// - Auto-Match by SKU
 /// - Delete existing mappings
 class ShopifyProductMappingScreen extends ConsumerStatefulWidget {
@@ -41,7 +41,7 @@ class _ShopifyProductMappingScreenState
   bool _didAutoRelink = false;
 
   /// Silently runs auto-match to re-create mappings for products
-  /// already in Masari that match Shopify products by SKU or
+  /// already in Revvo that match Shopify products by SKU or
   /// shopifyProductId/shopifyVariantId.
   Future<void> _autoRelinkExistingProducts(
     List<Map<String, dynamic>> shopifyProds,
@@ -359,7 +359,7 @@ class _ShopifyProductMappingScreenState
     );
   }
 
-  // ── Import single Shopify product into Masari ───────────
+  // ── Import single Shopify product into Revvo ───────────
 
   Future<void> _importSingle(Map<String, dynamic> shopifyProduct) async {
     final l10n = AppLocalizations.of(context)!;
@@ -482,10 +482,10 @@ class _ShopifyProductMappingScreenState
 
   // ── Core import logic ───────────────────────────────────
 
-  /// Creates a Masari Product from a Shopify product JSON, saves it,
+  /// Creates a Revvo Product from a Shopify product JSON, saves it,
   /// then creates variant-level mappings.
   ///
-  /// **Dedup guard**: If a Masari product already exists with the same
+  /// **Dedup guard**: If a Revvo product already exists with the same
   /// `shopifyProductId` or matching SKUs, it will be re-linked instead
   /// of creating a duplicate.
   Future<void> _importShopifyProduct(
@@ -503,8 +503,8 @@ class _ShopifyProductMappingScreenState
         (shopifyProduct['options'] as List<dynamic>?) ?? [];
     final imageUrl = _extractImageUrl(shopifyProduct);
 
-    // ── Check for existing Masari product (dedup) ───────
-    // Priority 1: Match by shopifyProductId stored on Masari product
+    // ── Check for existing Revvo product (dedup) ───────
+    // Priority 1: Match by shopifyProductId stored on Revvo product
     // Priority 2: Match by SKU of the first variant
     final existingProducts = ref.read(inventoryProvider).value ?? [];
     Product? existingProduct;
@@ -614,7 +614,7 @@ class _ShopifyProductMappingScreenState
       ));
     }
 
-    // ── Create the Masari Product ────────────────────────
+    // ── Create the Revvo Product ────────────────────────
     final productId = uuid.v4();
     final product = Product(
       id: productId,
@@ -636,8 +636,8 @@ class _ShopifyProductMappingScreenState
       final mapping = ShopifyProductMapping(
         id: '',
         userId: '',
-        masariProductId: productId,
-        masariVariantId: variant.id,
+        revvoProductId: productId,
+        revvoVariantId: variant.id,
         shopifyProductId: shopifyProductId,
         shopifyVariantId: variant.shopifyVariantId ?? '',
         shopifyInventoryItemId: variant.shopifyInventoryItemId ?? '',
@@ -653,11 +653,11 @@ class _ShopifyProductMappingScreenState
     }
   }
 
-  /// Links an existing Masari product to its Shopify counterpart by
+  /// Links an existing Revvo product to its Shopify counterpart by
   /// matching variants via shopifyVariantId or SKU.
   /// Called when dedup detects the product already exists.
   Future<void> _createMappingsForExistingProduct(
-    Product masariProduct,
+    Product revvoProduct,
     Map<String, dynamic> shopifyProduct,
     String shopifyTitle,
   ) async {
@@ -665,44 +665,44 @@ class _ShopifyProductMappingScreenState
     final shopifyVariants =
         (shopifyProduct['variants'] as List<dynamic>?) ?? [];
 
-    // Build a map of Masari variants by shopifyVariantId and SKU
-    final masariByShopifyVarId = <String, ProductVariant>{};
-    final masariBySku = <String, ProductVariant>{};
-    for (final v in masariProduct.variants) {
+    // Build a map of Revvo variants by shopifyVariantId and SKU
+    final revvoByShopifyVarId = <String, ProductVariant>{};
+    final revvoBySku = <String, ProductVariant>{};
+    for (final v in revvoProduct.variants) {
       if (v.shopifyVariantId != null && v.shopifyVariantId!.isNotEmpty) {
-        masariByShopifyVarId[v.shopifyVariantId!] = v;
+        revvoByShopifyVarId[v.shopifyVariantId!] = v;
       }
       final sku = v.sku.trim().toLowerCase();
-      if (sku.isNotEmpty) masariBySku[sku] = v;
+      if (sku.isNotEmpty) revvoBySku[sku] = v;
     }
 
-    // Match Shopify variants → Masari variants and create mappings
-    final usedMasariVariantIds = <String>{};
+    // Match Shopify variants → Revvo variants and create mappings
+    final usedRevvoVariantIds = <String>{};
     for (final sv in shopifyVariants) {
       final v = Map<String, dynamic>.from(sv as Map);
       final shopifyVariantId = v['id']?.toString() ?? '';
       final shopifySku = (v['sku']?.toString() ?? '').trim().toLowerCase();
       final inventoryItemId = v['inventory_item_id']?.toString() ?? '';
 
-      // Find matching Masari variant — prefer shopifyVariantId, then SKU
-      final masariVariant = masariByShopifyVarId[shopifyVariantId] ??
-          (shopifySku.isNotEmpty ? masariBySku[shopifySku] : null);
+      // Find matching Revvo variant — prefer shopifyVariantId, then SKU
+      final revvoVariant = revvoByShopifyVarId[shopifyVariantId] ??
+          (shopifySku.isNotEmpty ? revvoBySku[shopifySku] : null);
 
-      if (masariVariant == null) continue;
-      if (usedMasariVariantIds.contains(masariVariant.id)) continue;
-      usedMasariVariantIds.add(masariVariant.id);
+      if (revvoVariant == null) continue;
+      if (usedRevvoVariantIds.contains(revvoVariant.id)) continue;
+      usedRevvoVariantIds.add(revvoVariant.id);
 
       final mapping = ShopifyProductMapping(
         id: '',
         userId: '',
-        masariProductId: masariProduct.id,
-        masariVariantId: masariVariant.id,
+        revvoProductId: revvoProduct.id,
+        revvoVariantId: revvoVariant.id,
         shopifyProductId: shopifyProductId,
         shopifyVariantId: shopifyVariantId,
         shopifyInventoryItemId: inventoryItemId,
         shopifySku: shopifySku,
         shopifyTitle:
-            '$shopifyTitle${masariVariant.displayName != "Default" ? " — ${masariVariant.displayName}" : ""}',
+            '$shopifyTitle${revvoVariant.displayName != "Default" ? " — ${revvoVariant.displayName}" : ""}',
         autoImported: true,
         createdAt: DateTime.now(),
       );
@@ -711,11 +711,11 @@ class _ShopifyProductMappingScreenState
           .createMapping(mapping);
     }
 
-    // Update the Masari product's shopifyProductId if not already set
-    if (masariProduct.shopifyProductId != shopifyProductId) {
+    // Update the Revvo product's shopifyProductId if not already set
+    if (revvoProduct.shopifyProductId != shopifyProductId) {
       await ref.read(inventoryProvider.notifier).updateProduct(
-        masariProduct.id,
-        masariProduct.copyWith(shopifyProductId: shopifyProductId),
+        revvoProduct.id,
+        revvoProduct.copyWith(shopifyProductId: shopifyProductId),
       );
     }
   }
@@ -738,7 +738,7 @@ class _ShopifyProductMappingScreenState
     return null;
   }
 
-  // ── Link to existing Masari product ─────────────────────
+  // ── Link to existing Revvo product ─────────────────────
 
   void _showLinkPicker(Map<String, dynamic> shopifyProduct) {
     final products = ref.read(inventoryProvider).value ?? [];
@@ -746,7 +746,7 @@ class _ShopifyProductMappingScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            AppLocalizations.of(context)!.shopifyNoMasariProducts,
+            AppLocalizations.of(context)!.shopifyNoRevvoProducts,
           ),
           backgroundColor: AppColors.warning,
           behavior: SnackBarBehavior.floating,
@@ -761,10 +761,10 @@ class _ShopifyProductMappingScreenState
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _MasariProductPickerSheet(
+      builder: (_) => _RevvoProductPickerSheet(
         shopifyProduct: shopifyProduct,
-        masariProducts: products,
-        onSelected: (product) => _linkToMasariProduct(
+        revvoProducts: products,
+        onSelected: (product) => _linkToRevvoProduct(
           shopifyProduct,
           product,
         ),
@@ -772,9 +772,9 @@ class _ShopifyProductMappingScreenState
     );
   }
 
-  Future<void> _linkToMasariProduct(
+  Future<void> _linkToRevvoProduct(
     Map<String, dynamic> shopifyProduct,
-    Product masariProduct,
+    Product revvoProduct,
   ) async {
     HapticFeedback.mediumImpact();
     final shopifyProductId = shopifyProduct['id']?.toString() ?? '';
@@ -785,15 +785,15 @@ class _ShopifyProductMappingScreenState
     // Auto-link variant by variant (by index for simple cases)
     for (var i = 0; i < shopifyVariants.length; i++) {
       final sv = Map<String, dynamic>.from(shopifyVariants[i] as Map);
-      final masariVariant = i < masariProduct.variants.length
-          ? masariProduct.variants[i]
-          : masariProduct.variants.last;
+      final revvoVariant = i < revvoProduct.variants.length
+          ? revvoProduct.variants[i]
+          : revvoProduct.variants.last;
 
       final mapping = ShopifyProductMapping(
         id: '',
         userId: '',
-        masariProductId: masariProduct.id,
-        masariVariantId: masariVariant.id,
+        revvoProductId: revvoProduct.id,
+        revvoVariantId: revvoVariant.id,
         shopifyProductId: shopifyProductId,
         shopifyVariantId: sv['id']?.toString() ?? '',
         shopifyInventoryItemId:
@@ -812,7 +812,7 @@ class _ShopifyProductMappingScreenState
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(AppLocalizations.of(context)!.shopifyLinked(title, masariProduct.name)),
+        content: Text(AppLocalizations.of(context)!.shopifyLinked(title, revvoProduct.name)),
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -1337,32 +1337,32 @@ class _VariantMappingRow extends StatelessWidget {
   }
 }
 
-// ── Masari Product Picker (for "Link" flow) ───────────────
+// ── Revvo Product Picker (for "Link" flow) ───────────────
 
-class _MasariProductPickerSheet extends StatefulWidget {
+class _RevvoProductPickerSheet extends StatefulWidget {
   final Map<String, dynamic> shopifyProduct;
-  final List<Product> masariProducts;
+  final List<Product> revvoProducts;
   final ValueChanged<Product> onSelected;
 
-  const _MasariProductPickerSheet({
+  const _RevvoProductPickerSheet({
     required this.shopifyProduct,
-    required this.masariProducts,
+    required this.revvoProducts,
     required this.onSelected,
   });
 
   @override
-  State<_MasariProductPickerSheet> createState() =>
-      _MasariProductPickerSheetState();
+  State<_RevvoProductPickerSheet> createState() =>
+      _RevvoProductPickerSheetState();
 }
 
-class _MasariProductPickerSheetState
-    extends State<_MasariProductPickerSheet> {
+class _RevvoProductPickerSheetState
+    extends State<_RevvoProductPickerSheet> {
   String _search = '';
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final filtered = widget.masariProducts.where((p) {
+    final filtered = widget.revvoProducts.where((p) {
       if (_search.isEmpty) return true;
       final q = _search.toLowerCase();
       return p.name.toLowerCase().contains(q) ||
@@ -1401,7 +1401,7 @@ class _MasariProductPickerSheetState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l10n.shopifyLinkToMasari,
+                  l10n.shopifyLinkToRevvo,
                   style: AppTypography.h3.copyWith(
                     color: AppColors.textPrimary,
                   ),

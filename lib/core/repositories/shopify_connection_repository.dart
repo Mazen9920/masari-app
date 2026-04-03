@@ -16,6 +16,9 @@ abstract class ShopifyConnectionRepository {
   Future<Result<ShopifyConnection>> updateConnection(
       String docId, ShopifyConnection updated);
 
+  /// Updates a single field on the connection document.
+  Future<Result<void>> updateField(String field, dynamic value);
+
   /// Deletes the connection (disconnect from Shopify).
   Future<Result<void>> deleteConnection(String docId);
 

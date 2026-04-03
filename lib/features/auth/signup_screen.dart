@@ -145,6 +145,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       context.go(AppRoutes.home);
     } else {
       final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.appleSignInFailed;
+      if (error.contains('cancelled')) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error),
         backgroundColor: AppColors.danger,
@@ -176,7 +177,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               const SizedBox(height: 20),
               _buildTermsCheckbox(),
               const SizedBox(height: 24),
-              MasariPrimaryButton(
+              RevvoPrimaryButton(
                 text: _isLoading ? AppLocalizations.of(context)!.creatingAccount : AppLocalizations.of(context)!.signUp,
                 icon: Icons.arrow_forward_rounded,
                 onPressed: _isLoading ? null : _onSignUp,
@@ -234,7 +235,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       key: _formKey,
       child: Column(
         children: [
-          MasariTextField(
+          RevvoTextField(
             label: AppLocalizations.of(context)!.fullName,
             icon: Icons.person_outline_rounded,
             controller: _nameController,
@@ -247,7 +248,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             },
           ),
           const SizedBox(height: 16),
-          MasariTextField(
+          RevvoTextField(
             label: AppLocalizations.of(context)!.workEmail,
             icon: Icons.email_outlined,
             controller: _emailController,
@@ -270,7 +271,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: MasariTextField(
+                child: RevvoTextField(
                   label: AppLocalizations.of(context)!.phoneNumber,
                   icon: Icons.phone_iphone_rounded,
                   controller: _phoneController,
@@ -280,7 +281,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          MasariTextField(
+          RevvoTextField(
             label: AppLocalizations.of(context)!.password,
             icon: Icons.lock_outline_rounded,
             controller: _passwordController,
@@ -438,7 +439,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                   recognizer: TapGestureRecognizer()..onTap = () {
-                    launchUrl(Uri.parse('https://masari.app/terms.html'), mode: LaunchMode.externalApplication);
+                    launchUrl(Uri.parse('https://revvo-app.com/terms'), mode: LaunchMode.externalApplication);
                   },
                 ),
                 TextSpan(text: AppLocalizations.of(context)!.andWord),
@@ -449,7 +450,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                   recognizer: TapGestureRecognizer()..onTap = () {
-                    launchUrl(Uri.parse('https://masari.app/privacy.html'), mode: LaunchMode.externalApplication);
+                    launchUrl(Uri.parse('https://revvo-app.com/privacy'), mode: LaunchMode.externalApplication);
                   },
                 ),
                 const TextSpan(text: '.'),

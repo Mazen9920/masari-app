@@ -94,12 +94,12 @@ class ShareService {
   Future<void> shareMultipleFiles(List<XFile> files,
       {String? subject, Rect? origin}) async {
     await Share.shareXFiles(files,
-        subject: subject ?? 'Masari Export',
+        subject: subject ?? 'Revvo Export',
         sharePositionOrigin: origin);
   }
 
   // ─────────────────────────────────────────────────
-  //  Text share (for "Share Masari" etc.)
+  //  Text share (for "Share Revvo" etc.)
   // ─────────────────────────────────────────────────
 
   Future<void> shareText(String text, {String? subject, Rect? origin}) async {

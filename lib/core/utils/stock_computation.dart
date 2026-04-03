@@ -46,12 +46,9 @@ StockChangeResult computeStockChange({
   final variant = product.variants[variantIndex];
 
   final newStock = variant.currentStock + delta;
-  if (newStock < 0) {
-    throw Exception(
-      'Insufficient stock: ${product.name} / ${variant.displayName} '
-      'has ${variant.currentStock} units, cannot adjust by $delta',
-    );
-  }
+  // Allow stock to go to zero (or negative) — the UI already warns the user
+  // and lets them choose to proceed. Clamp to 0 for storage.
+  final clampedStock = newStock < 0 ? 0 : newStock;
 
   // --- Cost layer logic ---
   var layers = (clearLegacyLayers && variant.costLayers.isEmpty)
@@ -158,7 +155,7 @@ StockChangeResult computeStockChange({
   );
 
   final updatedVariant = variant.copyWith(
-    currentStock: newStock,
+    currentStock: clampedStock,
     costPrice: newCostPrice,
     costLayers: layers,
     movements: [...variant.movements, movement],

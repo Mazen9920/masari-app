@@ -116,14 +116,14 @@ class UserProfileNotifier extends Notifier<UserProfileState> {
         if (authUser != null) {
           final newName  = nameIsStale    ? authUser.name  : p.name;
           final newEmail = p.email.isEmpty ? authUser.email : p.email;
-          state = state.copyWith(name: newName, email: newEmail, phone: p.phone);
+          state = state.copyWith(name: newName, email: newEmail, phone: p.phone, avatarUrl: p.avatarUrl);
           await repo.updateProfile(
             uid,
-            UserProfile(name: newName, email: newEmail, phone: p.phone),
+            UserProfile(name: newName, email: newEmail, phone: p.phone, avatarUrl: p.avatarUrl),
           );
         }
       } else {
-        state = UserProfileState(name: p.name, email: p.email, phone: p.phone);
+        state = UserProfileState(name: p.name, email: p.email, phone: p.phone, avatarUrl: p.avatarUrl);
       }
     }
   }

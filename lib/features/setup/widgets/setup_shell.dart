@@ -158,7 +158,7 @@ class SetupShell extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          MasariPrimaryButton(
+          RevvoPrimaryButton(
             text: buttonText,
             icon: buttonIcon ?? Icons.arrow_forward_rounded,
             onPressed: onContinue,

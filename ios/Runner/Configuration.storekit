@@ -1,0 +1,129 @@
+{
+  "identifier" : "8A5F3C2E-1D4B-4A8F-9E7C-6B2D0F1A3E5C",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "000000000",
+    "_developerTeamID" : "798HDB7QN5",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : "2026-03-25T00:00:00Z",
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Message"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21084725",
+      "localizations" : [
+
+      ],
+      "name" : "Revvo Growth",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6741234001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Full access to Growth features, billed monthly",
+              "displayName" : "Revvo Growth Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "revvo_growth_monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Revvo Growth Monthly",
+          "subscriptionGroupID" : "21084725",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "95.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6741234002",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Full access to Growth features, billed yearly — save 20%",
+              "displayName" : "Revvo Growth Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "revvo_growth_yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Revvo Growth Yearly",
+          "subscriptionGroupID" : "21084725",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

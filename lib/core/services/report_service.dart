@@ -100,7 +100,7 @@ class ReportService {
     final pdf = pw.Document(
       theme: theme,
       title:  l10n.pnlStatement,
-      author: businessName ?? 'Masari',
+      author: businessName ?? 'Revvo',
     );
 
     // ── Filter by period ──
@@ -234,7 +234,7 @@ class ReportService {
     final pdf = pw.Document(
       theme: theme,
       title:  l10n.balanceSheet,
-      author: businessName ?? 'Masari',
+      author: businessName ?? 'Revvo',
     );
     final fmt = NumberFormat('#,##0.00', 'en');
     final dateLabel = DateFormat('dd MMMM yyyy').format(asOfDate);
@@ -316,7 +316,7 @@ class ReportService {
     final pdf = pw.Document(
       theme: theme,
       title:  l10n.cashFlowStatement,
-      author: businessName ?? 'Masari',
+      author: businessName ?? 'Revvo',
     );
     final fmt = NumberFormat('#,##0.00', 'en');
     final periodLabel = isMonthly
@@ -486,7 +486,7 @@ class ReportService {
     final pdf = pw.Document(
       theme: theme,
       title:  l10n.monthlyFinancialReport,
-      author: businessName ?? 'Masari',
+      author: businessName ?? 'Revvo',
     );
     final fmt = NumberFormat('#,##0.00', 'en');
     final periodLabel = DateFormat( 'MMMM yyyy').format(month);
@@ -801,7 +801,7 @@ class ReportService {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
-              pw.Text(_r(businessName ?? 'Masari'),
+              pw.Text(_r(businessName ?? 'Revvo'),
                   textDirection: pw.TextDirection.ltr,
                   style: pw.TextStyle(
                       fontSize: 14,
@@ -832,7 +832,7 @@ class ReportService {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(_r(footerLabel ?? 'Masari App - Financial Report'),
+          pw.Text(_r(footerLabel ?? 'Revvo - Financial Report'),
               textDirection: pw.TextDirection.ltr,
               style: const pw.TextStyle(fontSize: 8, color: _grey)),
           pw.Text(_r(pageLabel ?? 'Page ${ctx.pageNumber} of ${ctx.pagesCount}'),

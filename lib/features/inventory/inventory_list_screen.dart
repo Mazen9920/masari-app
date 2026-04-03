@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:csv/csv.dart' as csv_lib;
 import 'package:file_picker/file_picker.dart';
@@ -1052,7 +1053,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
         );
       }
     } catch (e) {
-      debugPrint('CSV import error: $e');
+      if (kDebugMode) debugPrint('CSV import error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.failedToImportCsv), backgroundColor: AppColors.danger),
@@ -1138,7 +1139,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                           final csvString = reportSvc.exportInventoryCsv(products, currency);
                           await shareSvc.shareCsv(csvString, 'Inventory_export.csv', subject: 'Inventory Export', origin: origin);
                         } catch (e) {
-                          debugPrint('Inventory export error: $e');
+                          if (kDebugMode) debugPrint('Inventory export error: $e');
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.somethingWentWrong), backgroundColor: AppColors.danger));
                           }

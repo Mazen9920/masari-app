@@ -1,17 +1,17 @@
-/// Maps a Masari product/variant to a Shopify product/variant.
+/// Maps a Revvo product/variant to a Shopify product/variant.
 ///
 /// This decoupled mapping table allows:
-/// - Auto-import of Shopify products into Masari inventory
-/// - Manual override (re-link a Shopify variant to a different Masari product)
+/// - Auto-import of Shopify products into Revvo inventory
+/// - Manual override (re-link a Shopify variant to a different Revvo product)
 /// - SKU-based auto-matching
-/// - Independent ID spaces (Masari UUIDs vs Shopify numeric IDs)
+/// - Independent ID spaces (Revvo UUIDs vs Shopify numeric IDs)
 class ShopifyProductMapping {
   final String id;
   final String userId;
 
-  // ── Masari side ──────────────────────────────────────────
-  final String masariProductId;
-  final String masariVariantId;
+  // ── Revvo side ──────────────────────────────────────────
+  final String revvoProductId;
+  final String revvoVariantId;
 
   // ── Shopify side ─────────────────────────────────────────
   final String shopifyProductId;
@@ -37,8 +37,8 @@ class ShopifyProductMapping {
   const ShopifyProductMapping({
     required this.id,
     required this.userId,
-    required this.masariProductId,
-    required this.masariVariantId,
+    required this.revvoProductId,
+    required this.revvoVariantId,
     required this.shopifyProductId,
     required this.shopifyVariantId,
     required this.shopifyInventoryItemId,
@@ -54,8 +54,8 @@ class ShopifyProductMapping {
   ShopifyProductMapping copyWith({
     String? id,
     String? userId,
-    String? masariProductId,
-    String? masariVariantId,
+    String? revvoProductId,
+    String? revvoVariantId,
     String? shopifyProductId,
     String? shopifyVariantId,
     String? shopifyInventoryItemId,
@@ -68,8 +68,8 @@ class ShopifyProductMapping {
     return ShopifyProductMapping(
       id: id ?? this.id,
       userId: userId ?? this.userId,
-      masariProductId: masariProductId ?? this.masariProductId,
-      masariVariantId: masariVariantId ?? this.masariVariantId,
+      revvoProductId: revvoProductId ?? this.revvoProductId,
+      revvoVariantId: revvoVariantId ?? this.revvoVariantId,
       shopifyProductId: shopifyProductId ?? this.shopifyProductId,
       shopifyVariantId: shopifyVariantId ?? this.shopifyVariantId,
       shopifyInventoryItemId: shopifyInventoryItemId ?? this.shopifyInventoryItemId,
@@ -86,8 +86,8 @@ class ShopifyProductMapping {
   Map<String, dynamic> toJson() => {
         'id': id,
         'user_id': userId,
-        'masari_product_id': masariProductId,
-        'masari_variant_id': masariVariantId,
+        'masari_product_id': revvoProductId,
+        'masari_variant_id': revvoVariantId,
         'shopify_product_id': shopifyProductId,
         'shopify_variant_id': shopifyVariantId,
         'shopify_inventory_item_id': shopifyInventoryItemId,
@@ -102,8 +102,8 @@ class ShopifyProductMapping {
     return ShopifyProductMapping(
       id: json['id'] as String,
       userId: json['user_id'] as String,
-      masariProductId: json['masari_product_id'] as String,
-      masariVariantId: json['masari_variant_id'] as String,
+      revvoProductId: json['masari_product_id'] as String,
+      revvoVariantId: json['masari_variant_id'] as String,
       shopifyProductId: json['shopify_product_id'] as String,
       shopifyVariantId: json['shopify_variant_id'] as String,
       shopifyInventoryItemId: json['shopify_inventory_item_id'] as String,

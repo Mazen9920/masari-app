@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// The title of the application
   ///
   /// In en, this message translates to:
-  /// **'Masari App'**
+  /// **'Revvo'**
   String get appTitle;
 
   /// No description provided for @greetingMorning.
@@ -1853,7 +1853,7 @@ abstract class AppLocalizations {
   /// No description provided for @openingCashHelpText.
   ///
   /// In en, this message translates to:
-  /// **'How much cash did you start with before using Masari?'**
+  /// **'How much cash did you start with before using Revvo?'**
   String get openingCashHelpText;
 
   /// No description provided for @tapToSetStartingCash.
@@ -1865,7 +1865,7 @@ abstract class AppLocalizations {
   /// No description provided for @openingCashDialogDesc.
   ///
   /// In en, this message translates to:
-  /// **'Enter the cash you had before you started tracking transactions in Masari.'**
+  /// **'Enter the cash you had before you started tracking transactions in Revvo.'**
   String get openingCashDialogDesc;
 
   /// No description provided for @lowCashAlertBody.
@@ -2789,7 +2789,7 @@ abstract class AppLocalizations {
   /// No description provided for @setupStep1Subtitle.
   ///
   /// In en, this message translates to:
-  /// **'Help Masari tailor your financial experience to your specific needs.'**
+  /// **'Help Revvo tailor your financial experience to your specific needs.'**
   String get setupStep1Subtitle;
 
   /// No description provided for @businessName.
@@ -3050,11 +3050,11 @@ abstract class AppLocalizations {
   /// **'Profile'**
   String get profile;
 
-  /// No description provided for @masariAiInsight.
+  /// No description provided for @revvoAiInsight.
   ///
   /// In en, this message translates to:
-  /// **'MASARI AI INSIGHT'**
-  String get masariAiInsight;
+  /// **'REVVO AI INSIGHT'**
+  String get revvoAiInsight;
 
   /// No description provided for @viewTransactions.
   ///
@@ -4686,11 +4686,11 @@ abstract class AppLocalizations {
   /// **'FAQ & contact support'**
   String get profileHelpCenterSubtitle;
 
-  /// No description provided for @profileAboutMasari.
+  /// No description provided for @profileAboutRevvo.
   ///
   /// In en, this message translates to:
-  /// **'About Masari'**
-  String get profileAboutMasari;
+  /// **'About Revvo'**
+  String get profileAboutRevvo;
 
   /// No description provided for @profileVersionInfo.
   ///
@@ -5403,13 +5403,13 @@ abstract class AppLocalizations {
   /// No description provided for @aboutTitle.
   ///
   /// In en, this message translates to:
-  /// **'About Masari'**
+  /// **'About Revvo'**
   String get aboutTitle;
 
   /// No description provided for @appName.
   ///
   /// In en, this message translates to:
-  /// **'Masari'**
+  /// **'Revvo'**
   String get appName;
 
   /// No description provided for @aboutTagline.
@@ -5472,11 +5472,11 @@ abstract class AppLocalizations {
   /// **'Thank you! Opening app store...'**
   String get aboutRateThankYou;
 
-  /// No description provided for @aboutShareMasari.
+  /// No description provided for @aboutShareRevvo.
   ///
   /// In en, this message translates to:
-  /// **'Share Masari'**
-  String get aboutShareMasari;
+  /// **'Share Revvo'**
+  String get aboutShareRevvo;
 
   /// No description provided for @aboutShareCopied.
   ///
@@ -5493,7 +5493,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutCopyright.
   ///
   /// In en, this message translates to:
-  /// **'© 2026 Masari. All rights reserved.'**
+  /// **'© 2026 Revvo. All rights reserved.'**
   String get aboutCopyright;
 
   /// No description provided for @subscriptionTitle.
@@ -5889,7 +5889,7 @@ abstract class AppLocalizations {
   /// No description provided for @subscriptionFaqShopifyA.
   ///
   /// In en, this message translates to:
-  /// **'Yes! Growth Mode includes full Shopify e-commerce integration: real-time order sync, inventory management, and product mapping between your Shopify store and Masari.'**
+  /// **'Yes! Growth Mode includes full Shopify e-commerce integration: real-time order sync, inventory management, and product mapping between your Shopify store and Revvo.'**
   String get subscriptionFaqShopifyA;
 
   /// No description provided for @subscriptionFaqShopifyHowQ.
@@ -5901,7 +5901,7 @@ abstract class AppLocalizations {
   /// No description provided for @subscriptionFaqShopifyHowA.
   ///
   /// In en, this message translates to:
-  /// **'After upgrading to Growth Mode, you connect your Shopify store once through a secure OAuth process. After that, your Shopify orders automatically sync as Masari sales in real-time. You can also sync inventory on-demand between Shopify and Masari.'**
+  /// **'After upgrading to Growth Mode, you connect your Shopify store once through a secure OAuth process. After that, your Shopify orders automatically sync as Revvo sales in real-time. You can also sync inventory on-demand between Shopify and Revvo.'**
   String get subscriptionFaqShopifyHowA;
 
   /// No description provided for @subscriptionFaqDowngradeQ.
@@ -5939,6 +5939,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{currency} 749'**
   String subscriptionProPrice(String currency);
+
+  /// No description provided for @subscriptionSubscribeOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribe on Web'**
+  String get subscriptionSubscribeOnWeb;
+
+  /// No description provided for @subscriptionManageOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage on Web'**
+  String get subscriptionManageOnWeb;
+
+  /// No description provided for @subscriptionOpenBilling.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Billing Portal'**
+  String get subscriptionOpenBilling;
+
+  /// No description provided for @subscriptionRefreshing.
+  ///
+  /// In en, this message translates to:
+  /// **'Refreshing subscription...'**
+  String get subscriptionRefreshing;
+
+  /// No description provided for @subscriptionRefreshed.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription status updated'**
+  String get subscriptionRefreshed;
+
+  /// No description provided for @subscriptionGracePeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Grace Period'**
+  String get subscriptionGracePeriod;
+
+  /// No description provided for @subscriptionExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get subscriptionExpired;
+
+  /// No description provided for @subscriptionExpiresOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {date}'**
+  String subscriptionExpiresOn(String date);
+
+  /// No description provided for @subscriptionGraceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your subscription has expired. Renew within {days} days to keep Growth features.'**
+  String subscriptionGraceMessage(int days);
+
+  /// No description provided for @subscriptionExpiredMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Growth subscription has expired. Subscribe again to restore access.'**
+  String get subscriptionExpiredMessage;
+
+  /// No description provided for @subscriptionRenew.
+  ///
+  /// In en, this message translates to:
+  /// **'Renew Subscription'**
+  String get subscriptionRenew;
+
+  /// No description provided for @subscriptionSetupGrowthLater.
+  ///
+  /// In en, this message translates to:
+  /// **'You can subscribe to Growth anytime from Settings.'**
+  String get subscriptionSetupGrowthLater;
 
   /// No description provided for @orderCancelledBanner.
   ///
@@ -6039,7 +6111,7 @@ abstract class AppLocalizations {
   /// No description provided for @cannotCancelHereMsg.
   ///
   /// In en, this message translates to:
-  /// **'Shopify order #{orderNumber} is marked as paid.\n\nPaid orders must be cancelled directly on Shopify (which will handle the refund automatically).\n\nOnce cancelled on Shopify, it will sync to Masari automatically.'**
+  /// **'Shopify order #{orderNumber} is marked as paid.\n\nPaid orders must be cancelled directly on Shopify (which will handle the refund automatically).\n\nOnce cancelled on Shopify, it will sync to Revvo automatically.'**
   String cannotCancelHereMsg(String orderNumber);
 
   /// No description provided for @keepOrder.
@@ -6051,7 +6123,7 @@ abstract class AppLocalizations {
   /// No description provided for @cancelOrderConfirmShopify.
   ///
   /// In en, this message translates to:
-  /// **'This sale is linked to Shopify order #{orderNumber}.\n\nCancelling here will:\n• Restore stock in Masari\n• Create reversal accounting entries\n• Cancel the order on Shopify\n\nThis action cannot be undone.'**
+  /// **'This sale is linked to Shopify order #{orderNumber}.\n\nCancelling here will:\n• Restore stock in Revvo\n• Create reversal accounting entries\n• Cancel the order on Shopify\n\nThis action cannot be undone.'**
   String cancelOrderConfirmShopify(String orderNumber);
 
   /// No description provided for @cancelOrderConfirmManual.
@@ -6801,7 +6873,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyConnectSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Set up a one-time connection between Masari\nand Shopify. Orders will sync automatically\nand inventory sync is available on-demand.'**
+  /// **'Set up a one-time connection between Revvo\nand Shopify. Orders will sync automatically\nand inventory sync is available on-demand.'**
   String get shopifyConnectSubtitle;
 
   /// No description provided for @shopifyStartSetupWizard.
@@ -6819,7 +6891,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyAlwaysOnOrderSyncDesc.
   ///
   /// In en, this message translates to:
-  /// **'Shopify orders automatically become Masari sales in real-time via webhooks.'**
+  /// **'Shopify orders automatically become Revvo sales in real-time via webhooks.'**
   String get shopifyAlwaysOnOrderSyncDesc;
 
   /// No description provided for @shopifyOnDemandInventory.
@@ -6831,7 +6903,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyOnDemandInventoryDesc.
   ///
   /// In en, this message translates to:
-  /// **'Pull stock from Shopify or push your Masari stock levels to Shopify anytime.'**
+  /// **'Pull stock from Shopify or push your Revvo stock levels to Shopify anytime.'**
   String get shopifyOnDemandInventoryDesc;
 
   /// No description provided for @shopifySecureOAuth.
@@ -6909,7 +6981,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyOrderSyncDesc.
   ///
   /// In en, this message translates to:
-  /// **'Shopify orders → Masari sales'**
+  /// **'Shopify orders → Revvo sales'**
   String get shopifyOrderSyncDesc;
 
   /// No description provided for @shopifyAlwaysOn.
@@ -6963,7 +7035,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyProductMappingsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Link Shopify ↔ Masari products'**
+  /// **'Link Shopify ↔ Revvo products'**
   String get shopifyProductMappingsDesc;
 
   /// No description provided for @shopifyReimportOrders.
@@ -7245,7 +7317,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyAlwaysOnSyncDesc.
   ///
   /// In en, this message translates to:
-  /// **'After setup, Shopify orders automatically sync to Masari in real-time via webhooks.'**
+  /// **'After setup, Shopify orders automatically sync to Revvo in real-time via webhooks.'**
   String get shopifyAlwaysOnSyncDesc;
 
   /// No description provided for @shopifyDisconnectAnytimeSetup.
@@ -7263,19 +7335,19 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyDataAccess.
   ///
   /// In en, this message translates to:
-  /// **'Data Masari Will Access'**
+  /// **'Data Revvo Will Access'**
   String get shopifyDataAccess;
 
   /// No description provided for @shopifyDataOrders.
   ///
   /// In en, this message translates to:
-  /// **'Orders — customer name, email, phone, shipping address, items, and totals. Stored in your private Masari account to populate your sales ledger.'**
+  /// **'Orders — customer name, email, phone, shipping address, items, and totals. Stored in your private Revvo account to populate your sales ledger.'**
   String get shopifyDataOrders;
 
   /// No description provided for @shopifyDataInventory.
   ///
   /// In en, this message translates to:
-  /// **'Inventory — product titles, variants, and stock levels. Used to keep your Masari inventory in sync with Shopify.'**
+  /// **'Inventory — product titles, variants, and stock levels. Used to keep your Revvo inventory in sync with Shopify.'**
   String get shopifyDataInventory;
 
   /// No description provided for @shopifyDataPrivacy.
@@ -7305,7 +7377,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyOAuthSuccess.
   ///
   /// In en, this message translates to:
-  /// **'Your Shopify store is now connected to Masari.'**
+  /// **'Your Shopify store is now connected to Revvo.'**
   String get shopifyOAuthSuccess;
 
   /// No description provided for @shopifyOAuthInstructions.
@@ -7341,7 +7413,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyLocationSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Masari will sync inventory with this Shopify location.\nIf you have multiple locations, pick your primary one.'**
+  /// **'Revvo will sync inventory with this Shopify location.\nIf you have multiple locations, pick your primary one.'**
   String get shopifyLocationSubtitle;
 
   /// No description provided for @shopifyPrimaryLocation.
@@ -7389,7 +7461,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifySyncingProducts.
   ///
   /// In en, this message translates to:
-  /// **'Importing your Shopify products and inventory levels into Masari…'**
+  /// **'Importing your Shopify products and inventory levels into Revvo…'**
   String get shopifySyncingProducts;
 
   /// No description provided for @shopifyProductsSyncedCount.
@@ -7518,16 +7590,16 @@ abstract class AppLocalizations {
   /// **'Failed to load sync history:\\n{error}'**
   String shopifyFailedLoadSyncHistory(String error);
 
-  /// No description provided for @shopifyDirectionToMasari.
+  /// No description provided for @shopifyDirectionToRevvo.
   ///
   /// In en, this message translates to:
-  /// **'Shopify → Masari'**
-  String get shopifyDirectionToMasari;
+  /// **'Shopify → Revvo'**
+  String get shopifyDirectionToRevvo;
 
   /// No description provided for @shopifyDirectionToShopify.
   ///
   /// In en, this message translates to:
-  /// **'Masari → Shopify'**
+  /// **'Revvo → Shopify'**
   String get shopifyDirectionToShopify;
 
   /// No description provided for @shopifyRefId.
@@ -7617,13 +7689,13 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyNoProductMappingsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Link your Masari products to Shopify products first\nusing the Product Mappings screen.'**
+  /// **'Link your Revvo products to Shopify products first\nusing the Product Mappings screen.'**
   String get shopifyNoProductMappingsDesc;
 
   /// No description provided for @shopifyPullInfo.
   ///
   /// In en, this message translates to:
-  /// **'Pull will update stock levels in Masari to match Shopify for all mapped products.  Review the preview before confirming.'**
+  /// **'Pull will update stock levels in Revvo to match Shopify for all mapped products.  Review the preview before confirming.'**
   String get shopifyPullInfo;
 
   /// No description provided for @shopifyMappedProductsCount.
@@ -7635,7 +7707,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyPushInfo.
   ///
   /// In en, this message translates to:
-  /// **'Push will overwrite Shopify stock levels with your Masari inventory values. Select products, then review the preview.'**
+  /// **'Push will overwrite Shopify stock levels with your Revvo inventory values. Select products, then review the preview.'**
   String get shopifyPushInfo;
 
   /// No description provided for @shopifySelectAll.
@@ -7698,11 +7770,11 @@ abstract class AppLocalizations {
   /// **'PRODUCT'**
   String get shopifyTableProduct;
 
-  /// No description provided for @shopifyTableMasari.
+  /// No description provided for @shopifyTableRevvo.
   ///
   /// In en, this message translates to:
-  /// **'MASARI'**
-  String get shopifyTableMasari;
+  /// **'REVVO'**
+  String get shopifyTableRevvo;
 
   /// No description provided for @shopifyTableShopify.
   ///
@@ -7767,7 +7839,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyImportAllProducts.
   ///
   /// In en, this message translates to:
-  /// **'Import All {count} Products to Masari'**
+  /// **'Import All {count} Products to Revvo'**
   String shopifyImportAllProducts(int count);
 
   /// No description provided for @shopifyNoProducts.
@@ -7803,7 +7875,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyImportAllConfirmMessage.
   ///
   /// In en, this message translates to:
-  /// **'This will create {count} new product(s) in your Masari inventory from Shopify and link them automatically.\n\nVariants, SKUs, prices, and stock levels will be imported.'**
+  /// **'This will create {count} new product(s) in your Revvo inventory from Shopify and link them automatically.\n\nVariants, SKUs, prices, and stock levels will be imported.'**
   String shopifyImportAllConfirmMessage(int count);
 
   /// No description provided for @shopifyImportAll.
@@ -7824,22 +7896,22 @@ abstract class AppLocalizations {
   /// **'Imported {imported} of {total}. Error: {error}'**
   String shopifyImportPartial(int imported, int total, String error);
 
-  /// No description provided for @shopifyNoMasariProducts.
+  /// No description provided for @shopifyNoRevvoProducts.
   ///
   /// In en, this message translates to:
-  /// **'No Masari products yet — use Import instead'**
-  String get shopifyNoMasariProducts;
+  /// **'No Revvo products yet — use Import instead'**
+  String get shopifyNoRevvoProducts;
 
-  /// No description provided for @shopifyLinkToMasari.
+  /// No description provided for @shopifyLinkToRevvo.
   ///
   /// In en, this message translates to:
-  /// **'Link to Masari Product'**
-  String get shopifyLinkToMasari;
+  /// **'Link to Revvo Product'**
+  String get shopifyLinkToRevvo;
 
   /// No description provided for @shopifyLinkSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Link \"{title}\" to an existing Masari product'**
+  /// **'Link \"{title}\" to an existing Revvo product'**
   String shopifyLinkSubtitle(String title);
 
   /// No description provided for @shopifySearchHint.
@@ -7857,8 +7929,8 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyLinked.
   ///
   /// In en, this message translates to:
-  /// **'Linked \"{shopTitle}\" → \"{masariName}\"'**
-  String shopifyLinked(String shopTitle, String masariName);
+  /// **'Linked \"{shopTitle}\" → \"{revvoName}\"'**
+  String shopifyLinked(String shopTitle, String revvoName);
 
   /// No description provided for @shopifyMatchedBySku.
   ///
@@ -9849,7 +9921,7 @@ abstract class AppLocalizations {
   /// No description provided for @shopifyIntegrationUpgradeDesc.
   ///
   /// In en, this message translates to:
-  /// **'Sync your Shopify store with Masari. Available on Growth Mode.'**
+  /// **'Sync your Shopify store with Revvo. Available on Growth Mode.'**
   String get shopifyIntegrationUpgradeDesc;
 
   /// No description provided for @upgradeToGrowth.
@@ -12326,11 +12398,11 @@ abstract class AppLocalizations {
   /// **'Upload Photo'**
   String get uploadPhoto;
 
-  /// No description provided for @masariExport.
+  /// No description provided for @revvoExport.
   ///
   /// In en, this message translates to:
-  /// **'Masari Export'**
-  String get masariExport;
+  /// **'Revvo Export'**
+  String get revvoExport;
 
   /// No description provided for @readAll.
   ///
@@ -12509,19 +12581,19 @@ abstract class AppLocalizations {
   /// No description provided for @aiGreeting.
   ///
   /// In en, this message translates to:
-  /// **'Hi there! I\'m your Masari AI Assistant. How can I help you analyze your finances today?'**
+  /// **'Hi there! I\'m your Revvo AI Assistant. How can I help you analyze your finances today?'**
   String get aiGreeting;
 
   /// No description provided for @aiPreviewResponse.
   ///
   /// In en, this message translates to:
-  /// **'I\'m currently in preview mode. When connected to a real AI backend, I\'ll be able to analyze your Masari financial data and provide deep insights. Stay tuned!'**
+  /// **'I\'m currently in preview mode. When connected to a real AI backend, I\'ll be able to analyze your Revvo financial data and provide deep insights. Stay tuned!'**
   String get aiPreviewResponse;
 
   /// No description provided for @aiTitle.
   ///
   /// In en, this message translates to:
-  /// **'Masari AI'**
+  /// **'Revvo AI'**
   String get aiTitle;
 
   /// No description provided for @aiPreview.
@@ -12533,7 +12605,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiHint.
   ///
   /// In en, this message translates to:
-  /// **'Ask Masari AI...'**
+  /// **'Ask Revvo AI...'**
   String get aiHint;
 
   /// No description provided for @aiVoiceSoon.
@@ -12686,16 +12758,16 @@ abstract class AppLocalizations {
   /// **'AI Analysis'**
   String get reportAiAnalysis;
 
-  /// No description provided for @reportAiAnalysisMock.
+  /// No description provided for @reportAiAnalysisPlaceholder.
   ///
   /// In en, this message translates to:
-  /// **'Revenue grew by 12% vs January. Salaries remain your largest outflow, consider reviewing contract renewals.'**
-  String get reportAiAnalysisMock;
+  /// **'AI-powered insights will appear here based on your financial data.'**
+  String get reportAiAnalysisPlaceholder;
 
   /// No description provided for @reportPoweredBy.
   ///
   /// In en, this message translates to:
-  /// **'Powered by Masari'**
+  /// **'Powered by Revvo'**
   String get reportPoweredBy;
 
   /// No description provided for @reportPageOf.
@@ -12743,7 +12815,7 @@ abstract class AppLocalizations {
   /// No description provided for @pdfFooterLabel.
   ///
   /// In en, this message translates to:
-  /// **'Masari App - Financial Report'**
+  /// **'Revvo - Financial Report'**
   String get pdfFooterLabel;
 
   /// No description provided for @categoryGroceries.
@@ -12937,6 +13009,342 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You\'re offline — changes will sync when back online'**
   String get offlineBanner;
+
+  /// No description provided for @updateRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Required'**
+  String get updateRequiredTitle;
+
+  /// No description provided for @updateRequiredBody.
+  ///
+  /// In en, this message translates to:
+  /// **'A new version of Revvo is available. Please update to continue using the app.'**
+  String get updateRequiredBody;
+
+  /// No description provided for @updateNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Now'**
+  String get updateNow;
+
+  /// No description provided for @maintenanceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Under Maintenance'**
+  String get maintenanceTitle;
+
+  /// No description provided for @maintenanceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Revvo is undergoing scheduled maintenance. We\'ll be back shortly.'**
+  String get maintenanceBody;
+
+  /// No description provided for @dismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get dismiss;
+
+  /// No description provided for @subscriptionSubscribeMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get subscriptionSubscribeMonthly;
+
+  /// No description provided for @subscriptionSubscribeYearly.
+  ///
+  /// In en, this message translates to:
+  /// **'Yearly — Save 20%'**
+  String get subscriptionSubscribeYearly;
+
+  /// No description provided for @subscriptionRestorePurchases.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore Purchases'**
+  String get subscriptionRestorePurchases;
+
+  /// No description provided for @payWithCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay with Local Card'**
+  String get payWithCard;
+
+  /// No description provided for @paymobProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing checkout…'**
+  String get paymobProcessing;
+
+  /// No description provided for @paymobPaymentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment failed. Please try again.'**
+  String get paymobPaymentFailed;
+
+  /// No description provided for @paymobManageBilling.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage Billing'**
+  String get paymobManageBilling;
+
+  /// No description provided for @subscriptionAutoRenewDisclosure.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment will be charged to your {platform} account at confirmation. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Manage subscriptions in your {platform} account settings.'**
+  String subscriptionAutoRenewDisclosure(String platform);
+
+  /// No description provided for @subscriptionTermsNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'By subscribing, you agree to our {terms} and {privacy}.'**
+  String subscriptionTermsNotice(String terms, String privacy);
+
+  /// No description provided for @manageAppleSubscription.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage in App Store'**
+  String get manageAppleSubscription;
+
+  /// No description provided for @manageGoogleSubscription.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage in Google Play'**
+  String get manageGoogleSubscription;
+
+  /// No description provided for @paymentMethodSavedCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved Card'**
+  String get paymentMethodSavedCard;
+
+  /// No description provided for @paymentMethodCardEnding.
+  ///
+  /// In en, this message translates to:
+  /// **'{brand} ending in {last4}'**
+  String paymentMethodCardEnding(String brand, String last4);
+
+  /// No description provided for @autoRenewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-Renew'**
+  String get autoRenewLabel;
+
+  /// No description provided for @autoRenewEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Your subscription will renew automatically.'**
+  String get autoRenewEnabled;
+
+  /// No description provided for @autoRenewDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-renew is off. Renew manually before expiry.'**
+  String get autoRenewDisabled;
+
+  /// No description provided for @removeCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove Card'**
+  String get removeCard;
+
+  /// No description provided for @removeCardConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove Saved Card?'**
+  String get removeCardConfirmTitle;
+
+  /// No description provided for @removeCardConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will disable auto-renew and remove your saved payment method.'**
+  String get removeCardConfirmMessage;
+
+  /// No description provided for @removeCardSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Card removed successfully.'**
+  String get removeCardSuccess;
+
+  /// No description provided for @autoRenewToggleError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to update auto-renew. Please try again.'**
+  String get autoRenewToggleError;
+
+  /// No description provided for @removeCardError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to remove card. Please try again.'**
+  String get removeCardError;
+
+  /// No description provided for @paymentSourcePaymob.
+  ///
+  /// In en, this message translates to:
+  /// **'Card Payment'**
+  String get paymentSourcePaymob;
+
+  /// No description provided for @paymentSourceIap.
+  ///
+  /// In en, this message translates to:
+  /// **'App Store / Google Play'**
+  String get paymentSourceIap;
+
+  /// No description provided for @noSavedPaymentMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved payment method'**
+  String get noSavedPaymentMethod;
+
+  /// No description provided for @billingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Billing & Payments'**
+  String get billingTitle;
+
+  /// No description provided for @billingPaymentMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'PAYMENT METHOD'**
+  String get billingPaymentMethod;
+
+  /// No description provided for @billingPaymentHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'PAYMENT HISTORY'**
+  String get billingPaymentHistory;
+
+  /// No description provided for @billingPlanManagement.
+  ///
+  /// In en, this message translates to:
+  /// **'PLAN MANAGEMENT'**
+  String get billingPlanManagement;
+
+  /// No description provided for @billingDangerZone.
+  ///
+  /// In en, this message translates to:
+  /// **'SUBSCRIPTION'**
+  String get billingDangerZone;
+
+  /// No description provided for @billingUpdateCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Card'**
+  String get billingUpdateCard;
+
+  /// No description provided for @billingAddCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Payment Card'**
+  String get billingAddCard;
+
+  /// No description provided for @billingChangeToMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to Monthly'**
+  String get billingChangeToMonthly;
+
+  /// No description provided for @billingChangeToYearly.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to Yearly'**
+  String get billingChangeToYearly;
+
+  /// No description provided for @billingNoPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'No payment history yet'**
+  String get billingNoPayments;
+
+  /// No description provided for @billingRenewal.
+  ///
+  /// In en, this message translates to:
+  /// **'Renewal'**
+  String get billingRenewal;
+
+  /// No description provided for @billingCancelSubscription.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel Subscription'**
+  String get billingCancelSubscription;
+
+  /// No description provided for @billingCancelConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel Subscription?'**
+  String get billingCancelConfirmTitle;
+
+  /// No description provided for @billingCancelConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You will be downgraded to Launch Mode. Your data will be preserved but you will lose access to Growth features.'**
+  String get billingCancelConfirmMessage;
+
+  /// No description provided for @billingCancelledSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription cancelled. You are now on Launch Mode.'**
+  String get billingCancelledSuccess;
+
+  /// No description provided for @billingReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Receipt'**
+  String get billingReceipt;
+
+  /// No description provided for @billingReceiptPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get billingReceiptPlan;
+
+  /// No description provided for @billingReceiptAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get billingReceiptAmount;
+
+  /// No description provided for @billingReceiptDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get billingReceiptDate;
+
+  /// No description provided for @billingReceiptStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get billingReceiptStatus;
+
+  /// No description provided for @billingReceiptType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get billingReceiptType;
+
+  /// No description provided for @billingReceiptTxId.
+  ///
+  /// In en, this message translates to:
+  /// **'Transaction ID'**
+  String get billingReceiptTxId;
+
+  /// No description provided for @billingReceiptSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Successful'**
+  String get billingReceiptSuccess;
+
+  /// No description provided for @billingReceiptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get billingReceiptFailed;
+
+  /// No description provided for @billingShareReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Share Receipt'**
+  String get billingShareReceipt;
 }
 
 class _AppLocalizationsDelegate

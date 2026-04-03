@@ -50,22 +50,22 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCpNdbXmGx0SvrskLn6xI9Z6B8SgEOBgoQ',
-    appId: '1:686452990628:ios:041d29008a8ec139a9bc31',
+    appId: '1:686452990628:ios:fa073c81209a8a83a9bc31',
     messagingSenderId: '686452990628',
     projectId: 'massari-574ff',
     storageBucket: 'massari-574ff.firebasestorage.app',
-    iosClientId: '686452990628-tblkqh5lquus1g26fvisce7t0nh0ne54.apps.googleusercontent.com',
-    iosBundleId: 'com.masari.masariApp',
+    iosClientId: '686452990628-0in6r7i6gpfu4slg3io56jed46f44phj.apps.googleusercontent.com',
+    iosBundleId: 'com.revvo.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyCpNdbXmGx0SvrskLn6xI9Z6B8SgEOBgoQ',
-    appId: '1:686452990628:ios:041d29008a8ec139a9bc31',
+    appId: '1:686452990628:ios:fa073c81209a8a83a9bc31',
     messagingSenderId: '686452990628',
     projectId: 'massari-574ff',
     storageBucket: 'massari-574ff.firebasestorage.app',
-    iosClientId: '686452990628-tblkqh5lquus1g26fvisce7t0nh0ne54.apps.googleusercontent.com',
-    iosBundleId: 'com.masari.masariApp',
+    iosClientId: '686452990628-0in6r7i6gpfu4slg3io56jed46f44phj.apps.googleusercontent.com',
+    iosBundleId: 'com.revvo.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
@@ -79,7 +79,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAFVWnGbHrYL9SGYisMNGZD7UjjyaRknrE',
-    appId: '1:686452990628:android:1bfb4a9309f31b24a9bc31',
+    appId: '1:686452990628:android:776ba03c580c5085a9bc31',
     messagingSenderId: '686452990628',
     projectId: 'massari-574ff',
     storageBucket: 'massari-574ff.firebasestorage.app',

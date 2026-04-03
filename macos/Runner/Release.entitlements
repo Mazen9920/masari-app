@@ -8,7 +8,7 @@
 	<true/>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)com.masari.masariApp</string>
+		<string>$(AppIdentifierPrefix)com.revvo.app</string>
 	</array>
 </dict>
 </plist>

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.masari" "\0"
-            VALUE "FileDescription", "masari_app" "\0"
+            VALUE "CompanyName", "com.revvo" "\0"
+            VALUE "FileDescription", "revvo_app" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "masari_app" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.masari. All rights reserved." "\0"
-            VALUE "OriginalFilename", "masari_app.exe" "\0"
-            VALUE "ProductName", "masari_app" "\0"
+            VALUE "InternalName", "revvo_app" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.revvo. All rights reserved." "\0"
+            VALUE "OriginalFilename", "revvo_app.exe" "\0"
+            VALUE "ProductName", "revvo_app" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

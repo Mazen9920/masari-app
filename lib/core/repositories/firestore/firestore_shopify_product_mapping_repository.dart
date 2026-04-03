@@ -71,12 +71,12 @@ class FirestoreShopifyProductMappingRepository
   }
 
   @override
-  Future<Result<ShopifyProductMapping?>> getMappingByMasariVariantId(
-      String masariVariantId) async {
+  Future<Result<ShopifyProductMapping?>> getMappingByRevvoVariantId(
+      String revvoVariantId) async {
     try {
       final snapshot = await _collection
           .where('user_id', isEqualTo: _uid)
-          .where('masari_variant_id', isEqualTo: masariVariantId)
+          .where('masari_variant_id', isEqualTo: revvoVariantId)
           .limit(1)
           .get();
       if (snapshot.docs.isEmpty) return Result.success(null);
@@ -84,7 +84,7 @@ class FirestoreShopifyProductMappingRepository
       data['id'] = snapshot.docs.first.id;
       return Result.success(ShopifyProductMapping.fromJson(data));
     } catch (e) {
-      return Result.failure( 'Failed to query mapping by Masari variant: $e');
+      return Result.failure( 'Failed to query mapping by Revvo variant: $e');
     }
   }
 
@@ -166,12 +166,12 @@ class FirestoreShopifyProductMappingRepository
   }
 
   @override
-  Future<Result<void>> deleteMappingsByMasariProductId(
-      String masariProductId) async {
+  Future<Result<void>> deleteMappingsByRevvoProductId(
+      String revvoProductId) async {
     try {
       final snapshot = await _collection
           .where('user_id', isEqualTo: _uid)
-          .where('masari_product_id', isEqualTo: masariProductId)
+          .where('masari_product_id', isEqualTo: revvoProductId)
           .get();
       if (snapshot.docs.isEmpty) return Result.success(null);
       final batch = _firestore.batch();

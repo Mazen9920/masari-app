@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/navigation/app_router.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../auth/widgets/form_components.dart';
 import 'widgets/setup_shell.dart';
 
-class BusinessSetupStep1 extends StatefulWidget {
+class BusinessSetupStep1 extends ConsumerStatefulWidget {
   const BusinessSetupStep1({super.key});
 
   @override
-  State<BusinessSetupStep1> createState() => _BusinessSetupStep1State();
+  ConsumerState<BusinessSetupStep1> createState() => _BusinessSetupStep1State();
 }
 
-class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
+class _BusinessSetupStep1State extends ConsumerState<BusinessSetupStep1> {
   final _businessNameController = TextEditingController();
   String? _selectedIndustry;
   int _selectedStageIndex = -1;
@@ -45,7 +47,7 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
     super.dispose();
   }
 
-  void _onContinue() {
+  void _onContinue() async {
     // Basic validation
     if (_businessNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -61,6 +63,18 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
       );
       return;
     }
+
+    // Save all step 1 data to appSettingsProvider
+    final settings = ref.read(appSettingsProvider.notifier);
+    await settings.setBusinessName(_businessNameController.text.trim());
+    if (_selectedIndustry != null) {
+      await settings.setIndustry(_selectedIndustry!);
+    }
+    if (_selectedStageIndex >= 0) {
+      await settings.setBusinessStage(_stageKeys[_selectedStageIndex]);
+    }
+
+    if (!mounted) return;
     context.push(AppRoutes.setupStep2);
   }
 
@@ -80,7 +94,7 @@ class _BusinessSetupStep1State extends State<BusinessSetupStep1> {
           // ─── Business Name ───
           _buildSectionLabel(l10n.businessName),
           const SizedBox(height: 8),
-          MasariTextField(
+          RevvoTextField(
             label: l10n.businessName,
             icon: Icons.storefront_outlined,
             controller: _businessNameController,

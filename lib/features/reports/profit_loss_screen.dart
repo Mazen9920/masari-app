@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -1222,7 +1223,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
             await shareSvc.sharePdf(bytes, 'PnL_$label.pdf',
                 subject: 'Profit & Loss Statement', origin: origin);
           } catch (e) {
-            debugPrint('P&L share error: $e');
+            if (kDebugMode) debugPrint('P&L share error: $e');
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

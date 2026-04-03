@@ -85,6 +85,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       context.go(AppRoutes.home);
     } else {
       final error = ref.read(authProvider).error ?? AppLocalizations.of(context)!.appleSignInFailed;
+      if (error.contains('cancelled')) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error),
         backgroundColor: AppColors.danger,
@@ -118,7 +119,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 12),
                 _buildForgotPassword(),
                 const SizedBox(height: 28),
-                MasariPrimaryButton(
+                RevvoPrimaryButton(
                   text: _isLoading ? AppLocalizations.of(context)!.loggingIn : AppLocalizations.of(context)!.logIn,
                   icon: Icons.arrow_forward_rounded,
                   onPressed: _isLoading ? null : _onLogin,
@@ -183,7 +184,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       key: _formKey,
       child: Column(
         children: [
-          MasariTextField(
+          RevvoTextField(
             label: AppLocalizations.of(context)!.emailAddress,
             icon: Icons.email_outlined,
             controller: _emailController,
@@ -196,7 +197,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             },
           ),
           const SizedBox(height: 16),
-          MasariTextField(
+          RevvoTextField(
             label: AppLocalizations.of(context)!.password,
             icon: Icons.lock_outline_rounded,
             controller: _passwordController,
@@ -248,7 +249,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             if (!mounted) return;
             ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(AppLocalizations.of(context)!.failedToSendResetLinkError(e.toString())),
+              content: Text(AppLocalizations.of(context)!.failedToSendResetLink),
               backgroundColor: AppColors.danger,
             ));
           }

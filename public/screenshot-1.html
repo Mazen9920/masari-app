@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Screenshot 1 – Connected State (1600×900)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#ccc; display:flex; align-items:center; justify-content:center; min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+
+  .canvas {
+    width:1600px; height:900px;
+    background:#f6f6f7;
+    position:relative; overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+
+  /* ── Shopify Admin Top Bar ── */
+  .admin-topbar {
+    height:56px; min-height:56px;
+    background:#f1f1f1;
+    border-bottom:1px solid #e1e3e5;
+    display:flex; align-items:center;
+    padding:0 24px;
+    gap:10px;
+  }
+  .admin-topbar-icon {
+    width:28px; height:28px; border-radius:7px;
+    background:#1e4d6e;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:700; color:#fff; letter-spacing:-0.3px;
+    position:relative; overflow:hidden;
+  }
+  .admin-topbar-icon::after {
+    content:''; position:absolute; bottom:5px; left:6px; right:6px;
+    height:2px; background:#e8963e; border-radius:1px;
+  }
+  .admin-topbar-name {
+    font-size:15px; font-weight:600; color:#303030;
+  }
+
+  /* ── Main Content Area ── */
+  .main-content {
+    flex:1;
+    overflow:hidden;
+    display:flex;
+    justify-content:center;
+    padding:28px 40px;
+  }
+
+  .page { width:720px; }
+
+  /* ── Exact styles from the real embedded app ── */
+  :root {
+    --p-surface:#f6f6f7;--p-bg:#fff;--p-text:#202223;
+    --p-subdued:#6d7175;--p-green:#008060;--p-green-h:#006e52;
+    --p-red:#d72c0d;--p-border:#e1e3e5;
+    --p-radius:12px;
+    --p-shadow:0 1px 1px rgba(0,0,0,.04),0 2px 4px 1px rgba(0,0,0,.04);
+    --p-font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+
+  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .page-title { font-size:24px; font-weight:700; color:var(--p-text); }
+  .badge { display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:500; }
+  .badge-ok { background:#e3f5ef; color:#008060; }
+  .dot { width:8px; height:8px; border-radius:50%; }
+  .dot-ok { background:#008060; }
+
+  .card { background:var(--p-bg); border-radius:var(--p-radius); box-shadow:var(--p-shadow); border:1px solid var(--p-border); margin-bottom:16px; }
+  .card-hd { padding:16px 20px; border-bottom:1px solid var(--p-border); display:flex; align-items:center; justify-content:space-between; }
+  .card-tt { font-size:16px; font-weight:600; color:var(--p-text); }
+  .card-bd { padding:20px; }
+
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .info-item label { font-size:12px; color:var(--p-subdued); text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:4px; }
+  .info-item .val { font-size:14px; font-weight:500; color:var(--p-text); }
+
+  .srow { display:flex; align-items:center; justify-content:space-between; padding:14px 0; }
+  .srow + .srow { border-top:1px solid var(--p-border); }
+  .slbl { font-size:14px; font-weight:500; color:var(--p-text); }
+  .sdsc { font-size:13px; color:var(--p-subdued); margin-top:2px; }
+
+  .toggle { position:relative; width:44px; height:24px; flex-shrink:0; }
+  .toggle input { display:none; }
+  .toggle .sl { position:absolute; inset:0; background:#babec3; border-radius:24px; transition:.2s; }
+  .toggle .sl::before { content:''; position:absolute; width:18px; height:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+  .toggle input:checked + .sl { background:var(--p-green); }
+  .toggle input:checked + .sl::before { transform:translateX(20px); }
+
+  .sel-w { position:relative; }
+  select { width:100%; padding:8px 32px 8px 12px; font-size:14px; border:1px solid var(--p-border); border-radius:8px; background:#fff; appearance:none; font-family:var(--p-font); cursor:pointer; }
+  .sel-w::after { content:'\25BE'; position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:var(--p-subdued); }
+
+  .banner { padding:14px 20px; border-radius:var(--p-radius); margin-bottom:16px; font-size:14px; display:flex; align-items:flex-start; gap:12px; }
+  .banner-i { background:#eaf5fe; border:1px solid #b4d4f1; color:#1f5199; }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <!-- Shopify Admin Top Bar (no browser chrome) -->
+  <div class="admin-topbar">
+    <div class="admin-topbar-icon">revvo</div>
+    <div class="admin-topbar-name">Revvo</div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="page">
+
+      <!-- Header -->
+      <div class="page-header">
+        <h1 class="page-title">Revvo</h1>
+        <span class="badge badge-ok"><span class="dot dot-ok"></span>Connected</span>
+      </div>
+
+      <!-- Info Banner -->
+      <div class="banner banner-i">
+        &#x1F4F1;&ensp;Manage product mappings, import orders, and view detailed analytics in the <strong>&nbsp;Revvo&nbsp;</strong> mobile app.
+      </div>
+
+      <!-- Connection Details -->
+      <div class="card">
+        <div class="card-hd"><span class="card-tt">Connection Details</span></div>
+        <div class="card-bd">
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Store</label>
+              <div class="val">your-store.myshopify.com</div>
+            </div>
+            <div class="info-item">
+              <label>Connected</label>
+              <div class="val">Apr 2, 2026, 07:33 PM</div>
+            </div>
+            <div class="info-item">
+              <label>Last Order Sync</label>
+              <div class="val">Apr 3, 2026, 10:24 AM</div>
+            </div>
+            <div class="info-item">
+              <label>Last Inventory Sync</label>
+              <div class="val">Apr 3, 2026, 10:24 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sync Settings -->
+      <div class="card">
+        <div class="card-hd"><span class="card-tt">Sync Settings</span></div>
+        <div class="card-bd">
+          <div class="srow">
+            <div>
+              <div class="slbl">Order Sync</div>
+              <div class="sdsc">Automatically sync new orders to Revvo</div>
+            </div>
+            <label class="toggle"><input type="checkbox" checked><span class="sl"></span></label>
+          </div>
+          <div class="srow">
+            <div>
+              <div class="slbl">Inventory Sync</div>
+              <div class="sdsc">Keep inventory levels in sync between Shopify and Revvo</div>
+            </div>
+            <label class="toggle"><input type="checkbox" checked><span class="sl"></span></label>
+          </div>
+          <div class="srow">
+            <div>
+              <div class="slbl">Sync Mode</div>
+              <div class="sdsc">How inventory syncs between platforms</div>
+            </div>
+            <div class="sel-w" style="width:160px">
+              <select><option selected>Always On</option></select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

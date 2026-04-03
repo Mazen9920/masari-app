@@ -1,17 +1,23 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:in_app_review/in_app_review.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../shared/utils/safe_pop.dart';
 import '../../l10n/app_localizations.dart';
 
-const _kPrivacyUrl = 'https://masari.app/privacy.html';
-const _kTermsUrl = 'https://masari.app/terms.html';
+const _kPrivacyUrl = 'https://revvo-app.com/privacy';
+const _kTermsUrl = 'https://revvo-app.com/terms';
+const _kAppStoreId = ''; // TODO: fill after App Store submission
+const _kPlayStoreId = 'com.revvo.app';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
@@ -108,12 +114,28 @@ class AboutScreen extends StatelessWidget {
                     );
                   }),
                   _divider(),
-                  _buildLink(icon: Icons.star_outline_rounded, title: l10n.aboutRateApp, onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.aboutRateThankYou)));
+                  _buildLink(icon: Icons.star_outline_rounded, title: l10n.aboutRateApp, onTap: () async {
+                    final inAppReview = InAppReview.instance;
+                    if (await inAppReview.isAvailable()) {
+                      inAppReview.requestReview();
+                    } else {
+                      // Fallback: open store listing directly
+                      final url = (Platform.isIOS && _kAppStoreId.isNotEmpty)
+                          ? 'https://apps.apple.com/app/id$_kAppStoreId'
+                          : (Platform.isAndroid)
+                              ? 'https://play.google.com/store/apps/details?id=$_kPlayStoreId'
+                              : 'https://revvo-app.com';
+                      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                    }
                   }),
                   _divider(),
-                  _buildLink(icon: Icons.share_outlined, title: l10n.aboutShareMasari, onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.aboutShareCopied)));
+                  _buildLink(icon: Icons.share_outlined, title: l10n.aboutShareRevvo, onTap: () {
+                    final url = (Platform.isIOS && _kAppStoreId.isNotEmpty)
+                        ? 'https://apps.apple.com/app/id$_kAppStoreId'
+                        : (Platform.isAndroid)
+                            ? 'https://play.google.com/store/apps/details?id=$_kPlayStoreId'
+                            : 'https://revvo-app.com';
+                    Share.share('${l10n.appName} — ${l10n.aboutTagline}\n$url');
                   }),
                 ],
               ),

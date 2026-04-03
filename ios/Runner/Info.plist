@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Masari App</string>
+	<string>Revvo</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>masari_app</string>
+	<string>Revvo</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -28,33 +28,38 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.masari.app</string>
+			<string>com.revvo.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>masari</string>
+				<string>revvo</string>
 			</array>
 		</dict>
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.googleusercontent.apps.686452990628-tblkqh5lquus1g26fvisce7t0nh0ne54</string>
+			<string>com.googleusercontent.apps.686452990628-0in6r7i6gpfu4slg3io56jed46f44phj</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.686452990628-tblkqh5lquus1g26fvisce7t0nh0ne54</string>
+				<string>com.googleusercontent.apps.686452990628-0in6r7i6gpfu4slg3io56jed46f44phj</string>
 			</array>
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>GIDClientID</key>
-	<string>686452990628-tblkqh5lquus1g26fvisce7t0nh0ne54.apps.googleusercontent.com</string>
+	<string>686452990628-0in6r7i6gpfu4slg3io56jed46f44phj.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Masari needs camera access to take product photos and profile pictures</string>
+	<string>Revvo needs camera access to take product photos and profile pictures</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Masari needs photo library access to upload product photos and profile pictures</string>
+	<string>Revvo needs photo library access to upload product photos and profile pictures</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -76,6 +81,8 @@
 			</array>
 		</dict>
 	</dict>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

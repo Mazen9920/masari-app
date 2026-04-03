@@ -221,7 +221,7 @@ class _LogTile extends StatelessWidget {
 
     final timeFmt = DateFormat( 'MMM dd, HH:mm');
     final directionLabel = entry.direction == 'shopify_to_masari'
-        ? l10n.shopifyDirectionToMasari
+        ? l10n.shopifyDirectionToRevvo
         : entry.direction == 'masari_to_shopify'
             ? l10n.shopifyDirectionToShopify
             : entry.direction;
@@ -326,14 +326,14 @@ class _LogTile extends StatelessWidget {
           ],
           // Reference IDs
           if (entry.shopifyOrderId != null ||
-              entry.masariSaleId != null) ...[
+              entry.revvoSaleId != null) ...[
             const SizedBox(height: 4),
             Text(
               [
                 if (entry.shopifyOrderId != null)
                   l10n.shopifyRefId(entry.shopifyOrderId!),
-                if (entry.masariSaleId != null)
-                  l10n.shopifySaleRef(entry.masariSaleId!.substring(0, 8)),
+                if (entry.revvoSaleId != null)
+                  l10n.shopifySaleRef(entry.revvoSaleId!.substring(0, 8)),
               ].join(' · '),
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textTertiary,

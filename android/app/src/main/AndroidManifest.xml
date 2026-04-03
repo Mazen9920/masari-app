@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="masari_app"
+        android:label="Revvo"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -24,13 +24,13 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Deep linking intent filter for masari:// -->
+            <!-- Deep linking intent filter for revvo:// -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <!-- Accepts URIs that begin with "masari://app" -->
-                <data android:scheme="masari" android:host="app" />
+                <!-- Accepts URIs that begin with "revvo://app" -->
+                <data android:scheme="revvo" android:host="app" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

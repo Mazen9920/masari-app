@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Revvo – Feature Media (1600×900)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#f0f0f0; display:flex; align-items:center; justify-content:center; min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+
+  .canvas {
+    width:1600px; height:900px;
+    background:linear-gradient(135deg, #f4f6f8 0%, #e8ecf0 100%);
+    position:relative; overflow:hidden;
+  }
+
+  /* ── Subtle grid dots ── */
+  .canvas::before {
+    content:'';position:absolute;inset:0;
+    background-image:radial-gradient(circle, #d0d5da 0.8px, transparent 0.8px);
+    background-size:32px 32px;
+    opacity:0.35;
+  }
+
+  /* ── Left: headline + value props ── */
+  .left {
+    position:absolute; left:80px; top:0; bottom:0; width:440px;
+    display:flex; flex-direction:column; justify-content:center; z-index:2;
+  }
+  .logo-row { display:flex; align-items:center; gap:12px; margin-bottom:24px; }
+  .logo-icon {
+    width:52px;height:52px;border-radius:14px;
+    background:linear-gradient(135deg,#008060,#00a87a);
+    display:flex;align-items:center;justify-content:center;
+    font-size:24px;font-weight:800;color:#fff;
+    box-shadow:0 4px 12px rgba(0,128,96,0.3);
+  }
+  .logo-text { font-size:32px; font-weight:800; color:#1a1a1a; letter-spacing:-0.5px; }
+
+  .headline {
+    font-size:38px; font-weight:800; color:#1a1a1a; line-height:1.2;
+    letter-spacing:-0.5px; margin-bottom:16px;
+  }
+  .headline span { color:#008060; }
+  .sub { font-size:16px; color:#6d7175; line-height:1.6; margin-bottom:32px; }
+
+  .pills { display:flex; flex-wrap:wrap; gap:10px; }
+  .pill {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:8px 16px; border-radius:20px;
+    background:#fff; border:1px solid #e1e3e5;
+    font-size:13px; font-weight:600; color:#202223;
+    box-shadow:0 1px 3px rgba(0,0,0,0.06);
+  }
+  .pill .ic { font-size:16px; }
+
+  /* ── Center: Shopify Admin browser ── */
+  .browser {
+    position:absolute; left:540px; top:60px;
+    width:620px; height:780px;
+    background:#fff; border-radius:12px;
+    box-shadow:0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+    overflow:hidden; z-index:3;
+  }
+  .browser-bar {
+    height:36px; background:#f6f6f7; border-bottom:1px solid #e1e3e5;
+    display:flex; align-items:center; padding:0 14px; gap:8px;
+  }
+  .dot-r { width:10px; height:10px; border-radius:50%; }
+  .dot-red { background:#ff5f57; }
+  .dot-yel { background:#febc2e; }
+  .dot-grn { background:#28c840; }
+  .url-bar {
+    flex:1; margin-left:12px; height:22px; border-radius:6px;
+    background:#e8ecf0; display:flex; align-items:center; padding:0 10px;
+    font-size:11px; color:#6d7175;
+  }
+
+  /* Shopify chrome sidebar */
+  .shop-layout { display:flex; height:calc(100% - 36px); }
+  .shop-side {
+    width:48px; background:#1a1a1a; display:flex; flex-direction:column;
+    align-items:center; padding-top:14px; gap:16px;
+  }
+  .shop-side-dot {
+    width:28px; height:28px; border-radius:8px; background:#333;
+  }
+  .shop-side-dot.active { background:#008060; }
+  .shop-main {
+    flex:1; background:#f6f6f7; overflow:hidden; padding:20px;
+  }
+
+  /* Embedded app mockup */
+  .embed-page { max-width:540px; }
+  .embed-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .embed-title { font-size:20px; font-weight:700; color:#202223; }
+  .embed-badge {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:3px 10px; border-radius:16px; font-size:11px; font-weight:600;
+    background:#e3f5ef; color:#008060;
+  }
+  .embed-badge .bdot { width:6px;height:6px;border-radius:50%;background:#008060; }
+
+  .embed-card {
+    background:#fff; border-radius:10px; border:1px solid #e1e3e5;
+    box-shadow:0 1px 2px rgba(0,0,0,0.04); margin-bottom:12px;
+  }
+  .embed-card-hd {
+    padding:12px 16px; border-bottom:1px solid #e1e3e5;
+    font-size:13px; font-weight:600; color:#202223;
+  }
+  .embed-card-bd { padding:14px 16px; }
+
+  .info-grid-m { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .info-item-m label { display:block; font-size:10px; color:#6d7175; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:2px; }
+  .info-item-m .val-m { font-size:12px; font-weight:500; color:#202223; }
+
+  .srow-m { display:flex; align-items:center; justify-content:space-between; padding:10px 0; }
+  .srow-m + .srow-m { border-top:1px solid #f0f0f0; }
+  .slbl-m { font-size:12px; font-weight:500; color:#202223; }
+  .sdsc-m { font-size:10px; color:#6d7175; }
+  .toggle-m {
+    width:34px; height:18px; border-radius:18px;
+    position:relative;
+  }
+  .toggle-on { background:#008060; }
+  .toggle-off { background:#babec3; }
+  .toggle-m::after {
+    content:''; position:absolute; width:14px; height:14px;
+    border-radius:50%; background:#fff; top:2px;
+  }
+  .toggle-on::after { right:2px; }
+  .toggle-off::after { left:2px; }
+
+  /* ── Right: phone mockup ── */
+  .phone {
+    position:absolute; right:40px; top:120px;
+    width:280px; height:560px;
+    background:#1a1a1a; border-radius:36px;
+    padding:8px; z-index:4;
+    box-shadow:0 12px 48px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .phone-screen {
+    width:100%; height:100%; border-radius:28px;
+    background:#f9fafb; overflow:hidden; position:relative;
+  }
+  .phone-notch {
+    position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:100px; height:24px; background:#1a1a1a;
+    border-radius:0 0 16px 16px;
+  }
+
+  /* Phone app content */
+  .phone-nav {
+    height:48px; background:#fff; border-bottom:1px solid #e8e8e8;
+    display:flex; align-items:center; justify-content:center;
+    padding-top:22px; font-size:14px; font-weight:700; color:#1a1a1a;
+  }
+  .phone-body { padding:14px; }
+  .phone-card {
+    background:#fff; border-radius:10px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.06);
+    margin-bottom:10px; overflow:hidden;
+  }
+  .phone-card-hd {
+    padding:10px 12px; font-size:11px; font-weight:700;
+    color:#202223; border-bottom:1px solid #f0f0f0;
+  }
+  .phone-card-bd { padding:10px 12px; }
+  .phone-row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:6px 0; font-size:10px;
+  }
+  .phone-row + .phone-row { border-top:1px solid #f6f6f7; }
+  .phone-label { color:#6d7175; }
+  .phone-val { color:#202223; font-weight:600; }
+  .phone-val.green { color:#008060; }
+
+  .phone-toggle {
+    width:28px; height:15px; border-radius:15px; background:#008060;
+    position:relative;
+  }
+  .phone-toggle::after {
+    content:''; position:absolute; right:2px; top:2px;
+    width:11px; height:11px; border-radius:50%; background:#fff;
+  }
+
+  .phone-status-bar {
+    display:flex; align-items:center; gap:6px;
+    padding:6px 12px; background:#e3f5ef; border-radius:8px;
+    margin-bottom:10px;
+  }
+  .phone-status-dot { width:6px;height:6px;border-radius:50%;background:#008060; }
+  .phone-status-text { font-size:10px; font-weight:600; color:#008060; }
+
+  /* ── Sync arrows ── */
+  .sync-arrows {
+    position:absolute; left:1128px; top:380px; z-index:5;
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+  }
+  .arrow-line {
+    display:flex; align-items:center; gap:4px;
+    padding:6px 14px; border-radius:20px;
+    background:#fff; border:1px solid #e1e3e5;
+    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    font-size:11px; font-weight:600; color:#008060;
+  }
+  .arrow-line svg { width:16px; height:16px; fill:#008060; }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <!-- Left: branding + features -->
+  <div class="left">
+    <div class="logo-row">
+      <div class="logo-icon">R</div>
+      <div class="logo-text">Revvo</div>
+    </div>
+    <div class="headline">Manage everywhere. <span>Sync automatically.</span></div>
+    <div class="sub">One dashboard in Shopify, one app on the go — your orders and inventory stay perfectly aligned.</div>
+    <div class="pills">
+      <div class="pill"><span class="ic">&#x1F4E6;</span> Order Sync</div>
+      <div class="pill"><span class="ic">&#x1F504;</span> Two-Way Inventory</div>
+      <div class="pill"><span class="ic">&#x1F4CA;</span> COGS &amp; Profit</div>
+      <div class="pill"><span class="ic">&#x1F4F1;</span> Mobile App</div>
+    </div>
+  </div>
+
+  <!-- Center: browser with embedded app -->
+  <div class="browser">
+    <div class="browser-bar">
+      <div class="dot-r dot-red"></div>
+      <div class="dot-r dot-yel"></div>
+      <div class="dot-r dot-grn"></div>
+      <div class="url-bar">admin.shopify.com/store/your-store/apps/revvo</div>
+    </div>
+    <div class="shop-layout">
+      <div class="shop-side">
+        <div class="shop-side-dot"></div>
+        <div class="shop-side-dot"></div>
+        <div class="shop-side-dot"></div>
+        <div class="shop-side-dot active"></div>
+        <div class="shop-side-dot"></div>
+      </div>
+      <div class="shop-main">
+        <div class="embed-page">
+          <div class="embed-header">
+            <div class="embed-title">Revvo</div>
+            <div class="embed-badge"><span class="bdot"></span> Connected</div>
+          </div>
+
+          <!-- Connection Details card -->
+          <div class="embed-card">
+            <div class="embed-card-hd">Connection Details</div>
+            <div class="embed-card-bd">
+              <div class="info-grid-m">
+                <div class="info-item-m"><label>Store</label><div class="val-m">your-store.myshopify.com</div></div>
+                <div class="info-item-m"><label>Connected</label><div class="val-m">Apr 2, 2026</div></div>
+                <div class="info-item-m"><label>Last Order Sync</label><div class="val-m">Apr 3, 2026, 10:24 AM</div></div>
+                <div class="info-item-m"><label>Last Inventory Sync</label><div class="val-m">Apr 3, 2026, 10:24 AM</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sync Settings card -->
+          <div class="embed-card">
+            <div class="embed-card-hd">Sync Settings</div>
+            <div class="embed-card-bd">
+              <div class="srow-m">
+                <div><div class="slbl-m">Order Sync</div><div class="sdsc-m">Automatically sync new orders to Revvo</div></div>
+                <div class="toggle-m toggle-on"></div>
+              </div>
+              <div class="srow-m">
+                <div><div class="slbl-m">Inventory Sync</div><div class="sdsc-m">Keep inventory levels in sync</div></div>
+                <div class="toggle-m toggle-on"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Linked Account card -->
+          <div class="embed-card">
+            <div class="embed-card-hd">Linked Revvo Account</div>
+            <div class="embed-card-bd">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div style="font-size:12px;font-weight:500;color:#202223">merchant@example.com</div>
+                  <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;background:#e3f5ef;color:#008060">active</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sync arrows between browser and phone -->
+  <div class="sync-arrows">
+    <div class="arrow-line">
+      Orders <svg viewBox="0 0 24 24"><path d="M5 12h14m-4-4 4 4-4 4"/></svg>
+    </div>
+    <div class="arrow-line">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5m4 4-4-4 4-4"/></svg> Inventory
+    </div>
+  </div>
+
+  <!-- Right: phone mockup -->
+  <div class="phone">
+    <div class="phone-screen">
+      <div class="phone-notch"></div>
+      <div class="phone-nav">Shopify Integration</div>
+      <div class="phone-body">
+
+        <div class="phone-status-bar">
+          <span class="phone-status-dot"></span>
+          <span class="phone-status-text">Connected to your-store.myshopify.com</span>
+        </div>
+
+        <div class="phone-card">
+          <div class="phone-card-hd">Connection Status</div>
+          <div class="phone-card-bd">
+            <div class="phone-row">
+              <span class="phone-label">Status</span>
+              <span class="phone-val green">Active</span>
+            </div>
+            <div class="phone-row">
+              <span class="phone-label">Store</span>
+              <span class="phone-val">your-store.myshopify.com</span>
+            </div>
+            <div class="phone-row">
+              <span class="phone-label">Connected</span>
+              <span class="phone-val">Apr 2, 2026</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone-card">
+          <div class="phone-card-hd">Sync Settings</div>
+          <div class="phone-card-bd">
+            <div class="phone-row">
+              <span class="phone-label">Order Sync</span>
+              <div class="phone-toggle"></div>
+            </div>
+            <div class="phone-row">
+              <span class="phone-label">Inventory Sync</span>
+              <div class="phone-toggle"></div>
+            </div>
+            <div class="phone-row">
+              <span class="phone-label">Mode</span>
+              <span class="phone-val">Always On</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone-card">
+          <div class="phone-card-hd">Recent Orders</div>
+          <div class="phone-card-bd">
+            <div class="phone-row">
+              <span class="phone-label">#1042</span>
+              <span class="phone-val">$124.50</span>
+            </div>
+            <div class="phone-row">
+              <span class="phone-label">#1041</span>
+              <span class="phone-val">$89.00</span>
+            </div>
+            <div class="phone-row">
+              <span class="phone-label">#1040</span>
+              <span class="phone-val">$215.00</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

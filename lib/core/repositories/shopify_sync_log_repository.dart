@@ -20,9 +20,9 @@ class ShopifySyncLogEntry {
 
   /// Reference IDs for traceability.
   final String? shopifyOrderId;
-  final String? masariSaleId;
+  final String? revvoSaleId;
   final String? shopifyProductId;
-  final String? masariProductId;
+  final String? revvoProductId;
 
   /// Arbitrary metadata (e.g. changed fields, counts).
   final Map<String, dynamic>? metadata;
@@ -37,9 +37,9 @@ class ShopifySyncLogEntry {
     required this.status,
     this.error,
     this.shopifyOrderId,
-    this.masariSaleId,
+    this.revvoSaleId,
     this.shopifyProductId,
-    this.masariProductId,
+    this.revvoProductId,
     this.metadata,
     required this.createdAt,
   });
@@ -52,9 +52,9 @@ class ShopifySyncLogEntry {
         'status': status,
         if (error != null) 'error': error,
         if (shopifyOrderId != null) 'shopify_order_id': shopifyOrderId,
-        if (masariSaleId != null) 'masari_sale_id': masariSaleId,
+        if (revvoSaleId != null) 'masari_sale_id': revvoSaleId,
         if (shopifyProductId != null) 'shopify_product_id': shopifyProductId,
-        if (masariProductId != null) 'masari_product_id': masariProductId,
+        if (revvoProductId != null) 'masari_product_id': revvoProductId,
         if (metadata != null) 'metadata': metadata,
         'created_at': createdAt.toIso8601String(),
       };
@@ -68,9 +68,9 @@ class ShopifySyncLogEntry {
       status: json['status'] as String,
       error: json['error'] as String?,
       shopifyOrderId: json['shopify_order_id'] as String?,
-      masariSaleId: json['masari_sale_id'] as String?,
+      revvoSaleId: json['masari_sale_id'] as String?,
       shopifyProductId: json['shopify_product_id'] as String?,
-      masariProductId: json['masari_product_id'] as String?,
+      revvoProductId: json['masari_product_id'] as String?,
       metadata: json['metadata'] as Map<String, dynamic>?,
       createdAt: DateTime.parse(json['created_at'] as String),
     );

@@ -278,7 +278,7 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        l10n.masariAiInsight,
+                        l10n.revvoAiInsight,
                         style: AppTypography.captionSmall.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,

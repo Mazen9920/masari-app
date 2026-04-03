@@ -365,13 +365,13 @@ class _StatusChips extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _chip(Icons.error_rounded, '${overCount} ${AppLocalizations.of(context)!.overStatus}', const Color(0xFFDC2626),
+        _chip(Icons.error_rounded, '$overCount ${AppLocalizations.of(context)!.overStatus}', const Color(0xFFDC2626),
             const Color(0xFFFEF2F2)),
         const SizedBox(width: 8),
-        _chip(Icons.warning_rounded, '${nearCount} ${AppLocalizations.of(context)!.nearStatus}', const Color(0xFFD97706),
+        _chip(Icons.warning_rounded, '$nearCount ${AppLocalizations.of(context)!.nearStatus}', const Color(0xFFD97706),
             const Color(0xFFFFFBEB)),
         const SizedBox(width: 8),
-        _chip(Icons.check_circle_rounded, '${safeCount} ${AppLocalizations.of(context)!.safeStatus}',
+        _chip(Icons.check_circle_rounded, '$safeCount ${AppLocalizations.of(context)!.safeStatus}',
             const Color(0xFF16A34A), const Color(0xFFF0FDF4)),
       ],
     );

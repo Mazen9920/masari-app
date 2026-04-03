@@ -5,13 +5,13 @@
  * to the correct handler based on the `topic` field.
  *
  * Handles:
- *  - orders/create   → create Masari Sale + Revenue/COGS txns + stock
+ *  - orders/create   → create Revvo Sale + Revenue/COGS txns + stock
  *  - orders/updated  → update existing Sale fields (Shopify wins)
  *  - orders/cancelled → cancel sale, reverse stock & transactions
  *  - products/update → sync title, image, variants, options, prices, SKUs
  *  - products/create → auto-import new Shopify product with mappings
- *  - products/delete → unlink Masari product, remove mappings
- *  - inventory_levels/update → update Masari variant stock level
+ *  - products/delete → unlink Revvo product, remove mappings
+ *  - inventory_levels/update → update Revvo variant stock level
  */
 
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
@@ -24,6 +24,7 @@ import {
 } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import {decrypt} from "./shopify-auth.js";
+import {notifyUser} from "./notify.js";
 
 // ── Secrets ────────────────────────────────────────────────
 
@@ -234,7 +235,7 @@ async function fetchShopifyInventoryItemCosts(
 // ── Payment / Order status mapping ─────────────────────────
 
 /**
- * Maps Shopify financial_status to Masari PaymentStatus index.
+ * Maps Shopify financial_status to Revvo PaymentStatus index.
  * @param {string} status  Shopify financial_status.
  * @return {number} PaymentStatus index (0=unpaid,1=partial,2=paid).
  */
@@ -253,7 +254,7 @@ function mapPaymentStatus(status: string | null): number {
 }
 
 /**
- * Maps Shopify fulfillment_status to Masari FulfillmentStatus index.
+ * Maps Shopify fulfillment_status to Revvo FulfillmentStatus index.
  * @param {string|null} status Shopify fulfillment_status.
  * @return {number} FulfillmentStatus index (0=unfulfilled,1=partial,2=fulfilled).
  */
@@ -269,10 +270,10 @@ function mapFulfillmentStatus(status: string | null): number {
 }
 
 /**
- * Derives Masari OrderStatus from payment, fulfillment, and cancel state.
+ * Derives Revvo OrderStatus from payment, fulfillment, and cancel state.
  * "completed" (3) only when BOTH fully paid AND fully fulfilled.
- * @param {number} paymentStatus Masari PaymentStatus index.
- * @param {number} fulfillmentStatus Masari FulfillmentStatus index.
+ * @param {number} paymentStatus Revvo PaymentStatus index.
+ * @param {number} fulfillmentStatus Revvo FulfillmentStatus index.
  * @param {string|null} cancelReason Shopify cancel_reason.
  * @return {number} OrderStatus index.
  */
@@ -355,7 +356,7 @@ function mapDeliveryStatus(
 }
 
 /**
- * Round to 2 decimal places (match Masari's roundMoney).
+ * Round to 2 decimal places (match Revvo's roundMoney).
  * @param {number} n Value to round.
  * @return {number} Rounded value.
  */
@@ -434,6 +435,15 @@ export const processShopifyWebhook = onDocumentCreated(
       case "app/uninstalled":
         await handleAppUninstalled(userId);
         break;
+      case "customers/data_request":
+        await handleCustomersDataRequest(userId, payload);
+        break;
+      case "customers/redact":
+        await handleCustomersRedact(userId, payload);
+        break;
+      case "shop/redact":
+        await handleShopRedact(userId, payload);
+        break;
       default:
         logger.warn("Unhandled webhook topic", {topic});
       }
@@ -458,8 +468,8 @@ export const processShopifyWebhook = onDocumentCreated(
 // ═══════════════════════════════════════════════════════════
 
 /**
- * Handles a new Shopify order → creates a Masari Sale.
- * @param {string} userId Masari user ID.
+ * Handles a new Shopify order → creates a Revvo Sale.
+ * @param {string} userId Revvo user ID.
  * @param {ShopifyOrder} order Shopify order payload.
  */
 async function handleOrderCreate(
@@ -621,6 +631,7 @@ async function handleOrderCreate(
       .join(" ") || null,
     customer_email: customer.email || null,
     customer_phone: customer.phone || null,
+    shopify_customer_id: customer.id ? String(customer.id) : null,
     date: saleDate,
     items: saleItems,
     tax_amount: taxAmount,
@@ -727,7 +738,14 @@ async function handleOrderCreate(
     item_count: saleItems.length,
   });
 
-  logger.info("Order created in Masari", {
+  await notifyUser(
+    userId,
+    "New Shopify Order",
+    `Order #${shopifyOrderId} synced — ${saleItems.length} item${saleItems.length === 1 ? "" : "s"}`,
+    {type: "shopify_order_created", sale_id: saleId}
+  );
+
+  logger.info("Order created in Revvo", {
     saleId,
     shopifyOrderId,
     items: saleItems.length,
@@ -740,7 +758,7 @@ async function handleOrderCreate(
 
 /**
  * Handles an updated Shopify order — updates changed Sale fields.
- * @param {string} userId Masari user ID.
+ * @param {string} userId Revvo user ID.
  * @param {ShopifyOrder} order Shopify order payload.
  */
 async function handleOrderUpdated(
@@ -772,15 +790,15 @@ async function handleOrderUpdated(
   const saleData = saleDoc.data();
   const saleId = saleData.id as string;
 
-  // ── Self-heal: if Masari says cancelled but Shopify says not ──
+  // ── Self-heal: if Revvo says cancelled but Shopify says not ──
   const cancelReason = order.cancel_reason as string | null;
   const shopifyCancelledAt = order.cancelled_at as string | null;
   const isShopifyCancelled = !!(cancelReason || shopifyCancelledAt);
 
   if (saleData.order_status === 4 && !isShopifyCancelled) {
-    // Data corruption — Masari was incorrectly cancelled.
+    // Data corruption — Revvo was incorrectly cancelled.
     // Shopify is truth: un-cancel and continue processing updates.
-    logger.warn("Self-healing: order incorrectly cancelled in Masari, " +
+    logger.warn("Self-healing: order incorrectly cancelled in Revvo, " +
       "Shopify says active. Un-cancelling.", {shopifyOrderId});
   }
 
@@ -820,11 +838,11 @@ async function handleOrderUpdated(
   }
 
   // ── ALREADY CANCELLED — only update payment_status ─────
-  // When an order is already cancelled in Masari, we ONLY update
+  // When an order is already cancelled in Revvo, we ONLY update
   // payment_status (e.g., "refunded"). We MUST NOT create refund
   // transactions, adjust stock, or modify line items — the cancel
   // handler already zeroed everything with exclude_from_pl reversals.
-  // NOTE: We rely on Masari's order_status (source of truth), NOT on
+  // NOTE: We rely on Revvo's order_status (source of truth), NOT on
   // Shopify's cancelled_at/cancel_reason which may be absent in
   // refund-triggered orders/updated webhooks.
   if (saleData.order_status === 4) {
@@ -996,8 +1014,8 @@ async function handleOrderUpdated(
       );
       costPrice = mapped.costPrice;
       lineCogs = round2(qty * costPrice);
-      mappedProductId = mapped.productId;
-      mappedVariantId = mapped.variantId;
+      mappedProductId = mapped.productId ?? undefined;
+      mappedVariantId = mapped.variantId ?? undefined;
       mappedVariantName = mapped.variantName;
     }
 
@@ -1429,7 +1447,7 @@ async function handleOrderUpdated(
     changed_fields: Object.keys(updates).join(", "),
   });
 
-  logger.info("Order updated in Masari", {
+  logger.info("Order updated in Revvo", {
     saleId,
     shopifyOrderId,
     changed: Object.keys(updates),
@@ -1442,7 +1460,7 @@ async function handleOrderUpdated(
 
 /**
  * Handles a cancelled Shopify order.
- * @param {string} userId Masari user ID.
+ * @param {string} userId Revvo user ID.
  * @param {ShopifyOrder} order Shopify order payload.
  */
 async function handleOrderCancelled(
@@ -1706,18 +1724,25 @@ async function handleOrderCancelled(
     masari_sale_id: saleId,
   });
 
-  logger.info("Order cancelled in Masari", {
+  await notifyUser(
+    userId,
+    "Order Cancelled",
+    `Shopify order #${shopifyOrderId} was cancelled. Stock restored.`,
+    {type: "shopify_order_cancelled", sale_id: saleId}
+  );
+
+  logger.info("Order cancelled in Revvo", {
     saleId,
     shopifyOrderId,
   });
 }
 
 // ═══════════════════════════════════════════════════════════
-//  Auto-import a new Shopify product into Masari
+//  Auto-import a new Shopify product into Revvo
 // ═══════════════════════════════════════════════════════════
 
 /**
- * Creates a new Masari product + variants + mappings from a Shopify
+ * Creates a new Revvo product + variants + mappings from a Shopify
  * product payload. Called when products/create fires (or products/update
  * for a product that has no mappings yet).
  */
@@ -1737,7 +1762,7 @@ async function autoImportShopifyProduct(
     return;
   }
 
-  // ── Check for existing Masari product with same shopify_product_id ──
+  // ── Check for existing Revvo product with same shopify_product_id ──
   const existingSnap = await db
     .collection("products")
     .where("user_id", "==", userId)
@@ -1795,9 +1820,9 @@ async function autoImportShopifyProduct(
     }
     await relinkBatch.commit();
 
-    logger.info("Relinked existing Masari product to Shopify", {
+    logger.info("Relinked existing Revvo product to Shopify", {
       shopifyProductId,
-      masariProductId: prodId,
+      revvoProductId: prodId,
     });
     return;
   }
@@ -1823,8 +1848,8 @@ async function autoImportShopifyProduct(
   const prodRef = db.collection("products").doc(prodId);
   const now = new Date().toISOString();
 
-  // Build Masari variants from Shopify variants
-  const masariVariants: Record<string, unknown>[] = [];
+  // Build Revvo variants from Shopify variants
+  const revvoVariants: Record<string, unknown>[] = [];
   const mappingDocs: {ref: FirebaseFirestore.DocumentReference;
     data: Record<string, unknown>}[] = [];
 
@@ -1842,7 +1867,7 @@ async function autoImportShopifyProduct(
       String(sv.inventory_item_id || "")
     ) || 0;
 
-    masariVariants.push({
+    revvoVariants.push({
       id: varId,
       option_values: optionValues,
       sku: sv.sku || "",
@@ -1876,11 +1901,11 @@ async function autoImportShopifyProduct(
     });
   }
 
-  // Build Masari options from Shopify product options
-  const masariOptions: Record<string, unknown>[] = [];
+  // Build Revvo options from Shopify product options
+  const revvoOptions: Record<string, unknown>[] = [];
   if (Array.isArray(product.options)) {
     for (const opt of product.options) {
-      masariOptions.push({
+      revvoOptions.push({
         name: opt.name || `Option ${opt.position || 1}`,
         values: Array.isArray(opt.values) ? opt.values : [],
       });
@@ -1899,8 +1924,8 @@ async function autoImportShopifyProduct(
     is_material: false,
     shopify_product_id: shopifyProductId,
     image_url: product.image?.src || null,
-    variants: masariVariants,
-    options: masariOptions,
+    variants: revvoVariants,
+    options: revvoOptions,
     created_at: now,
     updated_at: now,
     _last_modified_by: "shopify_webhook",
@@ -1920,13 +1945,13 @@ async function autoImportShopifyProduct(
     status: "success",
     shopify_product_id: shopifyProductId,
     masari_product_id: prodId,
-    variants_created: masariVariants.length,
+    variants_created: revvoVariants.length,
   });
 
   logger.info("Auto-imported Shopify product", {
     shopifyProductId,
-    masariProductId: prodId,
-    variantCount: masariVariants.length,
+    revvoProductId: prodId,
+    variantCount: revvoVariants.length,
   });
 }
 
@@ -1935,12 +1960,12 @@ async function autoImportShopifyProduct(
 // ═══════════════════════════════════════════════════════════
 
 /**
- * Handles a Shopify product update — syncs mapped Masari product.
+ * Handles a Shopify product update — syncs mapped Revvo product.
  *
  * Syncs: product title, variant prices, variant SKUs, new variants
- * added on Shopify (auto-creates Masari variant + mapping).
+ * added on Shopify (auto-creates Revvo variant + mapping).
  *
- * @param {string} userId Masari user ID.
+ * @param {string} userId Revvo user ID.
  * @param {ShopifyProduct} product Shopify product payload.
  */
 async function handleProductUpdate(
@@ -1995,34 +2020,34 @@ async function handleProductUpdate(
 
   // Build lookup: shopify_variant_id → mapping doc data
   const mappingByShopifyVariant = new Map<string, Record<string, unknown>>();
-  let masariProductId: string | null = null;
+  let revvoProductId: string | null = null;
   for (const doc of mappingSnap.docs) {
     const m = doc.data();
     mappingByShopifyVariant.set(
       m.shopify_variant_id as string,
       m
     );
-    masariProductId = m.masari_product_id as string;
+    revvoProductId = m.masari_product_id as string;
   }
 
-  if (!masariProductId) return;
+  if (!revvoProductId) return;
 
-  const prodRef = db.collection("products").doc(masariProductId);
+  const prodRef = db.collection("products").doc(revvoProductId);
   const prodSnap = await prodRef.get();
   if (!prodSnap.exists) return;
 
   const prodData = prodSnap.data();
   if (!prodData) return;
 
-  // Echo prevention: skip if recently modified by Masari
+  // Echo prevention: skip if recently modified by Revvo
   const lastModBy = prodData._last_modified_by as string | undefined;
   if (lastModBy === "masari") {
     const updatedAt = prodData.updated_at as string | undefined;
     if (updatedAt) {
       const elapsed = Date.now() - new Date(updatedAt).getTime();
       if (elapsed < 30_000) {
-        logger.info("Skipping product webhook — echo from Masari push", {
-          masariProductId,
+        logger.info("Skipping product webhook — echo from Revvo push", {
+          revvoProductId,
           elapsed,
         });
         await prodRef.update({_last_modified_by: "echo_cleared"});
@@ -2031,7 +2056,7 @@ async function handleProductUpdate(
     }
   }
 
-  const masariVariants: Record<string, unknown>[] =
+  const revvoVariants: Record<string, unknown>[] =
     prodData.variants ?? [];
   let changed = false;
   const now = new Date().toISOString();
@@ -2048,9 +2073,9 @@ async function handleProductUpdate(
   }
 
   // ── 2. Update existing mapped variants (price, SKU, option values) ──
-  const updatedVariants = masariVariants.map(
+  const updatedVariants = revvoVariants.map(
     (v: Record<string, unknown>) => {
-      // Find the mapping for this Masari variant
+      // Find the mapping for this Revvo variant
       for (const [shopVarId, mapping] of mappingByShopifyVariant) {
         if (
           (mapping as Record<string, unknown>).masari_variant_id === v.id
@@ -2100,14 +2125,14 @@ async function handleProductUpdate(
 
   // ── 3a. Detect removed Shopify variants (deleted on Shopify) ──
   const removedMappingDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-  const removedMasariVarIds = new Set<string>();
+  const removedRevvoVarIds = new Set<string>();
   for (const doc of mappingSnap.docs) {
     const m = doc.data();
     const svId = m.shopify_variant_id as string;
     if (!shopifyVariantMap.has(svId)) {
       // This Shopify variant no longer exists
       removedMappingDocs.push(doc);
-      removedMasariVarIds.add(m.masari_variant_id as string);
+      removedRevvoVarIds.add(m.masari_variant_id as string);
       changed = true;
     }
   }
@@ -2120,8 +2145,8 @@ async function handleProductUpdate(
     const svId = String(sv.id);
     if (mappingByShopifyVariant.has(svId)) continue;
 
-    // This Shopify variant has no mapping — create a new Masari variant
-    const newVarId = `${masariProductId}_v${updatedVariants.length + newVariants.length}`;
+    // This Shopify variant has no mapping — create a new Revvo variant
+    const newVarId = `${revvoProductId}_v${updatedVariants.length + newVariants.length}`;
     const variantTitle = sv.title || sv.option1 || "Default";
 
     const optionValues: Record<string, string> = {};
@@ -2149,7 +2174,7 @@ async function handleProductUpdate(
       id: mappingRef.id,
       ref: mappingRef,
       user_id: userId,
-      masari_product_id: masariProductId,
+      masari_product_id: revvoProductId,
       masari_variant_id: newVarId,
       shopify_product_id: shopifyProductId,
       shopify_variant_id: svId,
@@ -2168,7 +2193,7 @@ async function handleProductUpdate(
   if (changed) {
     // Filter out removed variants
     const keptVariants = updatedVariants.filter(
-      (v: Record<string, unknown>) => !removedMasariVarIds.has(v.id as string)
+      (v: Record<string, unknown>) => !removedRevvoVarIds.has(v.id as string)
     );
     const finalVariants = [
       ...keptVariants,
@@ -2193,14 +2218,14 @@ async function handleProductUpdate(
 
     // Sync product-level options array
     if (Array.isArray(product.options)) {
-      const masariOptions: Record<string, unknown>[] = [];
+      const revvoOptions: Record<string, unknown>[] = [];
       for (const opt of product.options) {
-        masariOptions.push({
+        revvoOptions.push({
           name: opt.name || `Option ${opt.position || 1}`,
           values: Array.isArray(opt.values) ? opt.values : [],
         });
       }
-      updatePayload.options = masariOptions;
+      updatePayload.options = revvoOptions;
     }
 
     await prodRef.update(updatePayload);
@@ -2265,12 +2290,12 @@ async function handleProductUpdate(
 
 /**
  * Handles a Shopify product deletion — removes mappings and optionally
- * marks the Masari product as deleted (soft-archive via category flag).
+ * marks the Revvo product as deleted (soft-archive via category flag).
  *
- * We don't hard-delete the Masari product because historical COGS /
+ * We don't hard-delete the Revvo product because historical COGS /
  * cost-layer data should be preserved.
  *
- * @param {string} userId Masari user ID.
+ * @param {string} userId Revvo user ID.
  * @param {ShopifyProduct} product Shopify product payload (may only contain id).
  */
 async function handleProductDelete(
@@ -2294,15 +2319,15 @@ async function handleProductDelete(
     return;
   }
 
-  let masariProductId: string | null = null;
+  let revvoProductId: string | null = null;
   for (const doc of mappingSnap.docs) {
-    masariProductId = doc.data().masari_product_id as string;
+    revvoProductId = doc.data().masari_product_id as string;
     await doc.ref.delete();
   }
 
-  // Clear Shopify IDs from the Masari product (soft unlink)
-  if (masariProductId) {
-    const prodRef = db.collection("products").doc(masariProductId);
+  // Clear Shopify IDs from the Revvo product (soft unlink)
+  if (revvoProductId) {
+    const prodRef = db.collection("products").doc(revvoProductId);
     const prodSnap = await prodRef.get();
     if (prodSnap.exists) {
       const prodData = prodSnap.data();
@@ -2328,13 +2353,13 @@ async function handleProductDelete(
     direction: "shopify_to_masari",
     status: "success",
     shopify_product_id: shopifyProductId,
-    masari_product_id: masariProductId,
+    masari_product_id: revvoProductId,
     mappings_removed: mappingSnap.size,
   });
 
-  logger.info("Product delete processed — unlinked Masari product", {
+  logger.info("Product delete processed — unlinked Revvo product", {
     shopifyProductId,
-    masariProductId,
+    revvoProductId,
     mappingsRemoved: mappingSnap.size,
   });
 }
@@ -2345,7 +2370,7 @@ async function handleProductDelete(
 
 /**
  * Handles inventory level change from Shopify.
- * @param {string} userId Masari user ID.
+ * @param {string} userId Revvo user ID.
  * @param {InventoryLevel} level Shopify inventory_level payload.
  */
 async function handleInventoryUpdate(
@@ -2400,7 +2425,7 @@ async function handleInventoryUpdate(
     const prodData = prodSnap.data();
     if (!prodData) return;
 
-    // Echo prevention: if this product was recently modified by Masari
+    // Echo prevention: if this product was recently modified by Revvo
     // (within 120s), this webhook is likely the echo of our own push.
     const lastModBy = prodData._last_modified_by as string | undefined;
     if (lastModBy === "masari") {
@@ -2409,7 +2434,7 @@ async function handleInventoryUpdate(
         const elapsed =
           Date.now() - new Date(updatedAt).getTime();
         if (elapsed < 120_000) {
-          logger.info("Skipping inventory webhook — echo from Masari push (time)", {
+          logger.info("Skipping inventory webhook — echo from Revvo push (time)", {
             inventoryItemId,
             elapsed,
           });
@@ -2539,10 +2564,10 @@ interface ResolvedMapping {
 }
 
 /**
- * Resolves a Shopify line item to a Masari product/variant.
+ * Resolves a Shopify line item to a Revvo product/variant.
  * If no mapping exists, auto-creates the product + mapping.
  * @param {FirebaseFirestore.Firestore} db Firestore instance.
- * @param {string} userId Masari user ID.
+ * @param {string} userId Revvo user ID.
  * @param {ShopifyLineItem} li Shopify line item.
  * @param {boolean} syncStock Whether to enable stock tracking.
  * @return {Promise<ResolvedMapping>} Mapped IDs and cost price.
@@ -2569,13 +2594,13 @@ async function resolveMapping(
 
   if (!snap.empty) {
     const m = snap.docs[0].data();
-    // Look up Masari cost price using valuation method
-    let cost = await getMasariCostPrice(
+    // Look up Revvo cost price using valuation method
+    let cost = await getRevvoCostPrice(
       db, m.masari_product_id, m.masari_variant_id,
       qty, valuationMethod,
     );
 
-    // Fall back to Shopify inventory item cost if Masari cost is 0
+    // Fall back to Shopify inventory item cost if Revvo cost is 0
     if (cost <= 0 && shopDomain && shopifyToken) {
       const invItemId = (m.shopify_inventory_item_id as string) || "";
       if (invItemId) {
@@ -2682,10 +2707,10 @@ async function resolveMapping(
 }
 
 /**
- * Looks up Masari cost price for a product variant.
+ * Looks up Revvo cost price for a product variant.
  * @param {FirebaseFirestore.Firestore} db Firestore instance.
- * @param {string} productId Masari product ID.
- * @param {string} variantId Masari variant ID.
+ * @param {string} productId Revvo product ID.
+ * @param {string} variantId Revvo variant ID.
  * @return {Promise<number>} Cost price (0 if not found).
  */
 /**
@@ -2693,7 +2718,7 @@ async function resolveMapping(
  * For 'average', returns the WAC (cost_price). For FIFO/LIFO, simulates
  * layer consumption without writing (read-only preview for COGS calculation).
  */
-async function getMasariCostPrice(
+async function getRevvoCostPrice(
   db: FirebaseFirestore.Firestore,
   productId: string,
   variantId: string,
@@ -2725,7 +2750,7 @@ async function getMasariCostPrice(
  * Adjusts stock for sale items (deduct or restore).
  * Cost-layer aware: consumes layers on deduct, adds layers on restore.
  * @param {FirebaseFirestore.Firestore} db Firestore instance.
- * @param {string} userId Masari user ID.
+ * @param {string} userId Revvo user ID.
  * @param {Record<string, unknown>[]} items Sale items.
  * @param {string} mode "deduct" or "restore".
  * @param {string} [customReason] Optional custom reason for movement log.
@@ -2826,7 +2851,7 @@ async function adjustStockForItems(
 /**
  * Writes an entry to shopify_sync_log.
  * @param {FirebaseFirestore.Firestore} db Firestore instance.
- * @param {string} userId Masari user ID.
+ * @param {string} userId Revvo user ID.
  * @param {Record<string, unknown>} entry Log data.
  */
 async function writeSyncLog(
@@ -2854,7 +2879,7 @@ async function writeSyncLog(
  * When the Shopify app is uninstalled by the merchant, mark the
  * connection as disconnected so the Flutter app shows the
  * reconnection banner.
- * @param {string} userId Masari user ID.
+ * @param {string} userId Revvo user ID.
  */
 async function handleAppUninstalled(userId: string): Promise<void> {
   const db = getDb();
@@ -2874,6 +2899,196 @@ async function handleAppUninstalled(userId: string): Promise<void> {
   });
 
   logger.info("App uninstalled — connection deactivated", {userId});
+
+  await notifyUser(
+    userId,
+    "Shopify Disconnected",
+    "Your Shopify app was uninstalled. Reconnect from Settings to resume sync.",
+    {type: "shopify_disconnected"}
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+//  customers/data_request — GDPR data export request
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Handles the `customers/data_request` mandatory compliance webhook.
+ * Shopify sends this when a merchant requests customer data. Our app
+ * does not store end-customer PII beyond order data already synced
+ * from Shopify, so we log the request for audit purposes.
+ * @param {string} userId Revvo user ID.
+ * @param {Record<string, unknown>} payload Webhook payload.
+ */
+async function handleCustomersDataRequest(
+  userId: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const db = getDb();
+  await writeSyncLog(db, userId, {
+    type: "compliance",
+    action: "customers_data_request",
+    message: "Customer data request received from Shopify",
+    shopDomain: payload.shop_domain as string || "",
+    ordersRequested: JSON.stringify(
+      (payload as {orders_requested?: unknown[]}).orders_requested || []
+    ),
+  });
+  logger.info("customers/data_request processed", {userId});
+}
+
+// ═══════════════════════════════════════════════════════════
+//  customers/redact — GDPR customer data deletion
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Handles the `customers/redact` mandatory compliance webhook.
+ * Shopify sends this when a merchant's customer requests data erasure.
+ * We remove any customer-identifying info from our synced order records.
+ * @param {string} userId Revvo user ID.
+ * @param {Record<string, unknown>} payload Webhook payload.
+ */
+async function handleCustomersRedact(
+  userId: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const db = getDb();
+  const customer = payload.customer as {id?: number; email?: string} | undefined;
+  const shopifyCustomerId = customer?.id ? String(customer.id) : null;
+
+  if (shopifyCustomerId) {
+    // Redact customer PII from any synced sales that reference this customer
+    const salesSnap = await db
+      .collection("sales")
+      .where("user_id", "==", userId)
+      .where("external_source", "==", "shopify")
+      .where("shopify_customer_id", "==", shopifyCustomerId)
+      .get();
+
+    if (!salesSnap.empty) {
+      const batch = db.batch();
+      for (const doc of salesSnap.docs) {
+        batch.update(doc.ref, {
+          customer_name: "[redacted]",
+          customer_email: null,
+          customer_phone: null,
+          shopify_customer_id: null,
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      logger.info("Redacted customer data from sales", {
+        userId, customerId: shopifyCustomerId, count: salesSnap.size,
+      });
+    }
+  }
+
+  // Fallback: also redact by email in case shopify_customer_id was missing
+  const customerEmail = customer?.email as string | undefined;
+  if (customerEmail) {
+    const emailSnap = await db
+      .collection("sales")
+      .where("user_id", "==", userId)
+      .where("external_source", "==", "shopify")
+      .where("customer_email", "==", customerEmail)
+      .get();
+
+    if (!emailSnap.empty) {
+      const batch = db.batch();
+      for (const doc of emailSnap.docs) {
+        batch.update(doc.ref, {
+          customer_name: "[redacted]",
+          customer_email: null,
+          customer_phone: null,
+          shopify_customer_id: null,
+          updated_at: FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      logger.info("Redacted customer data by email fallback", {
+        userId, email: customerEmail, count: emailSnap.size,
+      });
+    }
+  }
+
+  await writeSyncLog(db, userId, {
+    type: "compliance",
+    action: "customers_redact",
+    message: `Customer data redacted (${shopifyCustomerId || "unknown"})`,
+    shopDomain: payload.shop_domain as string || "",
+  });
+  logger.info("customers/redact processed", {userId});
+}
+
+// ═══════════════════════════════════════════════════════════
+//  shop/redact — GDPR shop data deletion
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Handles the `shop/redact` mandatory compliance webhook.
+ * Shopify sends this 48 hours after app uninstall. We must
+ * delete all data associated with the shop.
+ * @param {string} userId Revvo user ID.
+ * @param {Record<string, unknown>} payload Webhook payload.
+ */
+async function handleShopRedact(
+  userId: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const db = getDb();
+  const shopDomain = payload.shop_domain as string || "";
+
+  // Delete shopify_product_mappings for this user
+  const mappingsSnap = await db
+    .collection("shopify_product_mappings")
+    .where("user_id", "==", userId)
+    .get();
+  if (!mappingsSnap.empty) {
+    const batch = db.batch();
+    for (const doc of mappingsSnap.docs) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+
+  // Delete shopify_sync_log for this user
+  const logsSnap = await db
+    .collection("shopify_sync_log")
+    .where("user_id", "==", userId)
+    .get();
+  if (!logsSnap.empty) {
+    const batch = db.batch();
+    for (const doc of logsSnap.docs) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+
+  // Delete shopify_webhook_queue for this user
+  const queueSnap = await db
+    .collection("shopify_webhook_queue")
+    .where("user_id", "==", userId)
+    .get();
+  if (!queueSnap.empty) {
+    const batch = db.batch();
+    for (const doc of queueSnap.docs) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+
+  // Delete the connection record itself
+  await db.collection("shopify_connections").doc(userId).delete();
+
+  await writeSyncLog(db, userId, {
+    type: "compliance",
+    action: "shop_redact",
+    message: `Shop data fully purged for ${shopDomain}`,
+    shopDomain,
+  });
+  logger.info("shop/redact processed — all shop data deleted", {
+    userId, shopDomain,
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2886,7 +3101,7 @@ async function handleAppUninstalled(userId: string): Promise<void> {
  * Derives fulfillment from delivery_status and order_status.
  */
 export const backfillFulfillmentStatus = onCall(
-  {region: "us-central1"},
+  {region: "us-central1", invoker: "public"},
   async (request) => {
     const userId = request.auth?.uid;
     if (!userId) {

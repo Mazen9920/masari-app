@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Billing — Revvo</title>
+  <style>
+    :root { --navy: #1a2744; --orange: #f5a623; --bg: #f8f9fb; --text: #333; --muted: #666; --green: #27ae60; --red: #e74c3c; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    .header { background: var(--navy); color: #fff; padding: 40px 20px; text-align: center; }
+    .header h1 { font-size: 28px; font-weight: 700; }
+    .header p { color: rgba(255,255,255,0.7); margin-top: 8px; font-size: 14px; }
+    .badge { display: inline-block; background: var(--orange); color: #fff; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 12px; margin-bottom: 12px; }
+    .container { max-width: 640px; margin: 0 auto; padding: 32px 20px 80px; }
+    .lang-switch { text-align: center; margin: 20px 0; }
+    .lang-switch button { background: var(--navy); color: #fff; border: none; padding: 8px 20px; border-radius: 20px; cursor: pointer; font-size: 14px; }
+
+    /* Auth section */
+    .auth-box { background: #fff; border-radius: 12px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 24px; }
+    .auth-box h2 { color: var(--navy); font-size: 20px; margin-bottom: 16px; text-align: center; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+    .form-group input { width: 100%; padding: 12px 16px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.2s; }
+    .form-group input:focus { border-color: var(--navy); }
+    .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--navy); color: #fff; }
+    .btn-orange { background: var(--orange); color: #fff; }
+    .btn:hover:not(:disabled) { opacity: 0.85; }
+    .error-msg { color: var(--red); font-size: 13px; margin-top: 8px; text-align: center; display: none; }
+
+    /* Status card */
+    .status-card { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 24px; }
+    .status-card h3 { color: var(--navy); font-size: 16px; margin-bottom: 12px; }
+    .status-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+    .status-row:last-child { border-bottom: none; }
+    .status-row .label { color: var(--muted); font-size: 14px; }
+    .status-row .value { font-weight: 600; font-size: 14px; }
+    .status-badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; color: #fff; }
+    .status-active { background: var(--green); }
+    .status-grace { background: var(--orange); }
+    .status-expired { background: var(--red); }
+    .status-free { background: #95a5a6; }
+
+    /* Plan cards */
+    .plans-title { color: var(--navy); font-size: 20px; font-weight: 700; margin-bottom: 16px; text-align: center; }
+    .plan-cards { display: grid; gap: 16px; margin-bottom: 24px; }
+    .plan-card { background: #fff; border: 2px solid #e8e8e8; border-radius: 12px; padding: 24px; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; position: relative; }
+    .plan-card:hover { border-color: var(--orange); box-shadow: 0 4px 16px rgba(245,166,35,0.15); }
+    .plan-card.selected { border-color: var(--orange); box-shadow: 0 4px 16px rgba(245,166,35,0.2); }
+    .plan-card .plan-name { font-size: 18px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+    .plan-card .plan-price { font-size: 24px; font-weight: 800; color: var(--orange); }
+    .plan-card .plan-price span { font-size: 14px; font-weight: 400; color: var(--muted); }
+    .plan-card .plan-desc { font-size: 13px; color: var(--muted); margin-top: 8px; }
+    .plan-card .save-badge { position: absolute; top: -10px; right: 12px; background: var(--green); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 10px; }
+
+    /* Loading spinner */
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Iframe overlay */
+    .iframe-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+    .iframe-overlay.show { display: flex; }
+    .iframe-wrap { background: #fff; border-radius: 16px; width: 95%; max-width: 480px; height: 85vh; overflow: hidden; position: relative; }
+    .iframe-wrap iframe { width: 100%; height: 100%; border: none; }
+    .iframe-close { position: absolute; top: 12px; right: 12px; background: var(--navy); color: #fff; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 18px; z-index: 10; display: flex; align-items: center; justify-content: center; }
+
+    /* Sign out link */
+    .signout-link { text-align: center; margin-top: 24px; }
+    .signout-link a { color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: underline; }
+
+    .hidden { display: none !important; }
+
+    /* RTL */
+    [dir="rtl"] .container { direction: rtl; text-align: right; }
+    [dir="rtl"] .status-row { flex-direction: row-reverse; }
+    [dir="rtl"] .plan-card .save-badge { right: auto; left: 12px; }
+    [dir="rtl"] .spinner { margin-right: 0; margin-left: 8px; }
+    [dir="rtl"] .iframe-close { right: auto; left: 12px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1 id="pageTitle">Billing</h1>
+  <p id="pageSubtitle">Manage your Revvo subscription</p>
+</div>
+
+<div class="lang-switch">
+  <button onclick="toggleLang()"><span id="langBtn">العربية</span></button>
+</div>
+
+<div class="container">
+  <!-- ── Auth Section ──────────────────────────────────── -->
+  <div id="authSection" class="auth-box">
+    <h2 id="signInTitle">Sign In</h2>
+    <div class="form-group">
+      <label id="emailLabel">Email</label>
+      <input type="email" id="emailInput" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label id="passLabel">Password</label>
+      <input type="password" id="passInput" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="signInBtn" onclick="signIn()">
+      <span id="signInText">Sign In</span>
+    </button>
+    <p class="error-msg" id="authError"></p>
+  </div>
+
+  <!-- ── Dashboard (shown after auth) ─────────────────── -->
+  <div id="dashboard" class="hidden">
+    <!-- Status -->
+    <div class="status-card" id="statusCard">
+      <h3 id="statusTitle">Current Subscription</h3>
+      <div class="status-row">
+        <span class="label" id="tierLabel">Plan</span>
+        <span class="value" id="tierValue">—</span>
+      </div>
+      <div class="status-row">
+        <span class="label" id="statusLabel">Status</span>
+        <span class="value"><span class="status-badge status-free" id="statusBadge">Free</span></span>
+      </div>
+      <div class="status-row" id="expiryRow" style="display:none;">
+        <span class="label" id="expiryLabel">Expires</span>
+        <span class="value" id="expiryValue">—</span>
+      </div>
+    </div>
+
+    <!-- Plans -->
+    <h2 class="plans-title" id="plansTitle">Choose a Plan</h2>
+    <div class="plan-cards">
+      <div class="plan-card" id="cardMonthly" onclick="selectPlan('growth_monthly')">
+        <div class="plan-name" id="monthlyName">Growth — Monthly</div>
+        <div class="plan-price">249 <span id="monthlyUnit">EGP / month</span></div>
+        <div class="plan-desc" id="monthlyDesc">Unlimited products, advanced reports, Shopify sync, and more.</div>
+      </div>
+      <div class="plan-card" id="cardYearly" onclick="selectPlan('growth_yearly')">
+        <div class="save-badge" id="saveBadge">Save 20%</div>
+        <div class="plan-name" id="yearlyName">Growth — Yearly</div>
+        <div class="plan-price">2,390 <span id="yearlyUnit">EGP / year</span></div>
+        <div class="plan-desc" id="yearlyDesc">Same features, billed annually. Best value.</div>
+      </div>
+    </div>
+
+    <button class="btn btn-orange" id="payBtn" onclick="startPayment()" disabled>
+      <span id="payBtnText">Select a plan to continue</span>
+    </button>
+
+    <div class="signout-link">
+      <a onclick="signOut()" id="signOutText">Sign out</a>
+    </div>
+  </div>
+</div>
+
+<!-- Paymob iframe overlay -->
+<div class="iframe-overlay" id="iframeOverlay">
+  <div class="iframe-wrap">
+    <button class="iframe-close" onclick="closeIframe()">&times;</button>
+    <iframe id="paymobIframe" allow="payment"></iframe>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import {initializeApp} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+  import {getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut as fbSignOut} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+  import {getFirestore, doc, onSnapshot} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+  import {getFunctions, httpsCallable} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-functions.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBmDbbtaLoAzb55a30KG5X0I0SlN7RpDzA",
+    authDomain: "massari-574ff.firebaseapp.com",
+    projectId: "massari-574ff",
+    storageBucket: "massari-574ff.firebasestorage.app",
+    messagingSenderId: "686452990628",
+    appId: "1:686452990628:web:cea6b1946600e490a9bc31",
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const functions = getFunctions(app, "us-central1");
+
+  let currentUser = null;
+  let selectedPlan = null;
+  let unsubSnapshot = null;
+
+  // ── Auth ─────────────────────────────────────────────────────
+  window.signIn = async function () {
+    const email = document.getElementById("emailInput").value.trim();
+    const pass = document.getElementById("passInput").value;
+    const errEl = document.getElementById("authError");
+    const btn = document.getElementById("signInBtn");
+
+    if (!email || !pass) {
+      errEl.textContent = isAr ? "يرجى إدخال البريد وكلمة المرور" : "Please enter email and password";
+      errEl.style.display = "block";
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    errEl.style.display = "none";
+
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (e) {
+      const msg = e.code === "auth/invalid-credential"
+        ? (isAr ? "بريد إلكتروني أو كلمة مرور غير صحيحة" : "Invalid email or password")
+        : (isAr ? "حدث خطأ، حاول مرة أخرى" : "Something went wrong. Try again.");
+      errEl.textContent = msg;
+      errEl.style.display = "block";
+      btn.disabled = false;
+      btn.innerHTML = `<span id="signInText">${isAr ? "تسجيل الدخول" : "Sign In"}</span>`;
+    }
+  };
+
+  window.signOut = async function () {
+    if (unsubSnapshot) unsubSnapshot();
+    await fbSignOut(auth);
+  };
+
+  onAuthStateChanged(auth, (user) => {
+    currentUser = user;
+    if (user) {
+      document.getElementById("authSection").classList.add("hidden");
+      document.getElementById("dashboard").classList.remove("hidden");
+      listenToSubscription(user.uid);
+    } else {
+      document.getElementById("authSection").classList.remove("hidden");
+      document.getElementById("dashboard").classList.add("hidden");
+      if (unsubSnapshot) unsubSnapshot();
+    }
+  });
+
+  // ── Subscription listener ────────────────────────────────────
+  function listenToSubscription(uid) {
+    if (unsubSnapshot) unsubSnapshot();
+    const userRef = doc(db, "users", uid);
+    unsubSnapshot = onSnapshot(userRef, (snap) => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+      const tier = d.subscription_tier || "launch";
+      const status = d.subscription_status || "free";
+      const expiresAt = d.subscription_expires_at?.toDate?.() || null;
+
+      // Tier
+      document.getElementById("tierValue").textContent =
+        tier.charAt(0).toUpperCase() + tier.slice(1);
+
+      // Status badge
+      const badge = document.getElementById("statusBadge");
+      badge.className = "status-badge";
+      if (status === "active") {
+        badge.classList.add("status-active");
+        badge.textContent = isAr ? "نشط" : "Active";
+      } else if (status === "grace_period") {
+        badge.classList.add("status-grace");
+        badge.textContent = isAr ? "فترة سماح" : "Grace Period";
+      } else if (status === "expired") {
+        badge.classList.add("status-expired");
+        badge.textContent = isAr ? "منتهي" : "Expired";
+      } else {
+        badge.classList.add("status-free");
+        badge.textContent = isAr ? "مجاني" : "Free";
+      }
+
+      // Expiry
+      const expiryRow = document.getElementById("expiryRow");
+      if (expiresAt) {
+        expiryRow.style.display = "flex";
+        document.getElementById("expiryValue").textContent =
+          expiresAt.toLocaleDateString(isAr ? "ar-EG" : "en-US", {
+            year: "numeric", month: "long", day: "numeric",
+          });
+      } else {
+        expiryRow.style.display = "none";
+      }
+    });
+  }
+
+  // ── Plan selection ───────────────────────────────────────────
+  window.selectPlan = function (plan) {
+    selectedPlan = plan;
+    document.querySelectorAll(".plan-card").forEach((c) => c.classList.remove("selected"));
+    document.getElementById(
+      plan === "growth_monthly" ? "cardMonthly" : "cardYearly"
+    ).classList.add("selected");
+
+    const btn = document.getElementById("payBtn");
+    btn.disabled = false;
+    btn.querySelector("span").textContent = isAr ? "متابعة الدفع" : "Continue to Payment";
+  };
+
+  // ── Payment ──────────────────────────────────────────────────
+  window.startPayment = async function () {
+    if (!selectedPlan || !currentUser) return;
+
+    const btn = document.getElementById("payBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span><span>' + (isAr ? "جارٍ التحميل…" : "Loading…") + "</span>";
+
+    try {
+      const createPaymentIntent = httpsCallable(functions, "createPaymentIntent");
+      const result = await createPaymentIntent({plan: selectedPlan});
+      const {iframe_url} = result.data;
+
+      if (!iframe_url) throw new Error("No iframe URL");
+
+      document.getElementById("paymobIframe").src = iframe_url;
+      document.getElementById("iframeOverlay").classList.add("show");
+    } catch (e) {
+      alert(isAr ? "حدث خطأ أثناء إنشاء عملية الدفع. حاول مرة أخرى." : "Failed to create payment. Please try again.");
+      console.error(e);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<span>${isAr ? "متابعة الدفع" : "Continue to Payment"}</span>`;
+    }
+  };
+
+  window.closeIframe = function () {
+    document.getElementById("iframeOverlay").classList.remove("show");
+    document.getElementById("paymobIframe").src = "";
+  };
+
+  // Allow Enter key to submit sign-in
+  document.getElementById("passInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") window.signIn();
+  });
+
+  // ── i18n ───────────────────────────────────────────────────
+  window.isAr = false;
+
+  const strings = {
+    en: {
+      pageTitle: "Billing",
+      pageSubtitle: "Manage your Revvo subscription",
+      signInTitle: "Sign In",
+      emailLabel: "Email",
+      passLabel: "Password",
+      signInText: "Sign In",
+      statusTitle: "Current Subscription",
+      tierLabel: "Plan",
+      statusLabel: "Status",
+      expiryLabel: "Expires",
+      plansTitle: "Choose a Plan",
+      monthlyName: "Growth — Monthly",
+      monthlyUnit: "EGP / month",
+      monthlyDesc: "Unlimited products, advanced reports, Shopify sync, and more.",
+      yearlyName: "Growth — Yearly",
+      yearlyUnit: "EGP / year",
+      yearlyDesc: "Same features, billed annually. Best value.",
+      saveBadge: "Save 20%",
+      payBtnText: "Select a plan to continue",
+      signOutText: "Sign out",
+    },
+    ar: {
+      pageTitle: "الفوترة",
+      pageSubtitle: "إدارة اشتراكك في Revvo",
+      signInTitle: "تسجيل الدخول",
+      emailLabel: "البريد الإلكتروني",
+      passLabel: "كلمة المرور",
+      signInText: "تسجيل الدخول",
+      statusTitle: "الاشتراك الحالي",
+      tierLabel: "الخطة",
+      statusLabel: "الحالة",
+      expiryLabel: "تاريخ الانتهاء",
+      plansTitle: "اختر خطة",
+      monthlyName: "Growth — شهري",
+      monthlyUnit: "ج.م / شهر",
+      monthlyDesc: "منتجات غير محدودة، تقارير متقدمة، ربط مع Shopify، والمزيد.",
+      yearlyName: "Growth — سنوي",
+      yearlyUnit: "ج.م / سنة",
+      yearlyDesc: "نفس المميزات، فوترة سنوية. أفضل قيمة.",
+      saveBadge: "وفّر 20%",
+      payBtnText: "اختر خطة للمتابعة",
+      signOutText: "تسجيل الخروج",
+    },
+  };
+
+  window.toggleLang = function () {
+    isAr = !isAr;
+    const lang = isAr ? "ar" : "en";
+    document.documentElement.lang = lang;
+    document.documentElement.dir = isAr ? "rtl" : "ltr";
+    document.getElementById("langBtn").textContent = isAr ? "English" : "العربية";
+
+    const s = strings[lang];
+    for (const [id, val] of Object.entries(s)) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    }
+
+    // Re-set pay button if plan selected
+    if (selectedPlan) {
+      document.getElementById("payBtnText").textContent = isAr ? "متابعة الدفع" : "Continue to Payment";
+    }
+  };
+</script>
+</body>
+</html>

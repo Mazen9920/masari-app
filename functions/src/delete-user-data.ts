@@ -92,33 +92,31 @@ async function deleteUserDoc(uid: string): Promise<void> {
 
 /**
  * Deletes all Firebase Storage files for a user.
- * Covers profile images and product images.
+ * Covers profile images, product images, business logos, supplier avatars, and receipts.
  * @param {string} uid  User ID.
  */
 async function deleteStorageFiles(uid: string): Promise<number> {
   const bucket = getStorage().bucket();
   let count = 0;
 
-  // Delete user profile image
-  try {
-    const [profileFiles] = await bucket.getFiles({prefix: `users/${uid}/`});
-    for (const file of profileFiles) {
-      await file.delete();
-      count++;
-    }
-  } catch {
-    // Ignore — file may not exist
-  }
+  const prefixes = [
+    `users/${uid}/`,
+    `products/${uid}/`,
+    `business/${uid}/`,
+    `suppliers/${uid}/`,
+    `receipts/${uid}/`,
+  ];
 
-  // Delete product images
-  try {
-    const [productFiles] = await bucket.getFiles({prefix: `products/${uid}/`});
-    for (const file of productFiles) {
-      await file.delete();
-      count++;
+  for (const prefix of prefixes) {
+    try {
+      const [files] = await bucket.getFiles({prefix});
+      for (const file of files) {
+        await file.delete();
+        count++;
+      }
+    } catch {
+      // Ignore — files may not exist
     }
-  } catch {
-    // Ignore — files may not exist
   }
 
   return count;
@@ -128,6 +126,7 @@ export const deleteUserData = onCall(
   {
     maxInstances: 5,
     timeoutSeconds: 300,
+    invoker: "public",
   },
   async (request) => {
     // ── Auth check ──

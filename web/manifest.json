@@ -1,6 +1,6 @@
 {
-    "name": "masari_app",
-    "short_name": "masari_app",
+    "name": "Revvo",
+    "short_name": "Revvo",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

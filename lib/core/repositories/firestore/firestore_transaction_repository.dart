@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../shared/models/transaction_model.dart';
 import '../../services/result.dart';
@@ -89,9 +90,7 @@ class FirestoreTransactionRepository implements TransactionRepository {
           data['id'] = doc.id;
           transactions.add(Transaction.fromJson(data));
         } catch (e) {
-          // Log and skip unparseable documents
-          // ignore: avoid_print
-          print('[TxnRepo] Failed to parse transaction ${doc.id}: $e');
+          if (kDebugMode) debugPrint('[TxnRepo] Failed to parse transaction ${doc.id}: $e');
         }
       }
 

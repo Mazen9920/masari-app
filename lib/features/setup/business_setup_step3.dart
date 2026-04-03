@@ -21,12 +21,10 @@ class _BusinessSetupStep3State extends ConsumerState<BusinessSetupStep3> {
   int _selectedIndex = 0;
 
   void _onLetsGo() {
-    // Set the tier based on selection
-    final tier = switch (_selectedIndex) {
-      1 => SubscriptionTier.growth,
-      _ => SubscriptionTier.launch,
-    };
-    ref.read(appSettingsProvider.notifier).setTier(tier);
+    // During onboarding, always start on Launch (free).
+    // If user selected Growth, they can subscribe from Settings later.
+    // Subscription tier is managed exclusively by the backend (Paymob).
+    ref.read(appSettingsProvider.notifier).setTier(SubscriptionTier.launch);
 
     // Persist business name (entered in step 1) from local prefs → Firestore
     final settings = ref.read(appSettingsProvider);
@@ -39,6 +37,15 @@ class _BusinessSetupStep3State extends ConsumerState<BusinessSetupStep3> {
         taxId: '',
       );
     }
+
+    // If user expressed interest in Growth, show a hint
+    if (_selectedIndex == 1 && context.mounted) {
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.subscriptionSetupGrowthLater)),
+      );
+    }
+
     context.go(AppRoutes.home);
   }
 

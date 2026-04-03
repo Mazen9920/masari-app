@@ -10,6 +10,7 @@
 import {onCall, onRequest, HttpsError} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
+import {getAuth} from "firebase-admin/auth";
 import * as logger from "firebase-functions/logger";
 import {
   randomBytes,
@@ -18,6 +19,7 @@ import {
   createHmac,
   timingSafeEqual,
 } from "crypto";
+import {handleEmbedApi, getEmbeddedAppHtml} from "./shopify-embed.js";
 
 // ── Secrets (Firebase Secret Manager) ──────────────────────
 
@@ -61,13 +63,14 @@ const WEBHOOK_TOPICS = [
   "products/delete",
   "inventory_levels/update",
   "app/uninstalled",
+  // Mandatory compliance webhooks (GDPR)
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact",
 ];
 
-/** Gen 2 Cloud Run URLs for onRequest functions. */
-const CALLBACK_URL =
-  "https://shopifyauthcallback-colliwyzpa-uc.a.run.app";
-const WEBHOOK_URL =
-  "https://shopifywebhook-colliwyzpa-uc.a.run.app";
+const shopifyCallbackUrl = defineSecret("SHOPIFY_CALLBACK_URL");
+const shopifyWebhookUrl = defineSecret("SHOPIFY_WEBHOOK_URL");
 
 // ── Encryption helpers ─────────────────────────────────────
 
@@ -150,7 +153,7 @@ function verifyShopifyHmac(
 
 export const shopifyAuthStart = onCall(
   {
-    secrets: [shopifyApiKey],
+    secrets: [shopifyApiKey, shopifyCallbackUrl],
     region: "us-central1",
   },
   async (request) => {
@@ -182,6 +185,26 @@ export const shopifyAuthStart = onCall(
       );
     }
 
+    // ── 1:1 constraint: one shop → one Revvo account ───────
+    const existingSnap = await getDb()
+      .collection("shopify_connections")
+      .where("shop_domain", "==", shopDomain)
+      .where("status", "==", "active")
+      .limit(1)
+      .get();
+
+    if (!existingSnap.empty) {
+      const existingDoc = existingSnap.docs[0];
+      // Ignore orphaned temp docs from old install flow
+      if (existingDoc.id !== uid && !existingDoc.id.startsWith("_install_")) {
+        throw new HttpsError(
+          "already-exists",
+          "This Shopify store is already connected to another Revvo account. " +
+          "Disconnect it first from the Shopify app or the other Revvo account.",
+        );
+      }
+    }
+
     // Cryptographic nonce for CSRF protection
     const nonce = randomBytes(24).toString("hex");
 
@@ -200,7 +223,7 @@ export const shopifyAuthStart = onCall(
     );
 
     const state = `${uid}:${nonce}`;
-    const callbackUrl = CALLBACK_URL;
+    const callbackUrl = shopifyCallbackUrl.value().trim();
 
     const apiKey = shopifyApiKey.value().trim();
     if (!apiKey) {
@@ -229,12 +252,15 @@ export const shopifyAuthStart = onCall(
 );
 
 // ═══════════════════════════════════════════════════════════
-// shopifyAuthCallback — Shopify redirects here (onRequest)
+// storeAuthCallback — Shopify redirects here (onRequest)
 // ═══════════════════════════════════════════════════════════
 
-export const shopifyAuthCallback = onRequest(
+export const storeAuthCallback = onRequest(
   {
-    secrets: [shopifyApiKey, shopifyApiSecret, tokenEncryptionKey],
+    secrets: [
+      shopifyApiKey, shopifyApiSecret, tokenEncryptionKey,
+      shopifyWebhookUrl, shopifyCallbackUrl,
+    ],
     region: "us-central1",
   },
   async (req, res) => {
@@ -242,85 +268,116 @@ export const shopifyAuthCallback = onRequest(
       const query = req.query as Record<string, string>;
       const {code, state, shop} = query;
 
-      // ── App landing page (no OAuth params) ─────────────
-      // When a merchant clicks the app in Shopify admin,
-      // Shopify loads this URL without code/state. Show a
-      // friendly landing page instead of an error.
-      if (!code || !state) {
-        res.status(200).send(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1">
-  <title>Masari Inventory</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      text-align: center;
-      padding: 60px 24px;
-      background: #fafafa;
-      color: #1a1a1a;
-    }
-    .card {
-      max-width: 460px;
-      margin: 0 auto;
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.08);
-      padding: 40px 32px;
-    }
-    .logo {
-      font-size: 2.5rem;
-      margin-bottom: 4px;
-    }
-    h1 { font-size: 1.4rem; margin-bottom: 12px; }
-    p  { color: #555; line-height: 1.6; }
-    .steps {
-      text-align: left;
-      margin: 20px 0;
-      padding: 0 16px;
-    }
-    .steps li {
-      margin-bottom: 10px;
-      color: #444;
-    }
-    .badge {
-      display: inline-block;
-      background: #5C6BC0;
-      color: #fff;
-      border-radius: 8px;
-      padding: 10px 24px;
-      font-weight: 600;
-      margin-top: 16px;
-      text-decoration: none;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="logo">\uD83D\uDCE6</div>
-    <h1>Masari Inventory</h1>
-    <p>Manage your Shopify integration directly
-       from the <strong>Masari</strong> mobile app.</p>
-    <ol class="steps">
-      <li>Open the <strong>Masari</strong> app on
-          your phone</li>
-      <li>Go to <strong>Manage &rarr;
-          Shopify Integration</strong></li>
-      <li>Tap <strong>Connect Store</strong> and
-          follow the prompts</li>
-    </ol>
-    <p style="color:#888; font-size:0.9rem;">
-      Your store is linked and syncing
-      automatically once connected.</p>
+      // ── Embedded app / API requests ─────────────────────
+      // When _api is present, handle as an AJAX request from the
+      // embedded app (authenticated via App Bridge session token).
+      if (query._api) {
+        await handleEmbedApi(
+          req, res,
+          shopifyApiKey.value().trim(),
+          shopifyApiSecret.value().trim(),
+          tokenEncryptionKey.value().trim(),
+        );
+        return;
+      }
 
-    <a class="badge" href="masari://app">Open Masari</a>
-  </div>
-</body>
-</html>
-        `);
+      // When the merchant opens the app in Shopify admin (no
+      // code/state), always serve the embedded app.
+      if (!code || !state) {
+        const shopParam = query.shop || "";
+
+        // No shop param — generic info page
+        if (!shopParam || !shopParam.endsWith(".myshopify.com")) {
+          res.status(200).send(
+            "<h2>Revvo</h2><p>Open this app from your Shopify admin.</p>",
+          );
+          return;
+        }
+
+        // Query connection status server-side and inject into HTML
+        logger.info("Embed page load", {shop: shopParam});
+        const connSnap = await getDb()
+          .collection("shopify_connections")
+          .where("shop_domain", "==", shopParam)
+          .get();
+
+        logger.info("Embed Firestore result", {
+          shop: shopParam,
+          docsFound: connSnap.size,
+          docIds: connSnap.docs.map((d) => d.id),
+          statuses: connSnap.docs.map((d) => d.data().status),
+        });
+
+        let initialStatus: Record<string, unknown> | null = null;
+
+        if (!connSnap.empty) {
+          const statusOrder: Record<string, number> = {
+            active: 0, error: 1, pending: 2, disconnected: 3,
+          };
+          const sorted = connSnap.docs.sort((a, b) =>
+            (statusOrder[a.data().status] ?? 9) -
+            (statusOrder[b.data().status] ?? 9)
+          );
+          const best = sorted[0];
+          const d = best.data();
+          const userId = d.user_id ?? best.id;
+          const isInstall = best.id.startsWith("_install_");
+
+          // Look up user email from Firebase Auth
+          let userEmail: string | null = null;
+          if (userId && !isInstall) {
+            try {
+              const userRecord = await getAuth().getUser(userId);
+              userEmail = userRecord.email ?? null;
+            } catch (_) { /* user may not exist */ }
+          }
+
+          initialStatus = {
+            connected: true,
+            status: d.status,
+            shop_domain: d.shop_domain,
+            sync_orders_enabled: d.sync_orders_enabled ?? true,
+            sync_inventory_enabled: d.sync_inventory_enabled ?? false,
+            inventory_sync_mode: d.inventory_sync_mode ?? "on_demand",
+            shopify_location_id: d.shopify_location_id ?? null,
+            shopify_location_name: d.shopify_location_name ?? null,
+            connected_at: d.connected_at?.toDate?.() ?? d.connected_at ?? null,
+            last_order_sync_at: d.last_order_sync_at?.toDate?.() ?? null,
+            last_inventory_sync_at:
+              d.last_inventory_sync_at?.toDate?.() ?? null,
+            user_linked: !!d.user_id && !isInstall,
+            linked_account: {
+              id: best.id,
+              user_id: isInstall ? null : userId,
+              email: userEmail,
+              status: d.status ?? "unknown",
+              connected_at:
+                d.connected_at?.toDate?.() ?? d.connected_at ?? null,
+              last_order_sync_at:
+                d.last_order_sync_at?.toDate?.() ?? null,
+              sync_orders_enabled: d.sync_orders_enabled ?? false,
+              sync_inventory_enabled: d.sync_inventory_enabled ?? false,
+            },
+          };
+        }
+
+        logger.info("Embed serving HTML", {
+          shop: shopParam,
+          hasStatus: !!initialStatus,
+          statusConnected: initialStatus?.connected ?? null,
+          statusField: initialStatus?.status ?? null,
+        });
+
+        res.set(
+          "Content-Security-Policy",
+          "frame-ancestors https://*.myshopify.com https://admin.shopify.com;",
+        );
+        res.status(200).send(
+          getEmbeddedAppHtml(
+            shopifyApiKey.value().trim(),
+            initialStatus,
+          ),
+        );
         return;
       }
 
@@ -420,7 +477,7 @@ export const shopifyAuthCallback = onRequest(
               body: JSON.stringify({
                 webhook: {
                   topic,
-                  address: WEBHOOK_URL,
+                  address: shopifyWebhookUrl.value().trim(),
                   format: "json",
                 },
               }),
@@ -468,14 +525,22 @@ export const shopifyAuthCallback = onRequest(
         webhooks: Object.keys(webhookIds).length,
       });
 
-      // ── 7. Return a success page the user can close ──────
-      res.status(200).send(`
+      // ── 7. Redirect or show success page ─────────────────
+      const isShopifyInstall = userId.startsWith("_install_");
+
+      if (isShopifyInstall) {
+        // Shopify-initiated install → redirect back into Shopify admin
+        const key = shopifyApiKey.value().trim();
+        res.redirect(`https://${shop}/admin/apps/${key}`);
+      } else {
+        // Flutter-initiated → show success page the user can close
+        res.status(200).send(`
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Masari — Shopify Connected</title>
+  <title>Revvo — Shopify Connected</title>
   <style>
     body {
       font-family: system-ui, -apple-system, sans-serif;
@@ -499,15 +564,16 @@ export const shopifyAuthCallback = onRequest(
 <body>
   <div class="card">
     <h1>&#9989; Shopify Connected!</h1>
-    <p>Your store <strong>${shop}</strong> has been linked to Masari.</p>
+    <p>Your store <strong>${shop}</strong> has been linked to Revvo.</p>
     <p>You can close this window and return to the app.</p>
     <p style="margin-top: 18px;">
-      <a class="badge" href="masari://app">Open Masari</a>
+      <a class="badge" href="revvo://app">Open Revvo</a>
     </p>
   </div>
 </body>
 </html>
-      `);
+        `);
+      }
     } catch (error) {
       logger.error("shopifyAuthCallback error", {error});
       res.status(500).send("Internal server error");

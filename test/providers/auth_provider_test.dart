@@ -1,9 +1,10 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:masari_app/core/repositories/auth_repository.dart';
-import 'package:masari_app/core/services/result.dart';
-import 'package:masari_app/core/providers/auth_provider.dart';
-import 'package:masari_app/core/providers/repository_providers.dart';
+import 'package:revvo_app/core/repositories/auth_repository.dart';
+import 'package:revvo_app/core/services/result.dart';
+import 'package:revvo_app/core/providers/auth_provider.dart';
+import 'package:revvo_app/core/providers/repository_providers.dart';
 
 // Stub repository for testing
 class StubAuthRepository implements AuthRepository {
@@ -48,6 +49,13 @@ void main() {
     late StubAuthRepository authRepo;
 
     setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+
+      // Stub FCM method channel so NotificationService.init() doesn't crash.
+      const fcmChannel = MethodChannel('plugins.flutter.io/firebase_messaging');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(fcmChannel, (call) async => null);
+
       authRepo = StubAuthRepository();
       container = ProviderContainer(
         overrides: [

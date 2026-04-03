@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
-/// Masari Design System — Spacing
+/// Revvo Design System — Spacing
 class AppSpacing {
   AppSpacing._();
 
@@ -27,7 +27,7 @@ class AppSpacing {
   );
 }
 
-/// Masari Design System — Border Radius
+/// Revvo Design System — Border Radius
 class AppRadius {
   AppRadius._();
 
@@ -46,7 +46,7 @@ class AppRadius {
       );
 }
 
-/// Masari Design System — Typography
+/// Revvo Design System — Typography
 class AppTypography {
   AppTypography._();
 

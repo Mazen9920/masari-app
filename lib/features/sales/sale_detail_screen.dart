@@ -780,9 +780,9 @@ class SaleDetailScreen extends ConsumerWidget {
         live.externalOrderId != null;
     final isPaid = live.paymentStatus == PaymentStatus.paid;
 
-    // Block cancelling paid Shopify orders from Masari — user must cancel
+    // Block cancelling paid Shopify orders from Revvo — user must cancel
     // on Shopify (which handles refund + fulfillment properly), and the
-    // webhook will auto-sync the cancellation back to Masari.
+    // webhook will auto-sync the cancellation back to Revvo.
     if (isShopifyOrder && isPaid) {
       final l10n = AppLocalizations.of(context)!;
       showDialog(

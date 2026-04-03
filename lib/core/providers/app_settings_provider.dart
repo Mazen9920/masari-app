@@ -1,9 +1,13 @@
 import 'dart:ui' show Locale;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../l10n/app_localizations.dart';
+import '../services/remote_config_service.dart';
+import '../../shared/models/payment_history_entry.dart';
 
 // ─── Keys (suffixes — prefixed with userId at runtime) ───────────────────────
 const _kCurrency   = 'settings_currency';
@@ -24,6 +28,8 @@ const _kLowStockAlerts = 'settings_low_stock_alerts';
 const _kAlertThreshold = 'settings_alert_threshold';
 const _kHideOutOfStock = 'settings_hide_out_of_stock';
 const _kHideShopifyDrafts = 'settings_hide_shopify_drafts';
+const _kSubscriptionStatus = 'settings_subscription_status';
+const _kSubscriptionExpiresAt = 'settings_subscription_expires_at';
 
 // ─── Subscription Tier ───────────────────────────────────────────────────────
 enum SubscriptionTier {
@@ -41,7 +47,9 @@ enum SubscriptionTier {
   bool get isGrowthOrAbove => index >= SubscriptionTier.growth.index;
 
   /// Product limit for inventory. null = unlimited.
-  int? get productLimit => this == SubscriptionTier.launch ? 20 : null;
+  /// Launch tier uses Remote Config `max_free_products` (default 20).
+  int? get productLimit =>
+      this == SubscriptionTier.launch ? RemoteConfigService.maxFreeProducts : null;
 
   String get label => switch (this) {
     SubscriptionTier.launch => 'Launch',
@@ -153,6 +161,13 @@ class AppSettingsState {
   final int    alertThreshold; // notify when stock below this
   final bool   hideOutOfStock; // hide out-of-stock from main list
   final bool   hideShopifyDrafts; // hide Shopify drafted products
+  final String subscriptionStatus; // 'active', 'grace_period', 'expired', 'free'
+  final DateTime? subscriptionExpiresAt;
+  final String? paymentSource; // 'paymob', 'iap', or null
+  final String? paymobCardLast4;
+  final String? paymobCardBrand;
+  final bool paymobAutoRenew;
+  final String? subscriptionPlan; // e.g. 'growth_monthly', 'growth_yearly'
 
   const AppSettingsState({
     this.currency   = 'EGP',
@@ -173,6 +188,13 @@ class AppSettingsState {
     this.alertThreshold = 10,
     this.hideOutOfStock = false,
     this.hideShopifyDrafts = false,
+    this.subscriptionStatus = 'free',
+    this.subscriptionExpiresAt,
+    this.paymentSource,
+    this.paymobCardLast4,
+    this.paymobCardBrand,
+    this.paymobAutoRenew = false,
+    this.subscriptionPlan,
   });
 
   /// Quick check: does the current tier have access to the [required] tier?
@@ -203,6 +225,13 @@ class AppSettingsState {
     int?    alertThreshold,
     bool?   hideOutOfStock,
     bool?   hideShopifyDrafts,
+    String? subscriptionStatus,
+    DateTime? subscriptionExpiresAt,
+    String? paymentSource,
+    String? paymobCardLast4,
+    String? paymobCardBrand,
+    bool?   paymobAutoRenew,
+    String? subscriptionPlan,
   }) {
     return AppSettingsState(
       currency:   currency   ?? this.currency,
@@ -225,6 +254,13 @@ class AppSettingsState {
       alertThreshold: alertThreshold ?? this.alertThreshold,
       hideOutOfStock: hideOutOfStock ?? this.hideOutOfStock,
       hideShopifyDrafts: hideShopifyDrafts ?? this.hideShopifyDrafts,
+      subscriptionStatus: subscriptionStatus ?? this.subscriptionStatus,
+      subscriptionExpiresAt: subscriptionExpiresAt ?? this.subscriptionExpiresAt,
+      paymentSource: paymentSource ?? this.paymentSource,
+      paymobCardLast4: paymobCardLast4 ?? this.paymobCardLast4,
+      paymobCardBrand: paymobCardBrand ?? this.paymobCardBrand,
+      paymobAutoRenew: paymobAutoRenew ?? this.paymobAutoRenew,
+      subscriptionPlan: subscriptionPlan ?? this.subscriptionPlan,
     );
   }
 }
@@ -253,6 +289,12 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
 
     // Also check Firestore for the authoritative tier (e.g. set by CF)
     String valuationMethod = prefs.getString(_key(_kValuationMethod)) ?? 'fifo';
+    String subscriptionStatus = prefs.getString(_key(_kSubscriptionStatus)) ?? 'free';
+    int? subscriptionExpiresAtMs = prefs.getInt(_key(_kSubscriptionExpiresAt));
+    String? paymentSource;
+    String? cardLast4;
+    String? cardBrand;
+    bool autoRenew = false;
     try {
       final doc = await FirebaseFirestore.instance
           .collection('users')
@@ -268,6 +310,15 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
             await prefs.setString(_key(_kTier), fsTier);
           }
         }
+        if (data['subscription_status'] != null) {
+          subscriptionStatus = data['subscription_status'] as String;
+          await prefs.setString(_key(_kSubscriptionStatus), subscriptionStatus);
+        }
+        if (data['subscription_expires_at'] != null) {
+          final ts = data['subscription_expires_at'] as Timestamp;
+          subscriptionExpiresAtMs = ts.millisecondsSinceEpoch;
+          await prefs.setInt(_key(_kSubscriptionExpiresAt), subscriptionExpiresAtMs);
+        }
         if (data['valuation_method'] != null) {
           final fsVal = data['valuation_method'] as String;
           if (fsVal != valuationMethod) {
@@ -275,6 +326,11 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
             await prefs.setString(_key(_kValuationMethod), fsVal);
           }
         }
+        // Read card / payment fields from the same Firestore doc
+        paymentSource = data['payment_source'] as String?;
+        cardLast4     = data['paymob_card_last4'] as String?;
+        cardBrand     = data['paymob_card_brand'] as String?;
+        autoRenew     = data['paymob_auto_renew'] as bool? ?? false;
       }
     } catch (_) {
       // Firestore read failed; use local SharedPreferences value
@@ -303,6 +359,14 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
       alertThreshold: prefs.getInt(_key(_kAlertThreshold)) ?? 10,
       hideOutOfStock: prefs.getBool(_key(_kHideOutOfStock)) ?? false,
       hideShopifyDrafts: prefs.getBool(_key(_kHideShopifyDrafts)) ?? false,
+      subscriptionStatus: subscriptionStatus,
+      subscriptionExpiresAt: subscriptionExpiresAtMs != null
+          ? DateTime.fromMillisecondsSinceEpoch(subscriptionExpiresAtMs)
+          : null,
+      paymentSource: paymentSource,
+      paymobCardLast4: cardLast4,
+      paymobCardBrand: cardBrand,
+      paymobAutoRenew: autoRenew,
     );
   }
 
@@ -327,27 +391,139 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
     await prefs.setBool(_key(_kAutoBackup), value);
   }
 
+  /// Updates the local tier cache. The authoritative tier lives in Firestore
+  /// and is managed by Cloud Functions (Paymob webhook). This method is only
+  /// used for voluntary downgrades — never for upgrades.
   Future<void> setTier(SubscriptionTier tier) async {
-    // Always keep supplier-payment → transaction sync ON.
-    // The transactions are created with excludeFromPL so they
-    // don't affect the P&L but remain visible for tracking.
     state = state.copyWith(
       tier: tier,
+      subscriptionStatus: tier == SubscriptionTier.launch ? 'free' : state.subscriptionStatus,
       autoCreateTransactionOnSupplierPayment: true,
     );
     if (!_isAuth) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key(_kTier), tier.name);
     await prefs.setBool(_key(_kAutoTxnOnSupplierPayment), true);
+    if (tier == SubscriptionTier.launch) {
+      await prefs.setString(_key(_kSubscriptionStatus), 'free');
+    }
+    // Persist downgrade to Firestore via Cloud Function (Admin SDK bypasses
+    // security rules that protect subscription fields from client writes).
+    if (tier.index < SubscriptionTier.pro.index) {
+      try {
+        final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('cancelSubscription');
+        await callable.call({'target_tier': tier.name});
+      } catch (e) {
+        // Local state already updated; CF will reconcile on next refresh.
+        if (kDebugMode) debugPrint('cancelSubscription CF error: $e');
+      }
+    }
+  }
 
-    // Persist to Firestore so Cloud Functions can validate the tier
+  /// Refresh subscription state from the backend via Cloud Function.
+  /// Returns the new tier so callers can react.
+  Future<SubscriptionTier> refreshSubscription() async {
+    if (!_isAuth) return state.tier;
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_uid)
-          .set({'subscription_tier': tier.name}, SetOptions(merge: true));
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('getSubscriptionStatus');
+      final result = await callable.call<Map<String, dynamic>>();
+      final data = result.data;
+      final tierName = data['subscription_tier'] as String? ?? 'launch';
+      final status = data['subscription_status'] as String? ?? 'free';
+      final expiresAtMs = data['subscription_expires_at'] as int?;
+      final paymentSource = data['payment_source'] as String? ?? '';
+      final cardLast4 = data['paymob_card_last4'] as String? ?? '';
+      final cardBrand = data['paymob_card_brand'] as String? ?? '';
+      final autoRenew = data['paymob_auto_renew'] as bool? ?? false;
+      final plan = data['subscription_plan'] as String?;
+
+      final tier = SubscriptionTier.values.firstWhere(
+        (t) => t.name == tierName,
+        orElse: () => SubscriptionTier.launch,
+      );
+
+      // Cache locally
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key(_kTier), tier.name);
+      await prefs.setString(_key(_kSubscriptionStatus), status);
+      if (expiresAtMs != null) {
+        await prefs.setInt(_key(_kSubscriptionExpiresAt), expiresAtMs);
+      }
+
+      state = state.copyWith(
+        tier: tier,
+        subscriptionStatus: status,
+        subscriptionExpiresAt: expiresAtMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(expiresAtMs)
+            : null,
+        paymentSource: paymentSource,
+        paymobCardLast4: cardLast4,
+        paymobCardBrand: cardBrand,
+        paymobAutoRenew: autoRenew,
+        subscriptionPlan: plan,
+      );
+      return tier;
     } catch (_) {
-      // Firestore write is best-effort; local state is already set
+      // Network error — keep current cached state
+      return state.tier;
+    }
+  }
+
+  /// Toggle Paymob auto-renew via Cloud Function.
+  Future<bool> toggleAutoRenew(bool enabled) async {
+    if (!_isAuth) return state.paymobAutoRenew;
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('toggleAutoRenew');
+      await callable.call({'enabled': enabled});
+      state = state.copyWith(paymobAutoRenew: enabled);
+      return enabled;
+    } catch (e) {
+      if (kDebugMode) debugPrint('toggleAutoRenew error: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetch payment history from Cloud Function.
+  Future<List<PaymentHistoryEntry>> getPaymentHistory() async {
+    if (!_isAuth) return [];
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('getPaymentHistory');
+      final result = await callable.call<Map<String, dynamic>>();
+      final data = result.data;
+      final list = (data['payments'] as List<dynamic>?) ?? [];
+      return list
+          .map((e) =>
+              PaymentHistoryEntry.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (e) {
+      if (kDebugMode) debugPrint('getPaymentHistory error: $e');
+      return [];
+    }
+  }
+
+  /// Remove saved Paymob payment method via Cloud Function.
+  Future<bool> removePaymentMethod() async {
+    if (!_isAuth) return false;
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('removePaymentMethod');
+      final result = await callable.call<Map<String, dynamic>>();
+      final removed = result.data['removed'] as bool? ?? false;
+      if (removed) {
+        state = state.copyWith(
+          paymobCardLast4: '',
+          paymobCardBrand: '',
+          paymobAutoRenew: false,
+        );
+      }
+      return removed;
+    } catch (e) {
+      if (kDebugMode) debugPrint('removePaymentMethod error: $e');
+      rethrow;
     }
   }
 

@@ -11,7 +11,6 @@ import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/image_upload_service.dart';
 import '../../shared/models/product_model.dart';
-import '../../shared/models/category_data.dart';
 import '../../shared/widgets/image_source_picker.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {

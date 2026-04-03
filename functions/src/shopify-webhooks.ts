@@ -10,7 +10,7 @@
 
 import {onRequest} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
-import {getFirestore, FieldValue} from "firebase-admin/firestore";
+import {getFirestore, FieldValue, QuerySnapshot} from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import {createHmac, timingSafeEqual} from "crypto";
 
@@ -58,7 +58,7 @@ function verifyWebhookHmac(
 // shopifyWebhook — receives all Shopify webhook POSTs
 // ═══════════════════════════════════════════════════════════
 
-export const shopifyWebhook = onRequest(
+export const storeWebhook = onRequest(
   {
     secrets: [shopifyApiSecret],
     region: "us-central1",
@@ -101,16 +101,41 @@ export const shopifyWebhook = onRequest(
 
     // ── 2. Look up ALL users that own this shop ──────────
     const db = getDb();
-    const connSnap = await db
-      .collection("shopify_connections")
-      .where("shop_domain", "==", shopDomain)
-      .where("status", "==", "active")
-      .get();
+
+    // Compliance webhooks (shop/redact, customers/*) may arrive after
+    // the app was uninstalled, so we must also find disconnected
+    // connections; other topics still require an active connection.
+    const complianceTopics = new Set([
+      "customers/data_request",
+      "customers/redact",
+      "shop/redact",
+    ]);
+    const isCompliance = complianceTopics.has(topic);
+
+    let connSnap: QuerySnapshot;
+    if (isCompliance) {
+      connSnap = await db
+        .collection("shopify_connections")
+        .where("shop_domain", "==", shopDomain)
+        .get();
+    } else {
+      connSnap = await db
+        .collection("shopify_connections")
+        .where("shop_domain", "==", shopDomain)
+        .where("status", "==", "active")
+        .get();
+    }
 
     if (connSnap.empty) {
-      // No active connection for this shop — 200 to stop retries
-      logger.warn("No connection for shop", {shopDomain, topic});
-      res.status(200).send("OK (no connection)");
+      // No connection for this shop — 200 to stop retries
+      if (isCompliance) {
+        logger.info("Compliance webhook for unknown shop — acknowledged", {
+          shopDomain, topic,
+        });
+      } else {
+        logger.warn("No active connection for shop", {shopDomain, topic});
+      }
+      res.status(200).send("OK");
       return;
     }
 

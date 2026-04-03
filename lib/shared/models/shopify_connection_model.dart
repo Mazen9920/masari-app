@@ -12,7 +12,7 @@ class ShopifyConnection {
   /// Granted OAuth scopes, e.g. ["read_orders", "write_orders", ...].
   final List<String> scopes;
 
-  /// Whether to sync Shopify orders ↔ Masari sales.
+  /// Whether to sync Shopify orders ↔ Revvo sales.
   final bool syncOrdersEnabled;
 
   /// Whether inventory sync is enabled (manual, not automatic).

@@ -1,13 +1,27 @@
 import 'dart:io';
-import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
 
 /// Centralised service for picking images and uploading them to Firebase Storage.
 class ImageUploadService {
   static final _picker = ImagePicker();
   static final _storage = FirebaseStorage.instance;
+
+  /// Max upload size — must match Storage Rules (5 MB).
+  static const _maxBytes = 5 * 1024 * 1024;
+
+  /// Allowed image MIME types — must match Storage Rules.
+  static const _allowedTypes = <String, String>{
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.heic': 'image/heic',
+    '.heif': 'image/heif',
+  };
 
   /// Shows a source picker (camera / gallery) and returns the chosen [XFile],
   /// or `null` if the user cancelled.
@@ -25,7 +39,7 @@ class ImageUploadService {
         imageQuality: imageQuality,
       );
     } catch (e) {
-      debugPrint('[ImageUploadService] pickImage error: $e');
+      if (kDebugMode) debugPrint('[ImageUploadService] pickImage error: $e');
       return null;
     }
   }
@@ -37,20 +51,33 @@ class ImageUploadService {
     required String storagePath,
   }) async {
     try {
-      final currentUser = fb_auth.FirebaseAuth.instance.currentUser;
-      debugPrint('[ImageUploadService] currentUser uid: ${currentUser?.uid}');
-      debugPrint('[ImageUploadService] storagePath: $storagePath');
-      debugPrint('[ImageUploadService] bucket: ${_storage.bucket}');
+      // ── Client-side validation (mirrors Storage Rules) ──────────
+      final size = await file.length();
+      if (size > _maxBytes) {
+        if (kDebugMode) debugPrint('[ImageUploadService] rejected: file too large ($size bytes, max $_maxBytes)');
+        return null;
+      }
+
+      final ext = p.extension(file.path).toLowerCase();
+      final contentType = _allowedTypes[ext];
+      if (contentType == null) {
+        if (kDebugMode) debugPrint('[ImageUploadService] rejected: unsupported type "$ext"');
+        return null;
+      }
+
+      if (kDebugMode) debugPrint('[ImageUploadService] uploading ${size ~/ 1024} KB ($ext) to $storagePath');
       final ref = _storage.ref().child(storagePath);
       final uploadTask = ref.putFile(
         file,
-        SettableMetadata(contentType: 'image/jpeg'),
+        SettableMetadata(contentType: contentType),
       );
       final snapshot = await uploadTask;
       return await snapshot.ref.getDownloadURL();
     } catch (e, st) {
-      debugPrint('[ImageUploadService] uploadFile error: $e');
-      debugPrint('[ImageUploadService] stackTrace: $st');
+      if (kDebugMode) {
+        debugPrint('[ImageUploadService] uploadFile error: $e');
+        debugPrint('[ImageUploadService] stackTrace: $st');
+      }
       return null;
     }
   }

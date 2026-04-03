@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../shared/models/product_model.dart';
 import '../../../shared/models/sale_model.dart';
@@ -55,9 +56,7 @@ class FirestoreSaleRepository implements SaleRepository {
           data['id'] = doc.id;
           sales.add(Sale.fromJson(data));
         } catch (e) {
-          // Log and skip unparseable documents
-          // ignore: avoid_print
-          print('[SaleRepo] Failed to parse sale ${doc.id}: $e');
+          if (kDebugMode) debugPrint('[SaleRepo] Failed to parse sale ${doc.id}: $e');
         }
       }
 
@@ -182,12 +181,8 @@ class FirestoreSaleRepository implements SaleRepository {
           final variant = product.variants[variantIndex];
           final delta = -deduction.quantity;
           final newStock = variant.currentStock + delta;
-          if (newStock < 0) {
-            throw Exception(
-              'Insufficient stock: ${product.name} / ${variant.displayName} '
-              'has ${variant.currentStock} units, cannot deduct ${deduction.quantity}',
-            );
-          }
+          // Allow stock to go to zero — UI already warned the user
+          final clampedStock = newStock < 0 ? 0 : newStock;
 
           // Cost layer consumption
           var layers = List<CostLayer>.from(variant.effectiveCostLayers);
@@ -264,7 +259,7 @@ class FirestoreSaleRepository implements SaleRepository {
           );
 
           final updatedVariant = variant.copyWith(
-            currentStock: newStock,
+            currentStock: clampedStock,
             costPrice: newCostPrice,
             costLayers: layers,
             movements: [...variant.movements, movement],

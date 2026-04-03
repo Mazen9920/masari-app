@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/result.dart';
 
 /// User profile data for Firestore persistence.
@@ -35,13 +36,16 @@ class UserProfile {
       email: json['email'] as String? ?? '',
       phone: json['phone'] as String? ?? '',
       avatarUrl: json['avatar_url'] as String?,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : null,
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      createdAt: _parseDateTime(json['created_at']),
+      updatedAt: _parseDateTime(json['updated_at']),
     );
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 
   UserProfile copyWith({
@@ -102,12 +106,8 @@ class BusinessProfile {
       address: json['address'] as String? ?? '',
       taxId: json['tax_id'] as String? ?? '',
       logoUrl: json['logo_url'] as String?,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : null,
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      createdAt: UserProfile._parseDateTime(json['created_at']),
+      updatedAt: UserProfile._parseDateTime(json['updated_at']),
     );
   }
 

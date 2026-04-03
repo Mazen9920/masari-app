@@ -1164,7 +1164,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
               child: Column(
                 children: [
-                  MasariPrimaryButton(
+                  RevvoPrimaryButton(
                     text: l10n.saveTransaction,
                     icon: Icons.check_rounded,
                     onPressed: _amount != '0' ? _onSave : null,

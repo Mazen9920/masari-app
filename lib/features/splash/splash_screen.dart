@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/services/force_update_service.dart';
+import '../../core/services/remote_config_service.dart';
+import '../../l10n/app_localizations.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -124,16 +128,68 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     // Check auth state and navigate via GoRouter
     await Future.delayed(const Duration(milliseconds: 2200));
-    if (mounted) {
-      await ref.read(authProvider.notifier).checkAuthState();
-      if (!mounted) return;
-      final authState = ref.read(authProvider);
-      if (authState.isAuthenticated) {
-        context.go(AppRoutes.home);
-      } else {
-        context.go(AppRoutes.onboarding);
-      }
+    if (!mounted) return;
+
+    // ─── Remote Config + Force Update ───
+    await RemoteConfigService.init();
+    if (!mounted) return;
+    if (await ForceUpdateService.isUpdateRequired()) {
+      _showForceUpdateDialog();
+      return;
     }
+    if (RemoteConfigService.maintenanceMode) {
+      _showMaintenanceDialog();
+      return;
+    }
+
+    await ref.read(authProvider.notifier).checkAuthState();
+    if (!mounted) return;
+    final authState = ref.read(authProvider);
+    if (authState.isAuthenticated) {
+      context.go(AppRoutes.home);
+    } else {
+      context.go(AppRoutes.onboarding);
+    }
+  }
+
+  void _showForceUpdateDialog() {
+    final l10n = AppLocalizations.of(context)!;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: Text(l10n.updateRequiredTitle),
+          content: Text(l10n.updateRequiredBody),
+          actions: [
+            FilledButton(
+              onPressed: () => launchUrl(
+                Uri.parse(ForceUpdateService.storeUrl),
+                mode: LaunchMode.externalApplication,
+              ),
+              child: Text(l10n.updateNow),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMaintenanceDialog() {
+    final l10n = AppLocalizations.of(context)!;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: Text(l10n.maintenanceTitle),
+          content: Text(l10n.maintenanceBody),
+          actions: const [],
+        ),
+      ),
+    );
   }
 
   @override
@@ -246,7 +302,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Masari',
+                  'Revvo',
                   style: AppTypography.displayLarge.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,

@@ -549,7 +549,7 @@ async function cancelOrder(
               .map((li) => ({
                 line_item_id: li.id,
                 quantity: Number(li.quantity) || 0,
-                restock_type: "no_restock", // Masari handles stock locally
+                restock_type: "no_restock", // Revvo handles stock locally
               })),
           },
         }),

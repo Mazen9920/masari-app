@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -1591,7 +1592,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
           final label = '${DateFormat('MMMd').format(range.start)}_${DateFormat('MMMd').format(range.end)}';
           await shareSvc.sharePdf(bytes, 'CashFlow_$label.pdf', subject: 'Cash Flow Statement', origin: origin);
         } catch (e) {
-          debugPrint('Cash Flow share error: $e');
+          if (kDebugMode) debugPrint('Cash Flow share error: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.somethingWentWrong), backgroundColor: Colors.red));
           }

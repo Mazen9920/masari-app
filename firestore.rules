@@ -4,8 +4,93 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ─── Users: can only read/write their own profile ─────────────────
+    // Subscription fields are managed exclusively by Cloud Functions.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId
+        && !('subscription_tier' in request.resource.data
+             && request.resource.data.subscription_tier != 'launch')
+        && !('subscription_status' in request.resource.data)
+        && !('subscription_expires_at' in request.resource.data)
+        && !('subscription_plan' in request.resource.data)
+        && !('last_payment_at' in request.resource.data)
+        && !('last_paymob_order_id' in request.resource.data)
+        && !('last_paymob_transaction_id' in request.resource.data)
+        && !('paymob_card_token' in request.resource.data)
+        && !('paymob_card_last4' in request.resource.data)
+        && !('paymob_card_brand' in request.resource.data)
+        && !('paymob_auto_renew' in request.resource.data)
+        && !('paymob_renewal_attempts' in request.resource.data)
+        && !('payment_source' in request.resource.data)
+        && !('paymob_subscription_id' in request.resource.data)
+        && !('paymob_subscription_state' in request.resource.data)
+        && !('paymob_card_token_internal' in request.resource.data);
+      allow update: if request.auth != null && request.auth.uid == userId
+        // Prevent client from modifying billing-managed fields
+        && (!('subscription_tier' in request.resource.data)
+            || request.resource.data.subscription_tier
+               == resource.data.subscription_tier)
+        && (!('subscription_status' in request.resource.data)
+            || request.resource.data.subscription_status
+               == resource.data.subscription_status)
+        && (!('subscription_expires_at' in request.resource.data)
+            || request.resource.data.subscription_expires_at
+               == resource.data.subscription_expires_at)
+        && (!('subscription_plan' in request.resource.data)
+            || request.resource.data.subscription_plan
+               == resource.data.subscription_plan)
+        && (!('last_payment_at' in request.resource.data)
+            || request.resource.data.last_payment_at
+               == resource.data.last_payment_at)
+        && (!('last_paymob_order_id' in request.resource.data)
+            || request.resource.data.last_paymob_order_id
+               == resource.data.last_paymob_order_id)
+        && (!('last_paymob_transaction_id' in request.resource.data)
+            || request.resource.data.last_paymob_transaction_id
+               == resource.data.last_paymob_transaction_id)
+        && (!('last_iap_platform' in request.resource.data)
+            || request.resource.data.last_iap_platform
+               == resource.data.last_iap_platform)
+        && (!('last_iap_transaction_id' in request.resource.data)
+            || request.resource.data.last_iap_transaction_id
+               == resource.data.last_iap_transaction_id)
+        // Card token & payment_source: server-only
+        && (!('paymob_card_token' in request.resource.data)
+            || request.resource.data.paymob_card_token
+               == resource.data.paymob_card_token)
+        && (!('paymob_card_last4' in request.resource.data)
+            || request.resource.data.paymob_card_last4
+               == resource.data.paymob_card_last4)
+        && (!('paymob_card_brand' in request.resource.data)
+            || request.resource.data.paymob_card_brand
+               == resource.data.paymob_card_brand)
+        && (!('paymob_renewal_attempts' in request.resource.data)
+            || request.resource.data.paymob_renewal_attempts
+               == resource.data.paymob_renewal_attempts)
+        && (!('payment_source' in request.resource.data)
+            || request.resource.data.payment_source
+               == resource.data.payment_source)
+        // Subscription module fields: server-only
+        && (!('paymob_subscription_id' in request.resource.data)
+            || request.resource.data.paymob_subscription_id
+               == resource.data.paymob_subscription_id)
+        && (!('paymob_subscription_state' in request.resource.data)
+            || request.resource.data.paymob_subscription_state
+               == resource.data.paymob_subscription_state)
+        && (!('paymob_card_token_internal' in request.resource.data)
+            || request.resource.data.paymob_card_token_internal
+               == resource.data.paymob_card_token_internal)
+        // paymob_auto_renew: client may toggle (bool only)
+        && (!('paymob_auto_renew' in request.resource.data)
+            || request.resource.data.paymob_auto_renew is bool);
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ─── Payment Logs: read-only for the user, write by CF only ──────
+    match /payment_logs/{docId} {
+      allow read: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      // No client-side write — only Cloud Functions (Admin SDK) write here
     }
 
     // ─── Helper: owner check for data collections ─────────────────────
@@ -15,81 +100,81 @@ service cloud.firestore {
     // ─── Helper: validate required transaction fields ───────────────
     function validTransactionFields() {
       let d = request.resource.data;
-      return d.title is string && d.title.size() > 0
+      return d.title is string && d.title.size() > 0 && d.title.size() <= 200
         && d.amount is number
-        && d.date_time is string
-        && d.category_id is string
-        && d.payment_method is string
-        && d.user_id is string;
+        && d.date_time is timestamp
+        && d.category_id is string && d.category_id.size() <= 128
+        && d.payment_method is string && d.payment_method.size() <= 50
+        && d.user_id is string && d.user_id.size() <= 128;
     }
 
     // ─── Helper: validate required supplier fields ───────────────────
     function validSupplierFields() {
       let d = request.resource.data;
-      return d.name is string && d.name.size() > 0
-        && d.category is string
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+        && d.category is string && d.category.size() <= 100
         && d.balance is number
-        && d.user_id is string;
+        && d.user_id is string && d.user_id.size() <= 128;
     }
 
     // ─── Helper: validate required purchase fields ──────────────────
     function validPurchaseFields() {
       let d = request.resource.data;
-      return d.supplier_id is string && d.supplier_id.size() > 0
-        && d.supplier_name is string
-        && d.date is string
+      return d.supplier_id is string && d.supplier_id.size() > 0 && d.supplier_id.size() <= 128
+        && d.supplier_name is string && d.supplier_name.size() <= 200
+        && d.date is string && d.date.size() <= 50
         && d.payment_status is int && d.payment_status >= 0 && d.payment_status <= 2
         && d.amount_paid is number && d.amount_paid >= 0
-        && d.user_id is string;
+        && d.user_id is string && d.user_id.size() <= 128;
     }
 
     // ─── Helper: validate required payment fields ───────────────────
     function validPaymentFields() {
       let d = request.resource.data;
-      return d.supplier_id is string && d.supplier_id.size() > 0
-        && d.supplier_name is string
+      return d.supplier_id is string && d.supplier_id.size() > 0 && d.supplier_id.size() <= 128
+        && d.supplier_name is string && d.supplier_name.size() <= 200
         && d.amount is number && d.amount > 0
-        && d.date is string
-        && d.method is string
-        && d.user_id is string;
+        && d.date is string && d.date.size() <= 50
+        && d.method is string && d.method.size() <= 50
+        && d.user_id is string && d.user_id.size() <= 128;
     }
 
     // ─── Helper: validate required product fields ───────────────────
     function validProductFields() {
       let d = request.resource.data;
-      return d.name is string && d.name.size() > 0
-        && d.variants is list
-        && d.user_id is string;
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 200
+        && d.variants is list && d.variants.size() <= 100
+        && d.user_id is string && d.user_id.size() <= 128;
     }
 
     // ─── Helper: validate required sale fields ──────────────────────
     function validSaleFields() {
       let d = request.resource.data;
-      return d.items is list
-        && d.payment_method is string
+      return d.items is list && d.items.size() <= 200
+        && d.payment_method is string && d.payment_method.size() <= 50
         && d.payment_status is int && d.payment_status >= 0 && d.payment_status <= 3
         && d.order_status is int && d.order_status >= 0 && d.order_status <= 4
-        && d.user_id is string;
+        && d.user_id is string && d.user_id.size() <= 128;
     }
 
     // ─── Helper: validate required goods receipt fields ─────────────
     function validGoodsReceiptFields() {
       let d = request.resource.data;
-      return d.supplier_id is string && d.supplier_id.size() > 0
-        && d.date is string
-        && d.items is list
+      return d.supplier_id is string && d.supplier_id.size() > 0 && d.supplier_id.size() <= 128
+        && d.date is string && d.date.size() <= 50
+        && d.items is list && d.items.size() <= 200
         && d.status is int && d.status >= 0 && d.status <= 2
-        && d.user_id is string;
+        && d.user_id is string && d.user_id.size() <= 128;
     }
 
     // ─── Helper: validate required conversion order fields ──────────
     function validConversionOrderFields() {
       let d = request.resource.data;
-      return d.product_id is string && d.product_id.size() > 0
-        && d.source_variant_id is string
+      return d.product_id is string && d.product_id.size() > 0 && d.product_id.size() <= 128
+        && d.source_variant_id is string && d.source_variant_id.size() <= 128
         && d.source_quantity is number && d.source_quantity > 0
-        && d.outputs is list
-        && d.user_id is string;
+        && d.outputs is list && d.outputs.size() <= 100
+        && d.user_id is string && d.user_id.size() <= 128;
     }
 
     // Transactions
@@ -242,7 +327,7 @@ service cloud.firestore {
         && !('access_token' in request.resource.data);
     }
 
-    // Shopify Product Mappings (Masari ↔ Shopify variant links)
+    // Shopify Product Mappings (Revvo ↔ Shopify variant links)
     match /shopify_product_mappings/{docId} {
       allow read, delete: if request.auth != null
         && resource.data.user_id == request.auth.uid;

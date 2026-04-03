@@ -13,9 +13,9 @@ abstract class ShopifyProductMappingRepository {
   Future<Result<List<ShopifyProductMapping>>> getMappingsByShopifyVariantId(
       String shopifyVariantId);
 
-  /// Finds a mapping by Masari variant ID (for push-to-Shopify).
-  Future<Result<ShopifyProductMapping?>> getMappingByMasariVariantId(
-      String masariVariantId);
+  /// Finds a mapping by Revvo variant ID (for push-to-Shopify).
+  Future<Result<ShopifyProductMapping?>> getMappingByRevvoVariantId(
+      String revvoVariantId);
 
   /// Finds a mapping by Shopify inventory item ID (for stock-level sync).
   Future<Result<ShopifyProductMapping?>> getMappingByInventoryItemId(
@@ -36,8 +36,8 @@ abstract class ShopifyProductMappingRepository {
   /// Deletes a mapping by ID.
   Future<Result<void>> deleteMapping(String id);
 
-  /// Deletes all mappings for a given Masari product ID.
-  Future<Result<void>> deleteMappingsByMasariProductId(String masariProductId);
+  /// Deletes all mappings for a given Revvo product ID.
+  Future<Result<void>> deleteMappingsByRevvoProductId(String revvoProductId);
 
   /// Deletes all mappings for the current user (on Shopify disconnect).
   Future<Result<void>> deleteAllMappings();

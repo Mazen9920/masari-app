@@ -9,7 +9,7 @@ class AppLocalizationsAr extends AppLocalizations {
   AppLocalizationsAr([String locale = 'ar']) : super(locale);
 
   @override
-  String get appTitle => 'تطبيق مصاري';
+  String get appTitle => 'Revvo';
 
   @override
   String get greetingMorning => 'صباح الخير،';
@@ -952,14 +952,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get addTransaction => 'إضافة معاملة';
 
   @override
-  String get openingCashHelpText => 'كم كان لديك من نقد قبل استخدام مساري؟';
+  String get openingCashHelpText => 'كم كان لديك من نقد قبل استخدام Revvo؟';
 
   @override
   String get tapToSetStartingCash => 'انقر لتعيين رصيدك الافتتاحي';
 
   @override
   String get openingCashDialogDesc =>
-      'أدخل المبلغ النقدي الذي كان لديك قبل بدء تتبع المعاملات في مساري.';
+      'أدخل المبلغ النقدي الذي كان لديك قبل بدء تتبع المعاملات في Revvo.';
 
   @override
   String get lowCashAlertBody =>
@@ -1604,7 +1604,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get profile => 'الملف الشخصي';
 
   @override
-  String get masariAiInsight => 'تحليل مساري الذكي';
+  String get revvoAiInsight => 'تحليل Revvo الذكي';
 
   @override
   String get viewTransactions => 'عرض المعاملات';
@@ -2499,7 +2499,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get profileHelpCenterSubtitle => 'الأسئلة الشائعة والدعم';
 
   @override
-  String get profileAboutMasari => 'عن مصاري';
+  String get profileAboutRevvo => 'عن Revvo';
 
   @override
   String get profileVersionInfo => 'الإصدار 1.0.0';
@@ -2869,10 +2869,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get helpCenterChat => 'محادثة';
 
   @override
-  String get aboutTitle => 'عن مصاري';
+  String get aboutTitle => 'عن Revvo';
 
   @override
-  String get appName => 'مصاري';
+  String get appName => 'Revvo';
 
   @override
   String get aboutTagline => 'إدارة مالية ذكية';
@@ -2907,7 +2907,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aboutRateThankYou => 'شكرًا! جاري فتح المتجر...';
 
   @override
-  String get aboutShareMasari => 'شارك مصاري';
+  String get aboutShareRevvo => 'شارك Revvo';
 
   @override
   String get aboutShareCopied => 'تم نسخ رابط المشاركة!';
@@ -2916,7 +2916,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aboutMadeIn => 'صنع بـ ❤️ في مصر';
 
   @override
-  String get aboutCopyright => '© 2026 مصاري. جميع الحقوق محفوظة.';
+  String get aboutCopyright => '© 2026 Revvo. جميع الحقوق محفوظة.';
 
   @override
   String get subscriptionTitle => 'خطتك';
@@ -3134,14 +3134,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get subscriptionFaqShopifyA =>
-      'أكيد! وضع النمو يشمل ربط Shopify الكامل: مزامنة الطلبات بشكل فوري وإدارة المخزون وربط المنتجات بين متجرك ومصاري.';
+      'أكيد! وضع النمو يشمل ربط Shopify الكامل: مزامنة الطلبات بشكل فوري وإدارة المخزون وربط المنتجات بين متجرك و Revvo.';
 
   @override
   String get subscriptionFaqShopifyHowQ => 'إزاي ربط Shopify بيشتغل؟';
 
   @override
   String get subscriptionFaqShopifyHowA =>
-      'بعد الترقية لوضع النمو، بتوصل متجرك على Shopify مرة واحدة من خلال عملية OAuth آمنة. بعد كده طلبات Shopify بتتزامن تلقائيًا كمبيعات في مصاري. كمان تقدر تزامن المخزون يدويًا بين Shopify ومصاري.';
+      'بعد الترقية لوضع النمو، بتوصل متجرك على Shopify مرة واحدة من خلال عملية OAuth آمنة. بعد كده طلبات Shopify بتتزامن تلقائيًا كمبيعات في Revvo. كمان تقدر تزامن المخزون يدويًا بين Shopify و Revvo.';
 
   @override
   String get subscriptionFaqDowngradeQ => 'أقدر أنزل لخطة أقل بعدين؟';
@@ -3166,6 +3166,48 @@ class AppLocalizationsAr extends AppLocalizations {
   String subscriptionProPrice(String currency) {
     return '$currency 749';
   }
+
+  @override
+  String get subscriptionSubscribeOnWeb => 'اشترك عبر الموقع';
+
+  @override
+  String get subscriptionManageOnWeb => 'إدارة عبر الموقع';
+
+  @override
+  String get subscriptionOpenBilling => 'فتح بوابة الدفع';
+
+  @override
+  String get subscriptionRefreshing => 'جاري تحديث الاشتراك...';
+
+  @override
+  String get subscriptionRefreshed => 'تم تحديث حالة الاشتراك';
+
+  @override
+  String get subscriptionGracePeriod => 'فترة سماح';
+
+  @override
+  String get subscriptionExpired => 'منتهي';
+
+  @override
+  String subscriptionExpiresOn(String date) {
+    return 'ينتهي في $date';
+  }
+
+  @override
+  String subscriptionGraceMessage(int days) {
+    return 'انتهى اشتراكك. جدّد خلال $days أيام للحفاظ على مزايا Growth.';
+  }
+
+  @override
+  String get subscriptionExpiredMessage =>
+      'انتهى اشتراك Growth. اشترك مرة أخرى لاستعادة الوصول.';
+
+  @override
+  String get subscriptionRenew => 'تجديد الاشتراك';
+
+  @override
+  String get subscriptionSetupGrowthLater =>
+      'يمكنك الاشتراك في Growth في أي وقت من الإعدادات.';
 
   @override
   String get orderCancelledBanner => 'تم إلغاء هذا الطلب';
@@ -3217,7 +3259,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String cannotCancelHereMsg(String orderNumber) {
-    return 'طلب Shopify #$orderNumber مدفوع.\n\nالطلبات المدفوعة لازم تتلغي من Shopify مباشرة (هيتعامل مع الاسترداد تلقائيًا).\n\nبعد الإلغاء من Shopify، هيتزامن مع Masari تلقائيًا.';
+    return 'طلب Shopify #$orderNumber مدفوع.\n\nالطلبات المدفوعة لازم تتلغي من Shopify مباشرة (هيتعامل مع الاسترداد تلقائيًا).\n\nبعد الإلغاء من Shopify، هيتزامن مع Revvo تلقائيًا.';
   }
 
   @override
@@ -3225,7 +3267,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String cancelOrderConfirmShopify(String orderNumber) {
-    return 'البيع ده مرتبط بطلب Shopify #$orderNumber.\n\nالإلغاء هنا هيعمل:\n• استرجاع المخزون في Masari\n• إنشاء قيود محاسبية عكسية\n• إلغاء الطلب على Shopify\n\nالإجراء ده مش ممكن التراجع عنه.';
+    return 'البيع ده مرتبط بطلب Shopify #$orderNumber.\n\nالإلغاء هنا هيعمل:\n• استرجاع المخزون في Revvo\n• إنشاء قيود محاسبية عكسية\n• إلغاء الطلب على Shopify\n\nالإجراء ده مش ممكن التراجع عنه.';
   }
 
   @override
@@ -3679,7 +3721,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get shopifyConnectSubtitle =>
-      'اعمل ربط لمرة واحدة بين مصاري\nو Shopify. الطلبات هتتزامن تلقائيًا\nومزامنة المخزون متاحة عند الطلب.';
+      'اعمل ربط لمرة واحدة بين Revvo\nو Shopify. الطلبات هتتزامن تلقائيًا\nومزامنة المخزون متاحة عند الطلب.';
 
   @override
   String get shopifyStartSetupWizard => 'ابدأ معالج الإعداد';
@@ -3689,14 +3731,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get shopifyAlwaysOnOrderSyncDesc =>
-      'طلبات Shopify بتتحول تلقائيًا لمبيعات في مصاري لحظيًا عبر الويب هوكس.';
+      'طلبات Shopify بتتحول تلقائيًا لمبيعات في Revvo لحظيًا عبر الويب هوكس.';
 
   @override
   String get shopifyOnDemandInventory => 'مخزون عند الطلب';
 
   @override
   String get shopifyOnDemandInventoryDesc =>
-      'اسحب المخزون من Shopify أو ادفع مستويات مخزون مصاري لـ Shopify في أي وقت.';
+      'اسحب المخزون من Shopify أو ادفع مستويات مخزون Revvo لـ Shopify في أي وقت.';
 
   @override
   String get shopifySecureOAuth => 'مصادقة OAuth 2.0 آمنة';
@@ -3737,7 +3779,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopifyOrderSync => 'مزامنة الطلبات';
 
   @override
-  String get shopifyOrderSyncDesc => 'طلبات Shopify ← مبيعات مصاري';
+  String get shopifyOrderSyncDesc => 'طلبات Shopify ← مبيعات Revvo';
 
   @override
   String get shopifyAlwaysOn => 'دائمًا';
@@ -3764,7 +3806,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopifyProductMappings => 'ربط المنتجات';
 
   @override
-  String get shopifyProductMappingsDesc => 'اربط منتجات Shopify ↔ مصاري';
+  String get shopifyProductMappingsDesc => 'اربط منتجات Shopify ↔ Revvo';
 
   @override
   String get shopifyReimportOrders => 'إعادة استيراد الطلبات السابقة';
@@ -3923,7 +3965,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get shopifyAlwaysOnSyncDesc =>
-      'بعد الإعداد، طلبات Shopify بتتزامن لمصاري تلقائيًا لحظيًا عبر الويب هوكس.';
+      'بعد الإعداد، طلبات Shopify بتتزامن لـ Revvo تلقائيًا لحظيًا عبر الويب هوكس.';
 
   @override
   String get shopifyDisconnectAnytimeSetup => 'افصل في أي وقت';
@@ -3933,15 +3975,15 @@ class AppLocalizationsAr extends AppLocalizations {
       'تقدر تفصل متجرك على Shopify في أي وقت من الإعدادات.';
 
   @override
-  String get shopifyDataAccess => 'البيانات اللي مصاري هيوصلها';
+  String get shopifyDataAccess => 'البيانات اللي Revvo هيوصلها';
 
   @override
   String get shopifyDataOrders =>
-      'الطلبات — اسم العميل، الإيميل، التليفون، عنوان الشحن، المنتجات، والإجمالي. بتتحفظ في حساب مصاري الخاص بيك لملء دفتر المبيعات.';
+      'الطلبات — اسم العميل، الإيميل، التليفون، عنوان الشحن، المنتجات، والإجمالي. بتتحفظ في حساب Revvo الخاص بيك لملء دفتر المبيعات.';
 
   @override
   String get shopifyDataInventory =>
-      'المخزون — أسماء المنتجات، المتغيرات، ومستويات المخزون. بتستخدم لمزامنة مخزون مصاري مع Shopify.';
+      'المخزون — أسماء المنتجات، المتغيرات، ومستويات المخزون. بتستخدم لمزامنة مخزون Revvo مع Shopify.';
 
   @override
   String get shopifyDataPrivacy =>
@@ -3957,7 +3999,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopifyOAuthAuthorizing => 'جاري المصادقة…';
 
   @override
-  String get shopifyOAuthSuccess => 'متجرك على Shopify اتصل بمصاري.';
+  String get shopifyOAuthSuccess => 'متجرك على Shopify اتصل بـ Revvo.';
 
   @override
   String get shopifyOAuthInstructions =>
@@ -3978,7 +4020,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get shopifyLocationSubtitle =>
-      'مصاري هيزامن المخزون مع موقع Shopify ده.\nلو عندك مواقع متعددة، اختر الأساسي.';
+      'Revvo هيزامن المخزون مع موقع Shopify ده.\nلو عندك مواقع متعددة، اختر الأساسي.';
 
   @override
   String get shopifyPrimaryLocation => 'الموقع الأساسي';
@@ -4004,7 +4046,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get shopifySyncingProducts =>
-      'جاري استيراد منتجاتك ومستويات المخزون من Shopify لمصاري…';
+      'جاري استيراد منتجاتك ومستويات المخزون من Shopify لـ Revvo…';
 
   @override
   String shopifyProductsSyncedCount(int count) {
@@ -4085,10 +4127,10 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get shopifyDirectionToMasari => 'Shopify ← مصاري';
+  String get shopifyDirectionToRevvo => 'Shopify ← Revvo';
 
   @override
-  String get shopifyDirectionToShopify => 'مصاري ← Shopify';
+  String get shopifyDirectionToShopify => 'Revvo ← Shopify';
 
   @override
   String shopifyRefId(String orderId) {
@@ -4140,11 +4182,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get shopifyNoProductMappingsDesc =>
-      'اربط منتجات مصاري بمنتجات Shopify الأول\nمن شاشة ربط المنتجات.';
+      'اربط منتجات Revvo بمنتجات Shopify الأول\nمن شاشة ربط المنتجات.';
 
   @override
   String get shopifyPullInfo =>
-      'السحب هيحدث مستويات المخزون في مصاري لتتطابق مع Shopify لكل المنتجات المربوطة. راجع المعاينة قبل التأكيد.';
+      'السحب هيحدث مستويات المخزون في Revvo لتتطابق مع Shopify لكل المنتجات المربوطة. راجع المعاينة قبل التأكيد.';
 
   @override
   String shopifyMappedProductsCount(int count) {
@@ -4153,7 +4195,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get shopifyPushInfo =>
-      'الدفع هيستبدل مستويات مخزون Shopify بقيم مخزون مصاري. اختر المنتجات، وبعدين راجع المعاينة.';
+      'الدفع هيستبدل مستويات مخزون Shopify بقيم مخزون Revvo. اختر المنتجات، وبعدين راجع المعاينة.';
 
   @override
   String shopifySelectAll(int count) {
@@ -4196,7 +4238,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopifyTableProduct => 'المنتج';
 
   @override
-  String get shopifyTableMasari => 'مصاري';
+  String get shopifyTableRevvo => 'Revvo';
 
   @override
   String get shopifyTableShopify => 'SHOPIFY';
@@ -4240,7 +4282,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String shopifyImportAllProducts(int count) {
-    return 'استيراد كل $count منتج لمصاري';
+    return 'استيراد كل $count منتج لـ Revvo';
   }
 
   @override
@@ -4267,7 +4309,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String shopifyImportAllConfirmMessage(int count) {
-    return 'ده هينشئ $count منتج جديد في مخزون مصاري من Shopify ويربطهم تلقائيًا.\n\nالمتغيرات، أكواد SKU، الأسعار، ومستويات المخزون هيتم استيرادها.';
+    return 'ده هينشئ $count منتج جديد في مخزون Revvo من Shopify ويربطهم تلقائيًا.\n\nالمتغيرات، أكواد SKU، الأسعار، ومستويات المخزون هيتم استيرادها.';
   }
 
   @override
@@ -4284,15 +4326,15 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get shopifyNoMasariProducts =>
-      'مفيش منتجات مصاري لسه — استخدم الاستيراد بدل كده';
+  String get shopifyNoRevvoProducts =>
+      'مفيش منتجات Revvo لسه — استخدم الاستيراد بدل كده';
 
   @override
-  String get shopifyLinkToMasari => 'ربط بمنتج مصاري';
+  String get shopifyLinkToRevvo => 'ربط بمنتج Revvo';
 
   @override
   String shopifyLinkSubtitle(String title) {
-    return 'اربط \"$title\" بمنتج مصاري موجود';
+    return 'اربط \"$title\" بمنتج Revvo موجود';
   }
 
   @override
@@ -4302,8 +4344,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopifyNoMatchingProducts => 'مفيش منتجات مطابقة';
 
   @override
-  String shopifyLinked(String shopTitle, String masariName) {
-    return 'تم ربط \"$shopTitle\" ← \"$masariName\"';
+  String shopifyLinked(String shopTitle, String revvoName) {
+    return 'تم ربط \"$shopTitle\" ← \"$revvoName\"';
   }
 
   @override
@@ -5449,7 +5491,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get shopifyIntegrationUpgradeDesc =>
-      'مزامنة متجر شوبيفاي مع مساري. متاح في وضع النمو.';
+      'مزامنة متجر شوبيفاي مع Revvo. متاح في وضع النمو.';
 
   @override
   String get upgradeToGrowth => 'ترقية إلى النمو';
@@ -6861,7 +6903,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get uploadPhoto => 'رفع صورة';
 
   @override
-  String get masariExport => 'تصدير Masari';
+  String get revvoExport => 'تصدير Revvo';
 
   @override
   String get readAll => 'قراءة الكل';
@@ -6959,20 +7001,20 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get aiGreeting =>
-      'أهلاً! أنا مساعد Masari الذكي. إزاي أقدر أساعدك تحلل أمورك المالية النهارده؟';
+      'أهلاً! أنا مساعد Revvo الذكي. إزاي أقدر أساعدك تحلل أمورك المالية النهارده؟';
 
   @override
   String get aiPreviewResponse =>
-      'أنا حالياً في وضع المعاينة. لما أتوصّل بنظام ذكاء اصطناعي حقيقي، هقدر أحلل بيانات Masari المالية وأقدم رؤى عميقة. استنّونا!';
+      'أنا حالياً في وضع المعاينة. لما أتوصّل بنظام ذكاء اصطناعي حقيقي، هقدر أحلل بيانات Revvo المالية وأقدم رؤى عميقة. استنّونا!';
 
   @override
-  String get aiTitle => 'Masari AI';
+  String get aiTitle => 'Revvo AI';
 
   @override
   String get aiPreview => 'معاينة';
 
   @override
-  String get aiHint => 'اسأل Masari AI...';
+  String get aiHint => 'اسأل Revvo AI...';
 
   @override
   String get aiVoiceSoon => 'الإدخال الصوتي قريباً';
@@ -7054,11 +7096,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get reportAiAnalysis => 'تحليل الذكاء الاصطناعي';
 
   @override
-  String get reportAiAnalysisMock =>
-      'الإيرادات زادت ١٢٪ مقارنة بيناير. المرتبات لسه أكبر مصروف، فكّر في مراجعة تجديدات العقود.';
+  String get reportAiAnalysisPlaceholder =>
+      'رؤى الذكاء الاصطناعي ستظهر هنا بناءً على بياناتك المالية.';
 
   @override
-  String get reportPoweredBy => 'مدعوم من مَسَاري';
+  String get reportPoweredBy => 'مدعوم من Revvo';
 
   @override
   String reportPageOf(int current, int total) {
@@ -7088,7 +7130,7 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get pdfFooterLabel => 'تطبيق مَسَاري - تقرير مالي';
+  String get pdfFooterLabel => 'Revvo - تقرير مالي';
 
   @override
   String get categoryGroceries => 'بقالة';
@@ -7186,4 +7228,184 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get offlineBanner =>
       'أنت غير متصل — التغييرات ستُزامَن عند عودة الاتصال';
+
+  @override
+  String get updateRequiredTitle => 'تحديث مطلوب';
+
+  @override
+  String get updateRequiredBody =>
+      'يوجد إصدار جديد من Revvo. يرجى التحديث لمتابعة استخدام التطبيق.';
+
+  @override
+  String get updateNow => 'حدّث الآن';
+
+  @override
+  String get maintenanceTitle => 'صيانة مؤقتة';
+
+  @override
+  String get maintenanceBody => 'Revvo تحت الصيانة المجدولة. سنعود قريبًا.';
+
+  @override
+  String get dismiss => 'إغلاق';
+
+  @override
+  String get subscriptionSubscribeMonthly => 'شهري';
+
+  @override
+  String get subscriptionSubscribeYearly => 'سنوي — وفّر 20%';
+
+  @override
+  String get subscriptionRestorePurchases => 'استعادة المشتريات';
+
+  @override
+  String get payWithCard => 'ادفع ببطاقة محلية';
+
+  @override
+  String get paymobProcessing => 'جارٍ تجهيز الدفع…';
+
+  @override
+  String get paymobPaymentFailed => 'فشل الدفع. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get paymobManageBilling => 'إدارة الفواتير';
+
+  @override
+  String subscriptionAutoRenewDisclosure(String platform) {
+    return 'سيتم خصم المبلغ من حساب $platform الخاص بك عند التأكيد. يتجدد الاشتراك تلقائيًا ما لم يتم الإلغاء قبل 24 ساعة على الأقل من نهاية الفترة الحالية. يمكنك إدارة الاشتراكات من إعدادات حساب $platform.';
+  }
+
+  @override
+  String subscriptionTermsNotice(String terms, String privacy) {
+    return 'بالاشتراك، أنت توافق على $terms و$privacy.';
+  }
+
+  @override
+  String get manageAppleSubscription => 'إدارة في App Store';
+
+  @override
+  String get manageGoogleSubscription => 'إدارة في Google Play';
+
+  @override
+  String get paymentMethodSavedCard => 'البطاقة المحفوظة';
+
+  @override
+  String paymentMethodCardEnding(String brand, String last4) {
+    return '$brand تنتهي بـ $last4';
+  }
+
+  @override
+  String get autoRenewLabel => 'التجديد التلقائي';
+
+  @override
+  String get autoRenewEnabled => 'سيتم تجديد اشتراكك تلقائياً.';
+
+  @override
+  String get autoRenewDisabled =>
+      'التجديد التلقائي معطّل. جدّد يدوياً قبل انتهاء الصلاحية.';
+
+  @override
+  String get removeCard => 'إزالة البطاقة';
+
+  @override
+  String get removeCardConfirmTitle => 'إزالة البطاقة المحفوظة؟';
+
+  @override
+  String get removeCardConfirmMessage =>
+      'سيؤدي ذلك إلى تعطيل التجديد التلقائي وإزالة وسيلة الدفع المحفوظة.';
+
+  @override
+  String get removeCardSuccess => 'تمت إزالة البطاقة بنجاح.';
+
+  @override
+  String get autoRenewToggleError =>
+      'فشل تحديث التجديد التلقائي. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get removeCardError => 'فشل إزالة البطاقة. يرجى المحاولة مرة أخرى.';
+
+  @override
+  String get paymentSourcePaymob => 'دفع بالبطاقة';
+
+  @override
+  String get paymentSourceIap => 'App Store / Google Play';
+
+  @override
+  String get noSavedPaymentMethod => 'لا توجد وسيلة دفع محفوظة';
+
+  @override
+  String get billingTitle => 'الفواتير والمدفوعات';
+
+  @override
+  String get billingPaymentMethod => 'وسيلة الدفع';
+
+  @override
+  String get billingPaymentHistory => 'سجل المدفوعات';
+
+  @override
+  String get billingPlanManagement => 'إدارة الاشتراك';
+
+  @override
+  String get billingDangerZone => 'الاشتراك';
+
+  @override
+  String get billingUpdateCard => 'تحديث البطاقة';
+
+  @override
+  String get billingAddCard => 'إضافة بطاقة دفع';
+
+  @override
+  String get billingChangeToMonthly => 'التبديل إلى شهري';
+
+  @override
+  String get billingChangeToYearly => 'التبديل إلى سنوي';
+
+  @override
+  String get billingNoPayments => 'لا يوجد سجل مدفوعات بعد';
+
+  @override
+  String get billingRenewal => 'تجديد';
+
+  @override
+  String get billingCancelSubscription => 'إلغاء الاشتراك';
+
+  @override
+  String get billingCancelConfirmTitle => 'إلغاء الاشتراك؟';
+
+  @override
+  String get billingCancelConfirmMessage =>
+      'سيتم تخفيض حسابك إلى وضع الانطلاق. سيتم الاحتفاظ ببياناتك لكنك ستفقد الوصول إلى ميزات Growth.';
+
+  @override
+  String get billingCancelledSuccess =>
+      'تم إلغاء الاشتراك. أنت الآن على وضع الانطلاق.';
+
+  @override
+  String get billingReceipt => 'إيصال الدفع';
+
+  @override
+  String get billingReceiptPlan => 'الخطة';
+
+  @override
+  String get billingReceiptAmount => 'المبلغ';
+
+  @override
+  String get billingReceiptDate => 'التاريخ';
+
+  @override
+  String get billingReceiptStatus => 'الحالة';
+
+  @override
+  String get billingReceiptType => 'النوع';
+
+  @override
+  String get billingReceiptTxId => 'رقم المعاملة';
+
+  @override
+  String get billingReceiptSuccess => 'ناجح';
+
+  @override
+  String get billingReceiptFailed => 'فشل';
+
+  @override
+  String get billingShareReceipt => 'مشاركة الإيصال';
 }

@@ -84,6 +84,16 @@ class FirestoreShopifyConnectionRepository
   }
 
   @override
+  Future<Result<void>> updateField(String field, dynamic value) async {
+    try {
+      await _collection.doc(_uid).update({field: value});
+      return Result.success(null);
+    } catch (e) {
+      return Result.failure('Failed to update field $field: $e');
+    }
+  }
+
+  @override
   Future<Result<void>> deleteConnection(String docId) async {
     try {
       await _collection.doc(docId).delete();

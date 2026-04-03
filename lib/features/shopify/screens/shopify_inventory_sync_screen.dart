@@ -98,7 +98,7 @@ class _ShopifyInventorySyncScreenState
                 ),
                 data: (mappings) {
                   final mappedProductIds = <String>{
-                    for (final m in mappings) m.masariProductId,
+                    for (final m in mappings) m.revvoProductId,
                   };
                   final mappedProducts = products
                       .where((p) => mappedProductIds.contains(p.id))
@@ -367,7 +367,7 @@ class _ShopifyInventorySyncScreenState
                       },
                       mappings: mappings
                           .where((m) =>
-                              m.masariProductId ==
+                              m.revvoProductId ==
                               mappedProducts[i].id)
                           .toList(),
                     )
@@ -846,7 +846,7 @@ class _PreviewTable extends StatelessWidget {
           SizedBox(
             width: 55,
             child: Text(
-               l10n.shopifyTableMasari,
+               l10n.shopifyTableRevvo,
               textAlign: TextAlign.center,
               style: AppTypography.captionSmall.copyWith(
                 color: AppColors.textTertiary,
@@ -947,7 +947,7 @@ class _PreviewRow extends StatelessWidget {
             SizedBox(
               width: 55,
               child: Text(
-                '${item.masariStock}',
+                '${item.revvoStock}',
                 textAlign: TextAlign.center,
                 style: AppTypography.labelSmall.copyWith(
                   color: AppColors.textPrimary,

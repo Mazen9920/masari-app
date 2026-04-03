@@ -1,4 +1,4 @@
-/// Environment configuration for the Masari app.
+/// Environment configuration for the Revvo app.
 ///
 /// Controls API endpoints, feature flags, and logging based on
 /// the current deployment target.
@@ -24,9 +24,9 @@ class AppConfig {
       case Environment.development:
         return 'http://localhost:3000/api/v1';
       case Environment.staging:
-        return 'https://staging-api.masari.app/v1';
+        return 'https://staging-api.revvo-app.com/v1';
       case Environment.production:
-        return 'https://api.masari.app/v1';
+        return 'https://api.revvo-app.com/v1';
     }
   }
 
@@ -55,7 +55,7 @@ class AppConfig {
   }
 
   // ── App info ─────────────────────────────────────
-  static const String appName = 'Masari';
+  static const String appName = 'Revvo';
   static const String appVersion = '1.0.0';
   static const String buildNumber = '1';
 }

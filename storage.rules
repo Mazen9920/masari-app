@@ -1,25 +1,50 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+
+    // ── Helpers ──────────────────────────────────────────────
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    function isImage() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp|gif|heic|heif)');
+    }
+    // 5 MB limit for all uploads
+    function isUnderLimit() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
     // Users — profile avatars
     match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read:   if isOwner(userId);
+      allow write:  if isOwner(userId) && isImage() && isUnderLimit();
+      allow delete: if isOwner(userId);
     }
     // Products — product images
     match /products/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read:   if isOwner(userId);
+      allow write:  if isOwner(userId) && isImage() && isUnderLimit();
+      allow delete: if isOwner(userId);
     }
     // Business — logos
     match /business/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read:   if isOwner(userId);
+      allow write:  if isOwner(userId) && isImage() && isUnderLimit();
+      allow delete: if isOwner(userId);
     }
     // Suppliers — supplier avatars
     match /suppliers/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read:   if isOwner(userId);
+      allow write:  if isOwner(userId) && isImage() && isUnderLimit();
+      allow delete: if isOwner(userId);
     }
     // Receipts — payment receipt images
     match /receipts/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read:   if isOwner(userId);
+      allow write:  if isOwner(userId) && isImage() && isUnderLimit();
+      allow delete: if isOwner(userId);
     }
+
+    // Deny everything else (implicit)
   }
 }

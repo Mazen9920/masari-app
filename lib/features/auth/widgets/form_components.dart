@@ -4,10 +4,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
 
 // ═══════════════════════════════════════════════════════════
-// MASARI TEXT FIELD — Floating label with icon
+// REVVO TEXT FIELD — Floating label with icon
 // ═══════════════════════════════════════════════════════════
 
-class MasariTextField extends StatefulWidget {
+class RevvoTextField extends StatefulWidget {
   final String label;
   final IconData icon;
   final TextEditingController? controller;
@@ -18,7 +18,7 @@ class MasariTextField extends StatefulWidget {
   final bool enabled;
   final String? hint;
 
-  const MasariTextField({
+  const RevvoTextField({
     super.key,
     required this.label,
     required this.icon,
@@ -32,10 +32,10 @@ class MasariTextField extends StatefulWidget {
   });
 
   @override
-  State<MasariTextField> createState() => _MasariTextFieldState();
+  State<RevvoTextField> createState() => _RevvoTextFieldState();
 }
 
-class _MasariTextFieldState extends State<MasariTextField> {
+class _RevvoTextFieldState extends State<RevvoTextField> {
   bool _obscureText = false;
   bool _isFocused = false;
 
@@ -133,13 +133,13 @@ class _MasariTextFieldState extends State<MasariTextField> {
 // PRIMARY BUTTON — Orange CTA with press animation
 // ═══════════════════════════════════════════════════════════
 
-class MasariPrimaryButton extends StatefulWidget {
+class RevvoPrimaryButton extends StatefulWidget {
   final String text;
   final VoidCallback? onPressed;
   final IconData? icon;
   final bool isLoading;
 
-  const MasariPrimaryButton({
+  const RevvoPrimaryButton({
     super.key,
     required this.text,
     this.onPressed,
@@ -148,10 +148,10 @@ class MasariPrimaryButton extends StatefulWidget {
   });
 
   @override
-  State<MasariPrimaryButton> createState() => _MasariPrimaryButtonState();
+  State<RevvoPrimaryButton> createState() => _RevvoPrimaryButtonState();
 }
 
-class _MasariPrimaryButtonState extends State<MasariPrimaryButton>
+class _RevvoPrimaryButtonState extends State<RevvoPrimaryButton>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scale;

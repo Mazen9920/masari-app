@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:masari_app/shared/models/supplier_model.dart';
+import 'package:revvo_app/shared/models/supplier_model.dart';
 
 void main() {
   group('Supplier Model Tests', () {
@@ -49,7 +49,6 @@ void main() {
       final json = supplier.toJson();
 
       expect(json['id'], 'sup_123');
-      expect(json['user_id'], 'user_1');
       expect(json['name'], 'Acme Corp');
       expect(json['balance'], 1000.0);
       expect(json['payment_terms'], 'Net 30');

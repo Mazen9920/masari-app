@@ -1,6 +1,6 @@
 {
   "@@locale": "en",
-  "appTitle": "Masari App",
+  "appTitle": "Revvo",
   "@appTitle": {
     "description": "The title of the application"
   },
@@ -368,9 +368,9 @@
   "noActivityForThisPeriod": "No activity for this period",
   "recordSaleOrExpense": "Record a sale or expense to see your\nprofit & loss report come to life.",
   "addTransaction": "Add Transaction",
-  "openingCashHelpText": "How much cash did you start with before using Masari?",
+  "openingCashHelpText": "How much cash did you start with before using Revvo?",
   "tapToSetStartingCash": "Tap to set your starting cash",
-  "openingCashDialogDesc": "Enter the cash you had before you started tracking transactions in Masari.",
+  "openingCashDialogDesc": "Enter the cash you had before you started tracking transactions in Revvo.",
   "lowCashAlertBody": "Your current balance is critically low. Consider reviewing upcoming expenses to avoid a negative balance.",
   "forecastPositive": "Based on your recent transaction patterns, you should reach a healthy {currency} {amount} by the end of the month.",
   "@forecastPositive": { "placeholders": { "currency": { "type": "String" }, "amount": { "type": "String" } } },
@@ -552,7 +552,7 @@
   "continueButton": "Continue",
   "pleaseEnterBusinessName": "Please enter your business name",
   "tellUsAboutBusiness": "Tell us about your business",
-  "setupStep1Subtitle": "Help Masari tailor your financial experience to your specific needs.",
+  "setupStep1Subtitle": "Help Revvo tailor your financial experience to your specific needs.",
   "businessName": "Business Name",
   "egCairoCoffeeHouse": "e.g. Cairo Coffee House",
   "industry": "Industry",
@@ -600,7 +600,7 @@
   "lossLabel": "Loss",
   "notifications": "Notifications",
   "profile": "Profile",
-  "masariAiInsight": "MASARI AI INSIGHT",
+  "revvoAiInsight": "REVVO AI INSIGHT",
   "viewTransactions": "View Transactions",
   "viewSales": "View Sales",
   "checkInventory": "Check Inventory",
@@ -935,7 +935,7 @@
   "profileSectionSupport": "SUPPORT",
   "profileHelpCenter": "Help Center",
   "profileHelpCenterSubtitle": "FAQ & contact support",
-  "profileAboutMasari": "About Masari",
+  "profileAboutRevvo": "About Revvo",
   "profileVersionInfo": "Version 1.0.0",
   "profileMyBusiness": "My Business",
   "profileTierPlan": "{tier} Plan",
@@ -1068,8 +1068,8 @@
   "helpCenterSupportSubtitle": "We're here to help 24/7",
   "helpCenterChat": "Chat",
 
-  "aboutTitle": "About Masari",
-  "appName": "Masari",
+  "aboutTitle": "About Revvo",
+  "appName": "Revvo",
   "aboutTagline": "Smart Financial Management",
   "aboutVersion": "Version {version} (Build {buildNumber})",
   "@aboutVersion": {
@@ -1086,10 +1086,10 @@
   "aboutOpenSourceLicenses": "Open Source Licenses",
   "aboutRateApp": "Rate the App",
   "aboutRateThankYou": "Thank you! Opening app store...",
-  "aboutShareMasari": "Share Masari",
+  "aboutShareRevvo": "Share Revvo",
   "aboutShareCopied": "Share link copied to clipboard!",
   "aboutMadeIn": "Made with ❤️ in Egypt",
-  "aboutCopyright": "© 2026 Masari. All rights reserved.",
+  "aboutCopyright": "© 2026 Revvo. All rights reserved.",
 
   "subscriptionTitle": "Your Plan",
   "subscriptionFree": "Free",
@@ -1165,9 +1165,9 @@
   "subscriptionComparisonComingSoon": "Full feature comparison coming soon",
   "subscriptionCompareFeatures": "Compare full feature matrix",
   "subscriptionFaqShopifyQ": "Does Growth Mode include Shopify integration?",
-  "subscriptionFaqShopifyA": "Yes! Growth Mode includes full Shopify e-commerce integration: real-time order sync, inventory management, and product mapping between your Shopify store and Masari.",
+  "subscriptionFaqShopifyA": "Yes! Growth Mode includes full Shopify e-commerce integration: real-time order sync, inventory management, and product mapping between your Shopify store and Revvo.",
   "subscriptionFaqShopifyHowQ": "How does Shopify integration work?",
-  "subscriptionFaqShopifyHowA": "After upgrading to Growth Mode, you connect your Shopify store once through a secure OAuth process. After that, your Shopify orders automatically sync as Masari sales in real-time. You can also sync inventory on-demand between Shopify and Masari.",
+  "subscriptionFaqShopifyHowA": "After upgrading to Growth Mode, you connect your Shopify store once through a secure OAuth process. After that, your Shopify orders automatically sync as Revvo sales in real-time. You can also sync inventory on-demand between Shopify and Revvo.",
   "subscriptionFaqDowngradeQ": "Can I downgrade later?",
   "subscriptionFaqDowngradeA": "Yes, you can switch between plans at any time. Your data will be preserved, but access to plan-specific features will change. If you downgrade from Growth, your Shopify connection will be paused but existing data is kept.",
   "subscriptionFaqEnterpriseQ": "Do you offer custom enterprise plans?",
@@ -1180,6 +1180,25 @@
   "@subscriptionProPrice": {
     "placeholders": { "currency": {"type": "String"} }
   },
+
+  "subscriptionSubscribeOnWeb": "Subscribe on Web",
+  "subscriptionManageOnWeb": "Manage on Web",
+  "subscriptionOpenBilling": "Open Billing Portal",
+  "subscriptionRefreshing": "Refreshing subscription...",
+  "subscriptionRefreshed": "Subscription status updated",
+  "subscriptionGracePeriod": "Grace Period",
+  "subscriptionExpired": "Expired",
+  "subscriptionExpiresOn": "Expires {date}",
+  "@subscriptionExpiresOn": {
+    "placeholders": { "date": {"type": "String"} }
+  },
+  "subscriptionGraceMessage": "Your subscription has expired. Renew within {days} days to keep Growth features.",
+  "@subscriptionGraceMessage": {
+    "placeholders": { "days": {"type": "int"} }
+  },
+  "subscriptionExpiredMessage": "Your Growth subscription has expired. Subscribe again to restore access.",
+  "subscriptionRenew": "Renew Subscription",
+  "subscriptionSetupGrowthLater": "You can subscribe to Growth anytime from Settings.",
 
   "orderCancelledBanner": "This order has been cancelled",
   "refunded": "Refunded",
@@ -1197,12 +1216,12 @@
   "markedUnfulfilled": "Marked as unfulfilled",
   "fulfillmentStatus": "Fulfillment Status",
   "cannotCancelHere": "Cannot Cancel Here",
-  "cannotCancelHereMsg": "Shopify order #{orderNumber} is marked as paid.\n\nPaid orders must be cancelled directly on Shopify (which will handle the refund automatically).\n\nOnce cancelled on Shopify, it will sync to Masari automatically.",
+  "cannotCancelHereMsg": "Shopify order #{orderNumber} is marked as paid.\n\nPaid orders must be cancelled directly on Shopify (which will handle the refund automatically).\n\nOnce cancelled on Shopify, it will sync to Revvo automatically.",
   "@cannotCancelHereMsg": {
     "placeholders": { "orderNumber": {"type": "String"} }
   },
   "keepOrder": "Keep Order",
-  "cancelOrderConfirmShopify": "This sale is linked to Shopify order #{orderNumber}.\n\nCancelling here will:\n• Restore stock in Masari\n• Create reversal accounting entries\n• Cancel the order on Shopify\n\nThis action cannot be undone.",
+  "cancelOrderConfirmShopify": "This sale is linked to Shopify order #{orderNumber}.\n\nCancelling here will:\n• Restore stock in Revvo\n• Create reversal accounting entries\n• Cancel the order on Shopify\n\nThis action cannot be undone.",
   "@cancelOrderConfirmShopify": {
     "placeholders": { "orderNumber": {"type": "String"} }
   },
@@ -1420,12 +1439,12 @@
 
   "shopifyTitle": "Shopify",
   "shopifyConnectTitle": "Connect Your Shopify Store",
-  "shopifyConnectSubtitle": "Set up a one-time connection between Masari\nand Shopify. Orders will sync automatically\nand inventory sync is available on-demand.",
+  "shopifyConnectSubtitle": "Set up a one-time connection between Revvo\nand Shopify. Orders will sync automatically\nand inventory sync is available on-demand.",
   "shopifyStartSetupWizard": "Start Setup Wizard",
   "shopifyAlwaysOnOrderSync": "Always-On Order Sync",
-  "shopifyAlwaysOnOrderSyncDesc": "Shopify orders automatically become Masari sales in real-time via webhooks.",
+  "shopifyAlwaysOnOrderSyncDesc": "Shopify orders automatically become Revvo sales in real-time via webhooks.",
   "shopifyOnDemandInventory": "On-Demand Inventory",
-  "shopifyOnDemandInventoryDesc": "Pull stock from Shopify or push your Masari stock levels to Shopify anytime.",
+  "shopifyOnDemandInventoryDesc": "Pull stock from Shopify or push your Revvo stock levels to Shopify anytime.",
   "shopifySecureOAuth": "Secure OAuth 2.0",
   "shopifySecureOAuthDesc": "Industry-standard authentication. Tokens are encrypted server-side.",
   "shopifyDisconnectAnytime": "Disconnect Anytime",
@@ -1438,7 +1457,7 @@
   "shopifyLastInventorySync": "Last Inventory Sync",
   "shopifySectionSyncSettings": "SYNC SETTINGS",
   "shopifyOrderSync": "Order Sync",
-  "shopifyOrderSyncDesc": "Shopify orders → Masari sales",
+  "shopifyOrderSyncDesc": "Shopify orders → Revvo sales",
   "shopifyAlwaysOn": "Always on",
   "shopifyInventorySync": "Inventory Sync",
   "shopifyInvAutoSyncDesc": "Auto-syncs on every refresh",
@@ -1447,7 +1466,7 @@
   "shopifySectionLocation": "SHOPIFY LOCATION",
   "shopifySectionActions": "ACTIONS",
   "shopifyProductMappings": "Product Mappings",
-  "shopifyProductMappingsDesc": "Link Shopify ↔ Masari products",
+  "shopifyProductMappingsDesc": "Link Shopify ↔ Revvo products",
   "shopifyReimportOrders": "Re-import Historical Orders",
   "shopifyReimportOrdersDesc": "Import past Shopify orders",
   "shopifyInvSyncAuto": "Inventory Sync (Auto)",
@@ -1510,23 +1529,23 @@
   "shopifySecureOAuthConnection": "Secure OAuth Connection",
   "shopifySecureOAuthConnectionDesc": "We never see your Shopify password. Authorization uses industry-standard OAuth 2.0.",
   "shopifyAlwaysOnSync": "Always-On Sync",
-  "shopifyAlwaysOnSyncDesc": "After setup, Shopify orders automatically sync to Masari in real-time via webhooks.",
+  "shopifyAlwaysOnSyncDesc": "After setup, Shopify orders automatically sync to Revvo in real-time via webhooks.",
   "shopifyDisconnectAnytimeSetup": "Disconnect Anytime",
   "shopifyDisconnectAnytimeSetupDesc": "You can disconnect your Shopify store at any time from the settings.",
-  "shopifyDataAccess": "Data Masari Will Access",
-  "shopifyDataOrders": "Orders — customer name, email, phone, shipping address, items, and totals. Stored in your private Masari account to populate your sales ledger.",
-  "shopifyDataInventory": "Inventory — product titles, variants, and stock levels. Used to keep your Masari inventory in sync with Shopify.",
+  "shopifyDataAccess": "Data Revvo Will Access",
+  "shopifyDataOrders": "Orders — customer name, email, phone, shipping address, items, and totals. Stored in your private Revvo account to populate your sales ledger.",
+  "shopifyDataInventory": "Inventory — product titles, variants, and stock levels. Used to keep your Revvo inventory in sync with Shopify.",
   "shopifyDataPrivacy": "This data is never shared with third parties or used for marketing. It is accessible only by you and deleted when you delete your account.",
   "shopifyInvalidStoreName": "Invalid store name",
   "shopifyOAuthConnected": "Connected!",
   "shopifyOAuthAuthorizing": "Authorizing…",
-  "shopifyOAuthSuccess": "Your Shopify store is now connected to Masari.",
+  "shopifyOAuthSuccess": "Your Shopify store is now connected to Revvo.",
   "shopifyOAuthInstructions": "Complete the authorization in your browser.\nWhen done, come back here.",
   "shopifyAuthorizedInBrowser": "I've Authorized in Browser",
   "shopifyAuthNotDetected": "Authorization not detected yet.\nMake sure you approved the app on Shopify,\nthen tap the button again.",
   "shopifyChangeStore": "Change Store",
   "shopifySelectYourLocation": "Select Your Location",
-  "shopifyLocationSubtitle": "Masari will sync inventory with this Shopify location.\nIf you have multiple locations, pick your primary one.",
+  "shopifyLocationSubtitle": "Revvo will sync inventory with this Shopify location.\nIf you have multiple locations, pick your primary one.",
   "shopifyPrimaryLocation": "Primary location",
   "shopifyContinue": "Continue",
   "shopifyNoLocationsFound": "No locations found",
@@ -1534,7 +1553,7 @@
   "shopifyRetry": "Retry",
   "shopifyProductsSynced": "Products & Inventory Synced!",
   "shopifySyncProductsInventory": "Sync Products & Inventory",
-  "shopifySyncingProducts": "Importing your Shopify products and inventory levels into Masari…",
+  "shopifySyncingProducts": "Importing your Shopify products and inventory levels into Revvo…",
   "shopifyProductsSyncedCount": "{count} product(s) imported with current inventory levels.",
   "@shopifyProductsSyncedCount": {
     "placeholders": { "count": {"type": "int"} }
@@ -1573,8 +1592,8 @@
   "@shopifyFailedLoadSyncHistory": {
     "placeholders": { "error": {"type": "String"} }
   },
-  "shopifyDirectionToMasari": "Shopify → Masari",
-  "shopifyDirectionToShopify": "Masari → Shopify",
+  "shopifyDirectionToRevvo": "Shopify → Revvo",
+  "shopifyDirectionToShopify": "Revvo → Shopify",
   "shopifyRefId": "Shopify #{orderId}",
   "@shopifyRefId": {
     "placeholders": { "orderId": {"type": "String"} }
@@ -1599,13 +1618,13 @@
     "placeholders": { "error": {"type": "String"} }
   },
   "shopifyNoProductMappings": "No Product Mappings",
-  "shopifyNoProductMappingsDesc": "Link your Masari products to Shopify products first\nusing the Product Mappings screen.",
-  "shopifyPullInfo": "Pull will update stock levels in Masari to match Shopify for all mapped products.  Review the preview before confirming.",
+  "shopifyNoProductMappingsDesc": "Link your Revvo products to Shopify products first\nusing the Product Mappings screen.",
+  "shopifyPullInfo": "Pull will update stock levels in Revvo to match Shopify for all mapped products.  Review the preview before confirming.",
   "shopifyMappedProductsCount": "{count} MAPPED PRODUCT(S)",
   "@shopifyMappedProductsCount": {
     "placeholders": { "count": {"type": "int"} }
   },
-  "shopifyPushInfo": "Push will overwrite Shopify stock levels with your Masari inventory values. Select products, then review the preview.",
+  "shopifyPushInfo": "Push will overwrite Shopify stock levels with your Revvo inventory values. Select products, then review the preview.",
   "shopifySelectAll": "Select All ({count})",
   "@shopifySelectAll": {
     "placeholders": { "count": {"type": "int"} }
@@ -1631,7 +1650,7 @@
   },
   "shopifyAllInSync": "All variants are already in sync!",
   "shopifyTableProduct": "PRODUCT",
-  "shopifyTableMasari": "MASARI",
+  "shopifyTableRevvo": "REVVO",
   "shopifyTableShopify": "SHOPIFY",
   "shopifyTableDelta": "DELTA",
   "shopifyUnchangedCount": "UNCHANGED ({count})",
@@ -1658,7 +1677,7 @@
   "shopifyFailedLoadProducts": "Failed to load Shopify products",
   "shopifyProductsTitle": "Shopify Products",
   "shopifyAutoMatch": "Auto-Match",
-  "shopifyImportAllProducts": "Import All {count} Products to Masari",
+  "shopifyImportAllProducts": "Import All {count} Products to Revvo",
   "@shopifyImportAllProducts": {
     "placeholders": { "count": {"type": "int"} }
   },
@@ -1676,7 +1695,7 @@
   "@shopifyImportCountTitle": {
     "placeholders": { "count": {"type": "int"} }
   },
-  "shopifyImportAllConfirmMessage": "This will create {count} new product(s) in your Masari inventory from Shopify and link them automatically.\n\nVariants, SKUs, prices, and stock levels will be imported.",
+  "shopifyImportAllConfirmMessage": "This will create {count} new product(s) in your Revvo inventory from Shopify and link them automatically.\n\nVariants, SKUs, prices, and stock levels will be imported.",
   "@shopifyImportAllConfirmMessage": {
     "placeholders": { "count": {"type": "int"} }
   },
@@ -1689,17 +1708,17 @@
   "@shopifyImportPartial": {
     "placeholders": { "imported": {"type": "int"}, "total": {"type": "int"}, "error": {"type": "String"} }
   },
-  "shopifyNoMasariProducts": "No Masari products yet — use Import instead",
-  "shopifyLinkToMasari": "Link to Masari Product",
-  "shopifyLinkSubtitle": "Link \"{title}\" to an existing Masari product",
+  "shopifyNoRevvoProducts": "No Revvo products yet — use Import instead",
+  "shopifyLinkToRevvo": "Link to Revvo Product",
+  "shopifyLinkSubtitle": "Link \"{title}\" to an existing Revvo product",
   "@shopifyLinkSubtitle": {
     "placeholders": { "title": {"type": "String"} }
   },
   "shopifySearchHint": "Search by name or SKU...",
   "shopifyNoMatchingProducts": "No matching products",
-  "shopifyLinked": "Linked \"{shopTitle}\" → \"{masariName}\"",
+  "shopifyLinked": "Linked \"{shopTitle}\" → \"{revvoName}\"",
   "@shopifyLinked": {
-    "placeholders": { "shopTitle": {"type": "String"}, "masariName": {"type": "String"} }
+    "placeholders": { "shopTitle": {"type": "String"}, "revvoName": {"type": "String"} }
   },
   "shopifyMatchedBySku": "Matched {count} product(s) by SKU",
   "@shopifyMatchedBySku": {
@@ -2256,7 +2275,7 @@
   "syncOrdersInventoryProducts": "Sync orders, inventory & products automatically.",
   "connectShopify": "Connect Shopify",
   "shopifyIntegration": "Shopify Integration",
-  "shopifyIntegrationUpgradeDesc": "Sync your Shopify store with Masari. Available on Growth Mode.",
+  "shopifyIntegrationUpgradeDesc": "Sync your Shopify store with Revvo. Available on Growth Mode.",
   "upgradeToGrowth": "Upgrade to Growth",
 
   "copyAction": "Copy",
@@ -2764,7 +2783,7 @@
   "@tierMode": { "placeholders": { "tier": { "type": "String" } } },
   "somethingWentWrongShort": "Something went wrong",
   "uploadPhoto": "Upload Photo",
-  "masariExport": "Masari Export",
+  "revvoExport": "Revvo Export",
   "readAll": "Read All",
   "walkIn": "Walk-in",
   "stockLeftReorder": "{current} left (reorder at {reorder})",
@@ -2799,11 +2818,11 @@
   "countryUS": "US",
   "countryUK": "UK",
 
-  "aiGreeting": "Hi there! I'm your Masari AI Assistant. How can I help you analyze your finances today?",
-  "aiPreviewResponse": "I'm currently in preview mode. When connected to a real AI backend, I'll be able to analyze your Masari financial data and provide deep insights. Stay tuned!",
-  "aiTitle": "Masari AI",
+  "aiGreeting": "Hi there! I'm your Revvo AI Assistant. How can I help you analyze your finances today?",
+  "aiPreviewResponse": "I'm currently in preview mode. When connected to a real AI backend, I'll be able to analyze your Revvo financial data and provide deep insights. Stay tuned!",
+  "aiTitle": "Revvo AI",
   "aiPreview": "Preview",
-  "aiHint": "Ask Masari AI...",
+  "aiHint": "Ask Revvo AI...",
   "aiVoiceSoon": "Voice input coming soon",
   "aiSuggestCashFlow1": "Analyze my cash flow this month",
   "aiSuggestCashFlow2": "Why is my cash balance low?",
@@ -2838,8 +2857,8 @@
   "reportCashflowTrend": "CASHFLOW TREND",
   "reportTopExpenses": "TOP EXPENSES",
   "reportAiAnalysis": "AI Analysis",
-  "reportAiAnalysisMock": "Revenue grew by 12% vs January. Salaries remain your largest outflow, consider reviewing contract renewals.",
-  "reportPoweredBy": "Powered by Masari",
+  "reportAiAnalysisPlaceholder": "AI-powered insights will appear here based on your financial data.",
+  "reportPoweredBy": "Powered by Revvo",
   "reportPageOf": "Page {current} of {total}",
   "@reportPageOf": {
     "placeholders": { "current": {"type": "int"}, "total": {"type": "int"} }
@@ -2857,7 +2876,7 @@
   "@pdfGeneratedOn": {
     "placeholders": { "date": {"type": "String"} }
   },
-  "pdfFooterLabel": "Masari App - Financial Report",
+  "pdfFooterLabel": "Revvo - Financial Report",
 
   "categoryGroceries": "Groceries",
   "categoryIncome": "Income",
@@ -2890,5 +2909,79 @@
   "categoryUncategorized": "Uncategorized",
   "categoryTaxPayable": "Tax Payable",
   "preparingReport": "Preparing report…",
-  "offlineBanner": "You're offline — changes will sync when back online"
+  "offlineBanner": "You're offline — changes will sync when back online",
+  "updateRequiredTitle": "Update Required",
+  "updateRequiredBody": "A new version of Revvo is available. Please update to continue using the app.",
+  "updateNow": "Update Now",
+  "maintenanceTitle": "Under Maintenance",
+  "maintenanceBody": "Revvo is undergoing scheduled maintenance. We'll be back shortly.",
+  "dismiss": "Dismiss",
+  "subscriptionSubscribeMonthly": "Monthly",
+  "subscriptionSubscribeYearly": "Yearly — Save 20%",
+  "subscriptionRestorePurchases": "Restore Purchases",
+  "payWithCard": "Pay with Local Card",
+  "paymobProcessing": "Preparing checkout…",
+  "paymobPaymentFailed": "Payment failed. Please try again.",
+  "paymobManageBilling": "Manage Billing",
+  "subscriptionAutoRenewDisclosure": "Payment will be charged to your {platform} account at confirmation. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Manage subscriptions in your {platform} account settings.",
+  "@subscriptionAutoRenewDisclosure": {
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "subscriptionTermsNotice": "By subscribing, you agree to our {terms} and {privacy}.",
+  "@subscriptionTermsNotice": {
+    "placeholders": {
+      "terms": {
+        "type": "String"
+      },
+      "privacy": {
+        "type": "String"
+      }
+    }
+  },
+  "manageAppleSubscription": "Manage in App Store",
+  "manageGoogleSubscription": "Manage in Google Play",
+  "paymentMethodSavedCard": "Saved Card",
+  "paymentMethodCardEnding": "{brand} ending in {last4}",
+  "@paymentMethodCardEnding": { "placeholders": { "brand": { "type": "String" }, "last4": { "type": "String" } } },
+  "autoRenewLabel": "Auto-Renew",
+  "autoRenewEnabled": "Your subscription will renew automatically.",
+  "autoRenewDisabled": "Auto-renew is off. Renew manually before expiry.",
+  "removeCard": "Remove Card",
+  "removeCardConfirmTitle": "Remove Saved Card?",
+  "removeCardConfirmMessage": "This will disable auto-renew and remove your saved payment method.",
+  "removeCardSuccess": "Card removed successfully.",
+  "autoRenewToggleError": "Failed to update auto-renew. Please try again.",
+  "removeCardError": "Failed to remove card. Please try again.",
+  "paymentSourcePaymob": "Card Payment",
+  "paymentSourceIap": "App Store / Google Play",
+  "noSavedPaymentMethod": "No saved payment method",
+  "billingTitle": "Billing & Payments",
+  "billingPaymentMethod": "PAYMENT METHOD",
+  "billingPaymentHistory": "PAYMENT HISTORY",
+  "billingPlanManagement": "PLAN MANAGEMENT",
+  "billingDangerZone": "SUBSCRIPTION",
+  "billingUpdateCard": "Update Card",
+  "billingAddCard": "Add Payment Card",
+  "billingChangeToMonthly": "Switch to Monthly",
+  "billingChangeToYearly": "Switch to Yearly",
+  "billingNoPayments": "No payment history yet",
+  "billingRenewal": "Renewal",
+  "billingCancelSubscription": "Cancel Subscription",
+  "billingCancelConfirmTitle": "Cancel Subscription?",
+  "billingCancelConfirmMessage": "You will be downgraded to Launch Mode. Your data will be preserved but you will lose access to Growth features.",
+  "billingCancelledSuccess": "Subscription cancelled. You are now on Launch Mode.",
+  "billingReceipt": "Payment Receipt",
+  "billingReceiptPlan": "Plan",
+  "billingReceiptAmount": "Amount",
+  "billingReceiptDate": "Date",
+  "billingReceiptStatus": "Status",
+  "billingReceiptType": "Type",
+  "billingReceiptTxId": "Transaction ID",
+  "billingReceiptSuccess": "Successful",
+  "billingReceiptFailed": "Failed",
+  "billingShareReceipt": "Share Receipt"
 }

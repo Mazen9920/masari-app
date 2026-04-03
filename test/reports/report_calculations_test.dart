@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:masari_app/shared/models/transaction_model.dart';
-import 'package:masari_app/shared/models/balance_sheet_entries.dart';
-import 'package:masari_app/shared/models/category_data.dart';
-import 'package:masari_app/shared/utils/money_utils.dart';
+import 'package:revvo_app/shared/models/transaction_model.dart';
+import 'package:revvo_app/shared/models/balance_sheet_entries.dart';
+import 'package:revvo_app/shared/models/category_data.dart';
+import 'package:revvo_app/shared/utils/money_utils.dart';
 
 // ────────────────────────────────────────────────────────
 //  Test helpers

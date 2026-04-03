@@ -1,0 +1,17 @@
+name = "Revvo"
+client_id = "ae6c9a9bc032ca427e6174b3cfb22d0e"
+application_url = "https://us-central1-massari-574ff.cloudfunctions.net/storeAuthCallback"
+embedded = true
+
+[access_scopes]
+scopes = "write_inventory,read_inventory,read_inventory_shipments,read_locations,read_orders,write_orders,read_products,write_products"
+
+[auth]
+redirect_urls = ["https://us-central1-massari-574ff.cloudfunctions.net/storeAuthCallback"]
+
+[webhooks]
+api_version = "2026-01"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "https://storewebhook-colliwyzpa-uc.a.run.app"

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Screenshot 2 – Location, Account & Sync History (1600×900)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#ccc; display:flex; align-items:center; justify-content:center; min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+
+  .canvas {
+    width:1600px; height:900px;
+    background:#f6f6f7;
+    position:relative; overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+
+  /* ── Shopify Admin Top Bar ── */
+  .admin-topbar {
+    height:56px; min-height:56px;
+    background:#f1f1f1;
+    border-bottom:1px solid #e1e3e5;
+    display:flex; align-items:center;
+    padding:0 24px;
+    gap:10px;
+  }
+  .admin-topbar-icon {
+    width:28px; height:28px; border-radius:7px;
+    background:#1e4d6e;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:700; color:#fff; letter-spacing:-0.3px;
+    position:relative; overflow:hidden;
+  }
+  .admin-topbar-icon::after {
+    content:''; position:absolute; bottom:5px; left:6px; right:6px;
+    height:2px; background:#e8963e; border-radius:1px;
+  }
+  .admin-topbar-name {
+    font-size:15px; font-weight:600; color:#303030;
+  }
+
+  /* ── Main Content Area ── */
+  .main-content {
+    flex:1;
+    overflow:hidden;
+    display:flex;
+    justify-content:center;
+    padding:28px 40px;
+  }
+
+  .page { width:720px; }
+
+  /* ── Exact styles from the real embedded app ── */
+  :root {
+    --p-surface:#f6f6f7;--p-bg:#fff;--p-text:#202223;
+    --p-subdued:#6d7175;--p-green:#008060;--p-green-h:#006e52;
+    --p-red:#d72c0d;--p-border:#e1e3e5;
+    --p-radius:12px;
+    --p-shadow:0 1px 1px rgba(0,0,0,.04),0 2px 4px 1px rgba(0,0,0,.04);
+    --p-font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+
+  .card { background:var(--p-bg); border-radius:var(--p-radius); box-shadow:var(--p-shadow); border:1px solid var(--p-border); margin-bottom:16px; }
+  .card-hd { padding:16px 20px; border-bottom:1px solid var(--p-border); display:flex; align-items:center; justify-content:space-between; }
+  .card-tt { font-size:16px; font-weight:600; color:var(--p-text); }
+  .card-bd { padding:20px; }
+
+  .sel-w { position:relative; }
+  select { width:100%; padding:8px 32px 8px 12px; font-size:14px; border:1px solid var(--p-border); border-radius:8px; background:#fff; appearance:none; font-family:var(--p-font); cursor:pointer; }
+  .sel-w::after { content:'\25BE'; position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:var(--p-subdued); }
+
+  .btn { padding:8px 16px; font-size:14px; font-weight:500; border-radius:8px; border:none; cursor:pointer; font-family:var(--p-font); transition:.15s; }
+  .btn-o { background:none; border:1px solid var(--p-border); color:var(--p-text); }
+  .btn-sm { padding:4px 10px; font-size:12px; border-radius:6px; }
+
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; padding:10px 12px; font-size:12px; color:var(--p-subdued); text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid var(--p-border); font-weight:600; }
+  td { padding:10px 12px; border-bottom:1px solid var(--p-border); vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+
+  .st { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:600; }
+  .st-active { background:#e3f5ef; color:#008060; }
+  .st-success { background:#e3f5ef; color:#008060; }
+
+  .dir-arrow { font-size:11px; color:var(--p-subdued); }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <!-- Shopify Admin Top Bar -->
+  <div class="admin-topbar">
+    <div class="admin-topbar-icon">revvo</div>
+    <div class="admin-topbar-name">Revvo</div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="page">
+
+      <!-- Shopify Location -->
+      <div class="card">
+        <div class="card-hd"><span class="card-tt">Shopify Location</span></div>
+        <div class="card-bd">
+          <p style="margin-bottom:12px;font-size:13px;color:var(--p-subdued)">Select which Shopify location to use for inventory operations.</p>
+          <div class="sel-w"><select><option selected>Shop location</option></select></div>
+        </div>
+      </div>
+
+      <!-- Linked Revvo Account -->
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-tt">Linked Revvo Account</span>
+          <button class="btn btn-o btn-sm">Refresh</button>
+        </div>
+        <div class="card-bd" style="padding:0;overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Account</th>
+                <th>Status</th>
+                <th>Orders</th>
+                <th>Inventory</th>
+                <th>Last Sync</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-weight:500">merchant@example.com</td>
+                <td><span class="st st-active">active</span></td>
+                <td>&#x2705;</td>
+                <td>&#x2705;</td>
+                <td>Apr 3, 2026, 10:24 AM</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sync History -->
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-tt">Sync History</span>
+          <button class="btn btn-o btn-sm">Refresh</button>
+        </div>
+        <div class="card-bd" style="padding:0;overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>Direction</th>
+                <th>Status</th>
+                <th>Account</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Apr 3, 10:24 AM</td>
+                <td>Inventory Pull</td>
+                <td><span class="dir-arrow">Shopify &rarr; Revvo</span></td>
+                <td><span class="st st-success">success</span></td>
+                <td>merchant@example.com</td>
+              </tr>
+              <tr>
+                <td>Apr 3, 10:22 AM</td>
+                <td>Order Sync</td>
+                <td><span class="dir-arrow">Shopify &rarr; Revvo</span></td>
+                <td><span class="st st-success">success</span></td>
+                <td>merchant@example.com</td>
+              </tr>
+              <tr>
+                <td>Apr 3, 09:15 AM</td>
+                <td>Inventory Pull</td>
+                <td><span class="dir-arrow">Shopify &rarr; Revvo</span></td>
+                <td><span class="st st-success">success</span></td>
+                <td>merchant@example.com</td>
+              </tr>
+              <tr>
+                <td>Apr 3, 09:12 AM</td>
+                <td>Order Sync</td>
+                <td><span class="dir-arrow">Shopify &rarr; Revvo</span></td>
+                <td><span class="st st-success">success</span></td>
+                <td>merchant@example.com</td>
+              </tr>
+              <tr>
+                <td>Apr 2, 08:45 PM</td>
+                <td>Inventory Pull</td>
+                <td><span class="dir-arrow">Shopify &rarr; Revvo</span></td>
+                <td><span class="st st-success">success</span></td>
+                <td>merchant@example.com</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

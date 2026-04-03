@@ -62,6 +62,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
 
   // ── Manufacturing mode state ────────────────────────────
   bool _isManufactured = false;
+  bool _didInitStorage = false;
 
   List<String> get _storageOptions => [
     l10n.warehouseAShelf3,
@@ -104,7 +105,6 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
     _priceController.text = product.sellingPrice.toStringAsFixed(2);
     _reorderController.text = product.reorderPoint.toString();
     _unitController.text = product.unitOfMeasure;
-    _storageLocation = _storageOptions.first;
     _existingImageUrl = product.imageUrl;
 
     // Try to match supplier to the list; if not found, use custom entry
@@ -146,6 +146,15 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
 
     // Initialize manufacturing mode
     _isManufactured = product.isManufactured;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didInitStorage && _storageLocation.isEmpty) {
+      _didInitStorage = true;
+      _storageLocation = _storageOptions.first;
+    }
   }
 
   @override

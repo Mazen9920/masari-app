@@ -161,7 +161,7 @@ class ProfileScreen extends ConsumerWidget {
                       icon: Icons.info_outline_rounded,
                       iconBg: const Color(0xFFF1F5F9),
                       iconColor: const Color(0xFF64748B),
-                      title: l10n.profileAboutMasari,
+                      title: l10n.profileAboutRevvo,
                       subtitle: l10n.profileVersionInfo,
                       onTap: () => context.pushNamed('AboutScreen'),
                     ),

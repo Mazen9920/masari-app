@@ -5,7 +5,7 @@ import '../../../core/services/result.dart';
 import '../../../core/services/shopify_sync_service.dart';
 import '../../../shared/models/shopify_product_mapping_model.dart';
 
-/// Manages Shopify ↔ Masari product/variant mappings.
+/// Manages Shopify ↔ Revvo product/variant mappings.
 ///
 /// Provides CRUD and an auto-match-by-SKU helper that
 /// scans both systems for matching SKUs and creates mappings.
@@ -23,7 +23,7 @@ class ShopifyMappingsNotifier
 
   // ── CRUD ─────────────────────────────────────────────────
 
-  /// Creates a manual mapping between a Masari variant and a Shopify variant.
+  /// Creates a manual mapping between a Revvo variant and a Shopify variant.
   Future<Result<ShopifyProductMapping>> createMapping(
     ShopifyProductMapping mapping,
   ) async {
@@ -36,7 +36,7 @@ class ShopifyMappingsNotifier
     return result;
   }
 
-  /// Updates an existing mapping (e.g. re-link to different Masari product).
+  /// Updates an existing mapping (e.g. re-link to different Revvo product).
   Future<Result<ShopifyProductMapping>> updateMapping(
     String id,
     ShopifyProductMapping updated,
@@ -76,7 +76,7 @@ class ShopifyMappingsNotifier
 
   // ── Auto-match ───────────────────────────────────────────
 
-  /// Fetches products from both Shopify and Masari, matches by SKU,
+  /// Fetches products from both Shopify and Revvo, matches by SKU,
   /// and bulk-creates mappings for all matches found.
   ///
   /// Returns the count of new mappings created.
@@ -94,33 +94,33 @@ class ShopifyMappingsNotifier
     }
     final shopifyProducts = shopifyResult.data!;
 
-    // 2. Fetch all Masari products
-    final masariResult = await productRepo.getProducts();
-    if (!masariResult.isSuccess) {
+    // 2. Fetch all Revvo products
+    final revvoResult = await productRepo.getProducts();
+    if (!revvoResult.isSuccess) {
       return Result.failure(
-        masariResult.error ?? 'Failed to fetch Masari products',
+        revvoResult.error ?? 'Failed to fetch Revvo products',
       );
     }
-    final masariProducts = masariResult.data!;
+    final revvoProducts = revvoResult.data!;
 
-    // 3. Build lookup maps for Masari products:
-    //    a) SKU → masari ref (for matching by SKU)
-    //    b) shopifyVariantId → masari ref (for re-linking after reconnect)
+    // 3. Build lookup maps for Revvo products:
+    //    a) SKU → revvo ref (for matching by SKU)
+    //    b) shopifyVariantId → revvo ref (for re-linking after reconnect)
     //    c) shopifyProductId → product (for product-level matching)
-    final masariSkuMap = <String, _MasariVariantRef>{};
-    final masariShopifyVarMap = <String, _MasariVariantRef>{};
-    final masariShopifyProdMap = <String, String>{}; // shopifyProdId → masariProdId
-    for (final product in masariProducts) {
-      // Match by Shopify product ID stored on the Masari product
+    final revvoSkuMap = <String, _RevvoVariantRef>{};
+    final revvoShopifyVarMap = <String, _RevvoVariantRef>{};
+    final revvoShopifyProdMap = <String, String>{}; // shopifyProdId → revvoProdId
+    for (final product in revvoProducts) {
+      // Match by Shopify product ID stored on the Revvo product
       if (product.shopifyProductId != null &&
           product.shopifyProductId!.isNotEmpty) {
-        masariShopifyProdMap[product.shopifyProductId!] = product.id;
+        revvoShopifyProdMap[product.shopifyProductId!] = product.id;
       }
       for (final variant in product.variants) {
-        // Match by Shopify variant ID stored on the Masari variant
+        // Match by Shopify variant ID stored on the Revvo variant
         if (variant.shopifyVariantId != null &&
             variant.shopifyVariantId!.isNotEmpty) {
-          masariShopifyVarMap[variant.shopifyVariantId!] = _MasariVariantRef(
+          revvoShopifyVarMap[variant.shopifyVariantId!] = _RevvoVariantRef(
             productId: product.id,
             variantId: variant.id,
           );
@@ -128,7 +128,7 @@ class ShopifyMappingsNotifier
         // Match by SKU
         final sku = variant.sku.trim().toLowerCase();
         if (sku.isNotEmpty) {
-          masariSkuMap[sku] = _MasariVariantRef(
+          revvoSkuMap[sku] = _RevvoVariantRef(
             productId: product.id,
             variantId: variant.id,
           );
@@ -142,7 +142,7 @@ class ShopifyMappingsNotifier
       for (final m in existingMappings) m.shopifyVariantId,
     };
 
-    // 5. Match Shopify variants against Masari by:
+    // 5. Match Shopify variants against Revvo by:
     //    Priority 1: shopifyVariantId (exact re-link)
     //    Priority 2: SKU
     final newMappings = <ShopifyProductMapping>[];
@@ -163,15 +163,15 @@ class ShopifyMappingsNotifier
         if (existingShopifyVariantIds.contains(shopifyVariantId)) continue;
 
         // Try matching by shopify variant ID first, then SKU
-        final match = masariShopifyVarMap[shopifyVariantId] ??
-            (shopifySku.isNotEmpty ? masariSkuMap[shopifySku] : null);
+        final match = revvoShopifyVarMap[shopifyVariantId] ??
+            (shopifySku.isNotEmpty ? revvoSkuMap[shopifySku] : null);
         if (match == null) continue;
 
         newMappings.add(ShopifyProductMapping(
           id: '', // will be set by Firestore
           userId: '', // will be set by repo
-          masariProductId: match.productId,
-          masariVariantId: match.variantId,
+          revvoProductId: match.productId,
+          revvoVariantId: match.variantId,
           shopifyProductId: shopifyProductId,
           shopifyVariantId: shopifyVariantId,
           shopifyInventoryItemId: inventoryItemId,
@@ -207,11 +207,11 @@ class ShopifyMappingsNotifier
 }
 
 /// Internal helper for SKU matching.
-class _MasariVariantRef {
+class _RevvoVariantRef {
   final String productId;
   final String variantId;
 
-  const _MasariVariantRef({
+  const _RevvoVariantRef({
     required this.productId,
     required this.variantId,
   });

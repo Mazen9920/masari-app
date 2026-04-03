@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Masari Design System — Color Tokens
+/// Revvo Design System — Color Tokens
 /// Single source of truth. Never use raw hex values elsewhere.
 class AppColors {
   AppColors._();

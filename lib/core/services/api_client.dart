@@ -1,12 +1,11 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// API client configuration for backend communication.
 /// Currently a placeholder — will be configured when a backend is chosen.
 ///
 /// Usage:
-///   final client = ApiClient(baseUrl: 'https://api.masari.app/v1');
+///   final client = ApiClient(baseUrl: 'https://api.revvo-app.com/v1');
 ///   final response = await client.get('/transactions');
 class ApiClient {
   final String baseUrl;
@@ -135,16 +134,4 @@ class ApiException implements Exception {
 
   @override
   String toString() => message;
-}
-
-/// Environment configuration.
-/// Switch between dev/staging/prod by changing the active config.
-class ApiConfig {
-  static const String devBaseUrl = 'http://localhost:3000/api/v1';
-  static const String stagingBaseUrl = 'https://staging-api.masari.app/v1';
-  static const String prodBaseUrl = 'https://api.masari.app/v1';
-
-  /// Currently active base URL.
-  /// Uses kDebugMode to auto-select environment.
-  static String get activeBaseUrl => kDebugMode ? devBaseUrl : prodBaseUrl;
 }

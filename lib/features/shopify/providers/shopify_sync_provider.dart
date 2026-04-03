@@ -151,12 +151,12 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
         // before any push compares against them.
         await _syncService.pullInventoryFromShopify();
 
-        // Only push if direction allows masari → shopify
+        // Only push if direction allows revvo → shopify
         if (direction == 'masari_to_shopify' || direction == 'both') {
           final pushPreview = await _syncService.previewPushInventory();
           if (pushPreview.isSuccess && pushPreview.data != null) {
             final changed = pushPreview.data!
-                .where((i) => i.masariStock != i.shopifyStock)
+                .where((i) => i.revvoStock != i.shopifyStock)
                 .toList();
             if (changed.isNotEmpty) {
               await _syncService.pushInventoryBatch(changed);
@@ -246,10 +246,10 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
       progress: 0.1,
     );
 
-    // 1) Pull Shopify → Masari (always — gets latest stock)
+    // 1) Pull Shopify → Revvo (always — gets latest stock)
     final pullResult = await _syncService.pullInventoryFromShopify();
 
-    // 2) Push Masari → Shopify (only if direction allows)
+    // 2) Push Revvo → Shopify (only if direction allows)
     int pushed = 0;
     if (direction == 'masari_to_shopify' || direction == 'both') {
       state = const SyncStatus(
@@ -263,7 +263,7 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
           pushPreviewResult.data != null &&
           pushPreviewResult.data!.isNotEmpty) {
         final changed = pushPreviewResult.data!
-            .where((i) => i.masariStock != i.shopifyStock)
+            .where((i) => i.revvoStock != i.shopifyStock)
             .toList();
         if (changed.isNotEmpty) {
           final pushResult = await _syncService.pushInventoryBatch(changed);
@@ -309,7 +309,7 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
 
   // ── Inventory sync (either direction) ────────────────────
 
-  /// Syncs inventory between Masari and Shopify.
+  /// Syncs inventory between Revvo and Shopify.
   ///
   /// [direction] must be `"shopify_to_masari"` (pull) or
   /// `"masari_to_shopify"` (push).
@@ -329,7 +329,7 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
     );
 
     if (direction == 'shopify_to_masari') {
-      // Pull all inventory levels from Shopify → Masari
+      // Pull all inventory levels from Shopify → Revvo
       final result = await _syncService.pullInventoryFromShopify();
       if (result.isSuccess) {
         _pullPreview = null; // clear stale preview
@@ -413,7 +413,7 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
     // Don't auto-clear — keep success state so UI can display preview
   }
 
-  /// Applies the pull: updates Masari stock to match the cached preview.
+  /// Applies the pull: updates Revvo stock to match the cached preview.
   /// Uses the exact deltas the user reviewed instead of re-fetching.
   Future<void> confirmPull() async {
     if (_pullPreview == null || _pullPreview!.isEmpty) {
@@ -519,7 +519,7 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
 
   // ── Historical order import ──────────────────────────────
 
-  /// Syncs product details from Shopify (creates Masari products + mappings).
+  /// Syncs product details from Shopify (creates Revvo products + mappings).
   /// Returns the number of products changed/created.
   Future<int> syncProducts() async {
     final conn = ref.read(shopifyConnectionProvider).value;
@@ -567,7 +567,7 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
     }
   }
 
-  /// Imports Shopify orders from [from] to [to] into Masari.
+  /// Imports Shopify orders from [from] to [to] into Revvo.
   /// Max 3 months enforced by the sync service.
   Future<void> importHistorical({
     required DateTime from,

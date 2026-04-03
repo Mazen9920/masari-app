@@ -47,6 +47,7 @@ import '../../features/profile/edit_profile_screen.dart';
 import '../../features/profile/business_info_screen.dart';
 import '../../features/profile/currency_language_screen.dart';
 import '../../features/profile/manage_subscription_screen.dart';
+import '../../features/profile/billing_management_screen.dart';
 import '../../features/profile/notification_preferences_screen.dart';
 import '../../features/profile/security_screen.dart';
 import '../../features/profile/data_backup_screen.dart';
@@ -612,6 +613,12 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         builder: (context, state) => const ManageSubscriptionScreen(),
       ),
       GoRoute(
+        name: 'BillingManagementScreen',
+        path: '/profile/billing',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const BillingManagementScreen(),
+      ),
+      GoRoute(
         name: 'NotificationPreferencesScreen',
         path: '/profile/notification-prefs',
         parentNavigatorKey: rootNavigatorKey,
@@ -721,7 +728,11 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final args = state.extra as Map<String, dynamic>? ?? {};
-          return SaleDetailScreen(sale: args['sale']);
+          return FeatureGateScreen(
+            feature: GrowthFeature.salesSystem,
+            appBarTitle: AppLocalizations.of(context)!.salesTitle,
+            child: SaleDetailScreen(sale: args['sale']),
+          );
         },
       ),
       GoRoute(
@@ -730,8 +741,12 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final args = state.extra as Map<String, dynamic>?;
-          return RecordSaleScreen(
-            existingSale: args?['sale'] as Sale?,
+          return FeatureGateScreen(
+            feature: GrowthFeature.salesSystem,
+            appBarTitle: AppLocalizations.of(context)!.salesTitle,
+            child: RecordSaleScreen(
+              existingSale: args?['sale'] as Sale?,
+            ),
           );
         },
       ),

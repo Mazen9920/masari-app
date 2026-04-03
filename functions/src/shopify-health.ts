@@ -15,11 +15,9 @@ import {
 } from "crypto";
 
 const tokenEncryptionKey = defineSecret("SHOPIFY_TOKEN_ENCRYPTION_KEY");
+const shopifyWebhookUrl = defineSecret("SHOPIFY_WEBHOOK_URL");
 
 const SHOPIFY_API_VERSION = "2024-01";
-
-const WEBHOOK_URL =
-  "https://shopifywebhook-colliwyzpa-uc.a.run.app";
 
 const REQUIRED_WEBHOOK_TOPICS = [
   "orders/create",
@@ -30,6 +28,10 @@ const REQUIRED_WEBHOOK_TOPICS = [
   "products/delete",
   "inventory_levels/update",
   "app/uninstalled",
+  // Mandatory compliance webhooks (GDPR)
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact",
 ];
 
 /**
@@ -97,7 +99,7 @@ async function reconcileWebhooks(
     // Topics already registered pointing to our webhook URL
     const registeredTopics = new Set(
       existing
-        .filter((w) => w.address === WEBHOOK_URL)
+        .filter((w) => w.address === shopifyWebhookUrl.value().trim())
         .map((w) => w.topic),
     );
 
@@ -129,7 +131,7 @@ async function reconcileWebhooks(
             body: JSON.stringify({
               webhook: {
                 topic,
-                address: WEBHOOK_URL,
+                address: shopifyWebhookUrl.value().trim(),
                 format: "json",
               },
             }),
@@ -172,7 +174,7 @@ export const shopifyHealthCheck = onSchedule(
   {
     schedule: "every day 06:00",
     timeZone: "UTC",
-    secrets: [tokenEncryptionKey],
+    secrets: [tokenEncryptionKey, shopifyWebhookUrl],
     region: "us-central1",
   },
   async () => {

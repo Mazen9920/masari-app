@@ -1123,7 +1123,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-              child: MasariPrimaryButton(
+              child: RevvoPrimaryButton(
                 text: l10n.saveChanges,
                 icon: Icons.check_rounded,
                 onPressed: _amount != '0' ? _onSave : null,

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../repositories/auth_repository.dart';
+import '../services/notification_service.dart';
 import 'repository_providers.dart';
 import 'app_providers.dart';
 import 'app_settings_provider.dart';
@@ -71,12 +72,37 @@ class AuthNotifier extends Notifier<AuthState> {
 
   AuthRepository get _repo => ref.read(authRepositoryProvider);
 
+  /// Transitions to authenticated and initialises FCM.
+  void _setAuthenticated(AuthUser user) {
+    state = AuthState(status: AuthStatus.authenticated, user: user);
+    // Fire-and-forget; may throw in test environments without Firebase.
+    _initNotifications();
+    // Sync profile data from auth so name/email/phone are reflected.
+    _syncProfile();
+  }
+
+  Future<void> _syncProfile() async {
+    try {
+      await ref.read(userProfileProvider.notifier).syncFromAuth();
+    } catch (_) {
+      // Non-critical — profile will load on next screen anyway.
+    }
+  }
+
+  Future<void> _initNotifications() async {
+    try {
+      await NotificationService.init();
+    } catch (_) {
+      // Swallowed — expected in unit-test environments without Firebase.
+    }
+  }
+
   /// Check if user is already logged in (called on app start).
   Future<void> checkAuthState() async {
     try {
       final user = await _repo.getCurrentUser();
       if (user != null) {
-        state = AuthState(status: AuthStatus.authenticated, user: user);
+        _setAuthenticated(user);
       } else {
         state = const AuthState(status: AuthStatus.unauthenticated);
       }
@@ -97,10 +123,7 @@ class AuthNotifier extends Notifier<AuthState> {
       final result = await _repo.signIn(email: email, password: password);
 
       if (result.isSuccess) {
-        state = AuthState(
-          status: AuthStatus.authenticated,
-          user: result.data,
-        );
+        _setAuthenticated(result.data!);
         return true;
       } else {
         state = AuthState(
@@ -110,9 +133,9 @@ class AuthNotifier extends Notifier<AuthState> {
         return false;
       }
     } catch (e) {
-      state = AuthState(
+      state = const AuthState(
         status: AuthStatus.unauthenticated,
-        error:  'Login failed: ${e.toString()}',
+        error: 'Login failed. Please try again.',
       );
       return false;
     }
@@ -136,10 +159,7 @@ class AuthNotifier extends Notifier<AuthState> {
       );
 
       if (result.isSuccess) {
-        state = AuthState(
-          status: AuthStatus.authenticated,
-          user: result.data,
-        );
+        _setAuthenticated(result.data!);
         return true;
       } else {
         state = AuthState(
@@ -149,9 +169,9 @@ class AuthNotifier extends Notifier<AuthState> {
         return false;
       }
     } catch (e) {
-      state = AuthState(
+      state = const AuthState(
         status: AuthStatus.unauthenticated,
-        error:  'Signup failed: ${e.toString()}',
+        error: 'Sign up failed. Please try again.',
       );
       return false;
     }
@@ -165,10 +185,7 @@ class AuthNotifier extends Notifier<AuthState> {
       final result = await _repo.signInWithGoogle();
 
       if (result.isSuccess) {
-        state = AuthState(
-          status: AuthStatus.authenticated,
-          user: result.data,
-        );
+        _setAuthenticated(result.data!);
         return true;
       } else {
         state = AuthState(
@@ -178,9 +195,9 @@ class AuthNotifier extends Notifier<AuthState> {
         return false;
       }
     } catch (e) {
-      state = AuthState(
+      state = const AuthState(
         status: AuthStatus.unauthenticated,
-        error:  'Google sign-in failed: ${e.toString()}',
+        error: 'Google sign-in failed. Please try again.',
       );
       return false;
     }
@@ -194,10 +211,7 @@ class AuthNotifier extends Notifier<AuthState> {
       final result = await _repo.signInWithApple();
 
       if (result.isSuccess) {
-        state = AuthState(
-          status: AuthStatus.authenticated,
-          user: result.data,
-        );
+        _setAuthenticated(result.data!);
         return true;
       } else {
         state = AuthState(
@@ -207,9 +221,9 @@ class AuthNotifier extends Notifier<AuthState> {
         return false;
       }
     } catch (e) {
-      state = AuthState(
+      state = const AuthState(
         status: AuthStatus.unauthenticated,
-        error:  'Apple sign-in failed: ${e.toString()}',
+        error: 'Apple sign-in failed. Please try again.',
       );
       return false;
     }
@@ -234,7 +248,9 @@ class AuthNotifier extends Notifier<AuthState> {
     // This prevents the '_dependents.isEmpty framework assertion
     // that occurs when providers are invalidated while widgets
     // still depend on them.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // In unit tests WidgetsBinding may not be initialised.
+    final binding = WidgetsBinding.instance;
+    binding.addPostFrameCallback((_) async {
       ref.invalidate(transactionsProvider);
       ref.invalidate(categoriesProvider);
       ref.invalidate(inventoryProvider);

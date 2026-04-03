@@ -43,7 +43,7 @@ class ApiAuthRepository implements AuthRepository {
     } on ApiException catch (e) {
       return Result.failure(e.message);
     } catch (e) {
-      return Result.failure( 'An unexpected error occurred: $e');
+      return Result.failure('An unexpected error occurred. Please try again.');
     }
   }
 
@@ -81,7 +81,7 @@ class ApiAuthRepository implements AuthRepository {
     } on ApiException catch (e) {
       return Result.failure(e.message);
     } catch (e) {
-      return Result.failure( 'An unexpected error occurred: $e');
+      return Result.failure('An unexpected error occurred. Please try again.');
     }
   }
 
@@ -97,7 +97,7 @@ class ApiAuthRepository implements AuthRepository {
       return Result.failure(e.message);
     } catch (e) {
       await _storage.clearAll();
-      return Result.failure( 'An unexpected error occurred: $e');
+      return Result.failure('An unexpected error occurred. Please try again.');
     }
   }
 
@@ -132,12 +132,13 @@ class ApiAuthRepository implements AuthRepository {
 
   @override
   Future<Result<AuthUser>> signInWithGoogle() async {
-    return Result.failure( 'Google sign-in via API not implemented yet');
+    return Result.failure('Google sign-in is not available. Please try again.');
   }
 
   @override
   Future<Result<AuthUser>> signInWithApple() async {
-    return Result.failure( 'Apple sign-in via API not implemented yet');
+    // Social auth goes through Firebase directly; API repo is unused for this flow.
+    return Result.failure('Apple sign-in is not available. Please try again.');
   }
 
   @override
@@ -148,7 +149,7 @@ class ApiAuthRepository implements AuthRepository {
     } on ApiException catch (e) {
       return Result.failure(e.message);
     } catch (e) {
-      return Result.failure( 'Failed to send reset email: $e');
+      return Result.failure('Failed to send reset email. Please try again.');
     }
   }
 }

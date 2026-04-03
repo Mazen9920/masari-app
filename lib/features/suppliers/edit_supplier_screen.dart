@@ -7,7 +7,6 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../shared/models/supplier_model.dart';
-import '../../shared/models/category_data.dart';
 
 /// Edit Supplier — pre-filled form for modifying existing supplier data.
 class EditSupplierScreen extends ConsumerStatefulWidget {

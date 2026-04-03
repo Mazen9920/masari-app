@@ -18,7 +18,7 @@ import 'shopify_api_service.dart';
 
 /// High-level Shopify sync orchestrator.
 ///
-/// Coordinates between the local Masari repositories, the product mapping
+/// Coordinates between the local Revvo repositories, the product mapping
 /// table, and the [ShopifyApiService] proxy to push/pull data.
 class ShopifySyncService {
   final ShopifyApiService _api;
@@ -49,7 +49,7 @@ class ShopifySyncService {
         _transactionRepo = transactionRepo;
 
   // ═══════════════════════════════════════════════════════════
-  //  Push: Masari → Shopify
+  //  Push: Revvo → Shopify
   // ═══════════════════════════════════════════════════════════
 
   /// Pushes local Sale changes back to the linked Shopify order.
@@ -115,7 +115,7 @@ class ShopifySyncService {
       status: errors.isEmpty ? 'success' : 'partial',
       error: errors.isEmpty ? null : errors.join('; '),
       shopifyOrderId: orderId,
-      masariSaleId: sale.id,
+      revvoSaleId: sale.id,
       metadata: {'changed_fields': changes},
       createdAt: DateTime.now(),
     ));
@@ -133,7 +133,7 @@ class ShopifySyncService {
     ));
   }
 
-  /// Pushes a Masari stock level to Shopify for a mapped variant.
+  /// Pushes a Revvo stock level to Shopify for a mapped variant.
   ///
   /// Looks up the mapping to find the Shopify inventory item ID and
   /// location ID, then calls the proxy to set the absolute stock level.
@@ -143,7 +143,7 @@ class ShopifySyncService {
     required int newStock,
   }) async {
     // Find the mapping
-    final mappingResult = await _mappingRepo.getMappingByMasariVariantId(
+    final mappingResult = await _mappingRepo.getMappingByRevvoVariantId(
       variantId,
     );
     if (!mappingResult.isSuccess || mappingResult.data == null) {
@@ -195,7 +195,7 @@ class ShopifySyncService {
       action: 'inventory_push',
       direction: 'masari_to_shopify',
       status: 'success',
-      masariProductId: productId,
+      revvoProductId: productId,
       metadata: {
         'variant_id': variantId,
         'shopify_inventory_item_id': mapping.shopifyInventoryItemId,
@@ -221,7 +221,7 @@ class ShopifySyncService {
     final shopifyVariants = <Map<String, dynamic>>[];
 
     for (final v in variants) {
-      final mapResult = await _mappingRepo.getMappingByMasariVariantId(v.variantId);
+      final mapResult = await _mappingRepo.getMappingByRevvoVariantId(v.variantId);
       if (!mapResult.isSuccess || mapResult.data == null) continue;
       final mapping = mapResult.data!;
       shopifyProductId ??= mapping.shopifyProductId;
@@ -253,7 +253,7 @@ class ShopifySyncService {
       action: 'product_push',
       direction: 'masari_to_shopify',
       status: 'success',
-      masariProductId: productId,
+      revvoProductId: productId,
       metadata: {
         'shopify_product_id': shopifyProductId,
         'variants_pushed': shopifyVariants.length,
@@ -264,7 +264,7 @@ class ShopifySyncService {
     return Result.success(null);
   }
 
-  /// Pushes Masari stock levels to Shopify for a batch of preview items.
+  /// Pushes Revvo stock levels to Shopify for a batch of preview items.
   ///
   /// Only pushes items where [InventoryPreviewItem.hasChange] is true.
   /// Returns the count of successfully pushed variants.
@@ -278,9 +278,9 @@ class ShopifySyncService {
       if (!item.hasChange) continue;
 
       final result = await syncInventoryToShopify(
-        productId: item.masariProductId,
-        variantId: item.masariVariantId,
-        newStock: item.masariStock,
+        productId: item.revvoProductId,
+        variantId: item.revvoVariantId,
+        newStock: item.revvoStock,
       );
 
       if (result.isSuccess) {
@@ -291,16 +291,10 @@ class ShopifySyncService {
     }
 
     // Update connection timestamp
-    final connResult = await _connRepo.getConnection();
-    if (connResult.isSuccess && connResult.data != null) {
-      final conn = connResult.data!;
-      await _connRepo.updateConnection(
-        conn.userId,
-        conn.copyWith(
-          lastInventorySyncAt: DateTime.now(),
-        ),
-      );
-    }
+    await _connRepo.updateField(
+      'last_inventory_sync_at',
+      DateTime.now().toIso8601String(),
+    );
 
     await _logRepo.log(ShopifySyncLogEntry(
       id: '',
@@ -329,13 +323,13 @@ class ShopifySyncService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  Pull: Shopify → Masari
+  //  Pull: Shopify → Revvo
   // ═══════════════════════════════════════════════════════════
 
   /// Builds a preview of what pulling inventory from Shopify would change.
   ///
   /// Returns a list of [InventoryPreviewItem] — one per mapped variant —
-  /// showing current Masari stock, Shopify stock, and delta.
+  /// showing current Revvo stock, Shopify stock, and delta.
   /// Does NOT apply any changes.
   Future<Result<List<InventoryPreviewItem>>> previewPullInventory() async {
     // 1. Get all mappings
@@ -398,9 +392,9 @@ class ShopifySyncService {
         previews.add(InventoryPreviewItem(
           productName: mapping.shopifyTitle,
           variantName: null,
-          masariProductId: mapping.masariProductId,
-          masariVariantId: mapping.masariVariantId,
-          masariStock: 0,
+          revvoProductId: mapping.revvoProductId,
+          revvoVariantId: mapping.revvoVariantId,
+          revvoStock: 0,
           shopifyStock: 0,
           delta: 0,
           isUnmapped: true,
@@ -408,34 +402,34 @@ class ShopifySyncService {
         continue;
       }
 
-      // Get current Masari stock
+      // Get current Revvo stock
       final prodResult = await _productRepo.getProductById(
-        mapping.masariProductId,
+        mapping.revvoProductId,
       );
-      int masariStock = 0;
+      int revvoStock = 0;
       String productName = mapping.shopifyTitle;
       String? variantName;
       if (prodResult.isSuccess) {
         final product = prodResult.data!;
         productName = product.name;
         final variant = product.variants.firstWhere(
-          (v) => v.id == mapping.masariVariantId,
+          (v) => v.id == mapping.revvoVariantId,
           orElse: () => product.variants.first,
         );
-        masariStock = variant.currentStock;
+        revvoStock = variant.currentStock;
         if (product.variants.length > 1) {
           variantName = variant.optionValues.values.join(' / ');
         }
       }
 
-      final delta = shopifyStock - masariStock;
+      final delta = shopifyStock - revvoStock;
 
       previews.add(InventoryPreviewItem(
         productName: productName,
         variantName: variantName,
-        masariProductId: mapping.masariProductId,
-        masariVariantId: mapping.masariVariantId,
-        masariStock: masariStock,
+        revvoProductId: mapping.revvoProductId,
+        revvoVariantId: mapping.revvoVariantId,
+        revvoStock: revvoStock,
         shopifyStock: shopifyStock,
         delta: delta,
       ));
@@ -446,7 +440,7 @@ class ShopifySyncService {
 
   /// Builds a preview of what pushing inventory to Shopify would change.
   ///
-  /// Fetches current Shopify levels, compares against Masari, returns
+  /// Fetches current Shopify levels, compares against Revvo, returns
   /// a list of [InventoryPreviewItem] for user confirmation.
   Future<Result<List<InventoryPreviewItem>>> previewPushInventory({
     Set<String>? productIds,
@@ -461,7 +455,7 @@ class ShopifySyncService {
     var mappings = mappingsResult.data!;
     if (productIds != null) {
       mappings = mappings
-          .where((m) => productIds.contains(m.masariProductId))
+          .where((m) => productIds.contains(m.revvoProductId))
           .toList();
     }
     if (mappings.isEmpty) return Result.success([]);
@@ -514,9 +508,9 @@ class ShopifySyncService {
           previews.add(InventoryPreviewItem(
             productName: mapping.shopifyTitle,
             variantName: null,
-            masariProductId: mapping.masariProductId,
-            masariVariantId: mapping.masariVariantId,
-            masariStock: 0,
+            revvoProductId: mapping.revvoProductId,
+            revvoVariantId: mapping.revvoVariantId,
+            revvoStock: 0,
             shopifyStock: 0,
             delta: 0,
             isUnmapped: true,
@@ -532,9 +526,9 @@ class ShopifySyncService {
         previews.add(InventoryPreviewItem(
           productName: mapping.shopifyTitle,
           variantName: null,
-          masariProductId: mapping.masariProductId,
-          masariVariantId: mapping.masariVariantId,
-          masariStock: 0,
+          revvoProductId: mapping.revvoProductId,
+          revvoVariantId: mapping.revvoVariantId,
+          revvoStock: 0,
           shopifyStock: 0,
           delta: 0,
           isUnmapped: true,
@@ -543,32 +537,32 @@ class ShopifySyncService {
       }
 
       final prodResult = await _productRepo.getProductById(
-        mapping.masariProductId,
+        mapping.revvoProductId,
       );
-      int masariStock = 0;
+      int revvoStock = 0;
       String productName = mapping.shopifyTitle;
       String? variantName;
       if (prodResult.isSuccess) {
         final product = prodResult.data!;
         productName = product.name;
         final variant = product.variants.firstWhere(
-          (v) => v.id == mapping.masariVariantId,
+          (v) => v.id == mapping.revvoVariantId,
           orElse: () => product.variants.first,
         );
-        masariStock = variant.currentStock;
+        revvoStock = variant.currentStock;
         if (product.variants.length > 1) {
           variantName = variant.optionValues.values.join(' / ');
         }
       }
 
-      final delta = masariStock - shopifyStock;
+      final delta = revvoStock - shopifyStock;
 
       previews.add(InventoryPreviewItem(
         productName: productName,
         variantName: variantName,
-        masariProductId: mapping.masariProductId,
-        masariVariantId: mapping.masariVariantId,
-        masariStock: masariStock,
+        revvoProductId: mapping.revvoProductId,
+        revvoVariantId: mapping.revvoVariantId,
+        revvoStock: revvoStock,
         shopifyStock: shopifyStock,
         delta: delta,
       ));
@@ -578,7 +572,7 @@ class ShopifySyncService {
   }
 
   /// Pulls ALL inventory levels from Shopify for mapped products and
-  /// updates Masari stock accordingly.
+  /// updates Revvo stock accordingly.
   ///
   /// Returns count of variants updated.
   Future<Result<int>> pullInventoryFromShopify() async {
@@ -631,21 +625,21 @@ class ShopifySyncService {
       if (id.isNotEmpty) stockMap[id] = available;
     }
 
-    // 5. Update Masari products
+    // 5. Update Revvo products
     var updated = 0;
     for (final mapping in mappings) {
       final qty = stockMap[mapping.shopifyInventoryItemId];
       if (qty == null) continue;
 
-      // Get current Masari stock to compute delta
+      // Get current Revvo stock to compute delta
       final prodResult = await _productRepo.getProductById(
-        mapping.masariProductId,
+        mapping.revvoProductId,
       );
       if (!prodResult.isSuccess) continue;
 
       final product = prodResult.data!;
       final variant = product.variants.firstWhere(
-        (v) => v.id == mapping.masariVariantId,
+        (v) => v.id == mapping.revvoVariantId,
         orElse: () => product.variants.first,
       );
 
@@ -653,8 +647,8 @@ class ShopifySyncService {
       if (delta == 0) continue;
 
       await _productRepo.adjustStock(
-        mapping.masariProductId,
-        mapping.masariVariantId,
+        mapping.revvoProductId,
+        mapping.revvoVariantId,
         delta,
         'Shopify inventory sync',
         valuationMethod: valuationMethod,
@@ -663,16 +657,10 @@ class ShopifySyncService {
     }
 
     // 6. Update last sync timestamp
-    final connResult = await _connRepo.getConnection();
-    if (connResult.isSuccess && connResult.data != null) {
-      final conn = connResult.data!;
-      await _connRepo.updateConnection(
-        conn.userId,
-        conn.copyWith(
-          lastInventorySyncAt: DateTime.now(),
-        ),
-      );
-    }
+    await _connRepo.updateField(
+      'last_inventory_sync_at',
+      DateTime.now().toIso8601String(),
+    );
 
     await _logRepo.log(ShopifySyncLogEntry(
       id: '',
@@ -691,12 +679,12 @@ class ShopifySyncService {
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  Pull product details: Shopify → Masari (title, variants, options)
+  //  Pull product details: Shopify → Revvo (title, variants, options)
   // ═══════════════════════════════════════════════════════════
 
   /// Fetches all products from Shopify and syncs their details
-  /// (title, variant option values, prices, SKUs) into Masari.
-  /// Also auto-imports unmapped Shopify products as new Masari products.
+  /// (title, variant option values, prices, SKUs) into Revvo.
+  /// Also auto-imports unmapped Shopify products as new Revvo products.
   ///
   /// Returns the count of products that were updated or created.
   Future<Result<int>> pullProductDetailsFromShopify() async {
@@ -736,7 +724,7 @@ class ShopifySyncService {
 
       if (productMappings == null || productMappings.isEmpty) {
         // Mappings may be missing after a disconnect/reconnect.
-        // Check if a Masari product with this shopifyProductId already exists.
+        // Check if a Revvo product with this shopifyProductId already exists.
         final existingResult =
             await _productRepo.getProductsByShopifyProductId(shopifyProdId);
         final existing =
@@ -765,8 +753,8 @@ class ShopifySyncService {
       }
 
       // ── Existing product: sync details ─────────────────
-      final masariProductId = productMappings.first.masariProductId;
-      final prodResult = await _productRepo.getProductById(masariProductId);
+      final revvoProductId = productMappings.first.revvoProductId;
+      final prodResult = await _productRepo.getProductById(revvoProductId);
       if (!prodResult.isSuccess || prodResult.data == null) {
         // Orphaned mappings — product was deleted but mappings remain.
         // Clean up stale mappings and re-import the product.
@@ -848,10 +836,10 @@ class ShopifySyncService {
       // Sync existing variant details
       final updatedVariants = <ProductVariant>[];
       for (final v in product.variants) {
-        // Find which Shopify variant maps to this Masari variant
+        // Find which Shopify variant maps to this Revvo variant
         ShopifyProductMapping? mapping;
         for (final m in productMappings) {
-          if (m.masariVariantId == v.id) {
+          if (m.revvoVariantId == v.id) {
             mapping = m;
             break;
           }
@@ -913,9 +901,9 @@ class ShopifySyncService {
         final svId = sv['id']?.toString() ?? '';
         if (mappingByShopifyVar.containsKey(svId)) continue;
 
-        // Unmapped — create new Masari variant + mapping
+        // Unmapped — create new Revvo variant + mapping
         final newVarId =
-            '${masariProductId}_v${updatedVariants.length + newVariants.length}';
+            '${revvoProductId}_v${updatedVariants.length + newVariants.length}';
         final optValues = <String, String>{};
         if (sv['option1'] != null) {
           optValues['Option 1'] = sv['option1'].toString();
@@ -946,8 +934,8 @@ class ShopifySyncService {
         newMappings.add(ShopifyProductMapping(
           id: '',
           userId: product.userId,
-          masariProductId: masariProductId,
-          masariVariantId: newVarId,
+          revvoProductId: revvoProductId,
+          revvoVariantId: newVarId,
           shopifyProductId: shopifyProdId,
           shopifyVariantId: svId,
           shopifyInventoryItemId:
@@ -975,7 +963,7 @@ class ShopifySyncService {
       if (!productChanged) continue;
 
       // Build final variants: kept (updated) + new, excluding removed
-      final removedVarIds = staleMappings.map((m) => m.masariVariantId).toSet();
+      final removedVarIds = staleMappings.map((m) => m.revvoVariantId).toSet();
       final keptVariants = updatedVariants
           .where((v) => !removedVarIds.contains(v.id))
           .toList();
@@ -992,7 +980,7 @@ class ShopifySyncService {
         variants: finalVariants,
       );
       await _productRepo.updateProduct(
-        masariProductId, updatedProduct,
+        revvoProductId, updatedProduct,
         modifiedBy: 'shopify_sync',
       );
 
@@ -1014,8 +1002,8 @@ class ShopifySyncService {
     return Result.success(changed);
   }
 
-  /// Auto-imports a Shopify product as a new Masari product with mappings.
-  /// If a Masari product with the same shopifyProductId already exists
+  /// Auto-imports a Shopify product as a new Revvo product with mappings.
+  /// If a Revvo product with the same shopifyProductId already exists
   /// (e.g. after disconnect + reconnect), reuses it and recreates mappings.
   /// Deduplicates if multiple copies exist.
   Future<bool> _autoImportShopifyProduct(
@@ -1039,7 +1027,7 @@ class ShopifySyncService {
     if (!connResult.isSuccess || connResult.data == null) return false;
     final userId = connResult.data!.userId;
 
-    // ── Check for existing Masari product with same shopifyProductId ──
+    // ── Check for existing Revvo product with same shopifyProductId ──
     final existingResult =
         await _productRepo.getProductsByShopifyProductId(shopifyProdId);
     final existingProducts =
@@ -1079,8 +1067,8 @@ class ShopifySyncService {
         newMappings.add(ShopifyProductMapping(
           id: '',
           userId: userId,
-          masariProductId: keeper.id,
-          masariVariantId: matchedVariant.id,
+          revvoProductId: keeper.id,
+          revvoVariantId: matchedVariant.id,
           shopifyProductId: shopifyProdId,
           shopifyVariantId: svId,
           shopifyInventoryItemId:
@@ -1102,7 +1090,7 @@ class ShopifySyncService {
     // Use deterministic ID so reconnect upserts instead of duplicating
     final prodId = 'shopify_$shopifyProdId';
 
-    final masariOptions = options.map((o) {
+    final revvoOptions = options.map((o) {
       final values =
           (o['values'] as List?)?.map((v) => v.toString()).toList() ?? [];
       return ProductOption(
@@ -1111,7 +1099,7 @@ class ShopifySyncService {
       );
     }).toList();
 
-    final masariVariants = <ProductVariant>[];
+    final revvoVariants = <ProductVariant>[];
     final newMappings = <ShopifyProductMapping>[];
 
     for (var i = 0; i < variants.length; i++) {
@@ -1130,7 +1118,7 @@ class ShopifySyncService {
         optValues['Option 3'] = sv['option3'].toString();
       }
 
-      masariVariants.add(ProductVariant(
+      revvoVariants.add(ProductVariant(
         id: varId,
         optionValues: optValues,
         sku: sv['sku']?.toString() ?? '',
@@ -1149,8 +1137,8 @@ class ShopifySyncService {
       newMappings.add(ShopifyProductMapping(
         id: '',
         userId: userId,
-        masariProductId: prodId,
-        masariVariantId: varId,
+        revvoProductId: prodId,
+        revvoVariantId: varId,
         shopifyProductId: shopifyProdId,
         shopifyVariantId: svId,
         shopifyInventoryItemId:
@@ -1178,8 +1166,8 @@ class ShopifySyncService {
       shopifyProductId: shopifyProdId,
       shopifyStatus: sp['status']?.toString(),
       imageUrl: imageUrl,
-      options: masariOptions,
-      variants: masariVariants,
+      options: revvoOptions,
+      variants: revvoVariants,
     );
 
     final createResult = await _productRepo.createProduct(product);
@@ -1213,10 +1201,10 @@ class ShopifySyncService {
     for (final item in items) {
       if (!item.hasChange) continue;
 
-      // delta = shopifyStock - masariStock (already computed in preview)
+      // delta = shopifyStock - revvoStock (already computed in preview)
       await _productRepo.adjustStock(
-        item.masariProductId,
-        item.masariVariantId,
+        item.revvoProductId,
+        item.revvoVariantId,
         item.delta,
         'Shopify inventory sync',
         valuationMethod: valuationMethod,
@@ -1225,16 +1213,10 @@ class ShopifySyncService {
     }
 
     // Update last sync timestamp
-    final connResult = await _connRepo.getConnection();
-    if (connResult.isSuccess && connResult.data != null) {
-      final conn = connResult.data!;
-      await _connRepo.updateConnection(
-        conn.userId,
-        conn.copyWith(
-          lastInventorySyncAt: DateTime.now(),
-        ),
-      );
-    }
+    await _connRepo.updateField(
+      'last_inventory_sync_at',
+      DateTime.now().toIso8601String(),
+    );
 
     await _logRepo.log(ShopifySyncLogEntry(
       id: '',
@@ -1252,7 +1234,7 @@ class ShopifySyncService {
     return Result.success(updated);
   }
 
-  /// Imports historical Shopify orders as Masari Sales.
+  /// Imports historical Shopify orders as Revvo Sales.
   ///
   /// Fetches orders between [from] and [to] (max 3 months)
   /// and creates Sales for any that don't already exist.
@@ -1405,14 +1387,10 @@ class ShopifySyncService {
     }
 
     // Update connection's last sync timestamp
-    final connResult = await _connRepo.getConnection();
-    if (connResult.isSuccess && connResult.data != null) {
-      final conn = connResult.data!;
-      await _connRepo.updateConnection(
-        conn.userId,
-        conn.copyWith(lastOrderSyncAt: DateTime.now()),
-      );
-    }
+    await _connRepo.updateField(
+      'last_order_sync_at',
+      DateTime.now().toIso8601String(),
+    );
 
     await _logRepo.log(ShopifySyncLogEntry(
       id: '',
@@ -1441,7 +1419,7 @@ class ShopifySyncService {
 
   // ── Private ──────────────────────────────────────────────
 
-  /// Converts a single Shopify order JSON into a Masari Sale and
+  /// Converts a single Shopify order JSON into a Revvo Sale and
   /// creates it with revenue + COGS transactions.
   Future<void> _importSingleOrder(
     Map<String, dynamic> order,
@@ -1476,11 +1454,11 @@ class ShopifySyncService {
       );
       if (mappingResult.isSuccess && mappingResult.data!.isNotEmpty) {
         final m = mappingResult.data!.first;
-        productId = m.masariProductId;
-        variantId = m.masariVariantId;
+        productId = m.revvoProductId;
+        variantId = m.revvoVariantId;
         variantName = lineItem['variant_title'] as String?;
 
-        // Use Masari's cost price
+        // Use Revvo's cost price
         final prodResult = await _productRepo.getProductById(productId);
         if (prodResult.isSuccess) {
           final v = prodResult.data!.variants.firstWhere(
@@ -1495,7 +1473,7 @@ class ShopifySyncService {
       if (costPrice <= 0) {
         costPrice = shopifyCostMap[shopifyVariantId] ?? 0;
 
-        // Backfill cost on the Masari product so future lookups use it
+        // Backfill cost on the Revvo product so future lookups use it
         if (costPrice > 0 && productId != null && variantId != null) {
           final prodResult = await _productRepo.getProductById(productId);
           if (prodResult.isSuccess) {
@@ -1796,9 +1774,9 @@ class ImportResult {
 class InventoryPreviewItem {
   final String productName;
   final String? variantName;
-  final String masariProductId;
-  final String masariVariantId;
-  final int masariStock;
+  final String revvoProductId;
+  final String revvoVariantId;
+  final int revvoStock;
   final int shopifyStock;
   final int delta;
   final bool isUnmapped;
@@ -1807,9 +1785,9 @@ class InventoryPreviewItem {
   const InventoryPreviewItem({
     required this.productName,
     this.variantName,
-    required this.masariProductId,
-    required this.masariVariantId,
-    required this.masariStock,
+    required this.revvoProductId,
+    required this.revvoVariantId,
+    required this.revvoStock,
     required this.shopifyStock,
     required this.delta,
     this.isUnmapped = false,

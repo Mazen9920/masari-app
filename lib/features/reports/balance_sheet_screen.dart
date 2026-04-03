@@ -1,4 +1,5 @@
 import 'package:go_router/go_router.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -1047,7 +1048,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'MASARI AI',
+                'REVVO AI',
                 style: AppTypography.badge.copyWith(
                   fontSize: 11,
                   letterSpacing: 1.0,
@@ -1213,7 +1214,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
           );
           await shareSvc.sharePdf(bytes, 'Balance_Sheet.pdf', subject: 'Balance Sheet', origin: origin);
         } catch (e) {
-          debugPrint('Balance Sheet share error: $e');
+          if (kDebugMode) debugPrint('Balance Sheet share error: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.somethingWentWrong), backgroundColor: Colors.red));
           }

@@ -1,5 +1,5 @@
 /**
- * Masari Cloud Functions — v2.2.0
+ * Revvo Cloud Functions — v2.2.0
  *
  * 1. processRecurringTransactions — scheduled daily, creates transaction docs
  *    for overdue recurring transactions and advances their next_due_date.
@@ -21,10 +21,12 @@ import {onDocumentDeleted} from "firebase-functions/v2/firestore";
 import {initializeApp} from "firebase-admin/app";
 import {getFirestore, FieldValue, WriteBatch} from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
+import {notifyUser} from "./notify.js";
 
 // ── Shopify (Phases 3–5) ───────────────────────────────────
-export {shopifyAuthStart, shopifyAuthCallback} from "./shopify-auth.js";
-export {shopifyWebhook} from "./shopify-webhooks.js";
+export {shopifyAuthStart} from "./shopify-auth.js";
+export {storeAuthCallback} from "./shopify-auth.js";
+export {storeWebhook} from "./shopify-webhooks.js";
 export {processShopifyWebhook, backfillFulfillmentStatus} from "./shopify-processor.js";
 export {shopifyProxy} from "./shopify-proxy.js";
 export {shopifyHealthCheck} from "./shopify-health.js";
@@ -32,6 +34,18 @@ export {shopifyDisconnect} from "./shopify-disconnect.js";
 
 // ── Account Management ─────────────────────────────────────
 export {deleteUserData} from "./delete-user-data.js";
+
+// ── Admin Dashboard ────────────────────────────────────────
+export {adminListUsers, adminUpdateUser, adminGetUser, adminResetPassword, adminDisableUser} from "./admin.js";
+
+// ── Admin Analytics ────────────────────────────────────────
+export {getRevenueMetrics, getSubscriptionMetrics, computeDailyMetrics} from "./analytics.js";
+
+// ── Billing & Subscriptions ────────────────────────────────
+export {paymobWebhook, validateSubscriptions, getSubscriptionStatus, cancelSubscription, sendPreExpiryReminders, toggleAutoRenew, removePaymentMethod, getPaymentHistory} from "./billing.js";
+export {createPaymentIntent} from "./paymob-order.js";
+export {setupSubscriptionPlans, getPaymobSubscription, suspendSubscription, resumeSubscription, cancelPaymobSubscription} from "./paymob-subscription.js";
+export {verifyIapReceipt} from "./iap-receipt.js";
 
 initializeApp();
 const db = getFirestore();
@@ -128,6 +142,22 @@ export const processRecurringTransactions = onSchedule(
     if (opsInBatch > 0) {
       await batch.commit();
     }
+
+    // Notify users about auto-created transactions
+    const userCounts = new Map<string, number>();
+    for (const doc of snapshot.docs) {
+      const uid = doc.data().user_id as string;
+      userCounts.set(uid, (userCounts.get(uid) || 0) + 1);
+    }
+    for (const [uid, n] of userCounts) {
+      await notifyUser(
+        uid,
+        "Recurring Transactions",
+        `${n} recurring transaction${n === 1 ? " was" : "s were"} auto-created today.`,
+        {type: "recurring_created", count: String(n)}
+      );
+    }
+
     logger.info(`Processed ${count} recurring transactions`);
   }
 );

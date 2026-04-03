@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:masari_app/shared/models/transaction_model.dart';
+import 'package:revvo_app/shared/models/transaction_model.dart';
 
 void main() {
   group('Transaction Model Tests', () {
@@ -28,8 +28,8 @@ void main() {
       final incomeTx = transaction.copyWith(amount: 15.5);
       final expenseTx = transaction.copyWith(amount: -15.5);
 
-      expect(incomeTx.formattedAmount, '+\$15.50');
-      expect(expenseTx.formattedAmount, '-\$15.50');
+      expect(incomeTx.formattedAmount, '+15.50');
+      expect(expenseTx.formattedAmount, '-15.50');
     });
 
     test('JSON serialization works correctly', () {

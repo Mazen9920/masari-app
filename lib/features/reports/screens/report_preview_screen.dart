@@ -149,13 +149,13 @@ class ReportPreviewScreen extends StatelessWidget {
                       color: AppColors.primaryNavy,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text('M', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    child: const Text('R', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                   ),
                   const SizedBox(width: 8),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('TechStyle Egypt', style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(AppLocalizations.of(context)!.businessName, style: TextStyle(color: AppColors.primaryNavy, fontWeight: FontWeight.bold, fontSize: 14)),
                       Text(AppLocalizations.of(context)!.reportMonthTitle('FEBRUARY 2026'), style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w500, fontSize: 9, letterSpacing: 0.5)),
                     ],
                   ),
@@ -281,7 +281,7 @@ class ReportPreviewScreen extends StatelessWidget {
                       Text(AppLocalizations.of(context)!.reportAiAnalysis, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.indigo.shade900)),
                       const SizedBox(height: 2),
                       Text(
-                        AppLocalizations.of(context)!.reportAiAnalysisMock,
+                        AppLocalizations.of(context)!.reportAiAnalysisPlaceholder,
                         style: TextStyle(fontSize: 9, color: Colors.indigo.shade800.withValues(alpha: 0.8), height: 1.5),
                       ),
                     ],
