@@ -68,10 +68,13 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
     // Calculate Money In / Out for selected period
     // Exclude cat_cogs — COGS is a non-cash accrual P&L entry.
     // The actual cash outflow for inventory is recorded as cat_supplier_payment.
+    // Exclude excludeFromPL transactions — these are unpaid/partial sale revenue;
+    // no cash was received, so they must not appear in cash flow.
     final dateRange = _getDateRange();
     final periodTransactions = transactions.where((t) => 
       !t.dateTime.isBefore(dateRange.start) && !t.dateTime.isAfter(dateRange.end)
         && t.categoryId != 'cat_cogs'
+        && !t.excludeFromPL
     ).toList();
 
     final double moneyIn = roundMoney(periodTransactions
@@ -106,8 +109,9 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
 
     // Period Opening Balance = user-set seed + all cash transactions BEFORE period start
     // (excludes cat_cogs — non-cash accrual entry)
+    // (excludes excludeFromPL — unpaid sale revenue is not cash)
     final double periodOpeningBalance = roundMoney(openingCash + transactions
-        .where((t) => t.dateTime.isBefore(dateRange.start) && t.categoryId != 'cat_cogs')
+        .where((t) => t.dateTime.isBefore(dateRange.start) && t.categoryId != 'cat_cogs' && !t.excludeFromPL)
         .fold(
       0.0,
       (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),

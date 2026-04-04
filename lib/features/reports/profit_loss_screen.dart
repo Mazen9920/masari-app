@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/services/share_service.dart';
 import '../../shared/models/transaction_model.dart';
+import '../../shared/models/sale_model.dart';
 import '../../shared/utils/money_utils.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/navigation/app_router.dart';
@@ -46,6 +47,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     // Reports need the full dataset, not just the first page.
     Future.microtask(() {
       ref.read(transactionsProvider.notifier).loadAll();
+      ref.read(salesProvider.notifier).loadAll();
     });
   }
 
@@ -178,6 +180,17 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     final cogsItems = buildBreakdownItems(cogsByCategory, cogs, cogsColors);
     final opexItems = buildBreakdownItems(opexByCategory, operatingExpenses, opexColors);
 
+    // ── Tax Collected (informational – liability, not revenue) ──
+    final salesState = ref.watch(salesProvider);
+    final sales = salesState.value ?? [];
+    double taxCollected = 0;
+    for (final sale in sales) {
+      if (sale.orderStatus == OrderStatus.cancelled) continue;
+      if (sale.date.isBefore(dateRange.start) || sale.date.isAfter(dateRange.end)) continue;
+      taxCollected += sale.taxAmount;
+    }
+    taxCollected = roundMoney(taxCollected);
+
     final isGrowth = ref.watch(isGrowthProvider);
     final hasData = filteredTransactions.isNotEmpty;
 
@@ -263,6 +276,14 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
                       .animate()
                       .fadeIn(duration: 400.ms, delay: 400.ms)
                       .slideY(begin: 0.05, end: 0, curve: Curves.easeOut),
+
+                  // Tax Collected (informational)
+                  if (taxCollected > 0) ...[
+                    const SizedBox(height: 16),
+                    _buildTaxCollectedNote(fmt, currency, taxCollected)
+                        .animate()
+                        .fadeIn(duration: 400.ms, delay: 450.ms),
+                  ],
 
                   if (isGrowth) ...[
                     const SizedBox(height: 20),
@@ -1190,6 +1211,53 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
               isPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
               size: 18,
               color: isPositive ? AppColors.chartGreen : AppColors.chartRed,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaxCollectedNote(NumberFormat fmt, String currency, double taxCollected) {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLight,
+        borderRadius: BorderRadius.circular(AppRadius.base),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.accentOrange.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.accentOrange),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.taxCollectedLabel,
+                  style: AppTypography.badge.copyWith(fontSize: 10, color: AppColors.textTertiary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$currency ${fmt.format(taxCollected)}',
+                  style: AppTypography.metricSmall.copyWith(fontSize: 14, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.taxCollectedNote,
+                  style: AppTypography.bodySmall.copyWith(fontSize: 10, color: AppColors.textTertiary),
+                ),
+              ],
             ),
           ),
         ],

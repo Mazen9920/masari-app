@@ -54,6 +54,9 @@ class ShopifyConnection {
   /// Human-readable name of the selected Shopify location.
   final String? shopifyLocationName;
 
+  /// Whether the setup wizard has been completed.
+  final bool setupCompleted;
+
   const ShopifyConnection({
     required this.userId,
     required this.shopDomain,
@@ -70,6 +73,7 @@ class ShopifyConnection {
     this.status = 'active',
     this.shopifyLocationId,
     this.shopifyLocationName,
+    this.setupCompleted = false,
   });
 
   // ── Computed ─────────────────────────────────────────────
@@ -102,6 +106,7 @@ class ShopifyConnection {
     String? status,
     String? shopifyLocationId,
     String? shopifyLocationName,
+    bool? setupCompleted,
   }) {
     return ShopifyConnection(
       userId: userId ?? this.userId,
@@ -119,6 +124,7 @@ class ShopifyConnection {
       status: status ?? this.status,
       shopifyLocationId: shopifyLocationId ?? this.shopifyLocationId,
       shopifyLocationName: shopifyLocationName ?? this.shopifyLocationName,
+      setupCompleted: setupCompleted ?? this.setupCompleted,
     );
   }
 
@@ -147,6 +153,7 @@ class ShopifyConnection {
           'shopify_location_id': shopifyLocationId,
         if (shopifyLocationName != null)
           'shopify_location_name': shopifyLocationName,
+        'setup_completed': setupCompleted,
       };
 
   factory ShopifyConnection.fromJson(Map<String, dynamic> json) {
@@ -169,6 +176,7 @@ class ShopifyConnection {
       status: json['status'] as String? ?? 'active',
       shopifyLocationId: json['shopify_location_id'] as String?,
       shopifyLocationName: json['shopify_location_name'] as String?,
+      setupCompleted: json['setup_completed'] as bool? ?? false,
     );
   }
 

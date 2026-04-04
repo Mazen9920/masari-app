@@ -104,11 +104,23 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
     }
     _exitSelectionMode();
     final notifier = ref.read(salesProvider.notifier);
+    final allTxns = ref.read(transactionsProvider).value ?? [];
+    final txnNotifier = ref.read(transactionsProvider.notifier);
     for (final sale in toUpdate) {
       await notifier.updateSale(sale.copyWith(
         paymentStatus: PaymentStatus.paid,
         amountPaid: sale.total,
       ));
+
+      // Now paid: include linked revenue txns in P&L / cash-basis reports
+      for (final tx in allTxns) {
+        if (tx.saleId == sale.id && tx.excludeFromPL) {
+          txnNotifier.updateTransaction(tx.copyWith(
+            excludeFromPL: false,
+            updatedAt: DateTime.now(),
+          ));
+        }
+      }
     }
     if (mounted) {
       final shopifyCount = toUpdate.where((s) =>

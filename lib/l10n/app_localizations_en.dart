@@ -2675,6 +2675,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationsPaymentSubtitle => 'Upcoming vendor payments';
 
   @override
+  String get notificationsSales => 'New Sales';
+
+  @override
+  String get notificationsSalesSubtitle => 'When a new sale is recorded';
+
+  @override
+  String get notificationsShopifyOrders => 'Shopify Orders';
+
+  @override
+  String get notificationsShopifySubtitle => 'Orders synced from Shopify';
+
+  @override
+  String get notificationsBilling => 'Subscription & Billing';
+
+  @override
+  String get notificationsBillingSubtitle =>
+      'Payments, renewals, and expiry alerts';
+
+  @override
   String get notificationsSectionReports => 'REPORTS';
 
   @override
@@ -7505,4 +7524,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get billingShareReceipt => 'Share Receipt';
+
+  @override
+  String get taxCollectedLabel => 'TAX COLLECTED (LIABILITY)';
+
+  @override
+  String get taxCollectedNote =>
+      'This is tax you collected on behalf of the government — it is not revenue.';
 }

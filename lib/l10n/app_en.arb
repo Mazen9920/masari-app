@@ -989,6 +989,12 @@
   "notificationsLowStockSubtitle": "When items hit minimum quantity",
   "notificationsPaymentReminders": "Payment Reminders",
   "notificationsPaymentSubtitle": "Upcoming vendor payments",
+  "notificationsSales": "New Sales",
+  "notificationsSalesSubtitle": "When a new sale is recorded",
+  "notificationsShopifyOrders": "Shopify Orders",
+  "notificationsShopifySubtitle": "Orders synced from Shopify",
+  "notificationsBilling": "Subscription & Billing",
+  "notificationsBillingSubtitle": "Payments, renewals, and expiry alerts",
   "notificationsSectionReports": "REPORTS",
   "notificationsWeeklyDigest": "Weekly Digest",
   "notificationsWeeklySubtitle": "Summary every Monday morning",
@@ -2983,5 +2989,7 @@
   "billingReceiptTxId": "Transaction ID",
   "billingReceiptSuccess": "Successful",
   "billingReceiptFailed": "Failed",
-  "billingShareReceipt": "Share Receipt"
+  "billingShareReceipt": "Share Receipt",
+  "taxCollectedLabel": "TAX COLLECTED (LIABILITY)",
+  "taxCollectedNote": "This is tax you collected on behalf of the government — it is not revenue."
 }

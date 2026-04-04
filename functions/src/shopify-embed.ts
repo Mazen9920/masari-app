@@ -35,7 +35,7 @@ function decrypt(encryptedStr: string, key: string): string {
  * Verifies a Shopify App Bridge session token (JWT, HS256).
  * Returns the shop hostname on success, null on failure.
  */
-function verifySessionToken(
+export function verifySessionToken(
   token: string,
   secret: string,
   apiKey: string,

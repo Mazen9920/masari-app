@@ -60,6 +60,33 @@ class NotificationPreferencesScreen extends ConsumerWidget {
             const SizedBox(height: 10),
             _buildCard([
               _buildToggleRow(
+                icon: Icons.point_of_sale_rounded,
+                iconColor: const Color(0xFF22C55E),
+                title: l10n.notificationsSales,
+                subtitle: l10n.notificationsSalesSubtitle,
+                value: settings.salesNotifications,
+                onChanged: (v) => notifier.setSales(v),
+              ),
+              _divider(),
+              _buildToggleRow(
+                icon: Icons.store_rounded,
+                iconColor: const Color(0xFF8B5CF6),
+                title: l10n.notificationsShopifyOrders,
+                subtitle: l10n.notificationsShopifySubtitle,
+                value: settings.shopifyOrderNotifications,
+                onChanged: (v) => notifier.setShopifyOrders(v),
+              ),
+              _divider(),
+              _buildToggleRow(
+                icon: Icons.receipt_long_rounded,
+                iconColor: const Color(0xFF0EA5E9),
+                title: l10n.notificationsBilling,
+                subtitle: l10n.notificationsBillingSubtitle,
+                value: settings.billingNotifications,
+                onChanged: (v) => notifier.setBilling(v),
+              ),
+              _divider(),
+              _buildToggleRow(
                 icon: Icons.inventory_2_outlined,
                 iconColor: const Color(0xFFEF4444),
                 title: l10n.notificationsLowStock,

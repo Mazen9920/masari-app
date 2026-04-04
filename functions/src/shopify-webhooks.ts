@@ -17,6 +17,7 @@ import {createHmac, timingSafeEqual} from "crypto";
 // ── Secrets ────────────────────────────────────────────────
 
 const shopifyApiSecret = defineSecret("SHOPIFY_API_SECRET");
+const shopifyApiSecret2 = defineSecret("SHOPIFY_API_SECRET_2");
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ function verifyWebhookHmac(
 
 export const storeWebhook = onRequest(
   {
-    secrets: [shopifyApiSecret],
+    secrets: [shopifyApiSecret, shopifyApiSecret2],
     region: "us-central1",
   },
   async (req, res) => {
@@ -88,12 +89,13 @@ export const storeWebhook = onRequest(
       return;
     }
 
-    // ── 1. Validate HMAC ──────────────────────────────────
+    // ── 1. Validate HMAC (try both app secrets) ──────────
     const rawBody = (req as unknown as {rawBody: Buffer}).rawBody;
-    if (
-      !rawBody ||
-      !verifyWebhookHmac(rawBody, hmacHeader, shopifyApiSecret.value().trim())
-    ) {
+    const hmacOk = rawBody && (
+      verifyWebhookHmac(rawBody, hmacHeader, shopifyApiSecret.value().trim()) ||
+      verifyWebhookHmac(rawBody, hmacHeader, shopifyApiSecret2.value().trim())
+    );
+    if (!hmacOk) {
       logger.warn("Webhook HMAC invalid", {topic, shopDomain});
       res.status(401).send("HMAC verification failed");
       return;

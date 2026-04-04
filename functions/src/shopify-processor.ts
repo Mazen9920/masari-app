@@ -742,7 +742,8 @@ async function handleOrderCreate(
     userId,
     "New Shopify Order",
     `Order #${shopifyOrderId} synced — ${saleItems.length} item${saleItems.length === 1 ? "" : "s"}`,
-    {type: "shopify_order_created", sale_id: saleId}
+    {type: "shopify_order_created", sale_id: saleId},
+    "shopify_orders"
   );
 
   logger.info("Order created in Revvo", {
@@ -1728,7 +1729,8 @@ async function handleOrderCancelled(
     userId,
     "Order Cancelled",
     `Shopify order #${shopifyOrderId} was cancelled. Stock restored.`,
-    {type: "shopify_order_cancelled", sale_id: saleId}
+    {type: "shopify_order_cancelled", sale_id: saleId},
+    "shopify_orders"
   );
 
   logger.info("Order cancelled in Revvo", {
@@ -2904,7 +2906,8 @@ async function handleAppUninstalled(userId: string): Promise<void> {
     userId,
     "Shopify Disconnected",
     "Your Shopify app was uninstalled. Reconnect from Settings to resume sync.",
-    {type: "shopify_disconnected"}
+    {type: "shopify_disconnected"},
+    "shopify_orders"
   );
 }
 

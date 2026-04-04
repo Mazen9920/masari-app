@@ -49,53 +49,81 @@ type SubscriptionStatus = "active" | "grace_period" | "expired" | "free";
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Computes the Paymob HMAC from the transaction callback object.
- * Paymob specifies exactly which fields to concatenate (sorted alphabetically)
- * and hash with SHA-512.
- *
+ * Paymob HMAC transaction callback fields (sorted alphabetically).
  * See: https://docs.paymob.com/docs/transaction-callbacks
+ */
+const HMAC_FIELDS = [
+  "amount_cents",
+  "created_at",
+  "currency",
+  "error_occured",
+  "has_parent_transaction",
+  "id",
+  "integration_id",
+  "is_3d_secure",
+  "is_auth",
+  "is_capture",
+  "is_refunded",
+  "is_standalone_payment",
+  "is_voided",
+  "order.id",
+  "owner",
+  "pending",
+  "source_data.pan",
+  "source_data.sub_type",
+  "source_data.type",
+  "success",
+];
+
+/** Resolve a dotted field path on an object (e.g. "order.id"). */
+function resolveField(obj: Record<string, unknown>, key: string): unknown {
+  const parts = key.split(".");
+  let val: unknown = obj;
+  for (const p of parts) {
+    val = (val as Record<string, unknown>)?.[p];
+  }
+  return val;
+}
+
+/**
+ * Stringify a value the way Paymob's Python backend does: str(value).
+ * Python: str(True)="True", str(False)="False", str(None)="None", str(50)="50".
+ */
+function pyStr(val: unknown): string {
+  if (val === true) return "True";
+  if (val === false) return "False";
+  if (val === null || val === undefined) return "";
+  return String(val);
+}
+
+/**
+ * Compute HMAC-SHA512 for Paymob transaction callback using Python-style
+ * boolean stringification (True/False) which matches Paymob's backend.
  */
 function computePaymobHmac(
   obj: Record<string, unknown>,
   secret: string
 ): string {
-  const fields = [
-    "amount_cents",
-    "created_at",
-    "currency",
-    "error_occured",
-    "has_parent_transaction",
-    "id",
-    "integration_id",
-    "is_3d_secure",
-    "is_auth",
-    "is_capture",
-    "is_refunded",
-    "is_standalone_payment",
-    "is_voided",
-    "order.id",
-    "owner",
-    "pending",
-    "source_data.pan",
-    "source_data.sub_type",
-    "source_data.type",
-    "success",
-  ];
-
-  const fieldValues: Record<string, string> = {};
-  const concatenated = fields
-    .map((key) => {
-      const parts = key.split(".");
-      let val: unknown = obj;
-      for (const p of parts) {
-        val = (val as Record<string, unknown>)?.[p];
-      }
-      const strVal = String(val ?? "");
-      fieldValues[key] = strVal;
-      return strVal;
-    })
+  const concatenated = HMAC_FIELDS
+    .map((key) => pyStr(resolveField(obj, key)))
     .join("");
+  return crypto
+    .createHmac("sha512", secret)
+    .update(concatenated)
+    .digest("hex");
+}
 
+/**
+ * Fallback: compute HMAC with lowercase booleans (true/false) for backward
+ * compatibility with older Paymob Accept API responses.
+ */
+function computePaymobHmacLower(
+  obj: Record<string, unknown>,
+  secret: string
+): string {
+  const concatenated = HMAC_FIELDS
+    .map((key) => String(resolveField(obj, key) ?? ""))
+    .join("");
   return crypto
     .createHmac("sha512", secret)
     .update(concatenated)
@@ -118,9 +146,6 @@ export const paymobWebhook = onRequest(
 
     try {
       const body = req.body;
-      // Intention API sends {transaction: {...}, hmac: "..."} at top level.
-      // Legacy Accept API sends {obj: {...}}.
-      const obj = body.obj ?? body.transaction ?? body;
 
       // Debug: log top-level body keys and subscription-related fields
       logger.info("paymobWebhook: body keys", {
@@ -128,9 +153,75 @@ export const paymobWebhook = onRequest(
         hasObj: !!body.obj,
         hasTransaction: !!body.transaction,
         subscription_id: body.subscription_id ?? "none",
-        api_source: obj.api_source ?? "none",
-        intention: body.intention ? Object.keys(body.intention).join(", ") : "none",
       });
+
+      // ── Card/subscription data callback (separate payload format) ────
+      // Paymob sends a second POST with {subscription_data, card_data,
+      // transaction_id, trigger_type, hmac} after the main transaction.
+      // Handle this BEFORE HMAC verification since the payload has no
+      // transaction fields to verify against.
+      const subscriptionData = body.subscription_data as Record<string, unknown> | undefined;
+      const cardData = body.card_data as Record<string, unknown> | undefined;
+      const callbackTxId = body.transaction_id as number | undefined;
+
+      if ((subscriptionData || cardData) && !body.transaction && !body.obj) {
+        logger.info("paymobWebhook: card/subscription data callback", {
+          trigger_type: body.trigger_type ?? "none",
+          transaction_id: callbackTxId ?? "none",
+          subscription_data: subscriptionData ? JSON.stringify(subscriptionData).substring(0, 500) : "none",
+          card_data: cardData ? JSON.stringify(cardData).substring(0, 500) : "none",
+        });
+
+        // Verify by matching transaction_id to an existing payment_log
+        if (callbackTxId) {
+          const txStr = String(callbackTxId);
+          const logSnap = await db().collection("payment_logs")
+            .where("paymob_transaction_id", "==", txStr)
+            .where("success", "==", true)
+            .limit(1)
+            .get();
+
+          if (!logSnap.empty) {
+            const logDoc = logSnap.docs[0].data();
+            const uid = logDoc.user_id as string;
+
+            const updateFields: Record<string, unknown> = {};
+
+            const subId = (subscriptionData as Record<string, unknown> | undefined)?.id as number | undefined;
+            if (subId) {
+              updateFields.paymob_subscription_id = subId;
+              updateFields.paymob_subscription_state = (subscriptionData as Record<string, unknown>).state ?? "active";
+              updateFields.paymob_auto_renew = true;
+            }
+
+            const token = (cardData as Record<string, unknown> | undefined)?.token as string | undefined;
+            if (token) {
+              updateFields.paymob_card_token_internal = token;
+            }
+
+            if (Object.keys(updateFields).length > 0) {
+              await db().collection("users").doc(uid).set(updateFields, {merge: true});
+              logger.info("paymobWebhook: saved subscription/card data", {
+                uid,
+                subscriptionId: subId ?? "none",
+                hasCardToken: !!token,
+              });
+            }
+          } else {
+            logger.warn("paymobWebhook: card/sub callback — no matching payment_log", {
+              transaction_id: callbackTxId,
+            });
+          }
+        }
+
+        res.status(200).send("OK — card/subscription data processed");
+        return;
+      }
+
+      // ── Transaction callback handling ────────────────────────────────
+      // Intention API sends {transaction: {...}, hmac: "..."} at top level.
+      // Legacy Accept API sends {obj: {...}}.
+      const obj = body.obj ?? body.transaction ?? body;
 
       // ── HMAC verification ────────────────────────────────────────────
       const receivedHmac =
@@ -146,18 +237,36 @@ export const paymobWebhook = onRequest(
       }
 
       const hmacSecret = paymobHmacSecret.value().trim();
-      const fieldBasedHmac = computePaymobHmac(obj, hmacSecret);
-
       const received = String(receivedHmac);
+
+      // ── Try multiple HMAC computation methods ────────────────────────
+      // Paymob's Python backend uses str(True)="True", str(False)="False"
+      // which differs from JavaScript's String(true)="true".
       let hmacValid = false;
-      if (received.length === fieldBasedHmac.length) {
+      let matchedMethod = "";
+
+      // Method 1: Python-style booleans (True/False) — Intention API
+      const pyHmac = computePaymobHmac(obj, hmacSecret);
+      if (received.length === pyHmac.length) {
         hmacValid = crypto.timingSafeEqual(
-          Buffer.from(received), Buffer.from(fieldBasedHmac)
+          Buffer.from(received), Buffer.from(pyHmac)
         );
+        if (hmacValid) matchedMethod = "python-style";
       }
 
+      // Method 2: JavaScript-style booleans (true/false) — legacy Accept API
       if (!hmacValid) {
-        // Also try raw body HMAC
+        const jsHmac = computePaymobHmacLower(obj, hmacSecret);
+        if (received.length === jsHmac.length) {
+          hmacValid = crypto.timingSafeEqual(
+            Buffer.from(received), Buffer.from(jsHmac)
+          );
+          if (hmacValid) matchedMethod = "js-style";
+        }
+      }
+
+      // Method 3: Raw body HMAC (some Paymob integrations)
+      if (!hmacValid) {
         const rawBody = typeof req.rawBody === "string"
           ? req.rawBody
           : req.rawBody?.toString("utf8") ?? "";
@@ -169,16 +278,90 @@ export const paymobWebhook = onRequest(
           hmacValid = crypto.timingSafeEqual(
             Buffer.from(received), Buffer.from(rawBodyHmac)
           );
+          if (hmacValid) matchedMethod = "raw-body";
         }
       }
 
-      if (!hmacValid) {
-        logger.warn("paymobWebhook: HMAC mismatch", {
-          receivedPrefix: received.substring(0, 8),
-          computedPrefix: fieldBasedHmac.substring(0, 8),
-        });
-        res.status(401).send("Invalid HMAC");
-        return;
+      if (hmacValid) {
+        logger.info("paymobWebhook: HMAC verified", {method: matchedMethod});
+      } else {
+        // HMAC field-based verification failed — Paymob's Intention API v1
+        // uses a different HMAC computation than the legacy Accept API docs.
+        // Fallback: verify the transaction directly with Paymob's legacy API.
+        const txId = obj.id ?? body.transaction?.id;
+        if (txId) {
+          try {
+            // Step 1: Get auth token via legacy API
+            const apiKey = paymobApiKey.value().trim();
+            const authRes = await fetch(
+              "https://accept.paymob.com/api/auth/tokens",
+              {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({api_key: apiKey}),
+              }
+            );
+
+            if (authRes.ok) {
+              const authData = await authRes.json() as Record<string, unknown>;
+              const authToken = authData.token as string;
+
+              // Step 2: Retrieve transaction details
+              const verifyRes = await fetch(
+                `https://accept.paymob.com/api/acceptance/transactions/${txId}`,
+                {headers: {"Authorization": `Bearer ${authToken}`}}
+              );
+
+              if (verifyRes.ok) {
+                const verifyData = await verifyRes.json() as Record<string, unknown>;
+                // Confirm the amount and success status match
+                const verifiedSuccess = verifyData.success === true || verifyData.success === "true";
+                const verifiedAmount = Number(verifyData.amount_cents ?? 0);
+                const webhookAmount = Number(obj.amount_cents ?? 0);
+                if (
+                  verifiedSuccess === (obj.success === true || obj.success === "true") &&
+                  verifiedAmount === webhookAmount
+                ) {
+                  hmacValid = true;
+                  matchedMethod = "api-verification";
+                  logger.info("paymobWebhook: verified via Paymob API", {
+                    txId: String(txId),
+                    amount: verifiedAmount,
+                    success: verifiedSuccess,
+                  });
+                } else {
+                  logger.warn("paymobWebhook: API verification data mismatch", {
+                    txId: String(txId),
+                    webhookSuccess: String(obj.success),
+                    apiSuccess: String(verifyData.success),
+                    webhookAmount: webhookAmount,
+                    apiAmount: verifiedAmount,
+                  });
+                }
+              } else {
+                logger.warn("paymobWebhook: API transaction lookup failed", {
+                  txId: String(txId),
+                  status: verifyRes.status,
+                });
+              }
+            } else {
+              logger.warn("paymobWebhook: API auth token request failed", {
+                status: authRes.status,
+              });
+            }
+          } catch (verifyErr) {
+            logger.error("paymobWebhook: API verification error", verifyErr);
+          }
+        }
+
+        if (!hmacValid) {
+          logger.warn("paymobWebhook: HMAC mismatch and API verification failed", {
+            receivedPrefix: received.substring(0, 8),
+            pyHmacPrefix: pyHmac.substring(0, 8),
+          });
+          res.status(401).send("Invalid HMAC");
+          return;
+        }
       }
 
       // ── Extract payment data ─────────────────────────────────────────
@@ -203,70 +386,6 @@ export const paymobWebhook = onRequest(
       // Format: "{uid}_{plan}_{timestamp}"
       const separatorIdx = merchantOrderId.indexOf("_");
       if (!merchantOrderId || separatorIdx === -1) {
-        // ── Check if this is a card/subscription data callback ─────────
-        // Paymob sends a second POST with {subscription_data, card_data,
-        // transaction_id, trigger_type} after the main transaction callback.
-        // This carries the subscription ID and card token we need.
-        const subscriptionData = body.subscription_data as Record<string, unknown> | undefined;
-        const cardData = body.card_data as Record<string, unknown> | undefined;
-        const callbackTxId = body.transaction_id as number | undefined;
-
-        if (subscriptionData || cardData) {
-          logger.info("paymobWebhook: card/subscription data callback", {
-            trigger_type: body.trigger_type ?? "none",
-            transaction_id: callbackTxId ?? "none",
-            subscription_data: subscriptionData ? JSON.stringify(subscriptionData).substring(0, 500) : "none",
-            card_data: cardData ? JSON.stringify(cardData).substring(0, 500) : "none",
-          });
-
-          // Find the user by matching the transaction_id to a payment_log
-          if (callbackTxId) {
-            const txStr = String(callbackTxId);
-            const logSnap = await db().collection("payment_logs")
-              .where("paymob_transaction_id", "==", txStr)
-              .where("success", "==", true)
-              .limit(1)
-              .get();
-
-            if (!logSnap.empty) {
-              const logDoc = logSnap.docs[0].data();
-              const uid = logDoc.user_id as string;
-
-              const updateFields: Record<string, unknown> = {};
-
-              // Extract subscription ID
-              const subId = (subscriptionData as Record<string, unknown> | undefined)?.id as number | undefined;
-              if (subId) {
-                updateFields.paymob_subscription_id = subId;
-                updateFields.paymob_subscription_state = (subscriptionData as Record<string, unknown>).state ?? "active";
-                updateFields.paymob_auto_renew = true;
-              }
-
-              // Extract card token
-              const token = (cardData as Record<string, unknown> | undefined)?.token as string | undefined;
-              if (token) {
-                updateFields.paymob_card_token_internal = token;
-              }
-
-              if (Object.keys(updateFields).length > 0) {
-                await db().collection("users").doc(uid).set(updateFields, {merge: true});
-                logger.info("paymobWebhook: saved subscription/card data", {
-                  uid,
-                  subscriptionId: subId ?? "none",
-                  hasCardToken: !!token,
-                });
-              }
-            } else {
-              logger.warn("paymobWebhook: card/sub callback — no matching payment_log", {
-                transaction_id: callbackTxId,
-              });
-            }
-          }
-
-          res.status(200).send("OK — card/subscription data processed");
-          return;
-        }
-
         // Paymob sometimes sends extra callbacks (3DS verification, etc.)
         // with no merchant_order_id — acknowledge without processing.
         logger.info("paymobWebhook: callback without merchant_order_id — skipping", {
@@ -314,7 +433,8 @@ export const paymobWebhook = onRequest(
             uid,
             "Renewal Payment Issue",
             "We had trouble charging your card. Paymob will retry automatically.",
-            {type: "auto_renewal_retry", plan}
+            {type: "auto_renewal_retry", plan},
+            "billing"
           );
         }
 
@@ -494,7 +614,8 @@ export const paymobWebhook = onRequest(
         isRenewal
           ? `Your ${tier.charAt(0).toUpperCase() + tier.slice(1)} subscription has been automatically renewed until ${expiresAt.toLocaleDateString("en-US", {year: "numeric", month: "long", day: "numeric"})}.`
           : `Your ${tier.charAt(0).toUpperCase() + tier.slice(1)} subscription is active until ${expiresAt.toLocaleDateString("en-US", {year: "numeric", month: "long", day: "numeric"})}.`,
-        {type: isRenewal ? "auto_renewal_success" : "payment_success", plan}
+        {type: isRenewal ? "auto_renewal_success" : "payment_success", plan},
+        "billing"
       );
 
       res.status(200).send("OK");
@@ -544,7 +665,8 @@ export const validateSubscriptions = onSchedule(
           doc.id,
           "Subscription Expired",
           "Your subscription has ended. Renew to keep Growth features.",
-          {type: "subscription_expired"}
+          {type: "subscription_expired"},
+          "billing"
         );
       } else {
         // Within grace period — warn but keep tier
@@ -555,7 +677,8 @@ export const validateSubscriptions = onSchedule(
           doc.id,
           "Subscription Expiring",
           "Your subscription expires soon. Renew to avoid losing access.",
-          {type: "subscription_grace"}
+          {type: "subscription_grace"},
+          "billing"
         );
         movedToGrace++;
       }
@@ -578,7 +701,8 @@ export const validateSubscriptions = onSchedule(
         doc.id,
         "Subscription Expired",
         "Your grace period has ended. Renew to restore Growth features.",
-        {type: "subscription_expired"}
+        {type: "subscription_expired"},
+        "billing"
       );
       downgraded++;
     }
@@ -777,7 +901,8 @@ export const sendPreExpiryReminders = onSchedule(
         paymentSource === "iap"
           ? "Your subscription renews automatically through the App Store / Google Play."
           : "Renew now to keep your Growth features.",
-        {type: "pre_expiry_3d"}
+        {type: "pre_expiry_3d"},
+        "billing"
       );
       sent++;
     }
@@ -811,7 +936,8 @@ export const sendPreExpiryReminders = onSchedule(
         paymentSource === "iap"
           ? "Your subscription renews automatically through the App Store / Google Play."
           : "Renew today to avoid losing access to Growth features.",
-        {type: "pre_expiry_1d"}
+        {type: "pre_expiry_1d"},
+        "billing"
       );
       sent++;
     }

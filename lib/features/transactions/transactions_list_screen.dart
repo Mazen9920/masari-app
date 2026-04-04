@@ -111,6 +111,8 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     final notifier = ref.read(salesProvider.notifier);
     final shopifyApi = ref.read(shopifyApiServiceProvider);
     
+    final allTxns = ref.read(transactionsProvider).value ?? [];
+    final txnNotifier = ref.read(transactionsProvider.notifier);
     for (final sale in toUpdate) {
       final updated = sale.copyWith(
         paymentStatus: PaymentStatus.paid,
@@ -118,6 +120,16 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
         updatedAt: DateTime.now(),
       );
       await notifier.updateSale(updated);
+
+      // Now paid: include linked revenue txns in P&L / cash-basis reports
+      for (final tx in allTxns) {
+        if (tx.saleId == sale.id && tx.excludeFromPL) {
+          txnNotifier.updateTransaction(tx.copyWith(
+            excludeFromPL: false,
+            updatedAt: DateTime.now(),
+          ));
+        }
+      }
       
       // Sync to Shopify if linked
       if (sale.externalSource == 'shopify' && sale.externalOrderId != null) {

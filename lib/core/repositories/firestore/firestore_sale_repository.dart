@@ -174,101 +174,14 @@ class FirestoreSaleRepository implements SaleRepository {
             product = Product.fromJson(data);
           }
 
-          final variantIndex =
-              product.variants.indexWhere((v) => v.id == deduction.variantId);
-          if (variantIndex == -1) continue;
-
-          final variant = product.variants[variantIndex];
-          final delta = -deduction.quantity;
-          final newStock = variant.currentStock + delta;
-          // Allow stock to go to zero — UI already warned the user
-          final clampedStock = newStock < 0 ? 0 : newStock;
-
-          // Cost layer consumption
-          var layers = List<CostLayer>.from(variant.effectiveCostLayers);
-          double movementUnitCost = variant.costPrice;
-          final absQty = deduction.quantity;
-
-          if (deduction.valuationMethod == 'average' || layers.isEmpty) {
-            movementUnitCost = variant.costPrice;
-            if (layers.isNotEmpty) {
-              final totalLayerQty =
-                  layers.fold<int>(0, (s, l) => s + l.remainingQty);
-              if (totalLayerQty > 0) {
-                final updated = <CostLayer>[];
-                // Accumulator pattern: track cumulative assigned count
-                // to guarantee the sum of all takes == absQty exactly.
-                int cumulativeAssigned = 0;
-                for (var idx = 0; idx < layers.length; idx++) {
-                  final layer = layers[idx];
-                  final idealCumulative = ((idx + 1) == layers.length)
-                      ? absQty
-                      : (layer.remainingQty * absQty / totalLayerQty).round();
-                  final take = ((idx + 1) == layers.length)
-                      ? (absQty - cumulativeAssigned).clamp(0, layer.remainingQty)
-                      : (idealCumulative).clamp(0, layer.remainingQty);
-                  cumulativeAssigned += take;
-                  final newQty = layer.remainingQty - take;
-                  if (newQty > 0) updated.add(layer.copyWith(remainingQty: newQty));
-                }
-                layers = updated;
-              }
-            }
-          } else {
-            if (deduction.valuationMethod == 'lifo') {
-              layers.sort((a, b) => b.date.compareTo(a.date));
-            } else {
-              layers.sort((a, b) => a.date.compareTo(b.date));
-            }
-            var remaining = absQty;
-            var totalCost = 0.0;
-            final updated = <CostLayer>[];
-            for (final layer in layers) {
-              if (remaining <= 0) { updated.add(layer); continue; }
-              final take =
-                  remaining < layer.remainingQty ? remaining : layer.remainingQty;
-              totalCost += take * layer.unitCost;
-              remaining -= take;
-              final newQty = layer.remainingQty - take;
-              if (newQty > 0) updated.add(layer.copyWith(remainingQty: newQty));
-            }
-            movementUnitCost = absQty > 0
-                ? (totalCost / absQty * 100).roundToDouble() / 100
-                : variant.costPrice;
-            layers = updated;
-          }
-
-          // Recalculate WAC from remaining layers
-          double newCostPrice;
-          final totalLayerStock =
-              layers.fold<int>(0, (s, l) => s + l.remainingQty);
-          if (totalLayerStock > 0) {
-            final totalValue =
-                layers.fold<double>(0, (s, l) => s + l.remainingQty * l.unitCost);
-            newCostPrice = (totalValue / totalLayerStock * 100).roundToDouble() / 100;
-          } else {
-            newCostPrice = variant.costPrice;
-          }
-
-          final movement = StockMovement(
-            type: 'Sale',
-            quantity: delta,
-            dateTime: DateTime.now(),
+          final result = computeStockChange(
+            product: product,
             variantId: deduction.variantId,
-            unitCost: movementUnitCost,
+            delta: -deduction.quantity,
+            valuationMethod: deduction.valuationMethod,
+            reason: 'Sale',
           );
-
-          final updatedVariant = variant.copyWith(
-            currentStock: clampedStock,
-            costPrice: newCostPrice,
-            costLayers: layers,
-            movements: [...variant.movements, movement],
-          );
-
-          final updatedVariants = List<ProductVariant>.from(product.variants);
-          updatedVariants[variantIndex] = updatedVariant;
-          productUpdates[deduction.productId] =
-              product.copyWith(variants: updatedVariants, updatedAt: DateTime.now());
+          productUpdates[deduction.productId] = result.updatedProduct;
         }
 
         // ── Phase 3: WRITE everything atomically ─────────────────

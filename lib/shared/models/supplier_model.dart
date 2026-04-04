@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/money_utils.dart';
+
 /// Represents a supplier entity.
 class Supplier {
   final String id;
@@ -113,7 +115,7 @@ class Supplier {
       email: json['email'] as String? ?? '',
       whatsappAvailable: json['whatsapp_available'] as bool? ?? false,
       paymentTerms: json['payment_terms'] as String? ?? 'On Receipt',
-      balance: (json['balance'] as num?)?.toDouble() ?? 0,
+      balance: roundMoney((json['balance'] as num?)?.toDouble() ?? 0),
       address: json['address'] as String? ?? '',
       notes: json['notes'] as String? ?? '',
       supplierId: json['supplier_id'] as String? ?? '',
@@ -130,7 +132,7 @@ class Supplier {
     'email': email,
     'whatsapp_available': whatsappAvailable,
     'payment_terms': paymentTerms,
-    'balance': balance,
+    'balance': roundMoney(balance),
     'address': address,
     'notes': notes,
     'supplier_id': supplierId,

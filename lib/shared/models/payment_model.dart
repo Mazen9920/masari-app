@@ -1,3 +1,5 @@
+import '../utils/money_utils.dart';
+
 /// A recorded supplier payment.
 class Payment {
   final String id;
@@ -64,7 +66,7 @@ class Payment {
       'user_id': userId,
       'supplier_id': supplierId,
       'supplier_name': supplierName,
-      'amount': amount,
+      'amount': roundMoney(amount),
       'date': date.toIso8601String(),
       'method': method,
       'notes': notes,
@@ -81,7 +83,7 @@ class Payment {
       userId: json['user_id'] as String? ?? '',
       supplierId: json['supplier_id'] as String,
       supplierName: json['supplier_name'] as String,
-      amount: (json['amount'] as num).toDouble(),
+      amount: roundMoney((json['amount'] as num).toDouble()),
       date: DateTime.parse(json['date'] as String),
       method: json['method'] as String? ?? 'Cash',
       notes: json['notes'] as String? ?? '',

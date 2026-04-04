@@ -619,6 +619,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                             variantId,
                             _adjustQuantity,
                             _adjustReason,
+                            unitCost: _adjustQuantity > 0 && variant != null && variant.costPrice > 0
+                                ? variant.costPrice
+                                : null,
                             valuationMethod: ref.read(appSettingsProvider).valuationMethod,
                           );
                       if (!mounted) return;

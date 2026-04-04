@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -212,6 +214,24 @@ class FirestoreProductRepository implements ProductRepository {
     }
   }
 
+  @override
+  Future<Result<void>> markInventoryPushed(String id, String variantId, int stock) async {
+    try {
+      await _collection.doc(id).update({
+        '_last_modified_by': 'masari',
+        'updated_at': DateTime.now().toIso8601String(),
+        '_last_inventory_push': {
+          'variant_id': variantId,
+          'stock': stock,
+          'at': DateTime.now().toIso8601String(),
+        },
+      });
+      return Result.success(null);
+    } catch (e) {
+      return Result.failure('Failed to mark inventory pushed: $e');
+    }
+  }
+
   /// Transaction-based stock adjustment (original implementation).
   Future<Result<Product>> _adjustStockTransaction(
       String id, String variantId, int delta, String reason,
@@ -227,148 +247,31 @@ class FirestoreProductRepository implements ProductRepository {
         data['id'] = snapshot.id;
         final product = Product.fromJson(data);
 
-        final variantIndex =
-            product.variants.indexWhere((v) => v.id == variantId);
-        if (variantIndex == -1) {
-          throw Exception( 'Variant not found: $variantId');
-        }
-        final variant = product.variants[variantIndex];
-
-        final newStock = variant.currentStock + delta;
-        if (newStock < 0) {
-          throw Exception(
-             'Insufficient stock: ${product.name} / ${variant.displayName} '
-            'has ${variant.currentStock} units, cannot adjust by $delta',
+        // Log warning when stock would go negative (before delegating)
+        final variant = product.variants.where((v) => v.id == variantId).firstOrNull;
+        if (variant != null && variant.currentStock + delta < 0) {
+          developer.log(
+            'Stock would go negative: ${product.name} / ${variant.displayName} '
+            'has ${variant.currentStock} units, adjusting by $delta — clamping to 0',
+            name: 'FirestoreProductRepository',
           );
         }
 
-        // --- Cost layer logic ---
-        // clearLegacyLayers: skip synthetic legacy migration (used for
-        // breakdown outputs so manually-entered costPrice doesn't pollute WAC)
-        var layers = (clearLegacyLayers && variant.costLayers.isEmpty)
-            ? <CostLayer>[]
-            : List<CostLayer>.from(variant.effectiveCostLayers);
-        double movementUnitCost = variant.costPrice;
-
-        if (skipCostLayer && delta > 0) {
-          // ── MANUFACTURED RESTOCK: adjust qty only, no cost layer ──
-          movementUnitCost = unitCost ?? variant.costPrice;
-        } else if (delta > 0 && unitCost != null) {
-          // ── RESTOCK: add a new cost layer ──
-          layers.add(CostLayer(
-            date: DateTime.now(),
-            unitCost: unitCost,
-            remainingQty: delta,
-          ));
-          movementUnitCost = unitCost;
-        } else if (delta < 0) {
-          // ── CONSUMPTION: consume layers based on valuation method ──
-          final absQty = -delta;
-
-          if (valuationMethod == 'average' || layers.isEmpty) {
-            // Average: reduce all layers proportionally, COGS = WAC
-            movementUnitCost = variant.costPrice;
-            if (layers.isNotEmpty) {
-              final totalLayerQty =
-                  layers.fold<int>(0, (s, l) => s + l.remainingQty);
-              if (totalLayerQty > 0) {
-                final updated = <CostLayer>[];
-                // Accumulator pattern: track cumulative assigned count
-                // to guarantee the sum of all takes == absQty exactly.
-                int cumulativeAssigned = 0;
-                for (var idx = 0; idx < layers.length; idx++) {
-                  final layer = layers[idx];
-                  final idealCumulative = ((idx + 1) == layers.length)
-                      ? absQty // last layer gets all remaining
-                      : (layer.remainingQty * absQty / totalLayerQty).round();
-                  // For non-last layers, compute running total
-                  final take = ((idx + 1) == layers.length)
-                      ? (absQty - cumulativeAssigned).clamp(0, layer.remainingQty)
-                      : (idealCumulative).clamp(0, layer.remainingQty);
-                  cumulativeAssigned += take;
-                  final newQty = layer.remainingQty - take;
-                  if (newQty > 0) {
-                    updated.add(layer.copyWith(remainingQty: newQty));
-                  }
-                }
-                layers = updated;
-              }
-            }
-          } else {
-            // FIFO or LIFO: consume specific layers
-            if (valuationMethod == 'lifo') {
-              layers.sort((a, b) => b.date.compareTo(a.date)); // newest first
-            } else {
-              layers.sort((a, b) => a.date.compareTo(b.date)); // oldest first
-            }
-
-            var remaining = absQty;
-            var totalCost = 0.0;
-            final updated = <CostLayer>[];
-
-            for (final layer in layers) {
-              if (remaining <= 0) {
-                updated.add(layer);
-                continue;
-              }
-              final take =
-                  remaining < layer.remainingQty ? remaining : layer.remainingQty;
-              totalCost += take * layer.unitCost;
-              remaining -= take;
-              final newQty = layer.remainingQty - take;
-              if (newQty > 0) {
-                updated.add(layer.copyWith(remainingQty: newQty));
-              }
-            }
-
-            movementUnitCost = absQty > 0
-                ? (totalCost / absQty * 100).roundToDouble() / 100
-                : variant.costPrice;
-            layers = updated;
-          }
-        }
-
-        // Recalculate WAC from remaining layers (skip for manufactured products)
-        double newCostPrice;
-        if (skipCostLayer && delta > 0) {
-          newCostPrice = variant.costPrice; // preserve existing cost
-        } else {
-        final totalLayerStock =
-            layers.fold<int>(0, (s, l) => s + l.remainingQty);
-        if (totalLayerStock > 0) {
-          final totalValue = layers.fold<double>(
-              0, (s, l) => s + l.remainingQty * l.unitCost);
-          newCostPrice = (totalValue / totalLayerStock * 100).roundToDouble() / 100;
-        } else if (unitCost != null) {
-          newCostPrice = unitCost;
-        } else {
-          newCostPrice = variant.costPrice;
-        }
-        }
-
-        final movement = StockMovement(
-          type: reason,
-          quantity: delta,
-          dateTime: DateTime.now(),
+        final changeResult = computeStockChange(
+          product: product,
           variantId: variantId,
-          unitCost: movementUnitCost,
+          delta: delta,
+          valuationMethod: valuationMethod,
+          reason: reason,
+          unitCost: unitCost,
           supplierName: supplierName,
+          clearLegacyLayers: clearLegacyLayers,
+          skipCostLayer: skipCostLayer,
         );
 
-        final updatedVariant = variant.copyWith(
-          currentStock: newStock,
-          costPrice: newCostPrice,
-          costLayers: layers,
-          movements: [...variant.movements, movement],
-        );
-
-        final updatedVariants = List<ProductVariant>.from(product.variants);
-        updatedVariants[variantIndex] = updatedVariant;
-
-        final updatedProduct = product.copyWith(
-          variants: updatedVariants,
-          updatedAt: DateTime.now(),
-        );
+        final updatedProduct = changeResult.updatedProduct;
+        final updatedVariant = updatedProduct.variants
+            .firstWhere((v) => v.id == variantId);
 
         final json = updatedProduct.toJson();
         json.remove('id');
@@ -376,7 +279,7 @@ class FirestoreProductRepository implements ProductRepository {
         json['_last_modified_by'] = 'masari';
         json['_last_inventory_push'] = {
           'variant_id': variantId,
-          'stock': newStock,
+          'stock': updatedVariant.currentStock,
           'at': DateTime.now().toIso8601String(),
         };
 

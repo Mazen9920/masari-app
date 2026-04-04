@@ -70,6 +70,23 @@ class _ShopifySetupWizardScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // If reopened after OAuth completed (e.g. app was killed & relaunched),
+    // detect the active connection and skip ahead to the location step.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _resumeIfActive());
+  }
+
+  Future<void> _resumeIfActive() async {
+    await ref.read(shopifyConnectionProvider.notifier).refresh();
+    if (!mounted) return;
+    final conn = ref.read(shopifyConnectionProvider).value;
+    if (conn != null && conn.isActive && !conn.setupCompleted) {
+      setState(() {
+        _oauthCompleted = true;
+        _waitingForOAuth = false;
+      });
+      _goToStep(2); // location selection
+      _fetchLocations();
+    }
   }
 
   @override

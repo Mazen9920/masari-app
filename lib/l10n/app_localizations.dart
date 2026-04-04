@@ -4950,6 +4950,42 @@ abstract class AppLocalizations {
   /// **'Upcoming vendor payments'**
   String get notificationsPaymentSubtitle;
 
+  /// No description provided for @notificationsSales.
+  ///
+  /// In en, this message translates to:
+  /// **'New Sales'**
+  String get notificationsSales;
+
+  /// No description provided for @notificationsSalesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'When a new sale is recorded'**
+  String get notificationsSalesSubtitle;
+
+  /// No description provided for @notificationsShopifyOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'Shopify Orders'**
+  String get notificationsShopifyOrders;
+
+  /// No description provided for @notificationsShopifySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders synced from Shopify'**
+  String get notificationsShopifySubtitle;
+
+  /// No description provided for @notificationsBilling.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription & Billing'**
+  String get notificationsBilling;
+
+  /// No description provided for @notificationsBillingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payments, renewals, and expiry alerts'**
+  String get notificationsBillingSubtitle;
+
   /// No description provided for @notificationsSectionReports.
   ///
   /// In en, this message translates to:
@@ -13345,6 +13381,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Share Receipt'**
   String get billingShareReceipt;
+
+  /// No description provided for @taxCollectedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'TAX COLLECTED (LIABILITY)'**
+  String get taxCollectedLabel;
+
+  /// No description provided for @taxCollectedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This is tax you collected on behalf of the government — it is not revenue.'**
+  String get taxCollectedNote;
 }
 
 class _AppLocalizationsDelegate

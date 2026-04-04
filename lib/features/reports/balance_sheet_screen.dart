@@ -70,10 +70,13 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
     // Filter date: balance sheet is "as of" the period end
     final asOf = _period.range.end;
 
-    // Bank balance = opening cash + transactions up to the selected date
+    // Bank balance = opening cash + cash-basis transactions up to the selected date.
+    // Exclude transactions flagged excludeFromPL (unpaid/partial sale revenue)
+    // because no cash was actually received — they belong in AR, not bank/cash.
     final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
     final double bankBalance = roundMoney(openingCash + allTransactions
         .where((t) => !t.dateTime.isAfter(asOf))
+        .where((t) => !t.excludeFromPL)
         .fold(
       0.0,
       (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),

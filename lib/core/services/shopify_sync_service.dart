@@ -189,6 +189,10 @@ class ShopifySyncService {
       }
     }
 
+    // Set echo-prevention metadata so the returning webhook is detected
+    // as our own push and skipped by the Cloud Function.
+    await _productRepo.markInventoryPushed(productId, variantId, newStock);
+
     await _logRepo.log(ShopifySyncLogEntry(
       id: '',
       userId: '',
@@ -277,11 +281,21 @@ class ShopifySyncService {
     for (final item in items) {
       if (!item.hasChange) continue;
 
-      final result = await syncInventoryToShopify(
+      var result = await syncInventoryToShopify(
         productId: item.revvoProductId,
         variantId: item.revvoVariantId,
         newStock: item.revvoStock,
       );
+
+      // One retry on failure (covers transient network / rate-limit errors)
+      if (!result.isSuccess) {
+        await Future.delayed(const Duration(seconds: 2));
+        result = await syncInventoryToShopify(
+          productId: item.revvoProductId,
+          variantId: item.revvoVariantId,
+          newStock: item.revvoStock,
+        );
+      }
 
       if (result.isSuccess) {
         pushed++;
@@ -651,6 +665,7 @@ class ShopifySyncService {
         mapping.revvoVariantId,
         delta,
         'Shopify inventory sync',
+        unitCost: delta > 0 && variant.costPrice > 0 ? variant.costPrice : null,
         valuationMethod: valuationMethod,
       );
       updated++;
@@ -1202,11 +1217,25 @@ class ShopifySyncService {
       if (!item.hasChange) continue;
 
       // delta = shopifyStock - revvoStock (already computed in preview)
+      // For positive deltas (stock increase), pass current WAC so a cost
+      // layer is created for the added units.
+      double? unitCost;
+      if (item.delta > 0) {
+        final prodResult = await _productRepo.getProductById(item.revvoProductId);
+        if (prodResult.isSuccess) {
+          final variant = prodResult.data!.variants.firstWhere(
+            (v) => v.id == item.revvoVariantId,
+            orElse: () => prodResult.data!.variants.first,
+          );
+          if (variant.costPrice > 0) unitCost = variant.costPrice;
+        }
+      }
       await _productRepo.adjustStock(
         item.revvoProductId,
         item.revvoVariantId,
         item.delta,
         'Shopify inventory sync',
+        unitCost: unitCost,
         valuationMethod: valuationMethod,
       );
       updated++;

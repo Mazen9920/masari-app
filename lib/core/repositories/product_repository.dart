@@ -37,6 +37,10 @@ abstract class ProductRepository {
   /// managed separately.
   Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false});
 
+  /// Writes echo-prevention metadata on a product after stock has been
+  /// pushed to Shopify, so the returning webhook can detect the echo.
+  Future<Result<void>> markInventoryPushed(String id, String variantId, int stock);
+
   /// Performs a full breakdown operation atomically:
   /// deducts [qty] from [sourceVariantId] and adds proportional quantities
   /// to each output variant, all within a single Firestore transaction.

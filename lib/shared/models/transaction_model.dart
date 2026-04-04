@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'category_data.dart';
+import '../utils/money_utils.dart';
 
 /// Transaction model used across list, detail, and filter screens.
 class Transaction {
@@ -96,7 +97,7 @@ class Transaction {
       'id': id,
       'user_id': userId,
       'title': title,
-      'amount': amount,
+      'amount': roundMoney(amount),
       'date_time': Timestamp.fromDate(dateTime),
       'category_id': categoryId,
       'note': note,
@@ -152,7 +153,7 @@ class Transaction {
       id: json['id']?.toString() ?? '',
       userId: json['user_id']?.toString() ?? 'system',
       title: json['title']?.toString() ?? '',
-      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      amount: roundMoney((json['amount'] as num?)?.toDouble() ?? 0),
       dateTime: _parseDate(json['date_time']),
       categoryId: resolvedCategory.id,
       note: json['note']?.toString(),

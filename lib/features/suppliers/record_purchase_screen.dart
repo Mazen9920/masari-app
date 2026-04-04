@@ -53,7 +53,10 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   double get _subtotal =>
       _items.fold<double>(0, (s, item) => s + item.total);
 
-  double get _tax => double.tryParse(_taxCtrl.text) ?? 0;
+  double get _tax {
+    final v = double.tryParse(_taxCtrl.text) ?? 0;
+    return v < 0 ? 0 : v;
+  }
 
   double get _total => _subtotal + _tax;
 
@@ -74,6 +77,11 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   void _save() {
     if (_items.isEmpty) return;
     if (_selectedSupplierId == null) return;
+
+    // Filter out invalid items (qty <= 0 or unitPrice <= 0)
+    final validItems = _items.where((item) => item.qty > 0 && item.unitPrice > 0).toList();
+    if (validItems.isEmpty) return;
+
     final suppliers = ref.read(suppliersProvider).value ?? [];
     final supplierId = _selectedSupplierId!;
     final supplierName = suppliers
@@ -88,7 +96,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
       supplierName: supplierName,
       date: _purchaseDate,
       referenceNo: _refCtrl.text.trim(),
-      items: _items.map((item) => PurchaseItem(
+      items: validItems.map((item) => PurchaseItem(
         name: item.name,
         category: item.category,
         qty: item.qty,
@@ -850,12 +858,15 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                           controller: TextEditingController(
                               text: '${item.qty}'),
                           keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                           textAlign: TextAlign.center,
                           onChanged: (v) {
-                            setState(() {
-                              _items[i] = item.copyWith(
-                                  qty: int.tryParse(v) ?? item.qty);
-                            });
+                            final parsed = int.tryParse(v);
+                            if (parsed != null && parsed > 0) {
+                              setState(() {
+                                _items[i] = item.copyWith(qty: parsed);
+                              });
+                            }
                           },
                           decoration: InputDecoration(
                             filled: true,
@@ -911,13 +922,15 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                           controller: TextEditingController(
                               text: '${item.unitPrice.toInt()}'),
                           keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
                           textAlign: TextAlign.right,
                           onChanged: (v) {
-                            setState(() {
-                              _items[i] = item.copyWith(
-                                  unitPrice:
-                                      double.tryParse(v) ?? item.unitPrice);
-                            });
+                            final parsed = double.tryParse(v);
+                            if (parsed != null && parsed >= 0) {
+                              setState(() {
+                                _items[i] = item.copyWith(unitPrice: parsed);
+                              });
+                            }
                           },
                           decoration: InputDecoration(
                             filled: true,
@@ -1036,6 +1049,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                     controller: _taxCtrl,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
                     textAlign: TextAlign.right,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(

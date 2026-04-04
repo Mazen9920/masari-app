@@ -34,6 +34,7 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
 
   AppLocalizations get l10n => AppLocalizations.of(context)!;
   DateTime? _lastAutoRefreshAt;
+  bool _redirectedToWizard = false;
 
   @override
   void initState() {
@@ -79,8 +80,25 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
                 loading: () => _buildConnectForm(),
                 error: (e, _) => _buildConnectForm(),
                 data: (conn) {
-                  if (conn == null || conn.isDisconnected) {
+                  if (conn == null ||
+                      conn.isDisconnected ||
+                      conn.hasError ||
+                      conn.status == 'pending') {
                     return _buildConnectForm();
+                  }
+                  if (conn.isActive && !conn.setupCompleted) {
+                    // OAuth succeeded but the wizard wasn't finished.
+                    // Auto-redirect once so the user can resume.
+                    if (!_redirectedToWizard) {
+                      _redirectedToWizard = true;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          context.push(AppRoutes.shopifySetupWizard);
+                        }
+                      });
+                    }
+                    return const Center(
+                        child: CircularProgressIndicator());
                   }
                   return _buildConnectedView(conn);
                 },

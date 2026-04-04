@@ -211,9 +211,14 @@ class FirebaseAuthRepository implements AuthRepository {
         nonce: nonce,
       );
 
+      if (appleCredential.identityToken == null) {
+        return Result.failure('Apple sign-in failed: No identity token received from Apple.');
+      }
+
       final oauthCredential = firebase.OAuthProvider('apple.com').credential(
-        idToken: appleCredential.identityToken,
+        idToken: appleCredential.identityToken!,
         rawNonce: rawNonce,
+        accessToken: appleCredential.authorizationCode,
       );
 
       final userCredential = await _auth.signInWithCredential(oauthCredential);
@@ -244,11 +249,11 @@ class FirebaseAuthRepository implements AuthRepository {
       return Result.failure('Apple sign-in failed. Please try again.');
     } on firebase.FirebaseAuthException catch (e) {
       if (e.code == 'invalid-credential') {
-        return Result.failure('Apple sign-in failed. Please ensure Apple sign-in is enabled and try again.');
+        return Result.failure('Apple sign-in failed (${e.code}): ${e.message}');
       }
       return Result.failure(_friendlyAuthError(e));
     } catch (e) {
-      return Result.failure('Apple sign-in failed. Please try again.');
+      return Result.failure('Apple sign-in failed: $e');
     }
   }
 

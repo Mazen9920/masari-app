@@ -855,6 +855,12 @@
   "notificationsLowStockSubtitle": "لما المنتجات توصل للحد الأدنى",
   "notificationsPaymentReminders": "تذكيرات الدفع",
   "notificationsPaymentSubtitle": "مدفوعات الموردين القادمة",
+  "notificationsSales": "المبيعات الجديدة",
+  "notificationsSalesSubtitle": "عند تسجيل عملية بيع جديدة",
+  "notificationsShopifyOrders": "طلبات شوبيفاي",
+  "notificationsShopifySubtitle": "الطلبات المتزامنة من شوبيفاي",
+  "notificationsBilling": "الاشتراك والفواتير",
+  "notificationsBillingSubtitle": "المدفوعات والتجديد وتنبيهات الانتهاء",
   "notificationsSectionReports": "التقارير",
   "notificationsWeeklyDigest": "ملخص أسبوعي",
   "notificationsWeeklySubtitle": "ملخص كل يوم اتنين الصبح",
@@ -2455,5 +2461,7 @@
   "billingReceiptTxId": "رقم المعاملة",
   "billingReceiptSuccess": "ناجح",
   "billingReceiptFailed": "فشل",
-  "billingShareReceipt": "مشاركة الإيصال"
+  "billingShareReceipt": "مشاركة الإيصال",
+  "taxCollectedLabel": "الضريبة المحصّلة (التزام)",
+  "taxCollectedNote": "هذه ضريبة حصّلتها نيابةً عن الحكومة — وليست إيراداً."
 }

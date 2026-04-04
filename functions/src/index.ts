@@ -17,7 +17,7 @@
 
 import {setGlobalOptions} from "firebase-functions";
 import {onSchedule} from "firebase-functions/v2/scheduler";
-import {onDocumentDeleted} from "firebase-functions/v2/firestore";
+import {onDocumentDeleted, onDocumentCreated} from "firebase-functions/v2/firestore";
 import {initializeApp} from "firebase-admin/app";
 import {getFirestore, FieldValue, WriteBatch} from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
@@ -72,6 +72,47 @@ async function flushIfNeeded(
   }
   return {batch, count};
 }
+
+// ═══════════════════════════════════════════════════════════
+// 0. New Sale Notification — triggers on any new sale doc
+// ═══════════════════════════════════════════════════════════
+
+export const onSaleCreated = onDocumentCreated(
+  {document: "sales/{saleId}"},
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const userId = data.user_id as string | undefined;
+    if (!userId) return;
+
+    // Skip Shopify sales — they already send their own notification
+    if (data.external_source === "shopify") return;
+
+    const customerName = data.customer_name as string | undefined;
+    const total = Number(data.items?.reduce(
+      (sum: number, item: Record<string, unknown>) =>
+        sum + (Number(item.unit_price ?? 0) * Number(item.quantity ?? 0)),
+      0
+    ) ?? 0);
+    const taxAmount = Number(data.tax_amount ?? 0);
+    const discountAmount = Number(data.discount_amount ?? 0);
+    const shippingCost = Number(data.shipping_cost ?? 0);
+    const saleTotal = total - discountAmount + taxAmount + shippingCost;
+
+    const orderNumber = data.order_number as number | undefined;
+    const orderLabel = orderNumber ? `#${orderNumber}` : "";
+    const customerLabel = customerName ? ` from ${customerName}` : "";
+
+    await notifyUser(
+      userId,
+      `New Sale ${orderLabel}`.trim(),
+      `Sale${customerLabel} recorded — ${saleTotal.toFixed(2)} ${data.currency ?? ""}`.trim(),
+      {type: "sale_created", sale_id: event.params.saleId},
+      "sales"
+    );
+  }
+);
 
 // ═══════════════════════════════════════════════════════════
 // 1. Process Recurring Transactions — runs every day at 01:00 UTC
@@ -154,7 +195,8 @@ export const processRecurringTransactions = onSchedule(
         uid,
         "Recurring Transactions",
         `${n} recurring transaction${n === 1 ? " was" : "s were"} auto-created today.`,
-        {type: "recurring_created", count: String(n)}
+        {type: "recurring_created", count: String(n)},
+        "recurring"
       );
     }
 

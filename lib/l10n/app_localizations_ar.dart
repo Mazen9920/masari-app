@@ -2636,6 +2636,25 @@ class AppLocalizationsAr extends AppLocalizations {
   String get notificationsPaymentSubtitle => 'مدفوعات الموردين القادمة';
 
   @override
+  String get notificationsSales => 'المبيعات الجديدة';
+
+  @override
+  String get notificationsSalesSubtitle => 'عند تسجيل عملية بيع جديدة';
+
+  @override
+  String get notificationsShopifyOrders => 'طلبات شوبيفاي';
+
+  @override
+  String get notificationsShopifySubtitle => 'الطلبات المتزامنة من شوبيفاي';
+
+  @override
+  String get notificationsBilling => 'الاشتراك والفواتير';
+
+  @override
+  String get notificationsBillingSubtitle =>
+      'المدفوعات والتجديد وتنبيهات الانتهاء';
+
+  @override
   String get notificationsSectionReports => 'التقارير';
 
   @override
@@ -7408,4 +7427,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get billingShareReceipt => 'مشاركة الإيصال';
+
+  @override
+  String get taxCollectedLabel => 'الضريبة المحصّلة (التزام)';
+
+  @override
+  String get taxCollectedNote =>
+      'هذه ضريبة حصّلتها نيابةً عن الحكومة — وليست إيراداً.';
 }

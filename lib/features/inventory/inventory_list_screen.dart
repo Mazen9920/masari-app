@@ -1317,6 +1317,8 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
     };
 
     final quantityCtrl = TextEditingController(text: '0');
+    final costCtrl = TextEditingController();
+    double? costOverride;
     final notifier = ref.read(inventoryProvider.notifier);
     final valMethod = ref.read(appSettingsProvider).valuationMethod;
 
@@ -1659,6 +1661,57 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                     ),
                   ),
                 ),
+
+                // Cost per unit (Add Stock only)
+                if (isAddStock) ...[
+                  const SizedBox(height: 18),
+                  Text(
+                    l10n.costPrice,
+                    style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.textTertiary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8,
+                      fontSize: 10,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8F9FA),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: AppColors.borderLight
+                              .withValues(alpha: 0.5)),
+                    ),
+                    child: TextField(
+                      controller: costCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                      ],
+                      style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        hintText: selectedProductId != null && selectedVariantId != null
+                            ? (() {
+                                final prod = materials.firstWhere((p) => p.id == selectedProductId);
+                                final v = prod.variantById(selectedVariantId!);
+                                return v != null && v.costPrice > 0
+                                    ? '${v.costPrice}'
+                                    : '0.00';
+                              })()
+                            : '0.00',
+                        hintStyle: AppTypography.bodySmall.copyWith(color: AppColors.textTertiary),
+                      ),
+                      onChanged: (val) {
+                        setSheetState(() {
+                          costOverride = double.tryParse(val);
+                        });
+                      },
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
 
                 // Submit button
@@ -1668,11 +1721,23 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                     onPressed:
                         selectedProductId != null && selectedVariantId != null && quantity != 0
                             ? () {
+                                // Resolve cost for Add Stock: user input > variant WAC
+                                double? unitCost;
+                                if (isAddStock && quantity > 0) {
+                                  if (costOverride != null && costOverride! > 0) {
+                                    unitCost = costOverride;
+                                  } else {
+                                    final prod = materials.firstWhere((p) => p.id == selectedProductId);
+                                    final v = prod.variantById(selectedVariantId!);
+                                    if (v != null && v.costPrice > 0) unitCost = v.costPrice;
+                                  }
+                                }
                                 notifier.adjustStock(
                                       selectedProductId!,
                                       selectedVariantId!,
                                       quantity,
                                       reason,
+                                      unitCost: unitCost,
                                       valuationMethod: valMethod,
                                     );
                                 HapticFeedback.mediumImpact();

@@ -35,14 +35,14 @@ class CostLayer {
 
   Map<String, dynamic> toJson() => {
         'date': date.toIso8601String(),
-        'unit_cost': unitCost,
+        'unit_cost': roundMoney(unitCost),
         'remaining_qty': remainingQty,
       };
 
   factory CostLayer.fromJson(Map<String, dynamic> json) {
     return CostLayer(
       date: DateTime.parse(json['date'] as String),
-      unitCost: (json['unit_cost'] as num).toDouble(),
+      unitCost: roundMoney((json['unit_cost'] as num).toDouble()),
       remainingQty: (json['remaining_qty'] as num).toInt(),
     );
   }

@@ -871,6 +871,7 @@ class SaleDetailScreen extends ConsumerWidget {
               item.variantId ?? '${item.productId}_v0',
               item.quantity.round(),
               'Order cancelled',
+              unitCost: item.costPrice > 0 ? item.costPrice : null,
               valuationMethod: valMethod,
             );
       }
@@ -931,8 +932,9 @@ class SaleDetailScreen extends ConsumerWidget {
         ref.read(inventoryProvider.notifier).adjustStock(
               item.productId!,
               item.variantId ?? '${item.productId}_v0',
-              item.quantity.toInt(),
+              item.quantity.round(),
               'Order refunded',
+              unitCost: item.costPrice > 0 ? item.costPrice : null,
               valuationMethod: valMethod,
             );
       }
@@ -1548,6 +1550,22 @@ class SaleDetailScreen extends ConsumerWidget {
                           updatedAt: DateTime.now(),
                         );
                         ref.read(salesProvider.notifier).updateSale(updated);
+
+                        // Sync linked transactions: when payment is received,
+                        // include revenue in P&L / cash-basis reports;
+                        // when unpaid/partial, exclude it.
+                        final shouldExclude = status == PaymentStatus.unpaid ||
+                            status == PaymentStatus.partial;
+                        final txns = ref.read(transactionsProvider).value ?? [];
+                        final txnNotifier = ref.read(transactionsProvider.notifier);
+                        for (final tx in txns) {
+                          if (tx.saleId == live.id && tx.excludeFromPL != shouldExclude) {
+                            txnNotifier.updateTransaction(tx.copyWith(
+                              excludeFromPL: shouldExclude,
+                              updatedAt: DateTime.now(),
+                            ));
+                          }
+                        }
                       },
                       child: Container(
                         width: double.infinity,

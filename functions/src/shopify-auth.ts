@@ -19,12 +19,14 @@ import {
   createHmac,
   timingSafeEqual,
 } from "crypto";
-import {handleEmbedApi, getEmbeddedAppHtml} from "./shopify-embed.js";
+import {handleEmbedApi, getEmbeddedAppHtml, verifySessionToken} from "./shopify-embed.js";
 
 // ── Secrets (Firebase Secret Manager) ──────────────────────
 
 const shopifyApiKey = defineSecret("SHOPIFY_API_KEY");
 const shopifyApiSecret = defineSecret("SHOPIFY_API_SECRET");
+const shopifyApiKey2 = defineSecret("SHOPIFY_API_KEY_2");
+const shopifyApiSecret2 = defineSecret("SHOPIFY_API_SECRET_2");
 
 /**
  * 32-byte hex key (64 hex chars) used for AES-256-GCM encryption of
@@ -153,7 +155,7 @@ function verifyShopifyHmac(
 
 export const shopifyAuthStart = onCall(
   {
-    secrets: [shopifyApiKey, shopifyCallbackUrl],
+    secrets: [shopifyApiKey, shopifyApiKey2, shopifyCallbackUrl],
     region: "us-central1",
   },
   async (request) => {
@@ -225,7 +227,11 @@ export const shopifyAuthStart = onCall(
     const state = `${uid}:${nonce}`;
     const callbackUrl = shopifyCallbackUrl.value().trim();
 
-    const apiKey = shopifyApiKey.value().trim();
+    // Use secondary app (Custom distribution) so it can install on
+    // any store. The primary app is public and blocked on non-dev
+    // stores until approved. Revert to primary after approval.
+    const apiKey = shopifyApiKey2.value().trim() ||
+      shopifyApiKey.value().trim();
     if (!apiKey) {
       logger.error("SHOPIFY_API_KEY secret is missing/empty");
       throw new HttpsError(
@@ -260,6 +266,7 @@ export const storeAuthCallback = onRequest(
     secrets: [
       shopifyApiKey, shopifyApiSecret, tokenEncryptionKey,
       shopifyWebhookUrl, shopifyCallbackUrl,
+      shopifyApiKey2, shopifyApiSecret2,
     ],
     region: "us-central1",
   },
@@ -272,10 +279,26 @@ export const storeAuthCallback = onRequest(
       // When _api is present, handle as an AJAX request from the
       // embedded app (authenticated via App Bridge session token).
       if (query._api) {
+        // Try primary credentials first, fallback to secondary
+        const key1 = shopifyApiKey.value().trim();
+        const secret1 = shopifyApiSecret.value().trim();
+        const key2 = shopifyApiKey2.value().trim();
+        const secret2 = shopifyApiSecret2.value().trim();
+        const authHdr = req.headers.authorization as string | undefined;
+        const token = authHdr?.startsWith("Bearer ") ? authHdr.substring(7) : "";
+
+        // Detect which app's session token this is
+        let embedKey = key1;
+        let embedSecret = secret1;
+        if (token) {
+          if (!verifySessionToken(token, secret1, key1) && verifySessionToken(token, secret2, key2)) {
+            embedKey = key2;
+            embedSecret = secret2;
+          }
+        }
+
         await handleEmbedApi(
-          req, res,
-          shopifyApiKey.value().trim(),
-          shopifyApiSecret.value().trim(),
+          req, res, embedKey, embedSecret,
           tokenEncryptionKey.value().trim(),
         );
         return;
@@ -372,9 +395,23 @@ export const storeAuthCallback = onRequest(
           "Content-Security-Policy",
           "frame-ancestors https://*.myshopify.com https://admin.shopify.com;",
         );
+
+        // Use the API key that matches the app this store connected with
+        const connApiKey = connSnap.empty ? null :
+          (() => {
+            const best = connSnap.docs.sort((a, b) =>
+              (({active: 0, error: 1, pending: 2, disconnected: 3} as Record<string, number>)[a.data().status] ?? 9) -
+              (({active: 0, error: 1, pending: 2, disconnected: 3} as Record<string, number>)[b.data().status] ?? 9)
+            )[0];
+            return best.data().app_client_id as string | undefined;
+          })();
+        const embedApiKey = connApiKey === shopifyApiKey2.value().trim() ?
+          shopifyApiKey2.value().trim() :
+          shopifyApiKey.value().trim();
+
         res.status(200).send(
           getEmbeddedAppHtml(
-            shopifyApiKey.value().trim(),
+            embedApiKey,
             initialStatus,
           ),
         );
@@ -388,17 +425,29 @@ export const storeAuthCallback = onRequest(
 
       // ── 1. Verify HMAC (prevents parameter tampering) ────
       const apiSecret = shopifyApiSecret.value().trim();
+      const apiSecret2 = shopifyApiSecret2.value().trim();
       if (!apiSecret) {
         logger.error("SHOPIFY_API_SECRET secret is missing/empty");
         res.status(500).send("Server misconfigured");
         return;
       }
 
-      if (!verifyShopifyHmac(query, apiSecret)) {
+      // Try primary secret, fallback to secondary
+      const usePrimary = verifyShopifyHmac(query, apiSecret);
+      const useSecondary = !usePrimary && apiSecret2 &&
+        verifyShopifyHmac(query, apiSecret2);
+
+      if (!usePrimary && !useSecondary) {
         logger.warn("HMAC verification failed", {shop});
         res.status(403).send("HMAC verification failed");
         return;
       }
+
+      // Use the matching credentials for token exchange
+      const activeKey = usePrimary ?
+        shopifyApiKey.value().trim() :
+        shopifyApiKey2.value().trim();
+      const activeSecret = usePrimary ? apiSecret : apiSecret2;
 
       // ── 2. Validate nonce ────────────────────────────────
       // State format: "userId:nonce"
@@ -435,8 +484,8 @@ export const storeAuthCallback = onRequest(
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
-            client_id: shopifyApiKey.value().trim(),
-            client_secret: apiSecret,
+            client_id: activeKey,
+            client_secret: activeSecret,
             code,
           }),
         },
@@ -506,6 +555,7 @@ export const storeAuthCallback = onRequest(
         user_id: userId,
         shop_domain: shop,
         access_token: encryptedToken,
+        app_client_id: activeKey,
         scopes: tokenData.scope.split(","),
         sync_orders_enabled: true,
         sync_inventory_enabled: false,
@@ -530,8 +580,7 @@ export const storeAuthCallback = onRequest(
 
       if (isShopifyInstall) {
         // Shopify-initiated install → redirect back into Shopify admin
-        const key = shopifyApiKey.value().trim();
-        res.redirect(`https://${shop}/admin/apps/${key}`);
+        res.redirect(`https://${shop}/admin/apps/${activeKey}`);
       } else {
         // Flutter-initiated → show success page the user can close
         res.status(200).send(`

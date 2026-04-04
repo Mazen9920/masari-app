@@ -160,9 +160,20 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
     return sum;
   }
 
-  double get _tax => double.tryParse(_taxCtrl.text) ?? 0;
-  double get _discount => double.tryParse(_discountCtrl.text) ?? 0;
-  double get _shippingCost => double.tryParse(_shippingCostCtrl.text) ?? 0;
+  double get _tax {
+    final v = double.tryParse(_taxCtrl.text) ?? 0;
+    return v < 0 ? 0 : v;
+  }
+  double get _discount {
+    final v = double.tryParse(_discountCtrl.text) ?? 0;
+    if (v < 0) return 0;
+    final sub = _subtotal;
+    return v > sub ? sub : v;
+  }
+  double get _shippingCost {
+    final v = double.tryParse(_shippingCostCtrl.text) ?? 0;
+    return v < 0 ? 0 : v;
+  }
   double get _total => _subtotal + _tax - _discount + _shippingCost;
 
   // ── Build ────────────────────────────────────────────────
@@ -375,6 +386,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                   hint: l10n.shippingCost,
                   prefixText: ref.watch(currencyProvider),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
                   onChanged: (_) => setState(() {}),
                 ),
               ),
@@ -606,6 +618,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                 icon: Icons.tag_rounded,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -618,6 +631,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                 prefixText: currency,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -1024,6 +1038,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                 prefixText: currency,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -1035,6 +1050,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                 prefixText: currency,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -1562,6 +1578,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       final oldQtyMap = <String, double>{};
       final variantMap = <String, String>{}; // compositeKey → variantId
       final productMap = <String, String>{}; // compositeKey → productId
+      final oldCostMap = <String, double>{}; // compositeKey → costPrice
       for (final oi in oldItems) {
         if (oi.productId != null) {
           final vid = oi.variantId ?? '${oi.productId}_v0';
@@ -1569,6 +1586,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           oldQtyMap[key] = (oldQtyMap[key] ?? 0) + oi.quantity;
           variantMap[key] = vid;
           productMap[key] = oi.productId!;
+          if (oi.costPrice > 0) oldCostMap[key] = oi.costPrice;
         }
       }
       final newQtyMap = <String, double>{};
@@ -1592,6 +1610,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                 variantMap[key]!,
                 delta.round(),
                 'Sale edit adjustment',
+                unitCost: delta > 0 ? oldCostMap[key] : null,
                 valuationMethod: valMethod,
               );
         }
@@ -1608,17 +1627,23 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
         (t) => t!.saleId == sale.id && t.categoryId == 'cat_cogs',
         orElse: () => null,
       );
+      // Sync excludeFromPL with the current payment status so
+      // cash-basis reports stay accurate after edits.
+      final isUnpaidOrPartial = sale.paymentStatus == PaymentStatus.unpaid ||
+          sale.paymentStatus == PaymentStatus.partial;
       if (revTxn != null) {
         transNotifier.updateTransaction(revTxn.copyWith(
-          amount: sale.total,
+          amount: sale.netRevenue,
           dateTime: sale.date,
           title: 'Sale${sale.customerName != null ? ' to ${sale.customerName}' : ''}',
+          excludeFromPL: isUnpaidOrPartial,
         ));
       }
       if (cogsTxn != null) {
         transNotifier.updateTransaction(cogsTxn.copyWith(
           amount: -sale.totalCogs,
           dateTime: sale.date,
+          excludeFromPL: isUnpaidOrPartial,
         ));
       }
 
@@ -1632,6 +1657,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           transNotifier.updateTransaction(shipTxn.copyWith(
             amount: -sale.shippingCost,
             dateTime: sale.date,
+            excludeFromPL: isUnpaidOrPartial,
           ));
         } else {
           final newShipTxn = Transaction(
@@ -1643,6 +1669,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
             categoryId: 'cat_shipping',
             note: 'Auto-generated shipping expense',
             saleId: sale.id,
+            excludeFromPL: isUnpaidOrPartial,
             createdAt: DateTime.now(),
           );
           transNotifier.addTransaction(newShipTxn);
@@ -1652,17 +1679,23 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       }
     } else {
       // Auto-create Revenue + COGS transactions for P&L integration
-      // Revenue = total (subtotal − discount + tax + shipping)
+      // Revenue = netRevenue (subtotal − discount), excluding tax
+      // (collected liability) and shipping (separate expense).
+      // Unpaid/partial sales: exclude from P&L and cash-basis reports
+      // so that revenue is only recognised when cash is actually received.
+      final isUnpaidOrPartial = sale.paymentStatus == PaymentStatus.unpaid ||
+          sale.paymentStatus == PaymentStatus.partial;
       final revTxn = Transaction(
         id: 'sale_rev_${sale.id}',
         userId: uid,
         title: 'Sale${sale.customerName != null ? ' to ${sale.customerName}' : ''}',
-        amount: sale.total,
+        amount: sale.netRevenue,
         dateTime: sale.date,
         categoryId: 'cat_sales_revenue',
         note: sale.notes,
         paymentMethod: sale.paymentMethod,
         saleId: sale.id,
+        excludeFromPL: isUnpaidOrPartial,
         createdAt: DateTime.now(),
       );
       final cogsTxn = Transaction(
@@ -1674,6 +1707,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
         categoryId: 'cat_cogs',
         note: 'Auto-generated from sale',
         saleId: sale.id,
+        excludeFromPL: isUnpaidOrPartial,
         createdAt: DateTime.now(),
       );
 
@@ -1689,6 +1723,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           categoryId: 'cat_shipping',
           note: 'Auto-generated shipping expense',
           saleId: sale.id,
+          excludeFromPL: isUnpaidOrPartial,
           createdAt: DateTime.now(),
         ));
       }
@@ -1701,7 +1736,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
             deductions.add(StockDeduction(
               productId: item.productId!,
               variantId: item.variantId ?? '${item.productId}_v0',
-              quantity: item.quantity.toInt(),
+              quantity: item.quantity.round(),
               valuationMethod: valMethod,
             ));
           }
@@ -1793,12 +1828,14 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
     TextInputType? keyboardType,
     int maxLines = 1,
     ValueChanged<String>? onChanged,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
       onChanged: onChanged,
+      inputFormatters: inputFormatters,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: AppTypography.bodySmall
