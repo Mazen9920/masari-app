@@ -199,4 +199,9 @@ class LocalProductRepository implements ProductRepository {
     _products[index] = updated;
     return Result.success(updated);
   }
+
+  @override
+  Future<Result<void>> markInventoryPushed(String id, String variantId, int stock) async {
+    return Result.success(null);
+  }
 }

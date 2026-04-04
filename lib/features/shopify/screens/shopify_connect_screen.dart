@@ -77,8 +77,23 @@ class _ShopifyConnectScreenState extends ConsumerState<ShopifyConnectScreen>
             _buildHeader(context),
             Expanded(
               child: asyncConn.when(
-                loading: () => _buildConnectForm(),
-                error: (e, _) => _buildConnectForm(),
+                loading: () {
+                  // If we have a previous connected value, keep showing it
+                  // instead of flashing the connect form during refresh.
+                  final prev = asyncConn.value;
+                  if (prev != null && prev.isActive) {
+                    return _buildConnectedView(prev);
+                  }
+                  return const Center(child: CircularProgressIndicator());
+                },
+                error: (e, _) {
+                  // Same — preserve previous connected state on transient errors.
+                  final prev = asyncConn.value;
+                  if (prev != null && prev.isActive) {
+                    return _buildConnectedView(prev);
+                  }
+                  return _buildConnectForm();
+                },
                 data: (conn) {
                   if (conn == null ||
                       conn.isDisconnected ||

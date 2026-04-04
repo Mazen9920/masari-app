@@ -112,14 +112,17 @@ class ShopifyConnectionNotifier
 
   /// Reloads the connection from the server (bypasses cache).
   /// Used after OAuth or when we need guaranteed-fresh data.
+  /// Preserves the previous value during reload so the UI doesn't flash
+  /// "not connected" while the fetch is in-flight.
   Future<void> refresh() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
+    // Don't reset to loading — keep the current state visible while fetching.
+    final newState = await AsyncValue.guard(() async {
       final repo = ref.read(shopifyConnectionRepositoryProvider);
       final result = await repo.getConnectionFromServer();
       if (result.isSuccess) return result.data;
       throw Exception(result.error ??  'Failed to load Shopify connection');
     });
+    state = newState;
   }
 }
 
@@ -131,6 +134,8 @@ final shopifyConnectionProvider = AsyncNotifierProvider<
 });
 
 /// Convenience — true when an active Shopify connection exists.
+/// Preserves the previous value while a refresh is in-flight
+/// (via copyWithPrevious in refresh()) so UI doesn't flash.
 final isShopifyConnectedProvider = Provider<bool>((ref) {
   final asyncConn = ref.watch(shopifyConnectionProvider);
   final conn = asyncConn.value;

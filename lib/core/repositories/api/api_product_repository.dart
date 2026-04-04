@@ -180,4 +180,9 @@ class ApiProductRepository implements ProductRepository {
   }) async {
     return Result.failure('breakdownStock is not supported via the API repository');
   }
+
+  @override
+  Future<Result<void>> markInventoryPushed(String id, String variantId, int stock) async {
+    return Result.failure('markInventoryPushed is not supported via the API repository');
+  }
 }

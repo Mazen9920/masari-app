@@ -295,45 +295,53 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
     String? cardLast4;
     String? cardBrand;
     bool autoRenew = false;
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_uid)
-          .get();
-      if (doc.exists) {
-        final data = doc.data()!;
-        if (data['subscription_tier'] != null) {
-          final fsTier = data['subscription_tier'] as String;
-          // Firestore is authoritative; update local if different
-          if (fsTier != tierName) {
-            tierName = fsTier;
-            await prefs.setString(_key(_kTier), fsTier);
+    bool firestoreReadSucceeded = false;
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_uid)
+            .get();
+        if (doc.exists) {
+          final data = doc.data()!;
+          if (data['subscription_tier'] != null) {
+            final fsTier = data['subscription_tier'] as String;
+            // Firestore is authoritative; update local if different
+            if (fsTier != tierName) {
+              tierName = fsTier;
+              await prefs.setString(_key(_kTier), fsTier);
+            }
           }
-        }
-        if (data['subscription_status'] != null) {
-          subscriptionStatus = data['subscription_status'] as String;
-          await prefs.setString(_key(_kSubscriptionStatus), subscriptionStatus);
-        }
-        if (data['subscription_expires_at'] != null) {
-          final ts = data['subscription_expires_at'] as Timestamp;
-          subscriptionExpiresAtMs = ts.millisecondsSinceEpoch;
-          await prefs.setInt(_key(_kSubscriptionExpiresAt), subscriptionExpiresAtMs);
-        }
-        if (data['valuation_method'] != null) {
-          final fsVal = data['valuation_method'] as String;
-          if (fsVal != valuationMethod) {
-            valuationMethod = fsVal;
-            await prefs.setString(_key(_kValuationMethod), fsVal);
+          if (data['subscription_status'] != null) {
+            subscriptionStatus = data['subscription_status'] as String;
+            await prefs.setString(_key(_kSubscriptionStatus), subscriptionStatus);
           }
+          if (data['subscription_expires_at'] != null) {
+            final ts = data['subscription_expires_at'] as Timestamp;
+            subscriptionExpiresAtMs = ts.millisecondsSinceEpoch;
+            await prefs.setInt(_key(_kSubscriptionExpiresAt), subscriptionExpiresAtMs);
+          }
+          if (data['valuation_method'] != null) {
+            final fsVal = data['valuation_method'] as String;
+            if (fsVal != valuationMethod) {
+              valuationMethod = fsVal;
+              await prefs.setString(_key(_kValuationMethod), fsVal);
+            }
+          }
+          // Read card / payment fields from the same Firestore doc
+          paymentSource = data['payment_source'] as String?;
+          cardLast4     = data['paymob_card_last4'] as String?;
+          cardBrand     = data['paymob_card_brand'] as String?;
+          autoRenew     = data['paymob_auto_renew'] as bool? ?? false;
         }
-        // Read card / payment fields from the same Firestore doc
-        paymentSource = data['payment_source'] as String?;
-        cardLast4     = data['paymob_card_last4'] as String?;
-        cardBrand     = data['paymob_card_brand'] as String?;
-        autoRenew     = data['paymob_auto_renew'] as bool? ?? false;
+        firestoreReadSucceeded = true;
+        break; // success — no retry needed
+      } catch (_) {
+        if (attempt == 0) {
+          // First failure — wait briefly for auth token to propagate then retry
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
       }
-    } catch (_) {
-      // Firestore read failed; use local SharedPreferences value
     }
 
     state = AppSettingsState(
@@ -368,6 +376,16 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
       paymobCardBrand: cardBrand,
       paymobAutoRenew: autoRenew,
     );
+
+    // If Firestore read failed on a fresh device (no local cache),
+    // try the Cloud Function as a fallback to get the real tier.
+    if (!firestoreReadSucceeded && tierName == 'launch') {
+      try {
+        await refreshSubscription();
+      } catch (_) {
+        // Best-effort; will be corrected on next app open or manual refresh.
+      }
+    }
   }
 
   Future<void> setCurrency(String currency) async {
