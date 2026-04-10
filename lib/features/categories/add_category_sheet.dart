@@ -220,10 +220,8 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
                   _buildTypeToggle(),
                   const SizedBox(height: 24),
 
-                  if (_isExpense) ...[
-                    _buildLimitSection(),
-                    const SizedBox(height: 24),
-                  ],
+                  _buildLimitSection(),
+                  const SizedBox(height: 24),
 
                   _buildSectionLabel(AppLocalizations.of(context)!.icon),
                   const SizedBox(height: 10),
@@ -318,10 +316,6 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
         HapticFeedback.lightImpact();
         setState(() {
           _isExpense = isExpenseMode;
-          if (!isExpenseMode) {
-            _hasLimit = false;
-            _limitController.clear();
-          }
         });
       },
       child: AnimatedContainer(
@@ -348,13 +342,16 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
   }
 
   Widget _buildLimitSection() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildSectionLabel(AppLocalizations.of(context)!.monthlyLimit),
+            _buildSectionLabel(
+              _isExpense ? l10n.monthlyLimit : l10n.monthlyEarningTarget,
+            ),
             Switch.adaptive(
               value: _hasLimit,
               onChanged: (v) {
@@ -405,7 +402,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      AppLocalizations.of(context)!.budgetAlertHint,
+                      _isExpense ? l10n.budgetAlertHint : l10n.targetAlertHint,
                       style: AppTypography.captionSmall.copyWith(
                         color: AppColors.textTertiary,
                         fontSize: 10,

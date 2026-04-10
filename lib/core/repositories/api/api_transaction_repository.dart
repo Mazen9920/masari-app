@@ -14,6 +14,8 @@ class ApiTransactionRepository implements TransactionRepository {
     TransactionFilter? filter,
     int? limit,
     String? startAfterId,
+    DateTime? startDate,
+    DateTime? endDate,
   }) async {
     try {
       final queryParams = <String, String>{};
@@ -36,6 +38,8 @@ class ApiTransactionRepository implements TransactionRepository {
       
       if (limit != null) queryParams['limit'] = limit.toString();
       if (startAfterId != null) queryParams['startAfterId'] = startAfterId;
+      if (startDate != null) queryParams['startDate'] = startDate.toIso8601String();
+      if (endDate != null) queryParams['endDate'] = endDate.toIso8601String();
 
       final responseMap = await _client.get('/transactions', queryParams: queryParams);
       
@@ -149,4 +153,16 @@ class ApiTransactionRepository implements TransactionRepository {
     // For now, this is a no-op as the Firestore repo is used in production.
     return Result.success(null);
   }
+
+  @override
+  Future<Result<List<Transaction>>> getTransactionsInRange({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    // Not implemented – Firestore repo is used in production.
+    return Result.success([]);
+  }
+
+  @override
+  void clearRangeCache() {}
 }

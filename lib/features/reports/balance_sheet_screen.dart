@@ -11,12 +11,47 @@ import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/services/share_service.dart';
 import '../../core/providers/export_providers.dart';
+import '../../core/providers/repository_providers.dart';
 import '../../shared/models/sale_model.dart';
+import '../../shared/models/transaction_model.dart';
 import '../../shared/utils/money_utils.dart';
+import '../../shared/utils/report_constants.dart';
 import '../../l10n/app_localizations.dart';
 import 'widgets/report_card.dart';
 import 'widgets/chart_toggle.dart';
 import 'widgets/financial_period_sheet.dart';
+
+class _BSData {
+  final double bankBalance;
+  final double inventoryValue;
+  final double suppliersOwing;
+  final double supplierAdvancePayments;
+  final double accountsReceivable;
+  final double retainedEarnings;
+  final double currentPeriodNetIncome;
+  final double totalAssets;
+  final double totalLiabilities;
+  final double netEquity;
+  final bool hasManualCapital;
+  final double effectiveCapital;
+  final double reconAdjustment;
+
+  const _BSData({
+    required this.bankBalance,
+    required this.inventoryValue,
+    required this.suppliersOwing,
+    required this.supplierAdvancePayments,
+    required this.accountsReceivable,
+    required this.retainedEarnings,
+    required this.currentPeriodNetIncome,
+    required this.totalAssets,
+    required this.totalLiabilities,
+    required this.netEquity,
+    required this.hasManualCapital,
+    required this.effectiveCapital,
+    required this.reconAdjustment,
+  });
+}
 
 class BalanceSheetScreen extends ConsumerStatefulWidget {
   const BalanceSheetScreen({super.key});
@@ -25,7 +60,8 @@ class BalanceSheetScreen extends ConsumerStatefulWidget {
   ConsumerState<BalanceSheetScreen> createState() => _BalanceSheetScreenState();
 }
 
-class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
+class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
+    with AutomaticKeepAliveClientMixin {
   bool _showTrend = false;
   bool _sharing = false;
   FinancialPeriodResult _period = FinancialPeriodResult(
@@ -37,110 +73,192 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
     label: DateFormat('MMMM yyyy').format(DateTime.now()),
   );
 
+  // Cached balance sheet computation
+  _BSData? _cachedData;
+  Object? _lastDataKey;
+
+  // Local data fetched via direct repo queries (no loadAll on shared provider)
+  List<Transaction> _transactions = [];
+  List<Sale> _sales = [];
+  bool _isReportLoading = true;
+
+  @override
+  bool get wantKeepAlive => true;
+
   Future<void> _openDatePicker() async {
     final result = await showFinancialPeriodSheet(context, current: _period);
     if (result == null) return;
     setState(() => _period = result);
+    _loadData();
   }
 
   @override
   void initState() {
     super.initState();
-    // Reports need the full dataset, not just the first page.
     Future.microtask(() {
+      // Inventory & purchases still use their own providers (no bounds issue).
       ref.read(inventoryProvider.notifier).loadAll();
-      ref.read(salesProvider.notifier).loadAll();
-      ref.read(transactionsProvider.notifier).loadAll();
+      // Transactions & sales: fetch directly from repos.
+      _loadData();
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final fmt = NumberFormat('#,##0', 'en');
+  Future<void> _loadData() async {
+    setState(() => _isReportLoading = true);
+    try {
+      final txnRepo = ref.read(transactionRepositoryProvider);
+      final saleRepo = ref.read(saleRepositoryProvider);
+      final asOf = _period.range.end;
+      final results = await Future.wait([
+        txnRepo.getTransactionsInRange(start: DateTime(2000), end: asOf),
+        saleRepo.getSalesInRange(start: DateTime(2000), end: asOf),
+      ]);
+      if (mounted) {
+        setState(() {
+          _transactions = (results[0].data as List<Transaction>?) ?? [];
+          _sales = (results[1].data as List<Sale>?) ?? [];
+          _isReportLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isReportLoading = false);
+    }
+  }
 
-    // Persisted manual entries from Firestore
-    final bs = ref.watch(balanceSheetEntriesProvider);
+  _BSData _computeData({
+    required List<dynamic> inventoryProducts,
+    required List<dynamic> purchases,
+    required List<Sale> sales,
+    required List<dynamic> allTransactions,
+    required dynamic bs,
+    required double openingCash,
+  }) {
+    final key = Object.hashAll([
+      identityHashCode(inventoryProducts),
+      identityHashCode(purchases),
+      identityHashCode(sales),
+      identityHashCode(allTransactions),
+      bs.hashCode,
+      openingCash,
+      _period.range.start,
+      _period.range.end,
+    ]);
 
-    // Real Data from Providers
-    final inventoryProducts = ref.watch(inventoryProvider).value ?? [];
-    final purchases = ref.watch(purchasesProvider).value ?? [];
-    final sales = ref.watch(salesProvider).value ?? [];
-    final allTransactions = ref.watch(transactionsProvider).value ?? [];
+    if (_cachedData != null && _lastDataKey == key) return _cachedData!;
 
-    // Filter date: balance sheet is "as of" the period end
     final asOf = _period.range.end;
+    final periodStart = _period.range.start;
 
-    // Bank balance = opening cash + cash-basis transactions up to the selected date.
-    // Exclude transactions flagged excludeFromPL (unpaid/partial sale revenue)
-    // because no cash was actually received — they belong in AR, not bank/cash.
-    final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
-    final double bankBalance = roundMoney(openingCash + allTransactions
+    // Bank balance = actual cash movements only (not accrual entries).
+    // Sale-generated accrual categories are excluded; real cash from
+    // customers comes via sale.amountPaid instead.
+    final double txnCashFlow = allTransactions
         .where((t) => !t.dateTime.isAfter(asOf))
-        .where((t) => !t.excludeFromPL)
-        .fold(
+        .where((t) {
+          // Exclude POSITIVE sale-linked accrual entries (the original revenue/cogs/shipping
+          // bookings) — real cash comes via sale.amountPaid instead.
+          // Allow NEGATIVE ones (refund reversals) through — they represent real cash out.
+          if (t.saleId != null && saleTxnCats.contains(t.categoryId) && t.amount >= 0) {
+            return false;
+          }
+          if (t.categoryId == 'cat_supplier_payment') return true;
+          return !t.excludeFromPL;
+        })
+        .fold<double>(
       0.0,
       (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
-    ));
+    );
+    final double cashFromSales = sales
+        .where((s) => s.orderStatus != OrderStatus.cancelled)
+        .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOf))
+        .fold<double>(0.0, (sum, s) => sum + s.amountPaid);
+    final double bankBalance = roundMoney(openingCash + txnCashFlow + cashFromSales);
 
-    final double inventoryValue = roundMoney(inventoryProducts.fold(0.0, (sum, p) => sum + p.totalCostValue));
+    final double inventoryValue = roundMoney(inventoryProducts.fold<double>(0.0, (sum, p) => sum + p.totalCostValue));
 
-    // Only include purchases created on or before the reporting date
     final periodPurchases = purchases.where((p) => !p.date.isAfter(asOf)).toList();
 
-    // Supplier payable = received goods value minus amount paid (accrual basis)
-    final double suppliersOwing = roundMoney(periodPurchases.fold(0.0, (sum, p) {
+    final double suppliersOwing = roundMoney(periodPurchases.fold<double>(0.0, (sum, p) {
       final receivedValue = p.totalReceivedValue;
       final paid = p.amountPaid;
       return sum + (receivedValue - paid).clamp(0.0, double.maxFinite);
     }));
 
-    // Supplier advance payments = paid ahead of receiving goods (a prepaid asset)
-    final double supplierAdvancePayments = roundMoney(periodPurchases.fold(0.0, (sum, p) {
+    final double supplierAdvancePayments = roundMoney(periodPurchases.fold<double>(0.0, (sum, p) {
       final receivedValue = p.totalReceivedValue;
       final paid = p.amountPaid;
       return sum + (paid - receivedValue).clamp(0.0, double.maxFinite);
     }));
 
-    // Accounts receivable = outstanding from active (non-cancelled) sales up to period
     final double accountsReceivable = roundMoney(sales
         .where((s) => s.orderStatus != OrderStatus.cancelled)
         .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOf))
-        .fold(0.0, (sum, s) => sum + s.outstanding));
+        .fold<double>(0.0, (sum, s) => sum + s.outstanding));
 
-    // Net income from P&L-eligible transactions up to the period end
-    const plExcludedCats = {
-      'cat_investments',
-      'cat_loan_received',
-      'cat_loan_repayment',
-      'cat_equity_injection',
-      'cat_owner_withdrawal',
-    };
     final plEligible = allTransactions
         .where((t) => !t.dateTime.isAfter(asOf))
         .where((t) => !t.excludeFromPL && !plExcludedCats.contains(t.categoryId));
 
-    // Retained earnings = accumulated P&L net income from ALL prior periods
-    final periodStart = _period.range.start;
     final double retainedEarnings = roundMoney(plEligible
         .where((t) => t.dateTime.isBefore(periodStart))
-        .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
+        .fold<double>(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
 
-    // Current period net income = P&L net income within the selected period only
     final double currentPeriodNetIncome = roundMoney(plEligible
         .where((t) => !t.dateTime.isBefore(periodStart))
-        .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
+        .fold<double>(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
 
-    // Totals
     final double totalAssets = roundMoney(bankBalance + bs.cashOnHand + bs.unpaidInvoices + inventoryValue + accountsReceivable + supplierAdvancePayments);
     final double totalLiabilities = roundMoney(suppliersOwing + bs.loans + bs.unpaidSalaries);
     final double netEquity = roundMoney(totalAssets - totalLiabilities);
 
-    // Auto-derive opening capital so the BS always balances.
-    // If the user manually set a value, honour it and show an adjustment line.
-    final bool hasManualCapital = bs.openingCapital != 0;
+    final bool hasManualCapital = bs.hasSetCapital;
     final double autoOpeningCapital = roundMoney(netEquity - retainedEarnings - currentPeriodNetIncome);
     final double effectiveCapital = hasManualCapital ? bs.openingCapital : autoOpeningCapital;
     final double reconAdjustment = roundMoney(netEquity - (effectiveCapital + retainedEarnings + currentPeriodNetIncome));
+
+    _lastDataKey = key;
+    _cachedData = _BSData(
+      bankBalance: bankBalance,
+      inventoryValue: inventoryValue,
+      suppliersOwing: suppliersOwing,
+      supplierAdvancePayments: supplierAdvancePayments,
+      accountsReceivable: accountsReceivable,
+      retainedEarnings: retainedEarnings,
+      currentPeriodNetIncome: currentPeriodNetIncome,
+      totalAssets: totalAssets,
+      totalLiabilities: totalLiabilities,
+      netEquity: netEquity,
+      hasManualCapital: hasManualCapital,
+      effectiveCapital: effectiveCapital,
+      reconAdjustment: reconAdjustment,
+    );
+    return _cachedData!;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final fmt = NumberFormat('#,##0', 'en');
+
+    // Persisted manual entries from Firestore
+    final bs = ref.watch(balanceSheetEntriesProvider);
+
+    // Watch providers to trigger rebuilds when data changes
+    final inventoryProducts = ref.watch(filteredInventoryProvider).value ?? [];
+    final purchases = ref.watch(purchasesProvider).value ?? [];
+    final sales = _isReportLoading ? <Sale>[] : _sales;
+    final allTransactions = _isReportLoading ? <Transaction>[] : _transactions;
+    final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
+
+    // Compute (cached — skips math when inputs haven't changed)
+    final d = _computeData(
+      inventoryProducts: inventoryProducts,
+      purchases: purchases,
+      sales: sales,
+      allTransactions: allTransactions,
+      bs: bs,
+      openingCash: openingCash,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -148,8 +266,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
             onRefresh: () async {
               await Future.wait([
                 ref.read(inventoryProvider.notifier).refreshAll(),
-                ref.read(salesProvider.notifier).refreshAll(),
-                ref.read(transactionsProvider.notifier).refreshAll(),
+                _loadData(),
               ]);
               ref.invalidate(purchasesProvider);
             },
@@ -167,7 +284,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
 
                 // Net Equity / Trend Section
                  AnimatedCrossFade(
-                  firstChild: _buildNetEquitySection(fmt, netEquity, totalAssets, totalLiabilities),
+                  firstChild: _buildNetEquitySection(fmt, d.netEquity, d.totalAssets, d.totalLiabilities),
                   secondChild: _buildTrendChart(fmt),
                   crossFadeState: _showTrend ? CrossFadeState.showSecond : CrossFadeState.showFirst,
                   duration: 300.ms,
@@ -178,22 +295,22 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                 _buildCollapsibleSection(
                   title: AppLocalizations.of(context)!.whatYouOwn,
                   subtitle: AppLocalizations.of(context)!.totalAssets,
-                  amount: totalAssets,
+                  amount: d.totalAssets,
                   icon: Icons.account_balance_wallet_rounded,
                   iconColor: AppColors.chartBlue,
                   iconBg: AppColors.chartBlueLight,
                   items: [
                     _SheetItem(
                       label: AppLocalizations.of(context)!.bankAccounts,
-                      amount: bankBalance,
+                      amount: d.bankBalance,
                       icon: Icons.account_balance_rounded,
-                      pct: (totalAssets > 0) ? bankBalance / totalAssets : 0,
+                      pct: (d.totalAssets > 0) ? d.bankBalance / d.totalAssets : 0,
                     ),
                     _SheetItem(
                       label: AppLocalizations.of(context)!.cashOnHand,
                       amount: bs.cashOnHand,
                       icon: Icons.payments_rounded,
-                      pct: (totalAssets > 0) ? bs.cashOnHand / totalAssets : 0,
+                      pct: (d.totalAssets > 0) ? bs.cashOnHand / d.totalAssets : 0,
                       onTap: () => _showEditDialog(AppLocalizations.of(context)!.cashOnHand, bs.cashOnHand, (v) {
                         ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(cashOnHand: v));
                       }),
@@ -201,9 +318,9 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                     ),
                     _SheetItem(
                       label: AppLocalizations.of(context)!.inventory,
-                      amount: inventoryValue,
+                      amount: d.inventoryValue,
                       icon: Icons.inventory_2_rounded,
-                      pct: (totalAssets > 0) ? inventoryValue / totalAssets : 0,
+                      pct: (d.totalAssets > 0) ? d.inventoryValue / d.totalAssets : 0,
                       onTap: () => context.push('/manage/inventory'),
                       showChevron: true,
                     ),
@@ -211,7 +328,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                       label: AppLocalizations.of(context)!.otherReceivables,
                       amount: bs.unpaidInvoices,
                       icon: Icons.receipt_long_rounded,
-                      pct: (totalAssets > 0) ? bs.unpaidInvoices / totalAssets : 0,
+                      pct: (d.totalAssets > 0) ? bs.unpaidInvoices / d.totalAssets : 0,
                       onTap: () => _showEditDialog(AppLocalizations.of(context)!.otherReceivables, bs.unpaidInvoices, (v) {
                         ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(unpaidInvoices: v));
                       }),
@@ -219,17 +336,17 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                     ),
                     _SheetItem(
                       label: AppLocalizations.of(context)!.salesReceivables,
-                      amount: accountsReceivable,
+                      amount: d.accountsReceivable,
                       icon: Icons.request_quote_rounded,
-                      pct: (totalAssets > 0) ? accountsReceivable / totalAssets : 0,
+                      pct: (d.totalAssets > 0) ? d.accountsReceivable / d.totalAssets : 0,
                       onTap: () => context.push('/sales'),
                       showChevron: true,
                     ),
                     _SheetItem(
                       label: AppLocalizations.of(context)!.supplierPrepayments,
-                      amount: supplierAdvancePayments,
+                      amount: d.supplierAdvancePayments,
                       icon: Icons.schedule_send_rounded,
-                      pct: (totalAssets > 0) ? supplierAdvancePayments / totalAssets : 0,
+                      pct: (d.totalAssets > 0) ? d.supplierAdvancePayments / d.totalAssets : 0,
                       onTap: () => context.push('/manage/suppliers'),
                       showChevron: true,
                     ),
@@ -243,16 +360,16 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                 _buildCollapsibleSection(
                   title: AppLocalizations.of(context)!.whatYouOwe,
                   subtitle: AppLocalizations.of(context)!.totalLiabilities,
-                  amount: totalLiabilities,
+                  amount: d.totalLiabilities,
                   icon: Icons.money_off_rounded,
                   iconColor: AppColors.chartRed,
                   iconBg: AppColors.chartRedLight,
                   items: [
                     _SheetItem(
                       label: AppLocalizations.of(context)!.supplierPayable,
-                      amount: suppliersOwing,
+                      amount: d.suppliersOwing,
                       icon: Icons.local_shipping_rounded,
-                      pct: (totalLiabilities > 0) ? suppliersOwing / totalLiabilities : 0,
+                      pct: (d.totalLiabilities > 0) ? d.suppliersOwing / d.totalLiabilities : 0,
                        onTap: () => context.push('/manage/suppliers'),
                       showChevron: true,
                     ),
@@ -260,7 +377,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                       label: AppLocalizations.of(context)!.loans,
                       amount: bs.loans,
                       icon: Icons.credit_card_rounded,
-                      pct: (totalLiabilities > 0) ? bs.loans / totalLiabilities : 0,
+                      pct: (d.totalLiabilities > 0) ? bs.loans / d.totalLiabilities : 0,
                        onTap: () => _showEditDialog(AppLocalizations.of(context)!.loans, bs.loans, (v) {
                         ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(loans: v));
                        }),
@@ -270,7 +387,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                       label: AppLocalizations.of(context)!.unpaidSalaries,
                       amount: bs.unpaidSalaries,
                       icon: Icons.people_rounded,
-                      pct: (totalLiabilities > 0) ? bs.unpaidSalaries / totalLiabilities : 0,
+                      pct: (d.totalLiabilities > 0) ? bs.unpaidSalaries / d.totalLiabilities : 0,
                       onTap: () => _showEditDialog(AppLocalizations.of(context)!.unpaidSalaries, bs.unpaidSalaries, (v) {
                         ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(unpaidSalaries: v));
                       }),
@@ -286,55 +403,60 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                 _buildCollapsibleSection(
                   title: AppLocalizations.of(context)!.ownersEquity,
                   subtitle: AppLocalizations.of(context)!.netWorth,
-                  amount: netEquity,
+                  amount: d.netEquity,
                   icon: Icons.diamond_rounded,
                   iconColor: AppColors.chartGreen,
                   iconBg: AppColors.chartGreenLight,
                   items: [
                     _SheetItem(
-                      label: hasManualCapital
+                      label: d.hasManualCapital
                           ? AppLocalizations.of(context)!.openingCapital
                           : '${AppLocalizations.of(context)!.openingCapital} (${AppLocalizations.of(context)!.autoCalculated})',
-                      amount: effectiveCapital,
+                      amount: d.effectiveCapital,
                       icon: Icons.account_balance_rounded,
-                      pct: netEquity != 0 ? (effectiveCapital / netEquity).clamp(-1.0, 1.0) : 0,
+                      pct: d.netEquity != 0 ? (d.effectiveCapital / d.netEquity).clamp(-1.0, 1.0) : 0,
                       onTap: () => _showEditDialog(AppLocalizations.of(context)!.openingCapital, bs.openingCapital, (v) {
-                        ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(openingCapital: v));
+                        ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(openingCapital: v, hasSetCapital: true));
                       }),
                       isEditable: true,
                     ),
                     _SheetItem(
                       label: AppLocalizations.of(context)!.retainedEarnings,
-                      amount: retainedEarnings,
+                      amount: d.retainedEarnings,
                       icon: Icons.savings_rounded,
-                      pct: netEquity != 0 ? (retainedEarnings / netEquity).clamp(-1.0, 1.0) : 0,
+                      pct: d.netEquity != 0 ? (d.retainedEarnings / d.netEquity).clamp(-1.0, 1.0) : 0,
                     ),
                     _SheetItem(
                       label: AppLocalizations.of(context)!.currentPeriodNetIncome,
-                      amount: currentPeriodNetIncome,
+                      amount: d.currentPeriodNetIncome,
                       icon: Icons.trending_up_rounded,
-                      pct: netEquity != 0 ? (currentPeriodNetIncome / netEquity).clamp(-1.0, 1.0) : 0,
+                      pct: d.netEquity != 0 ? (d.currentPeriodNetIncome / d.netEquity).clamp(-1.0, 1.0) : 0,
                     ),
-                    if (reconAdjustment.abs() >= 0.01)
+                    if (d.reconAdjustment.abs() >= 0.01)
                       _SheetItem(
                         label: AppLocalizations.of(context)!.reconAdjustment,
-                        amount: reconAdjustment,
+                        amount: d.reconAdjustment,
                         icon: Icons.tune_rounded,
-                        pct: netEquity != 0 ? (reconAdjustment / netEquity).clamp(-1.0, 1.0) : 0,
+                        pct: d.netEquity != 0 ? (d.reconAdjustment / d.netEquity).clamp(-1.0, 1.0) : 0,
                       ),
                   ],
                   fmt: fmt,
                   isAssets: true,
                 ).animate().fadeIn(duration: 400.ms, delay: 250.ms),
 
-                // Accounting equation check — always balanced because the
-                // auto-derived capital (or the adjustment line) absorbs the gap.
+                // Accounting equation check — show green when balanced,
+                // orange warning when reconAdjustment is significant.
                 Builder(builder: (_) {
-                  const badgeColor = AppColors.badgeTextPositive;
-                  const bgColors = [AppColors.chartGreenLight, Color(0xFFD1FAE5)];
-                  const borderColor = AppColors.badgeBgPositive;
-                  const icon = Icons.check_circle_rounded;
-                  final text = AppLocalizations.of(context)!.accountingEquationBalanced;
+                  final isBalanced = d.reconAdjustment.abs() < 1.0;
+                  final badgeColor = isBalanced ? AppColors.badgeTextPositive : AppColors.accentOrange;
+                  final bgColors = isBalanced
+                      ? const [AppColors.chartGreenLight, Color(0xFFD1FAE5)]
+                      : [AppColors.accentOrange.withValues(alpha: 0.1), AppColors.accentOrange.withValues(alpha: 0.15)];
+                  final borderColor = isBalanced ? AppColors.badgeBgPositive : AppColors.accentOrange.withValues(alpha: 0.3);
+                  final icon = isBalanced ? Icons.check_circle_rounded : Icons.warning_amber_rounded;
+                  final text = isBalanced
+                      ? AppLocalizations.of(context)!.accountingEquationBalanced
+                      : AppLocalizations.of(context)!.accountingEquationUnbalanced;
 
                   return Padding(
                     padding: const EdgeInsets.only(top: 12, bottom: 8),
@@ -378,7 +500,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
                 }),
 
                 // AI Insight
-                _buildAIInsightCard(totalAssets, totalLiabilities, netEquity)
+                _buildAIInsightCard(d.totalAssets, d.totalLiabilities, d.netEquity)
                     .animate()
                     .fadeIn(duration: 400.ms, delay: 300.ms)
                     .scale(begin: const Offset(0.95, 0.95)),
@@ -457,37 +579,55 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
 
   Widget _buildTrendChart(NumberFormat fmt) {
     // Calculate historical Net Equity Trend based on transactions
-    final transactions = ref.watch(transactionsProvider).value ?? [];
+    final transactions = _isReportLoading ? <Transaction>[] : _transactions;
     final bs = ref.watch(balanceSheetEntriesProvider);
 
-    // Compute bank balance from CF (opening cash + all transaction flows)
+    // Compute bank balance consistently with _computeData():
+    // exclude positive sale-linked accrual txns, add cashFromSales,
+    // allow refund txns (negative) through.
     final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
-    final double bankBalance = transactions.fold(
-      openingCash,
-      (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
-    );
+    final double txnCashFlow = transactions
+        .where((t) {
+          if (t.saleId != null && saleTxnCats.contains(t.categoryId) && t.amount >= 0) {
+            return false;
+          }
+          if (t.categoryId == 'cat_supplier_payment') return true;
+          return !t.excludeFromPL;
+        })
+        .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()));
 
-    final baseAssets = bankBalance + bs.cashOnHand + bs.unpaidInvoices;
-    final baseLiabilities = bs.loans + bs.unpaidSalaries;
-    // We will calculate backwards: Current Net Equity - net change per month
-    
-    // Get inventory value and purchase-based supplier payable
-    final inventoryProducts = ref.watch(inventoryProvider).value ?? [];
+    final sales = _isReportLoading ? <Sale>[] : _sales;
+    final double cashFromSales = sales
+        .where((s) => s.orderStatus != OrderStatus.cancelled)
+        .where((s) => s.createdAt != null)
+        .fold<double>(0.0, (sum, s) => sum + s.amountPaid);
+    final double bankBalance = roundMoney(openingCash + txnCashFlow + cashFromSales);
+
+    // Get inventory, AR, supplier balances
+    final inventoryProducts = ref.watch(filteredInventoryProvider).value ?? [];
     final purchases = ref.watch(purchasesProvider).value ?? [];
-    final sales = ref.watch(salesProvider).value ?? [];
-    
+
     final double inventoryValue = inventoryProducts.fold(0.0, (sum, p) => sum + p.totalCostValue);
     final double suppliersOwing = purchases.fold(0.0, (sum, p) {
       final receivedValue = p.totalReceivedValue;
       final paid = p.amountPaid;
       return sum + (receivedValue - paid).clamp(0.0, double.maxFinite);
     });
+    final double supplierAdvancePayments = purchases.fold(0.0, (sum, p) {
+      final receivedValue = p.totalReceivedValue;
+      final paid = p.amountPaid;
+      return sum + (paid - receivedValue).clamp(0.0, double.maxFinite);
+    });
     final double accountsReceivable = sales
         .where((s) => s.orderStatus != OrderStatus.cancelled)
         .fold(0.0, (sum, s) => sum + s.outstanding);
-    
-    final currentNetEquity = (baseAssets + inventoryValue + accountsReceivable) - (baseLiabilities + suppliersOwing);
 
+    final totalAssets = bankBalance + bs.cashOnHand + bs.unpaidInvoices +
+        inventoryValue + accountsReceivable + supplierAdvancePayments;
+    final totalLiabilities = bs.loans + bs.unpaidSalaries + suppliersOwing;
+    final currentNetEquity = totalAssets - totalLiabilities;
+
+    // Build 6-month backward trend by deducting monthly P&L flows
     final data = <Map<String, dynamic>>[];
     final now = DateTime.now();
     double runningEquity = currentNetEquity;
@@ -500,15 +640,8 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
     for (int i = 1; i <= 5; i++) {
       final monthEnd = DateTime(now.year, now.month - i + 1, 1);
       final monthStart = DateTime(now.year, now.month - i, 1);
-      
+
       // Calculate net flow for that month (P&L items only)
-      const plExcludedCats = {
-        'cat_investments',
-        'cat_loan_received',
-        'cat_loan_repayment',
-        'cat_equity_injection',
-        'cat_owner_withdrawal',
-      };
       double monthlyFlow = 0;
       for (final tx in transactions) {
         if (tx.excludeFromPL) continue;
@@ -517,10 +650,10 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
           monthlyFlow += tx.isIncome ? tx.amount.abs() : -tx.amount.abs();
         }
       }
-      
+
       // If we go backwards, equity at start of month = equity at end - monthly flow
       runningEquity = runningEquity - monthlyFlow;
-      
+
       data.insert(0, {
         'month': DateFormat('MMM').format(monthStart),
         'amount': runningEquity,
@@ -1155,20 +1288,34 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
           final shareSvc = ref.read(shareServiceProvider);
           final settings = ref.read(appSettingsProvider);
           final bsManual = ref.read(balanceSheetEntriesProvider);
-          final allTxns = ref.read(transactionsProvider).value ?? [];
-          final products = await ref.read(inventoryProvider.future);
+          final allTxns = _transactions;
+          final products = ref.read(filteredInventoryProvider).value ?? [];
           final purchases = ref.read(purchasesProvider).value ?? [];
-          final sales = await ref.read(salesProvider.future);
+          final sales = _sales;
 
           // Compute bank balance from opening cash + transactions up to now (consistent with screen)
           final asOfDate = _period.range.end;
-          final computedBank = roundMoney(settings.openingCashBalance + allTxns
+          // Mirror screen: exclude sale-linked accrual txns, add cashFromSales
+          final pdfTxnCashFlow = allTxns
               .where((t) => !t.dateTime.isAfter(asOfDate))
-              .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
+              .where((t) {
+                if (t.saleId != null && saleTxnCats.contains(t.categoryId) && t.amount >= 0) {
+                  return false;
+                }
+                if (t.categoryId == 'cat_supplier_payment') return true;
+                return !t.excludeFromPL;
+              })
+              .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()));
+          final pdfCashFromSales = sales
+              .where((s) => s.orderStatus != OrderStatus.cancelled)
+              .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOfDate))
+              .fold<double>(0.0, (sum, s) => sum + s.amountPaid);
+          final computedBank = roundMoney(settings.openingCashBalance + pdfTxnCashFlow + pdfCashFromSales);
 
           final inventoryValue = products.fold<double>(0, (s, p) => s + p.totalCostValue);
           final accountsReceivable = sales
               .where((s) => s.orderStatus != OrderStatus.cancelled)
+              .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOfDate))
               .fold<double>(0, (sum, s) => sum + s.outstanding);
           final pdfPurchases = purchases.where((p) => !p.date.isAfter(asOfDate)).toList();
           final suppliersOwing = pdfPurchases.fold<double>(0.0, (sum, p) {
@@ -1180,14 +1327,13 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen> {
             return sum + (p.amountPaid - received).clamp(0.0, double.maxFinite);
           });
           // Compute equity components for PDF (same logic as the screen)
-          const plExcl = {'cat_investments'};
           final pdfRetained = roundMoney(allTxns
               .where((t) => t.dateTime.isBefore(_period.range.start))
-              .where((t) => !t.excludeFromPL && !plExcl.contains(t.categoryId))
+              .where((t) => !t.excludeFromPL && !plExcludedCats.contains(t.categoryId))
               .fold(0.0, (s, t) => s + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
           final pdfCurrentNet = roundMoney(allTxns
               .where((t) => !t.dateTime.isBefore(_period.range.start) && !t.dateTime.isAfter(asOfDate))
-              .where((t) => !t.excludeFromPL && !plExcl.contains(t.categoryId))
+              .where((t) => !t.excludeFromPL && !plExcludedCats.contains(t.categoryId))
               .fold(0.0, (s, t) => s + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
 
           // Auto-derive opening capital (mirrors screen logic)

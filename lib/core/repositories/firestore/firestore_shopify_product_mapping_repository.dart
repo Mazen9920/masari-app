@@ -24,7 +24,7 @@ class FirestoreShopifyProductMappingRepository
   Future<Result<List<ShopifyProductMapping>>> getMappings() async {
     try {
       final snapshot =
-          await _collection.where('user_id', isEqualTo: _uid).get();
+          await _collection.where('user_id', isEqualTo: _uid).limit(2000).get();
       final mappings = snapshot.docs.map((doc) {
         final data = doc.data();
         data['id'] = doc.id;
@@ -189,14 +189,20 @@ class FirestoreShopifyProductMappingRepository
   @override
   Future<Result<void>> deleteAllMappings() async {
     try {
-      final snapshot =
-          await _collection.where('user_id', isEqualTo: _uid).get();
-      if (snapshot.docs.isEmpty) return Result.success(null);
-      final batch = _firestore.batch();
-      for (final doc in snapshot.docs) {
-        batch.delete(doc.reference);
+      // Paginated delete to avoid loading all docs into memory at once
+      const pageSize = 500;
+      while (true) {
+        final snapshot = await _collection
+            .where('user_id', isEqualTo: _uid)
+            .limit(pageSize)
+            .get();
+        if (snapshot.docs.isEmpty) break;
+        final batch = _firestore.batch();
+        for (final doc in snapshot.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
       }
-      await batch.commit();
       return Result.success(null);
     } catch (e) {
       return Result.failure( 'Failed to delete all product mappings: $e');

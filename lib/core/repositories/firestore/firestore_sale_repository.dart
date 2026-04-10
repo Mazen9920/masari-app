@@ -14,6 +14,24 @@ class FirestoreSaleRepository implements SaleRepository {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
+  /// Cached cursor from the last page for efficient pagination.
+  DocumentSnapshot? _lastCursor;
+
+  /// In-memory cache for [getSalesInRange] queries.
+  final Map<String, Future<Result<List<Sale>>>> _rangeCache = {};
+
+  /// Optional callback to invalidate transaction range cache when sale
+  /// mutations also write transaction documents.
+  VoidCallback? onTransactionCacheInvalidated;
+
+  @override
+  void clearRangeCache() => _rangeCache.clear();
+
+  void _invalidateAll() {
+    _rangeCache.clear();
+    onTransactionCacheInvalidated?.call();
+  }
+
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('sales');
 
@@ -24,29 +42,46 @@ class FirestoreSaleRepository implements SaleRepository {
   }
 
   @override
-  Future<Result<List<Sale>>> getSales({int? limit, String? startAfterId}) async {
+  Future<Result<List<Sale>>> getSales({
+    int? limit,
+    String? startAfterId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
     try {
       Query<Map<String, dynamic>> query =
-          _collection.where('user_id', isEqualTo: _uid).orderBy('date', descending: true);
+          _collection.where('user_id', isEqualTo: _uid);
+
+      // Server-side date bounds — dramatically reduces reads for large datasets
+      if (startDate != null) {
+        query = query.where('date',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
+      }
+      if (endDate != null) {
+        query = query.where('date',
+            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
+      }
+
+      query = query.orderBy('date', descending: true);
 
       if (startAfterId != null) {
-        final cursorDoc = await _collection.doc(startAfterId).get();
-        if (cursorDoc.exists) {
-          query = query.startAfterDocument(cursorDoc);
+        // Reuse cached cursor when it matches, avoiding an extra Firestore read.
+        DocumentSnapshot? cursor = _lastCursor;
+        if (cursor == null || cursor.id != startAfterId) {
+          cursor = await _collection.doc(startAfterId).get();
+        }
+        if (cursor.exists) {
+          query = query.startAfterDocument(cursor);
         }
       }
 
       if (limit != null) query = query.limit(limit);
 
-      QuerySnapshot<Map<String, dynamic>> snapshot;
-      try {
-        snapshot = await query.get();
-      } catch (_) {
-        // Index may not be ready yet — fall back to unordered query
-        Query<Map<String, dynamic>> fallback =
-            _collection.where('user_id', isEqualTo: _uid);
-        if (limit != null) fallback = fallback.limit(limit);
-        snapshot = await fallback.get();
+      final snapshot = await query.get();
+
+      // Cache last doc for the next loadMore() call.
+      if (snapshot.docs.isNotEmpty) {
+        _lastCursor = snapshot.docs.last;
       }
 
       final sales = <Sale>[];
@@ -60,12 +95,55 @@ class FirestoreSaleRepository implements SaleRepository {
         }
       }
 
-      // Client-side sort (ensures order even with fallback query)
-      sales.sort((a, b) => b.date.compareTo(a.date));
-
       return Result.success(sales);
     } catch (e) {
       return Result.failure( 'Failed to fetch sales: $e');
+    }
+  }
+
+  @override
+  Future<Result<List<Sale>>> getSalesInRange({
+    required DateTime start,
+    required DateTime end,
+  }) {
+    final key = '${start.millisecondsSinceEpoch}_${end.millisecondsSinceEpoch}';
+    final cached = _rangeCache[key];
+    if (cached != null) return cached;
+
+    final future = _doGetSalesInRange(start, end);
+    _rangeCache[key] = future;
+    future.then((r) { if (!r.isSuccess) _rangeCache.remove(key); });
+    return future;
+  }
+
+  Future<Result<List<Sale>>> _doGetSalesInRange(
+      DateTime start, DateTime end) async {
+    try {
+      final startTs = Timestamp.fromDate(start);
+      final endTs = Timestamp.fromDate(end);
+
+      final snapshot = await _collection
+          .where('user_id', isEqualTo: _uid)
+          .where('date', isGreaterThanOrEqualTo: startTs)
+          .where('date', isLessThanOrEqualTo: endTs)
+          .orderBy('date', descending: true)
+          .get();
+
+      final sales = <Sale>[];
+      for (final doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          data['id'] = doc.id;
+          sales.add(Sale.fromJson(data));
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('[SaleRepo] Failed to parse sale ${doc.id}: $e');
+          }
+        }
+      }
+      return Result.success(sales);
+    } catch (e) {
+      return Result.failure('Failed to fetch sales in range: $e');
     }
   }
 
@@ -92,6 +170,7 @@ class FirestoreSaleRepository implements SaleRepository {
 
       // Preserve client-side ID so transactions can reference it reliably
       await _collection.doc(sale.id).set(json);
+      _rangeCache.clear();
       return Result.success(sale);
     } catch (e) {
       return Result.failure( 'Failed to create sale: $e');
@@ -125,6 +204,7 @@ class FirestoreSaleRepository implements SaleRepository {
       // Atomic commit — all succeed or all fail
       await batch.commit();
 
+      _invalidateAll();
       return Result.success(sale);
     } catch (e) {
       return Result.failure( 'Failed to create sale: $e');
@@ -213,6 +293,7 @@ class FirestoreSaleRepository implements SaleRepository {
         }
       });
 
+      _invalidateAll();
       return Result.success(sale);
     } catch (e) {
       return Result.failure('Failed to create sale: $e');
@@ -297,6 +378,7 @@ class FirestoreSaleRepository implements SaleRepository {
 
       await batch.commit();
 
+      _invalidateAll();
       return Result.success(sale);
     } catch (e) {
       return Result.failure('Failed to create sale (batch): $e');
@@ -312,6 +394,7 @@ class FirestoreSaleRepository implements SaleRepository {
       json.remove('id');
 
       await _collection.doc(id).update(json);
+      _rangeCache.clear();
       return Result.success(updated);
     } catch (e) {
       return Result.failure( 'Failed to update sale: $e');
@@ -322,6 +405,7 @@ class FirestoreSaleRepository implements SaleRepository {
   Future<Result<void>> deleteSale(String id) async {
     try {
       await _collection.doc(id).delete();
+      _rangeCache.clear();
       return Result.success(null);
     } catch (e) {
       return Result.failure( 'Failed to delete sale: $e');

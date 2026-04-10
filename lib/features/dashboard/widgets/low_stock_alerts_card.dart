@@ -21,7 +21,7 @@ class LowStockAlertsCard extends ConsumerWidget {
     final alertsEnabled = ref.watch(appSettingsProvider).lowStockAlerts;
     if (!alertsEnabled) return const SizedBox.shrink();
 
-    final inventoryAsync = ref.watch(inventoryProvider);
+    final inventoryAsync = ref.watch(filteredInventoryProvider);
     final products = inventoryAsync.value ?? [];
 
     // Collect all variants that are low/out-of-stock

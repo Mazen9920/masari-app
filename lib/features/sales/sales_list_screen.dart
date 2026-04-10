@@ -41,19 +41,10 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
     if (_isRefreshing) return;
     setState(() => _isRefreshing = true);
     try {
-      final futures = <Future>[
+      await Future.wait([
         ref.read(salesProvider.notifier).refresh(),
-      ];
-      final hasAccess = ref.read(hasShopifyAccessProvider);
-      if (hasAccess) {
-        final conn = ref.read(shopifyConnectionProvider).value;
-        if (conn != null && conn.isActive) {
-          futures.add(
-            ref.read(shopifyConnectionProvider.notifier).refresh(),
-          );
-        }
-      }
-      await Future.wait(futures);
+        ref.read(shopifyConnectionProvider.notifier).refresh(),
+      ]);
     } finally {
       if (mounted) setState(() => _isRefreshing = false);
     }
@@ -352,7 +343,7 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
                               );
                             }
                             final sale = filtered[i];
-                            return _SaleCard(
+                            final card = _SaleCard(
                               sale: sale,
                               currency: currency,
                               selectionMode: _selectionMode,
@@ -361,12 +352,17 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
                               onLongPress: _selectionMode
                                   ? null
                                   : () => _enterSelectionMode(),
-                            )
-                                .animate()
-                                .fadeIn(
-                                    duration: 200.ms,
-                                    delay: (i * 40).ms)
-                                .slideY(begin: 0.04, duration: 200.ms);
+                            );
+                            // Only animate the first visible batch
+                            if (i < 8) {
+                              return card
+                                  .animate()
+                                  .fadeIn(
+                                      duration: 200.ms,
+                                      delay: (i * 40).ms)
+                                  .slideY(begin: 0.04, duration: 200.ms);
+                            }
+                            return card;
                           },
                         ),
                       ),
@@ -853,7 +849,7 @@ class _BulkActionBar extends StatelessWidget {
 
 // ── Sale Card ──────────────────────────────────────────────
 
-class _SaleCard extends ConsumerWidget {
+class _SaleCard extends StatelessWidget {
   final Sale sale;
   final String currency;
   final bool selectionMode;
@@ -871,7 +867,7 @@ class _SaleCard extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final fmt = NumberFormat('#,##0.00', 'en');
     final dateFmt = DateFormat('MMM dd, yyyy');

@@ -8,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' show Intl;
+import 'package:timezone/data/latest.dart' as tz;
 import 'package:revvo_app/l10n/app_localizations.dart';
 import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
@@ -19,6 +20,9 @@ import 'core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize IANA timezone database for timezone-aware period boundaries
+  tz.initializeTimeZones();
 
   // Force Western (English) numerals for all intl formatting (NumberFormat, DateFormat)
   // even when the UI locale is Arabic. The Flutter UI locale is set separately in MaterialApp.

@@ -3,10 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
-import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/app_settings_provider.dart';
-import '../../../shared/models/sale_model.dart';
-import '../providers/dashboard_state_provider.dart';
+import '../providers/dashboard_data_provider.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// Card showing Gross Margin %, Net Margin %, and COGS Ratio
@@ -17,61 +15,9 @@ class ProfitMarginsCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final dashState = ref.watch(dashboardStateProvider);
-    final range = dashState.range;
-    final salesAsync = ref.watch(salesProvider);
-    final sales = salesAsync.value ?? [];
+    final dashData = ref.watch(dashboardDataProvider).value;
+    final cur = dashData?.currentMetrics ?? const PeriodMetrics();
     final currency = ref.watch(appSettingsProvider).currency;
-
-    // Filter sales in the selected period (exclude cancelled)
-    final periodSales = sales.where((s) {
-      return s.orderStatus != OrderStatus.cancelled &&
-          !s.date.isBefore(range.start) && !s.date.isAfter(range.end);
-    }).toList();
-
-    double totalRevenue = 0;
-    double totalCogs = 0;
-
-    for (final sale in periodSales) {
-      totalRevenue += sale.netRevenue;
-      totalCogs += sale.totalCogs;
-    }
-
-    final grossProfit = totalRevenue - totalCogs;
-    final grossMargin =
-        totalRevenue > 0 ? (grossProfit / totalRevenue * 100) : 0.0;
-    final cogsRatio =
-        totalRevenue > 0 ? (totalCogs / totalRevenue * 100) : 0.0;
-
-    // Net margin: P&L income - expenses (investments excluded from P&L)
-    const plExcludedCats = {
-      'cat_investments',
-      'cat_loan_received',
-      'cat_loan_repayment',
-      'cat_equity_injection',
-      'cat_owner_withdrawal',
-    };
-    final transactionsAsync = ref.watch(transactionsProvider);
-    final transactions = transactionsAsync.value ?? [];
-    double totalIncome = 0;
-    double totalExpenses = 0;
-    for (final tx in transactions) {
-      if (tx.excludeFromPL || plExcludedCats.contains(tx.categoryId)) continue;
-      if (!tx.dateTime.isBefore(range.start) &&
-          !tx.dateTime.isAfter(range.end)) {
-        if (tx.isIncome) {
-          totalIncome += tx.amount.abs();
-        } else if (tx.categoryId == 'cat_sales_revenue') {
-          // Refund: reduce income, not increase expenses
-          totalIncome -= tx.amount.abs();
-        } else {
-          totalExpenses += tx.amount.abs();
-        }
-      }
-    }
-    final netProfit = totalIncome - totalExpenses;
-    final netMargin =
-        totalIncome > 0 ? (netProfit / totalIncome * 100) : 0.0;
 
     final fmt = NumberFormat.compactCurrency(symbol: '$currency ');
 
@@ -116,7 +62,7 @@ class ProfitMarginsCard extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Text(
-             l10n.totalIncomeLabel(fmt.format(totalIncome)),
+             l10n.totalIncomeLabel(fmt.format(cur.revenue)),
             style: AppTypography.captionSmall.copyWith(
               color: AppColors.textSecondary,
             ),
@@ -125,21 +71,23 @@ class ProfitMarginsCard extends ConsumerWidget {
 
           _MarginRow(
             label: l10n.grossMargin,
-            percentage: grossMargin,
-            color: AppColors.success,
+            percentage: cur.grossMarginPct,
+            color: cur.grossMarginPct >= 0
+                ? AppColors.success
+                : AppColors.danger,
           ),
           const SizedBox(height: 14),
           _MarginRow(
             label: l10n.netMargin,
-            percentage: netMargin,
-            color: netMargin >= 0
+            percentage: cur.netMarginPct,
+            color: cur.netMarginPct >= 0
                 ? AppColors.secondaryBlue
                 : AppColors.danger,
           ),
           const SizedBox(height: 14),
           _MarginRow(
             label: l10n.cogsRatio,
-            percentage: cogsRatio,
+            percentage: cur.cogsRatioPct,
             color: AppColors.accentOrange,
             invertColor: true,
           ),
@@ -164,7 +112,9 @@ class _MarginRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final clamped = percentage.clamp(0.0, 100.0);
+    final isNegative = percentage < 0;
+    final displayColor = isNegative && !invertColor ? AppColors.danger : color;
+    final barValue = percentage.abs().clamp(0.0, 100.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -181,7 +131,7 @@ class _MarginRow extends StatelessWidget {
             Text(
               '${percentage.toStringAsFixed(1)}%',
               style: AppTypography.labelLarge.copyWith(
-                color: color,
+                color: displayColor,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -191,10 +141,10 @@ class _MarginRow extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
-            value: clamped / 100,
+            value: barValue / 100,
             minHeight: 6,
-            backgroundColor: color.withValues(alpha: 0.1),
-            valueColor: AlwaysStoppedAnimation(color),
+            backgroundColor: displayColor.withValues(alpha: 0.1),
+            valueColor: AlwaysStoppedAnimation(displayColor),
           ),
         ),
       ],

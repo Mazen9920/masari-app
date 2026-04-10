@@ -252,6 +252,8 @@ class _ProfileSection extends StatelessWidget {
                     fit: BoxFit.cover,
                     width: 80,
                     height: 80,
+                    memCacheWidth: 160,
+                    memCacheHeight: 160,
                     placeholder: (_, _) => Center(
                       child: Text(
                         supplier.initials,

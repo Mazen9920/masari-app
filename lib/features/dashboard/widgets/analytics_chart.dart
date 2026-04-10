@@ -4,11 +4,12 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
-import '../../../core/providers/app_providers.dart';
-import '../../../l10n/app_localizations.dart';
 import '../../../core/providers/app_settings_provider.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/models/sale_model.dart';
+import '../../../shared/utils/report_constants.dart';
 import '../providers/dashboard_state_provider.dart';
+import '../providers/dashboard_data_provider.dart';
 
 enum _Metric { sales, expenses, profit, orders }
 
@@ -31,8 +32,9 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
     final range = ds.range;
     final currency = ref.watch(appSettingsProvider).currency;
 
-    final allSales = ref.watch(salesProvider).value ?? [];
-    final allTxns = ref.watch(transactionsProvider).value ?? [];
+    final dashData = ref.watch(dashboardDataProvider).value;
+    final allSales = dashData?.sales ?? [];
+    final allTxns = dashData?.transactions ?? [];
 
     // Filter to current period
     final curSales = allSales
@@ -44,15 +46,6 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
             !s.date.isBefore(range.previousStart) &&
             !s.date.isAfter(range.previousEnd))
         .toList();
-
-    // Categories excluded from P&L (CF investing activities / BS only)
-    const plExcludedCats = {
-      'cat_investments',
-      'cat_loan_received',
-      'cat_loan_repayment',
-      'cat_equity_injection',
-      'cat_owner_withdrawal',
-    };
 
     final curTxns = allTxns
         .where((t) =>
@@ -76,9 +69,9 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
         _buildBuckets(range.previousStart, range.previousEnd, strategy);
 
     final curData =
-        _aggregate(buckets, curSales, curTxns, range.start, _selected);
+        _aggregate(buckets, curSales, curTxns, range.start, _selected, strategy);
     final prevData =
-        _aggregate(prevBuckets, prevSales, prevTxns, range.previousStart, _selected);
+        _aggregate(prevBuckets, prevSales, prevTxns, range.previousStart, _selected, strategy);
 
     // Summary value
     final totalCur = curData.fold<double>(0, (a, b) => a + b);
@@ -243,9 +236,12 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
     }
 
     final color = _metricColor(_selected);
-    final maxY = [...curData, if (_showComparison) ...prevData]
-        .fold<double>(0, (a, b) => a > b ? a : b);
-    final safeMaxY = maxY == 0 ? 1.0 : maxY * 1.15;
+    final allPoints = [...curData, if (_showComparison) ...prevData];
+    final rawMax = allPoints.fold<double>(0, (a, b) => a > b ? a : b);
+    final rawMin = allPoints.fold<double>(0, (a, b) => a < b ? a : b);
+    final safeMaxY = rawMax == 0 ? 1.0 : rawMax * 1.15;
+    final safeMinY = rawMin >= 0 ? 0.0 : rawMin * 1.15;
+    final yRange = safeMaxY - safeMinY;
 
     final curSpots = List.generate(
         curData.length, (i) => FlSpot(i.toDouble(), curData[i]));
@@ -256,12 +252,12 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
 
     return LineChart(
       LineChartData(
-        minY: 0,
+        minY: safeMinY,
         maxY: safeMaxY,
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
-          horizontalInterval: safeMaxY / 4,
+          horizontalInterval: yRange / 4,
           getDrawingHorizontalLine: (_) => FlLine(
             color: AppColors.borderLight,
             strokeWidth: 1,
@@ -277,7 +273,7 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 44,
-              interval: safeMaxY / 4,
+              interval: yRange / 4,
               getTitlesWidget: (value, _) {
                 if (value == 0) return const SizedBox.shrink();
                 return Text(
@@ -477,33 +473,49 @@ List<double> _aggregate(
   List<dynamic> txns,
   DateTime rangeStart,
   _Metric metric,
+  BucketStrategy strategy,
 ) {
   if (buckets.isEmpty) return [];
   final values = List.filled(buckets.length, 0.0);
+  final lastIdx = buckets.length - 1;
 
+  // O(1) bucket lookup instead of O(n) reverse scan.
   int bucketIndex(DateTime d) {
-    for (int i = buckets.length - 1; i >= 0; i--) {
-      if (!d.isBefore(buckets[i])) return i;
+    int idx;
+    switch (strategy) {
+      case BucketStrategy.hourly:
+        idx = d.difference(buckets.first).inHours;
+      case BucketStrategy.daily:
+        final dDay = DateTime(d.year, d.month, d.day);
+        final startDay = DateTime(
+            buckets.first.year, buckets.first.month, buckets.first.day);
+        idx = dDay.difference(startDay).inDays;
+      case BucketStrategy.monthly:
+        idx = (d.year - buckets.first.year) * 12 +
+            d.month -
+            buckets.first.month;
     }
-    return 0;
+    return idx.clamp(0, lastIdx);
   }
 
   switch (metric) {
     case _Metric.sales:
       // Revenue — investments already excluded at the pre-filter stage.
-      // Refund transactions (negative cat_sales_revenue) reduce revenue.
+      // Refund/reversal transactions reduce revenue. COGS reversals are excluded.
       for (final t in txns) {
         final amount = (t as dynamic).amount as double;
         final catId = (t as dynamic).categoryId as String;
         final idx = bucketIndex((t as dynamic).dateTime as DateTime);
         if (idx >= 0 && idx < values.length) {
-          if (amount > 0) {
-            if ((t as dynamic).isIncome as bool) {
-              values[idx] += amount.abs();
-            }
-          } else if (catId == 'cat_sales_revenue') {
-            // Refund: reduce revenue
-            values[idx] -= amount.abs();
+          if (catId == 'cat_cogs') {
+            // COGS (and reversals) don't affect revenue chart
+            continue;
+          } else if (catId == 'cat_sales_revenue' ||
+              catId == 'cat_shipping') {
+            // Signed: positive = income, negative = refund/reversal
+            values[idx] += amount;
+          } else if (amount > 0) {
+            values[idx] += amount;
           }
         }
       }
@@ -512,29 +524,37 @@ List<double> _aggregate(
       for (final t in txns) {
         final amount = (t as dynamic).amount as double;
         final catId = (t as dynamic).categoryId as String;
-        if (amount < 0 && catId != 'cat_sales_revenue') {
-          final idx = bucketIndex((t as dynamic).dateTime as DateTime);
-          if (idx >= 0 && idx < values.length) {
+        final idx = bucketIndex((t as dynamic).dateTime as DateTime);
+        if (idx >= 0 && idx < values.length) {
+          if (catId == 'cat_cogs') {
+            // COGS: negative = cost, positive = reversal (reduces expenses)
+            values[idx] -= amount;
+          } else if (amount < 0 &&
+              catId != 'cat_sales_revenue' &&
+              catId != 'cat_shipping') {
             values[idx] += amount.abs();
           }
         }
       }
       break;
     case _Metric.profit:
-      // Revenue (income txns) minus expenses (negative txns)
-      // Refund txns (negative cat_sales_revenue) reduce revenue, not increase expenses
+      // Revenue minus expenses. Refunds/reversals reduce revenue, COGS reversals reduce expenses.
       for (final t in txns) {
         final amount = (t as dynamic).amount as double;
-        final isIncome = (t as dynamic).isIncome as bool;
         final catId = (t as dynamic).categoryId as String;
         final idx = bucketIndex((t as dynamic).dateTime as DateTime);
         if (idx >= 0 && idx < values.length) {
-          if (isIncome) {
-            values[idx] += amount.abs(); // add revenue
-          } else if (catId == 'cat_sales_revenue') {
-            values[idx] -= amount.abs(); // refund reduces revenue (profit)
+          if (catId == 'cat_cogs') {
+            // COGS: negative = expense, positive = reversal (reduces expense)
+            values[idx] += amount; // +(-X) subtracts cost, +(+X) adds back reversal
+          } else if (catId == 'cat_sales_revenue' ||
+              catId == 'cat_shipping') {
+            // Signed: positive = revenue, negative = refund
+            values[idx] += amount;
+          } else if (amount > 0) {
+            values[idx] += amount; // other income
           } else {
-            values[idx] -= amount.abs(); // subtract expense
+            values[idx] += amount; // other expense (negative)
           }
         }
       }

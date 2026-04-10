@@ -9,13 +9,14 @@ import '../../core/services/share_service.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/sale_model.dart';
 import '../../shared/utils/money_utils.dart';
+import '../../shared/utils/report_constants.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/navigation/app_router.dart';
 import '../../shared/models/category_data.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/export_providers.dart';
+import '../../core/providers/repository_providers.dart';
 import '../../l10n/app_localizations.dart';
 import 'widgets/financial_period_sheet.dart';
 import 'widgets/report_card.dart';
@@ -28,7 +29,8 @@ class ProfitLossScreen extends ConsumerStatefulWidget {
   ConsumerState<ProfitLossScreen> createState() => _ProfitLossScreenState();
 }
 
-class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
+class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
+    with AutomaticKeepAliveClientMixin {
   // State
   FinancialPeriodResult _period = FinancialPeriodResult(
     type: FinancialPeriodType.monthEnd,
@@ -41,14 +43,52 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
   bool _showTrend = false;
   bool _sharing = false;
 
+  // Local data fetched via date-range queries (no loadAll)
+  List<Transaction> _transactions = [];
+  List<Sale> _sales = [];
+  bool _isLoading = true;
+  Object? _loadError;
+
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     super.initState();
-    // Reports need the full dataset, not just the first page.
-    Future.microtask(() {
-      ref.read(transactionsProvider.notifier).loadAll();
-      ref.read(salesProvider.notifier).loadAll();
-    });
+    Future.microtask(_loadData);
+  }
+
+  Future<void> _loadData() async {
+    if (!mounted) return;
+    setState(() { _isLoading = true; _loadError = null; });
+    try {
+      final dateRange = _getDateRange();
+      // Compute previous period so we fetch both ranges in one pass
+      final periodDuration = dateRange.end.difference(dateRange.start);
+      final prevStart = dateRange.start.subtract(periodDuration).subtract(const Duration(seconds: 1));
+
+      final txnRepo = ref.read(transactionRepositoryProvider);
+      final saleRepo = ref.read(saleRepositoryProvider);
+
+      final results = await Future.wait([
+        txnRepo.getTransactionsInRange(start: prevStart, end: dateRange.end),
+        saleRepo.getSalesInRange(start: dateRange.start, end: dateRange.end),
+      ]);
+
+      if (!mounted) return;
+
+      final txnResult = results[0] as dynamic;
+      final saleResult = results[1] as dynamic;
+
+      setState(() {
+        _transactions = (txnResult.data as List<Transaction>?) ?? [];
+        _sales = (saleResult.data as List<Sale>?) ?? [];
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _loadError = e; _isLoading = false; });
+    }
   }
 
   DateTimeRange _getDateRange() => _period.range;
@@ -57,31 +97,23 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     final result = await showFinancialPeriodSheet(context, current: _period);
     if (result == null) return;
     setState(() => _period = result);
+    _loadData();
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final fmt = NumberFormat('#,##0', 'en');
     final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(appSettingsProvider).currency;
 
     // Fetch live data — distinguish loading / error / empty
-    final txnState = ref.watch(transactionsProvider);
-    final isLoadingTxns = txnState.isLoading && !txnState.hasValue;
-    final txnError = txnState.hasError && !txnState.hasValue ? txnState.error : null;
-    final transactions = txnState.value ?? [];
+    final isLoadingTxns = _isLoading;
+    final txnError = _loadError;
+    final transactions = _transactions;
 
     // Get date range for the selected period
     final dateRange = _getDateRange();
-
-    // Categories excluded from P&L (CF investing activities / BS only)
-    const plExcludedCats = {
-      'cat_investments',
-      'cat_loan_received',
-      'cat_loan_repayment',
-      'cat_equity_injection',
-      'cat_owner_withdrawal',
-    };
 
     // Filter transactions (exclude P&L-excluded items like supplier payments)
     final filteredTransactions = transactions.where((tx) {
@@ -93,18 +125,27 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     final periodDuration = dateRange.end.difference(dateRange.start);
     final prevEnd = dateRange.start.subtract(const Duration(seconds: 1));
     final prevStart = prevEnd.subtract(periodDuration);
-    double prevRevenue = 0;
+    double prevSalesRevenue = 0;
+    double prevCogs = 0;
+    double prevOtherIncome = 0;
     double prevExpenses = 0;
     for (final tx in transactions) {
       if (tx.excludeFromPL || plExcludedCats.contains(tx.categoryId)) continue;
       if (tx.dateTime.isBefore(prevStart) || tx.dateTime.isAfter(prevEnd)) continue;
-      if (tx.isIncome) {
-        prevRevenue += tx.amount.abs();
+      if (tx.categoryId == 'cat_sales_revenue') {
+        prevSalesRevenue += tx.amount; // signed: refunds are negative
+      } else if (tx.categoryId == 'cat_cogs') {
+        prevCogs += -tx.amount; // signed: positive tx = reversal
+      } else if (tx.categoryId == 'cat_shipping') {
+        prevOtherIncome += tx.amount; // signed: reversals are negative
+      } else if (tx.isIncome) {
+        prevOtherIncome += tx.amount.abs();
       } else {
         prevExpenses += tx.amount.abs();
       }
     }
-    final double prevNetProfit = roundMoney(prevRevenue - prevExpenses);
+    final double prevGrossProfit = roundMoney(prevSalesRevenue - prevCogs);
+    final double prevNetProfit = roundMoney(prevGrossProfit + prevOtherIncome - prevExpenses);
 
     // ── Income Statement Grouping ──
     double salesRevenue = 0;
@@ -123,8 +164,15 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
         salesRevenue += tx.amount;
         revenueByCategory[tx.categoryId] = (revenueByCategory[tx.categoryId] ?? 0) + tx.amount;
       } else if (tx.categoryId == 'cat_cogs') {
-        cogs += amt;
-        cogsByCategory[tx.categoryId] = (cogsByCategory[tx.categoryId] ?? 0) + amt;
+        // Signed: negative amount = cost, positive = reversal from cancelled order
+        final cogsAmt = -tx.amount;
+        cogs += cogsAmt;
+        cogsByCategory[tx.categoryId] = (cogsByCategory[tx.categoryId] ?? 0) + cogsAmt;
+      } else if (tx.categoryId == 'cat_shipping') {
+        // Shipping revenue: use signed amount so cancellation reversals
+        // reduce shipping revenue instead of inflating expenses.
+        otherIncome += tx.amount;
+        revenueByCategory[tx.categoryId] = (revenueByCategory[tx.categoryId] ?? 0) + tx.amount;
       } else if (tx.isIncome) {
         otherIncome += amt;
         revenueByCategory[tx.categoryId] = (revenueByCategory[tx.categoryId] ?? 0) + amt;
@@ -181,8 +229,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     final opexItems = buildBreakdownItems(opexByCategory, operatingExpenses, opexColors);
 
     // ── Tax Collected (informational – liability, not revenue) ──
-    final salesState = ref.watch(salesProvider);
-    final sales = salesState.value ?? [];
+    final sales = _sales;
     double taxCollected = 0;
     for (final sale in sales) {
       if (sale.orderStatus == OrderStatus.cancelled) continue;
@@ -197,7 +244,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: RefreshIndicator(
-            onRefresh: () => ref.read(transactionsProvider.notifier).refreshAll(),
+            onRefresh: _loadData,
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(24, 24, 24, 100 + MediaQuery.of(context).padding.bottom),
               physics: const AlwaysScrollableScrollPhysics(
@@ -911,9 +958,15 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
       double revenue = 0;
       double expense = 0;
       for (final tx in allTx) {
-        if (tx.excludeFromPL) continue;
+        if (tx.excludeFromPL || plExcludedCats.contains(tx.categoryId)) continue;
         if (!tx.dateTime.isBefore(month) && tx.dateTime.isBefore(nextMonth)) {
-          if (tx.isIncome) {
+          if (tx.categoryId == 'cat_sales_revenue') {
+            revenue += tx.amount; // signed: refunds are negative
+          } else if (tx.categoryId == 'cat_cogs') {
+            expense += -tx.amount; // signed: negative amount = cost
+          } else if (tx.categoryId == 'cat_shipping') {
+            revenue += tx.amount; // signed: reversals are negative
+          } else if (tx.isIncome) {
             revenue += tx.amount.abs();
           } else {
             expense += tx.amount.abs();
@@ -1155,7 +1208,6 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
     final ids = categoryId.split(',').toSet();
     final filter = TransactionFilter(
         type: TransactionType.all,
-        amountRange: const RangeValues(0, 1000000),
         selectedCategories: ids,
     );
 
@@ -1276,8 +1328,11 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen> {
           final reportSvc = ref.read(reportServiceProvider);
           final shareSvc = ref.read(shareServiceProvider);
           final settings = ref.read(appSettingsProvider);
-          final txs = await ref.read(transactionsProvider.future);
           final range = _getDateRange();
+          // Filter to current period only — _transactions includes previous period data
+          final txs = _transactions.where((t) =>
+            !t.dateTime.isBefore(range.start) && !t.dateTime.isAfter(range.end),
+          ).toList();
           try {
             final bytes = await reportSvc.generatePnlPdf(
               l10n: l10n,

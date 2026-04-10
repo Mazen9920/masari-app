@@ -11,6 +11,7 @@ import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/category_data.dart';
 import '../../l10n/app_localizations.dart';
+import 'add_category_sheet.dart';
 
 /// Shows the "Quick Categorize" bottom sheet for uncategorized transactions.
 Future<int> showCategorizeTransactionsSheet(
@@ -81,10 +82,6 @@ class _CategorizeTransactionsSheetState
 
   void _pickCategory(String txId, bool isExpense) {
     HapticFeedback.lightImpact();
-    // Same source as add_transaction_screen: categoriesProvider only
-    final categories = (ref.read(categoriesProvider).value ?? [])
-        .where((c) => c.isExpense == isExpense && c.name != 'Uncategorized')
-        .toList();
 
     showModalBottomSheet<String>(
       context: context,
@@ -92,7 +89,7 @@ class _CategorizeTransactionsSheetState
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _CategoryPickerSheet(
-        categories: categories,
+        isExpense: isExpense,
         selectedId: _selectedCategories[txId],
       ),
     ).then((picked) {
@@ -437,18 +434,26 @@ class _TransactionCategoryRow extends ConsumerWidget {
 //  Category picker mini-sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _CategoryPickerSheet extends StatelessWidget {
-  final List<CategoryData> categories;
+class _CategoryPickerSheet extends ConsumerWidget {
+  final bool isExpense;
   final String? selectedId;
 
   const _CategoryPickerSheet({
-    required this.categories,
+    required this.isExpense,
     this.selectedId,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final categories = (ref.watch(categoriesProvider).value ?? [])
+        .where((c) => c.isExpense == isExpense && c.name != 'Uncategorized' && !c.isSystemLocked)
+        .toList();
+
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.7,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -456,6 +461,7 @@ class _CategoryPickerSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // ── Drag handle ──
           const SizedBox(height: 10),
           Container(
             width: 40,
@@ -465,72 +471,153 @@ class _CategoryPickerSheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+
+          // ── Header: title + close button ──
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(
-               'Choose a Category',
-              style: AppTypography.h2.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const SizedBox(width: 36), // balance the close button
+                Expanded(
+                  child: Text(
+                    l10n.selectCategory,
+                    style: AppTypography.h2.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.close_rounded, size: 22),
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // ── Create new category ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: InkWell(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                showAddCategorySheet(context);
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.accentOrange.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.accentOrange.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.accentOrange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        size: 20,
+                        color: AppColors.accentOrange,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      l10n.createCategory,
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.accentOrange,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+
+          Divider(height: 1, color: AppColors.borderLight),
+
+          // ── Category list ──
           Flexible(
-            child: GridView.builder(
+            child: ListView.builder(
               shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 1.1,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               itemCount: categories.length,
               itemBuilder: (ctx, i) {
                 final cat = categories[i];
                 final isSelected = cat.id == selectedId;
-                return GestureDetector(
+                return InkWell(
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    context.pop(cat.id);
+                    Navigator.of(context).pop(cat.id);
                   },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Color(cat.colorValue).withValues(alpha: 0.15)
-                          : Color(cat.bgColorValue),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isSelected
-                            ? Color(cat.colorValue)
-                            : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
+                    color: isSelected
+                        ? Color(cat.colorValue).withValues(alpha: 0.06)
+                        : null,
+                    child: Row(
                       children: [
-                        Icon(
-                          cat.iconData,
-                          size: 26,
-                          color: Color(cat.colorValue),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          cat.localizedName(AppLocalizations.of(context)!),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
+                        // Icon
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? Color(cat.colorValue).withValues(alpha: 0.15)
+                                : Color(cat.bgColorValue),
+                            borderRadius: BorderRadius.circular(12),
+                            border: isSelected
+                                ? Border.all(
+                                    color: Color(cat.colorValue),
+                                    width: 1.5,
+                                  )
+                                : null,
                           ),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          child: Icon(
+                            cat.iconData,
+                            size: 20,
+                            color: Color(cat.colorValue),
+                          ),
                         ),
+                        const SizedBox(width: 14),
+                        // Name
+                        Expanded(
+                          child: Text(
+                            cat.localizedName(l10n),
+                            style: AppTypography.labelMedium.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight:
+                                  isSelected ? FontWeight.w700 : FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        // Checkmark
+                        if (isSelected)
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 22,
+                            color: Color(cat.colorValue),
+                          ),
                       ],
                     ),
                   ),

@@ -27,9 +27,9 @@ class FirestoreGoodsReceiptRepository implements GoodsReceiptRepository {
     try {
       developer.log('[GoodsReceiptRepo] getReceipts – uid=$_uid');
       Query<Map<String, dynamic>> query =
-          _collection.where('user_id', isEqualTo: _uid);
-
-      if (limit != null) query = query.limit(limit);
+          _collection.where('user_id', isEqualTo: _uid)
+              .orderBy('date', descending: true);
+      query = query.limit(limit ?? 500);
 
       final snapshot = await query.get();
       developer.log('[GoodsReceiptRepo] docs found: ${snapshot.docs.length}');
@@ -38,9 +38,6 @@ class FirestoreGoodsReceiptRepository implements GoodsReceiptRepository {
         data['id'] = doc.id;
         return GoodsReceipt.fromJson(data);
       }).toList();
-
-      // Sort in-memory (newest first) – avoids composite-index requirement
-      receipts.sort((a, b) => b.date.compareTo(a.date));
 
       return Result.success(receipts);
     } catch (e) {
@@ -57,6 +54,8 @@ class FirestoreGoodsReceiptRepository implements GoodsReceiptRepository {
       final snapshot = await _collection
           .where('user_id', isEqualTo: _uid)
           .where('supplier_id', isEqualTo: supplierId)
+          .orderBy('date', descending: true)
+          .limit(500)
           .get();
 
       final receipts = snapshot.docs.map((doc) {
@@ -64,9 +63,6 @@ class FirestoreGoodsReceiptRepository implements GoodsReceiptRepository {
         data['id'] = doc.id;
         return GoodsReceipt.fromJson(data);
       }).toList();
-
-      // Sort in-memory
-      receipts.sort((a, b) => b.date.compareTo(a.date));
 
       return Result.success(receipts);
     } catch (e) {

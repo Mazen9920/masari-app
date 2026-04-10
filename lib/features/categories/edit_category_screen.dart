@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import '../../core/navigation/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
@@ -128,7 +126,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
         .read(categoriesProvider.notifier)
         .updateCategory(updated);
     HapticFeedback.mediumImpact();
-    context.pop(updated);
+    Navigator.of(context).pop(updated);
   }
 
   // ── Delete ──────────────────────────────────────────
@@ -162,9 +160,10 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                   .removeCategory(widget.category.id);
               HapticFeedback.mediumImpact();
               Navigator.pop(ctx); // dialog
-              // Navigate safely back to categories list
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (context.mounted) context.go(AppRoutes.categories);
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                }
               });
             },
             style: ElevatedButton.styleFrom(
@@ -203,7 +202,10 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                     const SizedBox(height: 28),
                     _buildConfigCard(),
                     const SizedBox(height: 28),
-                    _buildDeleteButton(),
+                    if (!widget.category.isSystemLocked)
+                      _buildDeleteButton(),
+                    if (widget.category.isSystemLocked)
+                      _buildSystemBanner(),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -231,7 +233,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
       child: Row(
         children: [
           TextButton(
-            onPressed: () => context.pop(),
+            onPressed: () => Navigator.of(context).pop(),
             child: Text(
               AppLocalizations.of(context)!.cancel,
               style: AppTypography.labelMedium.copyWith(
@@ -251,17 +253,20 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
             ),
           ),
           const Spacer(),
-          TextButton(
-            onPressed: _save,
-            child: Text(
-              AppLocalizations.of(context)!.save,
-              style: AppTypography.labelMedium.copyWith(
-                color: AppColors.accentOrange,
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
+          if (!widget.category.isSystemLocked)
+            TextButton(
+              onPressed: _save,
+              child: Text(
+                AppLocalizations.of(context)!.save,
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.accentOrange,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
               ),
-            ),
-          ),
+            )
+          else
+            const SizedBox(width: 48),
         ],
       ),
     );
@@ -343,6 +348,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
             label: AppLocalizations.of(context)!.categoryName.toUpperCase(),
             child: TextField(
               controller: _nameController,
+              enabled: !widget.category.isSystemLocked,
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
@@ -361,6 +367,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
           ),
 
           // ── Type toggle ──
+          if (!widget.category.isSystemLocked)
           _field(
             label: AppLocalizations.of(context)!.type.toUpperCase(),
             child: Container(
@@ -379,10 +386,12 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
             showBorder: true,
           ),
 
-          // ── Monthly Limit (expense only) ──
-          if (_isExpense)
+          // ── Monthly Limit / Target ──
+          if (!widget.category.isSystemLocked)
           _field(
-            label: AppLocalizations.of(context)!.monthlyLimit.toUpperCase(),
+            label: (_isExpense
+                ? AppLocalizations.of(context)!.monthlyLimit
+                : AppLocalizations.of(context)!.monthlyEarningTarget).toUpperCase(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -390,7 +399,9 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      AppLocalizations.of(context)!.enableMonthlyBudget,
+                      _isExpense
+                          ? AppLocalizations.of(context)!.enableMonthlyBudget
+                          : AppLocalizations.of(context)!.enableMonthlyTarget,
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -445,7 +456,9 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              AppLocalizations.of(context)!.budgetAlertHint,
+                              _isExpense
+                                  ? AppLocalizations.of(context)!.budgetAlertHint
+                                  : AppLocalizations.of(context)!.targetAlertHint,
                               style: AppTypography.captionSmall.copyWith(
                                 color: AppColors.textTertiary,
                                 fontSize: 10,
@@ -464,6 +477,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
           ),
 
           // ── Icon picker ──
+          if (!widget.category.isSystemLocked)
           _field(
             label: AppLocalizations.of(context)!.icon.toUpperCase(),
             child: GridView.count(
@@ -505,6 +519,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
           ),
 
           // ── Color picker ──
+          if (!widget.category.isSystemLocked)
           _field(
             label: AppLocalizations.of(context)!.color.toUpperCase(),
             child: Wrap(
@@ -550,6 +565,35 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
         ],
       ),
     ).animate().fadeIn(duration: 300.ms, delay: 50.ms);
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  SYSTEM INFO BANNER
+  // ═══════════════════════════════════════════════════
+  Widget _buildSystemBanner() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primaryNavy.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primaryNavy.withValues(alpha: 0.10)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.lock_outline_rounded, size: 20, color: AppColors.primaryNavy.withValues(alpha: 0.5)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              AppLocalizations.of(context)!.systemCategoryInfo,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textTertiary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 300.ms, delay: 150.ms);
   }
 
   // ═══════════════════════════════════════════════════
@@ -615,19 +659,7 @@ class _EditCategoryScreenState extends ConsumerState<EditCategoryScreen> {
 
   // Type tab
   void _onTypeChanged(bool newIsExpense) {
-    if (_isExpense && !newIsExpense && _hasBudget) {
-      // Clear budget when switching from expense to income
-      setState(() {
-        _isExpense = newIsExpense;
-        _hasBudget = false;
-        _budgetController.clear();
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.budgetRemovedNotice)),
-      );
-    } else {
-      setState(() => _isExpense = newIsExpense);
-    }
+    setState(() => _isExpense = newIsExpense);
   }
 
   Widget _typeTab(String label, bool isExpenseTab) {

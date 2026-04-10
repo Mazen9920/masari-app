@@ -337,4 +337,54 @@ class ShopifyApiService {
       return Result.failure( 'Failed to mark Shopify order as paid: $e');
     }
   }
+
+  // ── Refresh Order from Shopify ───────────────────────────
+
+  /// Fetches the latest state of a Shopify order and re-syncs all
+  /// fields (statuses, items, financials) into Revvo.
+  ///
+  /// [saleId] is the Revvo sale document ID.
+  Future<Result<void>> refreshShopifyOrder({
+    required String saleId,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable(
+        'refreshShopifyOrder',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
+      );
+      await callable.call<Map<String, dynamic>>({
+        'saleId': saleId,
+      });
+      return Result.success(null);
+    } on FirebaseFunctionsException catch (e) {
+      return Result.failure(
+        e.message ?? 'Failed to refresh order from Shopify',
+      );
+    } catch (e) {
+      return Result.failure('Failed to refresh order from Shopify: $e');
+    }
+  }
+
+  // ── Refresh All Shopify Orders ───────────────────────────
+
+  /// Fetches the latest state of ALL Shopify orders and re-syncs
+  /// statuses, items, and financials into Revvo.
+  ///
+  /// Returns a map with { total, synced, failed }.
+  Future<Result<Map<String, dynamic>>> refreshAllShopifyOrders() async {
+    try {
+      final callable = _functions.httpsCallable(
+        'refreshAllShopifyOrders',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 300)),
+      );
+      final result = await callable.call<Map<String, dynamic>>({});
+      return Result.success(result.data);
+    } on FirebaseFunctionsException catch (e) {
+      return Result.failure(
+        e.message ?? 'Failed to refresh orders from Shopify',
+      );
+    } catch (e) {
+      return Result.failure('Failed to refresh orders from Shopify: $e');
+    }
+  }
 }

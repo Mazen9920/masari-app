@@ -63,7 +63,7 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
   }
 
   void _buildEntries() {
-    final products = ref.read(inventoryProvider).value ?? [];
+    final products = ref.read(filteredInventoryProvider).value ?? [];
     final missing = <_MissingCostEntry>[];
     for (final p in products) {
       final zeroVariants =
@@ -437,6 +437,8 @@ class _MissingCostScreenState extends ConsumerState<MissingCostScreen> {
               width: size,
               height: size,
               fit: BoxFit.cover,
+              memCacheWidth: (size * 2).toInt(),
+              memCacheHeight: (size * 2).toInt(),
               placeholder: (_, _) => Container(
                 width: size,
                 height: size,

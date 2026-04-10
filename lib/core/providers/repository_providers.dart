@@ -76,7 +76,12 @@ final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {
 });
 
 final saleRepositoryProvider = Provider<SaleRepository>((ref) {
-  return FirestoreSaleRepository();
+  final saleRepo = FirestoreSaleRepository();
+  // When sale mutations also write transaction docs (batch creates),
+  // invalidate the txn range cache to prevent stale reads.
+  saleRepo.onTransactionCacheInvalidated =
+      () => ref.read(transactionRepositoryProvider).clearRangeCache();
+  return saleRepo;
 });
 
 final goodsReceiptRepositoryProvider =

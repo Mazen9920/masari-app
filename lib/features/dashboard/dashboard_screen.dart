@@ -14,6 +14,7 @@ import '../../core/providers/user_profile_provider.dart';
 import '../../l10n/app_localizations.dart';
 import 'providers/dashboard_state_provider.dart';
 import 'providers/dashboard_config_provider.dart';
+import 'providers/dashboard_data_provider.dart';
 import 'widgets/ai_insight_card.dart';
 import 'widgets/quick_stats_row.dart';
 import 'widgets/analytics_chart.dart';
@@ -44,10 +45,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Dashboard needs ALL data for accurate stats, not just page 1.
+    // Dashboard uses date-range queries via dashboardDataProvider.
+    // Only inventory needs loadAll() (< 500 products, no date filter).
     Future.microtask(() {
-      ref.read(transactionsProvider.notifier).loadAll();
-      ref.read(salesProvider.notifier).loadAll();
       ref.read(inventoryProvider.notifier).loadAll();
       // purchasesProvider auto-loads on build (sync Notifier)
     });
@@ -61,8 +61,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
 
     await Future.wait([
-      ref.read(transactionsProvider.notifier).refreshAll(),
-      ref.read(salesProvider.notifier).refreshAll(),
+      ref.read(dashboardDataProvider.notifier).refresh(),
       ref.read(inventoryProvider.notifier).refreshAll(),
     ]);
   }
@@ -250,6 +249,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                   fit: BoxFit.cover,
                                   width: 42,
                                   height: 42,
+                                  memCacheWidth: 84,
+                                  memCacheHeight: 84,
                                   placeholder: (_, _) => Center(
                                     child: Text(initials, style: AppTypography.labelLarge.copyWith(color: AppColors.primaryNavy, fontSize: 17)),
                                   ),

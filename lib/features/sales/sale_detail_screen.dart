@@ -58,7 +58,15 @@ class SaleDetailScreen extends ConsumerWidget {
             _buildHeader(context, live, ref),
             Expanded(
               child: RefreshIndicator(
-                onRefresh: () => ref.read(salesProvider.notifier).refresh(),
+                onRefresh: () async {
+                  final shopifyApi = ref.read(shopifyApiServiceProvider);
+                  final salesNotifier = ref.read(salesProvider.notifier);
+                  if (live.isShopifyOrder) {
+                    // Pull latest from Shopify, then reload from Firestore
+                    await shopifyApi.refreshShopifyOrder(saleId: live.id);
+                  }
+                  await salesNotifier.refresh();
+                },
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics()),
@@ -186,6 +194,8 @@ class SaleDetailScreen extends ConsumerWidget {
 
   Widget _buildHeader(BuildContext context, Sale live, WidgetRef ref) {
     final isCancelled = live.orderStatus == OrderStatus.cancelled;
+    final isShopify = live.isShopifyOrder;
+    final showMenu = !isCancelled || isShopify;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
@@ -215,7 +225,7 @@ class SaleDetailScreen extends ConsumerWidget {
               ),
             ),
           ),
-          if (!isCancelled)
+          if (showMenu)
             PopupMenuButton<String>(
               icon:
                   Icon(Icons.more_vert_rounded, color: AppColors.textSecondary),
@@ -225,16 +235,31 @@ class SaleDetailScreen extends ConsumerWidget {
                       .pushNamed('RecordSaleScreen', extra: {'sale': live});
                 } else if (v == 'cancel') {
                   _confirmCancel(context, ref, live);
+                } else if (v == 'refresh_shopify') {
+                  _refreshFromShopify(context, ref, live);
                 }
               },
               itemBuilder: (_) => [
-                PopupMenuItem(
-                    value: 'edit', child: Text(AppLocalizations.of(context)!.editOrder)),
-                PopupMenuItem(
-                  value: 'cancel',
-                  child: Text(AppLocalizations.of(context)!.cancelOrder,
-                      style: const TextStyle(color: AppColors.danger)),
-                ),
+                if (isShopify)
+                  PopupMenuItem(
+                    value: 'refresh_shopify',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.sync_rounded, size: 18),
+                        const SizedBox(width: 8),
+                        Text(AppLocalizations.of(context)!.refreshFromShopify),
+                      ],
+                    ),
+                  ),
+                if (!isCancelled) ...[
+                  PopupMenuItem(
+                      value: 'edit', child: Text(AppLocalizations.of(context)!.editOrder)),
+                  PopupMenuItem(
+                    value: 'cancel',
+                    child: Text(AppLocalizations.of(context)!.cancelOrder,
+                        style: const TextStyle(color: AppColors.danger)),
+                  ),
+                ],
               ],
             )
           else
@@ -774,6 +799,43 @@ class SaleDetailScreen extends ConsumerWidget {
   }
 
   // ── Cancel Order ────────────────────────────────────────
+
+  Future<void> _refreshFromShopify(
+      BuildContext context, WidgetRef ref, Sale live) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+
+    messenger.showSnackBar(SnackBar(
+      content: Text(l10n.refreshingFromShopify),
+      duration: const Duration(seconds: 10),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+
+    final result = await ref
+        .read(shopifyApiServiceProvider)
+        .refreshShopifyOrder(saleId: live.id);
+
+    messenger.hideCurrentSnackBar();
+
+    if (result.isSuccess) {
+      // Reload sales so the UI picks up the updated data
+      await ref.read(salesProvider.notifier).refresh();
+      messenger.showSnackBar(SnackBar(
+        content: Text(l10n.refreshFromShopifySuccess),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    } else {
+      messenger.showSnackBar(SnackBar(
+        content: Text('${l10n.refreshFromShopifyFailed}: ${result.error}'),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    }
+  }
 
   void _confirmCancel(BuildContext context, WidgetRef ref, Sale live) {
     final isShopifyOrder = live.externalSource == 'shopify' &&
@@ -1332,6 +1394,8 @@ class SaleDetailScreen extends ConsumerWidget {
               width: size,
               height: size,
               fit: BoxFit.cover,
+              memCacheWidth: (size * 2).toInt(),
+              memCacheHeight: (size * 2).toInt(),
               placeholder: (_, _) => Container(
                 width: size,
                 height: size,
@@ -1550,22 +1614,6 @@ class SaleDetailScreen extends ConsumerWidget {
                           updatedAt: DateTime.now(),
                         );
                         ref.read(salesProvider.notifier).updateSale(updated);
-
-                        // Sync linked transactions: when payment is received,
-                        // include revenue in P&L / cash-basis reports;
-                        // when unpaid/partial, exclude it.
-                        final shouldExclude = status == PaymentStatus.unpaid ||
-                            status == PaymentStatus.partial;
-                        final txns = ref.read(transactionsProvider).value ?? [];
-                        final txnNotifier = ref.read(transactionsProvider.notifier);
-                        for (final tx in txns) {
-                          if (tx.saleId == live.id && tx.excludeFromPL != shouldExclude) {
-                            txnNotifier.updateTransaction(tx.copyWith(
-                              excludeFromPL: shouldExclude,
-                              updatedAt: DateTime.now(),
-                            ));
-                          }
-                        }
                       },
                       child: Container(
                         width: double.infinity,

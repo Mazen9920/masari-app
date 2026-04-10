@@ -42,8 +42,8 @@ class TransactionsListScreen extends ConsumerStatefulWidget {
 class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen> {
   AppLocalizations get l10n => AppLocalizations.of(context)!;
 
-  int _allTabPeriodIndex = 2; // "This Month" default
-  int _salesTabPeriodIndex = 2;
+  int _allTabPeriodIndex = 4; // "This Month" default
+  int _salesTabPeriodIndex = 4;
   int get _selectedPeriodIndex => _tabIndex == 0 ? _allTabPeriodIndex : _salesTabPeriodIndex;
   set _selectedPeriodIndex(int value) {
     if (_tabIndex == 0) {
@@ -54,7 +54,16 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
   }
   TransactionFilter _filter = TransactionFilter.empty;
   SaleFilter _salesFilter = SaleFilter.empty;
-  DateTimeRange? _customRange;
+  DateTimeRange? _allTabCustomRange;
+  DateTimeRange? _salesTabCustomRange;
+  DateTimeRange? get _customRange => _tabIndex == 0 ? _allTabCustomRange : _salesTabCustomRange;
+  set _customRange(DateTimeRange? value) {
+    if (_tabIndex == 0) {
+      _allTabCustomRange = value;
+    } else {
+      _salesTabCustomRange = value;
+    }
+  }
   int _tabIndex = 0; // 0 = All, 1 = Sales
   bool _isRefreshing = false;
 
@@ -66,7 +75,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
   final Set<String> _selectedIds = {};
   bool _shopifyBannerDismissed = false;
 
-  List<String> get _periods => [l10n.all, l10n.periodThisWeek, l10n.periodThisMonth, l10n.periodLastMonth, l10n.periodCustom];
+  List<String> get _periods => [l10n.all, l10n.periodToday, l10n.periodYesterday, l10n.periodThisWeek, l10n.periodThisMonth, l10n.periodLastMonth, l10n.periodCustom];
 
   final _scrollController = ScrollController();
 
@@ -111,8 +120,6 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     final notifier = ref.read(salesProvider.notifier);
     final shopifyApi = ref.read(shopifyApiServiceProvider);
     
-    final allTxns = ref.read(transactionsProvider).value ?? [];
-    final txnNotifier = ref.read(transactionsProvider.notifier);
     for (final sale in toUpdate) {
       final updated = sale.copyWith(
         paymentStatus: PaymentStatus.paid,
@@ -120,16 +127,6 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
         updatedAt: DateTime.now(),
       );
       await notifier.updateSale(updated);
-
-      // Now paid: include linked revenue txns in P&L / cash-basis reports
-      for (final tx in allTxns) {
-        if (tx.saleId == sale.id && tx.excludeFromPL) {
-          txnNotifier.updateTransaction(tx.copyWith(
-            excludeFromPL: false,
-            updatedAt: DateTime.now(),
-          ));
-        }
-      }
       
       // Sync to Shopify if linked
       if (sale.externalSource == 'shopify' && sale.externalOrderId != null) {
@@ -268,12 +265,20 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     setState(() => _isRefreshing = true);
     try {
       final futures = <Future>[
-        ref.read(transactionsProvider.notifier).refreshAll(),
+        ref.read(transactionsProvider.notifier).refresh(),
       ];
       if (_tabIndex == 1) {
-        futures.add(ref.read(salesProvider.notifier).refreshAll());
+        futures.add(ref.read(salesProvider.notifier).refresh());
       }
       await Future.wait(futures);
+      // Load remaining pages so summaries are complete after refresh.
+      final loadFutures = <Future>[
+        ref.read(transactionsProvider.notifier).loadAll(),
+      ];
+      if (_tabIndex == 1) {
+        loadFutures.add(ref.read(salesProvider.notifier).loadAll());
+      }
+      await Future.wait(loadFutures);
     } finally {
       if (mounted) setState(() => _isRefreshing = false);
     }
@@ -286,17 +291,54 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       _filter = widget.initialFilter!;
     }
     _scrollController.addListener(_onScroll);
-    // Load all pages so sale-related transactions (revenue/COGS) are
-    // always visible regardless of which pagination page they fall on.
-    Future.microtask(() {
-      ref.read(transactionsProvider.notifier).loadAll();
-      ref.read(salesProvider.notifier).loadAll();
-    });
+    // Set initial period bounds (default: This Month) so queries are
+    // date-bounded from the start — avoids fetching all-time data.
+    Future.microtask(() => _applyPeriodToProviders());
+  }
+
+  /// Pushes the current period bounds to the active tab's provider only.
+  Future<void> _applyPeriodToProviders() async {
+    final (from, to) = _periodBounds;
+    if (_tabIndex == 0) {
+      await ref.read(transactionsProvider.notifier).setPeriod(from, to);
+    } else {
+      await ref.read(salesProvider.notifier).setPeriod(from, to);
+    }
   }
 
   void _onScroll() {
     if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-      ref.read(transactionsProvider.notifier).loadMore();
+      if (_tabIndex == 1) {
+        ref.read(salesProvider.notifier).loadMore().then((_) => _checkPaginationError());
+      } else {
+        ref.read(transactionsProvider.notifier).loadMore().then((_) => _checkPaginationError());
+      }
+    }
+  }
+
+  /// Shows a snackbar if the last pagination attempt failed.
+  void _checkPaginationError() {
+    if (!mounted) return;
+    final txnErr = ref.read(transactionsProvider.notifier).paginationError;
+    final salesErr = ref.read(salesProvider.notifier).paginationError;
+    final error = _tabIndex == 1 ? salesErr : txnErr;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.somethingWentWrongShort),
+          duration: const Duration(seconds: 3),
+          action: SnackBarAction(
+            label: l10n.retry,
+            onPressed: () {
+              if (_tabIndex == 1) {
+                ref.read(salesProvider.notifier).loadMore();
+              } else {
+                ref.read(transactionsProvider.notifier).loadMore();
+              }
+            },
+          ),
+        ),
+      );
     }
   }
 
@@ -314,17 +356,25 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     switch (_selectedPeriodIndex) {
       case 0: // All
         return (null, null);
-      case 1: // This Week — Mon … now
+      case 1: // Today
+        return (DateTime(now.year, now.month, now.day), DateTime(now.year, now.month, now.day, 23, 59, 59));
+      case 2: // Yesterday
+        final y = now.subtract(const Duration(days: 1));
+        return (
+          DateTime(y.year, y.month, y.day),
+          DateTime(y.year, y.month, y.day, 23, 59, 59),
+        );
+      case 3: // This Week — Mon … now
         final monday = now.subtract(Duration(days: now.weekday - 1));
-        return (DateTime(monday.year, monday.month, monday.day), now);
-      case 2: // This Month
-        return (DateTime(now.year, now.month, 1), now);
-      case 3: // Last Month
+        return (DateTime(monday.year, monday.month, monday.day), DateTime(now.year, now.month, now.day, 23, 59, 59));
+      case 4: // This Month
+        return (DateTime(now.year, now.month, 1), DateTime(now.year, now.month, now.day, 23, 59, 59));
+      case 5: // Last Month
         return (
           DateTime(now.year, now.month - 1, 1),
           DateTime(now.year, now.month, 0, 23, 59, 59),
         );
-      case 4: // Custom
+      case 6: // Custom
         if (_customRange != null) {
           return (
             _customRange!.start,
@@ -348,10 +398,8 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       list = list.where((t) => _salesCategoryIds.contains(t.categoryId)).toList();
     }
 
-    // Filter by period
-    final (from, to) = _periodBounds;
-    if (from != null) list = list.where((t) => !t.dateTime.isBefore(from)).toList();
-    if (to != null)   list = list.where((t) => !t.dateTime.isAfter(to)).toList();
+    // Date filtering is now server-side via setPeriod() — no client-side
+    // date filtering needed here.
 
     // Filter by type
     if (_filter.type == TransactionType.income) {
@@ -446,25 +494,45 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
         : DateFormat('MMM d', 'en').format(dt);
   }
 
-  double get _totalIncome => roundMoney(
-      _filteredTransactions.where((t) => t.isIncome && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount));
+  double get _totalIncome {
+    double r = 0;
+    for (final t in _filteredTransactions.where((t) => !t.excludeFromPL)) {
+      if (t.categoryId == 'cat_cogs') continue; // COGS is expense, not income
+      if (t.categoryId == 'cat_sales_revenue' || t.categoryId == 'cat_shipping') {
+        r += t.amount; // signed: positive = income, negative = refund
+      } else if (t.isIncome) {
+        r += t.amount;
+      }
+    }
+    return roundMoney(r);
+  }
 
-  double get _totalExpenses => roundMoney(
-      _filteredTransactions.where((t) => !t.isIncome && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount.abs()));
+  double get _totalExpenses {
+    double e = 0;
+    for (final t in _filteredTransactions.where((t) => !t.excludeFromPL)) {
+      if (t.categoryId == 'cat_cogs') {
+        e -= t.amount; // -(-X)=+X for cost, -(+X)=-X for reversal
+      } else if (!t.isIncome &&
+          t.categoryId != 'cat_sales_revenue' &&
+          t.categoryId != 'cat_shipping') {
+        e += t.amount.abs();
+      }
+    }
+    return roundMoney(e);
+  }
 
   double get _salesTotalRevenue => roundMoney(
-      _filteredTransactions.where((t) => t.categoryId == 'cat_sales_revenue' && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount));
+      _filteredSales.where((s) => s.orderStatus != OrderStatus.cancelled).fold(0.0, (sum, s) => sum + s.netRevenue));
 
   double get _salesTotalCogs => roundMoney(
-      _filteredTransactions.where((t) => t.categoryId == 'cat_cogs' && !t.excludeFromPL).fold(0.0, (sum, t) => sum + t.amount.abs()));
+      _filteredSales.where((s) => s.orderStatus != OrderStatus.cancelled).fold(0.0, (sum, s) => sum + s.totalCogs));
 
   // ─── Sales tab: render Sale objects directly ─────────
   List<Sale> get _filteredSales {
     var list = List<Sale>.from(ref.watch(salesProvider).value ?? []);
-    // Filter by period
-    final (from, to) = _periodBounds;
-    if (from != null) list = list.where((s) => !s.date.isBefore(from)).toList();
-    if (to != null)   list = list.where((s) => !s.date.isAfter(to)).toList();
+
+    // Date filtering is now server-side via setPeriod() — no client-side
+    // date filtering needed here.
 
     // Payment status filter
     if (_salesFilter.paymentStatus != null) {
@@ -736,6 +804,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
         onTap: () {
           HapticFeedback.lightImpact();
           setState(() => _tabIndex = index);
+          _applyPeriodToProviders();
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -1087,6 +1156,105 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
   }
 
   // ═══════════════════════════════════════════════════
+  //  CUSTOM DATE PICKER (single day or range)
+  // ═══════════════════════════════════════════════════
+  Widget _themedDatePicker(BuildContext ctx, Widget? child) => Theme(
+      data: Theme.of(ctx).copyWith(
+        colorScheme: const ColorScheme.light(
+          primary: AppColors.accentOrange,
+          onPrimary: Colors.white,
+          surface: Colors.white,
+          onSurface: AppColors.textPrimary,
+        ),
+      ),
+      child: child!,
+    );
+
+  Future<void> _showCustomDatePicker() async {
+
+    // Ask user: single day or date range
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                l10n.periodCustom,
+                style: AppTypography.h3.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.today_rounded, color: AppColors.accentOrange),
+                title: Text(l10n.periodSingleDay),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () => Navigator.pop(ctx, 'single'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.date_range_rounded, color: AppColors.accentOrange),
+                title: Text(l10n.periodDateRange),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onTap: () => Navigator.pop(ctx, 'range'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (choice == null) return;
+
+    if (choice == 'single') {
+      final day = await showDatePicker(
+        context: context,
+        firstDate: DateTime(2020),
+        lastDate: DateTime.now(),
+        initialDate: _customRange?.start ?? DateTime.now(),
+        builder: _themedDatePicker,
+      );
+      if (day != null && mounted) {
+        setState(() {
+          _customRange = DateTimeRange(start: day, end: day);
+          _selectedPeriodIndex = 6;
+        });
+        await _applyPeriodToProviders();
+      }
+    } else {
+      final range = await showDateRangePicker(
+        context: context,
+        firstDate: DateTime(2020),
+        lastDate: DateTime.now(),
+        initialDateRange: _customRange,
+        builder: _themedDatePicker,
+      );
+      if (range != null && mounted) {
+        setState(() {
+          _customRange = range;
+          _selectedPeriodIndex = 6;
+        });
+        await _applyPeriodToProviders();
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════
   //  PERIOD PILLS
   // ═══════════════════════════════════════════════════
   Widget _buildPeriodPills() {
@@ -1103,33 +1271,12 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           return GestureDetector(
             onTap: () async {
               HapticFeedback.lightImpact();
-              if (index == 4) {
-                // Custom — show date range picker
-                final range = await showDateRangePicker(
-                  context: context,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now(),
-                  initialDateRange: _customRange,
-                  builder: (ctx, child) => Theme(
-                    data: Theme.of(ctx).copyWith(
-                      colorScheme: const ColorScheme.light(
-                        primary: AppColors.accentOrange,
-                        onPrimary: Colors.white,
-                        surface: Colors.white,
-                        onSurface: AppColors.textPrimary,
-                      ),
-                    ),
-                    child: child!,
-                  ),
-                );
-                if (range != null) {
-                  setState(() {
-                    _customRange = range;
-                    _selectedPeriodIndex = 4;
-                  });
-                }
+              if (index == 6) {
+                // Custom — let user choose single day or date range
+                await _showCustomDatePicker();
               } else {
                 setState(() => _selectedPeriodIndex = index);
+                await _applyPeriodToProviders();
               }
             },
             child: AnimatedContainer(
@@ -1264,6 +1411,10 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       return _buildEmptyState();
     }
 
+    // Read once in the parent — avoids ref.watch inside every tile
+    final categories = ref.watch(categoriesProvider).value ?? [];
+    final currency = ref.watch(appSettingsProvider).currency;
+
     final items = <Widget>[];
     int animIndex = 0;
 
@@ -1301,6 +1452,8 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               child: _SaleGroupTile(
                 revenueTransaction: tx,
                 childTransactions: children,
+                categories: categories,
+                currency: currency,
                 isExpanded: isExpanded,
                 onToggleExpand: () {
                   setState(() {
@@ -1318,13 +1471,13 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
                 .animate()
                 .fadeIn(
                   duration: 350.ms,
-                  delay: Duration(milliseconds: 50 * i),
+                  delay: i < 8 ? Duration(milliseconds: 50 * i) : Duration.zero,
                 )
                 .slideX(
                   begin: 0.05,
                   end: 0,
                   duration: 350.ms,
-                  delay: Duration(milliseconds: 50 * i),
+                  delay: i < 8 ? Duration(milliseconds: 50 * i) : Duration.zero,
                   curve: Curves.easeOutCubic,
                 ),
           );
@@ -1335,19 +1488,21 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: _TransactionTile(
                 transaction: tx,
+                categories: categories,
+                currency: currency,
                 onTap: () => _onTransactionTap(tx),
               ),
             )
                 .animate()
                 .fadeIn(
                   duration: 350.ms,
-                  delay: Duration(milliseconds: 50 * i),
+                  delay: i < 8 ? Duration(milliseconds: 50 * i) : Duration.zero,
                 )
                 .slideX(
                   begin: 0.05,
                   end: 0,
                   duration: 350.ms,
-                  delay: Duration(milliseconds: 50 * i),
+                  delay: i < 8 ? Duration(milliseconds: 50 * i) : Duration.zero,
                   curve: Curves.easeOutCubic,
                 ),
           );
@@ -1357,6 +1512,8 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: _SwipeActionTile(
                 transaction: tx,
+                categories: categories,
+                currency: currency,
                 onTap: () => _onTransactionTap(tx),
                 onEdit: () => _editTransaction(tx),
                 onDuplicate: () => _duplicateTransaction(tx),
@@ -1366,13 +1523,13 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
                 .animate()
                 .fadeIn(
                   duration: 350.ms,
-                  delay: Duration(milliseconds: 50 * i),
+                  delay: i < 8 ? Duration(milliseconds: 50 * i) : Duration.zero,
                 )
                 .slideX(
                   begin: 0.05,
                   end: 0,
                   duration: 350.ms,
-                  delay: Duration(milliseconds: 50 * i),
+                  delay: i < 8 ? Duration(milliseconds: 50 * i) : Duration.zero,
                   curve: Curves.easeOutCubic,
                 ),
           );
@@ -1380,10 +1537,9 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       }
     }
 
-    // Check if we're currently loading more
-    final isPageLoading = ref.watch(transactionsProvider.notifier).hasMore;
-    
-    if (isPageLoading) {
+    // Show a small spinner while loading more pages
+    final txnNotifier = ref.watch(transactionsProvider.notifier);
+    if (txnNotifier.isLoadingMore) {
       items.add(
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 24),
@@ -1400,12 +1556,13 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
 
     return RefreshIndicator(
       onRefresh: _refreshTransactions,
-      child: ListView(
+      child: ListView.builder(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics()),
         padding: const EdgeInsets.only(bottom: 100, top: 8),
-        children: items,
+        itemCount: items.length,
+        itemBuilder: (context, i) => items[i],
       ),
     );
   }
@@ -1561,28 +1718,46 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               .animate()
               .fadeIn(
                 duration: 350.ms,
-                delay: Duration(milliseconds: 50 * i),
+                delay: i < 8 ? Duration(milliseconds: 50 * i) : Duration.zero,
               )
               .slideX(
                 begin: 0.05,
                 end: 0,
                 duration: 350.ms,
-                delay: Duration(milliseconds: 50 * i),
+                delay: i < 8 ? Duration(milliseconds: 50 * i) : Duration.zero,
                 curve: Curves.easeOutCubic,
               ),
         );
       }
     }
 
+    // Show a small spinner while loading more sales pages
+    final salesNotifier = ref.watch(salesProvider.notifier);
+    if (salesNotifier.isLoadingMore) {
+      items.add(
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Stack(
       children: [
         RefreshIndicator(
           onRefresh: _refreshTransactions,
-          child: ListView(
+          child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics()),
             padding: EdgeInsets.only(bottom: _selectionMode ? 100 : 100, top: 8),
-            children: items,
+            itemCount: items.length,
+            itemBuilder: (context, i) => items[i],
           ),
         ),
         // Bulk action bar — slides up when in selection mode
@@ -1643,19 +1818,21 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
 // ═══════════════════════════════════════════════════════════
 //  TRANSACTION TILE WIDGET
 // ═══════════════════════════════════════════════════════════
-class _TransactionTile extends ConsumerWidget {
+class _TransactionTile extends StatelessWidget {
   final Transaction transaction;
+  final List<CategoryData> categories;
+  final String currency;
   final VoidCallback onTap;
 
   const _TransactionTile({
     required this.transaction,
+    required this.categories,
+    required this.currency,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final categories = ref.watch(categoriesProvider).value ?? [];
-    final currency = ref.watch(appSettingsProvider).currency;
+  Widget build(BuildContext context) {
     final category = categories.firstWhere(
       (c) => c.id == transaction.categoryId,
       orElse: () => CategoryData.findById(transaction.categoryId),
@@ -1771,6 +1948,8 @@ class _TransactionTile extends ConsumerWidget {
 /// Swipe left to reveal Edit, Duplicate, and Delete buttons.
 class _SwipeActionTile extends StatefulWidget {
   final Transaction transaction;
+  final List<CategoryData> categories;
+  final String currency;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDuplicate;
@@ -1778,6 +1957,8 @@ class _SwipeActionTile extends StatefulWidget {
 
   const _SwipeActionTile({
     required this.transaction,
+    required this.categories,
+    required this.currency,
     required this.onTap,
     required this.onEdit,
     required this.onDuplicate,
@@ -1918,6 +2099,8 @@ class _SwipeActionTileState extends State<_SwipeActionTile>
                   ),
                   child: _TransactionTile(
                     transaction: widget.transaction,
+                    categories: widget.categories,
+                    currency: widget.currency,
                     onTap: () {
                       if (_isOpen) {
                         _close();
@@ -2241,9 +2424,11 @@ class _ShopifyBanner extends StatelessWidget {
 
 /// Shows a revenue transaction with an expand chevron.
 /// When expanded, reveals COGS and shipping child rows.
-class _SaleGroupTile extends ConsumerWidget {
+class _SaleGroupTile extends StatelessWidget {
   final Transaction revenueTransaction;
   final List<Transaction> childTransactions;
+  final List<CategoryData> categories;
+  final String currency;
   final bool isExpanded;
   final VoidCallback onToggleExpand;
   final VoidCallback onTap;
@@ -2251,15 +2436,15 @@ class _SaleGroupTile extends ConsumerWidget {
   const _SaleGroupTile({
     required this.revenueTransaction,
     required this.childTransactions,
+    required this.categories,
+    required this.currency,
     required this.isExpanded,
     required this.onToggleExpand,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final currency = ref.watch(appSettingsProvider).currency;
-    final categories = ref.watch(categoriesProvider).value ?? [];
+  Widget build(BuildContext context) {
     final category = categories.firstWhere(
       (c) => c.id == revenueTransaction.categoryId,
       orElse: () => CategoryData.findById(revenueTransaction.categoryId),

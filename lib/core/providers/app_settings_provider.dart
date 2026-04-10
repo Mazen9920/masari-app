@@ -28,6 +28,7 @@ const _kLowStockAlerts = 'settings_low_stock_alerts';
 const _kAlertThreshold = 'settings_alert_threshold';
 const _kHideOutOfStock = 'settings_hide_out_of_stock';
 const _kHideShopifyDrafts = 'settings_hide_shopify_drafts';
+const _kHideShopifyBundles = 'settings_hide_shopify_bundles';
 const _kSubscriptionStatus = 'settings_subscription_status';
 const _kSubscriptionExpiresAt = 'settings_subscription_expires_at';
 
@@ -161,6 +162,7 @@ class AppSettingsState {
   final int    alertThreshold; // notify when stock below this
   final bool   hideOutOfStock; // hide out-of-stock from main list
   final bool   hideShopifyDrafts; // hide Shopify drafted products
+  final bool   hideShopifyBundles; // hide Shopify bundle products
   final String subscriptionStatus; // 'active', 'grace_period', 'expired', 'free'
   final DateTime? subscriptionExpiresAt;
   final String? paymentSource; // 'paymob', 'iap', or null
@@ -188,6 +190,7 @@ class AppSettingsState {
     this.alertThreshold = 10,
     this.hideOutOfStock = false,
     this.hideShopifyDrafts = false,
+    this.hideShopifyBundles = false,
     this.subscriptionStatus = 'free',
     this.subscriptionExpiresAt,
     this.paymentSource,
@@ -225,6 +228,7 @@ class AppSettingsState {
     int?    alertThreshold,
     bool?   hideOutOfStock,
     bool?   hideShopifyDrafts,
+    bool?   hideShopifyBundles,
     String? subscriptionStatus,
     DateTime? subscriptionExpiresAt,
     String? paymentSource,
@@ -254,6 +258,7 @@ class AppSettingsState {
       alertThreshold: alertThreshold ?? this.alertThreshold,
       hideOutOfStock: hideOutOfStock ?? this.hideOutOfStock,
       hideShopifyDrafts: hideShopifyDrafts ?? this.hideShopifyDrafts,
+      hideShopifyBundles: hideShopifyBundles ?? this.hideShopifyBundles,
       subscriptionStatus: subscriptionStatus ?? this.subscriptionStatus,
       subscriptionExpiresAt: subscriptionExpiresAt ?? this.subscriptionExpiresAt,
       paymentSource: paymentSource ?? this.paymentSource,
@@ -367,6 +372,7 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
       alertThreshold: prefs.getInt(_key(_kAlertThreshold)) ?? 10,
       hideOutOfStock: prefs.getBool(_key(_kHideOutOfStock)) ?? false,
       hideShopifyDrafts: prefs.getBool(_key(_kHideShopifyDrafts)) ?? false,
+      hideShopifyBundles: prefs.getBool(_key(_kHideShopifyBundles)) ?? false,
       subscriptionStatus: subscriptionStatus,
       subscriptionExpiresAt: subscriptionExpiresAtMs != null
           ? DateTime.fromMillisecondsSinceEpoch(subscriptionExpiresAtMs)
@@ -650,6 +656,13 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
     if (!_isAuth) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_key(_kHideShopifyDrafts), value);
+  }
+
+  Future<void> setHideShopifyBundles(bool value) async {
+    state = state.copyWith(hideShopifyBundles: value);
+    if (!_isAuth) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_key(_kHideShopifyBundles), value);
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../core/providers/repository_providers.dart';
 import '../../l10n/app_localizations.dart';
 import 'profit_loss_screen.dart';
 import 'balance_sheet_screen.dart';
@@ -34,6 +35,37 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen>
         HapticFeedback.lightImpact();
       }
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _preFetchReportData();
+  }
+
+  /// Fire-and-forget pre-fetch of the Firestore queries that the three
+  /// child report screens will need. By the time the child tabs build and
+  /// call the same repo methods with the same range parameters, the
+  /// Future-based cache returns instantly (de-duplicated).
+  void _preFetchReportData() {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    final monthEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    final txnRepo = ref.read(transactionRepositoryProvider);
+    final saleRepo = ref.read(saleRepositoryProvider);
+
+    // BS + CF both need ALL historical transactions & sales
+    txnRepo.getTransactionsInRange(start: DateTime(2000), end: monthEnd);
+    saleRepo.getSalesInRange(start: DateTime(2000), end: monthEnd);
+
+    // P&L needs transactions spanning current + previous period
+    final periodDuration = monthEnd.difference(monthStart);
+    final prevStart = monthStart
+        .subtract(periodDuration)
+        .subtract(const Duration(seconds: 1));
+    txnRepo.getTransactionsInRange(start: prevStart, end: monthEnd);
+    saleRepo.getSalesInRange(start: monthStart, end: monthEnd);
   }
 
   @override

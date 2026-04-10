@@ -250,6 +250,8 @@ class ProfileScreen extends ConsumerWidget {
                       fit: BoxFit.cover,
                       width: 64,
                       height: 64,
+                      memCacheWidth: 128,
+                      memCacheHeight: 128,
                       placeholder: (_, _) => Center(
                         child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
                       ),

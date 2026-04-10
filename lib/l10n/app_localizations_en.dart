@@ -1698,6 +1698,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fixedDates => 'Fixed dates';
 
   @override
+  String get categoryLast => 'Last';
+
+  @override
+  String get categoryPeriodToDate => 'Period to date';
+
+  @override
   String get apply => 'Apply';
 
   @override
@@ -1747,6 +1753,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get periodCustom => 'Custom';
+
+  @override
+  String get periodSingleDay => 'Single Day';
+
+  @override
+  String get periodDateRange => 'Date Range';
 
   @override
   String get vsYesterday => 'vs yesterday';
@@ -5373,6 +5385,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Hide Shopify products with draft status';
 
   @override
+  String get hideShopifyBundles => 'Hide bundles';
+
+  @override
+  String get hideShopifyBundlesDesc => 'Hide Shopify products with bundle type';
+
+  @override
   String get inventorySyncLabel => 'Inventory Sync';
 
   @override
@@ -7531,4 +7549,98 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get taxCollectedNote =>
       'This is tax you collected on behalf of the government — it is not revenue.';
+
+  @override
+  String get incomeSources => 'Income Sources';
+
+  @override
+  String get systemCategories => 'System Categories';
+
+  @override
+  String get financingEquity => 'Financing & Equity';
+
+  @override
+  String nCategoriesCount(int count) {
+    return '$count categories';
+  }
+
+  @override
+  String get autoManaged => 'Auto-managed';
+
+  @override
+  String budgetPerMonth(String amount) {
+    return '$amount/mo';
+  }
+
+  @override
+  String get expenseBudgets => 'Expense Budgets';
+
+  @override
+  String get incomeTargets => 'Income Targets';
+
+  @override
+  String get budgetUsedLabel => 'Budget Used';
+
+  @override
+  String get incomeProgressLabel => 'Income Progress';
+
+  @override
+  String get monthlyTargetLabel => 'Monthly Target';
+
+  @override
+  String get metStatus => 'Met';
+
+  @override
+  String get belowStatus => 'Below';
+
+  @override
+  String get targetMetBadge => 'Target Met!';
+
+  @override
+  String earnedOf(String amount, String target) {
+    return 'Earned $amount of $target';
+  }
+
+  @override
+  String get noBudgetsSet => 'No expense budgets set yet';
+
+  @override
+  String get noTargetsSet => 'No income targets set yet';
+
+  @override
+  String get currentEarnings => 'CURRENT EARNINGS';
+
+  @override
+  String percentEarned(int percent) {
+    return '$percent% Earned';
+  }
+
+  @override
+  String get approachingTarget => 'Approaching target!';
+
+  @override
+  String get systemCategoryInfo =>
+      'This category is auto-managed by the system';
+
+  @override
+  String get monthlyEarningTarget => 'Monthly Earning Target';
+
+  @override
+  String get enableMonthlyTarget => 'Enable Monthly Target';
+
+  @override
+  String get targetAlertHint =>
+      'We will track your progress toward this earning target.';
+
+  @override
+  String get refreshFromShopify => 'Refresh from Shopify';
+
+  @override
+  String get refreshingFromShopify => 'Syncing with Shopify…';
+
+  @override
+  String get refreshFromShopifySuccess => 'Order synced with Shopify';
+
+  @override
+  String get refreshFromShopifyFailed => 'Failed to sync with Shopify';
 }

@@ -16,6 +16,7 @@
 
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {onSchedule} from "firebase-functions/v2/scheduler";
 import {defineSecret} from "firebase-functions/params";
 import {
   getFirestore,
@@ -164,8 +165,10 @@ async function getUserValuationMethod(
     if (userDoc.exists) {
       return (userDoc.data()?.valuation_method as string) || "fifo";
     }
-  } catch (_) {
-    // Fall back to fifo
+  } catch (err) {
+    logger.warn("Failed to read valuation method, defaulting to fifo", {
+      userId, error: String(err),
+    });
   }
   return "fifo";
 }
@@ -275,15 +278,17 @@ function mapFulfillmentStatus(status: string | null): number {
  * @param {number} paymentStatus Revvo PaymentStatus index.
  * @param {number} fulfillmentStatus Revvo FulfillmentStatus index.
  * @param {string|null} cancelReason Shopify cancel_reason.
+ * @param {string|null} cancelledAt Shopify cancelled_at timestamp.
  * @return {number} OrderStatus index.
  */
 function deriveOrderStatus(
   paymentStatus: number,
   fulfillmentStatus: number,
   cancelReason?: string | null,
+  cancelledAt?: string | null,
 ): number {
-  // Auto-cancel for rejected or returned
-  if (cancelReason === "declined" || cancelReason === "fraud") {
+  // Cancelled if cancelled_at is set OR cancel_reason indicates rejection
+  if (cancelledAt || cancelReason === "declined" || cancelReason === "fraud") {
     return 4; // OrderStatus.cancelled
   }
   // Completed only when fully paid AND fully fulfilled
@@ -374,8 +379,10 @@ function toTs(isoOrNow?: string | null): Timestamp {
   if (isoOrNow) {
     try {
       return Timestamp.fromDate(new Date(isoOrNow));
-    } catch (_) {
-      // Fall through to "now"
+    } catch (err) {
+      logger.warn("Invalid ISO date, falling back to now", {
+        isoOrNow, error: String(err),
+      });
     }
   }
   return Timestamp.now();
@@ -517,6 +524,23 @@ async function handleOrderCreate(
     .doc(userId)
     .get();
   const conn = connDoc.exists ? connDoc.data() : null;
+
+  // ── Gate: ignore orders created before Shopify was connected ──
+  // Webhooks (orders/create, orders/updated) may fire for old orders
+  // after connecting. Only manual historical import (client-side)
+  // should bring in pre-connection orders.
+  const connectedAt = conn?.connected_at?.toDate?.() as Date | undefined;
+  const orderCreatedAt = order.created_at ?
+    new Date(order.created_at as string) : null;
+  if (connectedAt && orderCreatedAt && orderCreatedAt < connectedAt) {
+    logger.info("Skipping pre-connection order from webhook", {
+      shopifyOrderId,
+      orderCreatedAt: orderCreatedAt.toISOString(),
+      connectedAt: connectedAt.toISOString(),
+    });
+    return;
+  }
+
   const inventorySyncEnabled = conn?.sync_inventory_enabled === true;
   const valMethod = await getUserValuationMethod(db, userId);
 
@@ -572,7 +596,6 @@ async function handleOrderCreate(
   // ── Build Sale document ────────────────────────────────
   const customer = order.customer ?? {};
   const shipping = order.shipping_address ?? {};
-  const shippingLine = (order.shipping_lines ?? [])[0];
   const fulfillment = (order.fulfillments ?? [])[0];
 
   const subtotal = round2(
@@ -584,16 +607,27 @@ async function handleOrderCreate(
   );
   const taxAmount = Number(order.total_tax) || 0;
   const discountAmount = Number(order.total_discounts) || 0;
-  // Prefer total_shipping_price_set (accurate after order edits)
-  // over shipping_lines[0].price (stays at original value).
-  const totalShippingSet = order.total_shipping_price_set as
-    Record<string, Record<string, unknown>> | undefined;
-  const shippingCost =
-    totalShippingSet?.shop_money?.amount != null ?
-      Number(totalShippingSet.shop_money.amount) || 0 :
-      (shippingLine ? Number(shippingLine.price) || 0 : 0);
+  // Use discounted_price (net of shipping discounts) — what the customer
+  // actually paid for shipping.  Falls back to price if unavailable.
+  const shippingCost = round2(
+    ((order.shipping_lines ?? []) as Array<Record<string, unknown>>).reduce(
+      (s, sl) => s + (Number(sl.discounted_price ?? sl.price) || 0), 0,
+    )
+  );
+  // shipping discounts are included in total_discounts but should only
+  // reduce shipping revenue, not product revenue.  Subtract them out.
+  const shippingDiscount = round2(
+    ((order.shipping_lines ?? []) as Array<Record<string, unknown>>).reduce(
+      (s, sl) => {
+        const gross = Number(sl.price) || 0;
+        const net = Number(sl.discounted_price ?? sl.price) || 0;
+        return s + (gross - net);
+      }, 0,
+    )
+  );
+  const productDiscount = round2(discountAmount - shippingDiscount);
   const total = round2(
-    subtotal + taxAmount - discountAmount + shippingCost
+    subtotal + taxAmount - discountAmount + shippingCost + shippingDiscount
   );
 
   const paymentStatus = mapPaymentStatus(
@@ -606,6 +640,7 @@ async function handleOrderCreate(
     paymentStatus,
     fulfillmentStatus,
     order.cancel_reason as string | null,
+    order.cancelled_at as string | null,
   );
 
   // Build order number label for display
@@ -667,18 +702,25 @@ async function handleOrderCreate(
   const revId = `sale_rev_${saleId}`;
   const cogsId = `sale_cogs_${saleId}`;
 
+  // netRevenue = subtotal − product discount only (excludes tax & shipping
+  // per GAAP/IFRS).  Shipping discounts reduce shipping revenue, not this.
+  const netRevenue = round2(subtotal - productDiscount);
+
+  // Accrual accounting: revenue is recognised at point of sale,
+  // regardless of payment status. Never exclude from P&L.
   const revTxn: Record<string, unknown> = {
     id: revId,
     user_id: userId,
     title: `${orderLabel}${saleDoc.customer_name ?
       ` — ${saleDoc.customer_name}` :
       ""}`,
-    amount: total,
+    amount: netRevenue,
     date_time: saleDate,
     category_id: "cat_sales_revenue",
     note: orderLabel,
     payment_method: saleDoc.payment_method,
     sale_id: saleId,
+    exclude_from_pl: false,
     created_at: now,
   };
 
@@ -692,41 +734,78 @@ async function handleOrderCreate(
     note: `Auto-generated from ${orderLabel}`,
     payment_method: "shopify",
     sale_id: saleId,
+    exclude_from_pl: false,
     created_at: now,
   };
 
-  // ── Batch write ────────────────────────────────────────
-  const batch = db.batch();
-  batch.set(saleRef, saleDoc);
-  batch.set(db.collection("transactions").doc(revId), revTxn);
-  batch.set(db.collection("transactions").doc(cogsId), cogsTxn);
+  // ── Atomic write: sale + transactions + stock in single transaction ──
+  // All writes happen atomically — if any part fails, nothing is committed.
+  // This prevents orphaned stock movements (stock deducted but sale missing)
+  // and provides true idempotency against concurrent webhook deliveries.
+  await db.runTransaction(async (txn) => {
+    // Re-check idempotency inside transaction (atomic guard)
+    const saleSnap = await txn.get(saleRef);
+    if (saleSnap.exists) {
+      logger.info("Order already imported (atomic check), skipping", {
+        shopifyOrderId,
+      });
+      return;
+    }
 
-  // Shipping expense transaction (operating cost)
-  if (shippingCost > 0) {
-    const shipId = `sale_ship_${saleId}`;
-    batch.set(db.collection("transactions").doc(shipId), {
-      id: shipId,
-      user_id: userId,
-      title: `Shipping — ${orderLabel}`,
-      amount: -round2(shippingCost),
-      date_time: saleDate,
-      category_id: "cat_shipping",
-      note: `Auto-generated from ${orderLabel}`,
-      payment_method: "shopify",
-      sale_id: saleId,
-      created_at: now,
-    });
-  }
+    // Read product docs for stock adjustment (inside txn for atomicity)
+    const productSnapshots = new Map<
+      string,
+      FirebaseFirestore.DocumentSnapshot
+    >();
+    if (inventorySyncEnabled) {
+      const uniqueProductIds = new Set<string>();
+      for (const item of saleItems) {
+        const pid = item.product_id as string | undefined;
+        if (pid) uniqueProductIds.add(pid);
+      }
+      for (const pid of uniqueProductIds) {
+        productSnapshots.set(
+          pid,
+          await txn.get(db.collection("products").doc(pid)),
+        );
+      }
+    }
 
-  // ── Stock deduction (BEFORE batch to prevent overselling) ──
-  // If stock deduction fails, the sale batch is never committed.
-  // If stock succeeds but batch fails, inventory is conservatively
-  // decremented (preferable to overselling) and is reconcilable.
-  if (inventorySyncEnabled) {
-    await adjustStockForItems(db, userId, saleItems, "deduct", undefined, valMethod);
-  }
+    // Write sale
+    txn.set(saleRef, saleDoc);
 
-  await batch.commit();
+    // Skip financial transactions for already-cancelled orders —
+    // they have no P&L impact and don't need reversals.
+    if (orderStatus !== 4) {
+      txn.set(db.collection("transactions").doc(revId), revTxn);
+      txn.set(db.collection("transactions").doc(cogsId), cogsTxn);
+
+      // Shipping revenue transaction (customer-paid shipping = income)
+      if (shippingCost > 0) {
+        const shipId = `sale_ship_${saleId}`;
+        txn.set(db.collection("transactions").doc(shipId), {
+          id: shipId,
+          user_id: userId,
+          title: `Shipping — ${orderLabel}`,
+          amount: round2(shippingCost),
+          date_time: saleDate,
+          category_id: "cat_shipping",
+          note: `Auto-generated from ${orderLabel}`,
+          payment_method: "shopify",
+          sale_id: saleId,
+          exclude_from_pl: false,
+          created_at: now,
+        });
+      }
+    }
+
+    // Stock deduction (skip for cancelled orders — no inventory impact)
+    if (inventorySyncEnabled && orderStatus !== 4) {
+      applyStockInTransaction(
+        txn, saleItems, productSnapshots, "deduct", valMethod,
+      );
+    }
+  });
 
   // ── Sync log ───────────────────────────────────────────
   await writeSyncLog(db, userId, {
@@ -778,8 +857,29 @@ async function handleOrderUpdated(
     .get();
 
   if (snap.empty) {
-    // Out-of-order: create arrived before update could be processed
-    // Fall back to creating the order
+    // Order not in Revvo. Only create if the order was placed AFTER
+    // the shop was connected (handleOrderCreate also has this gate,
+    // but checking here avoids a redundant Firestore read).
+    const connDoc = await db
+      .collection("shopify_connections")
+      .doc(userId)
+      .get();
+    const connectedAt = connDoc.data()?.connected_at?.toDate?.() as
+      Date | undefined;
+    const orderCreatedAt = order.created_at ?
+      new Date(order.created_at as string) : null;
+
+    if (connectedAt && orderCreatedAt && orderCreatedAt < connectedAt) {
+      logger.info(
+        "Ignoring update for pre-connection order (not imported)",
+        {shopifyOrderId,
+          orderDate: orderCreatedAt.toISOString(),
+          connectedAt: connectedAt.toISOString()},
+      );
+      return;
+    }
+
+    // Genuine out-of-order delivery: create arrived before update
     logger.warn("Order not found for update, creating", {
       shopifyOrderId,
     });
@@ -827,6 +927,7 @@ async function handleOrderUpdated(
     newPaymentStatus,
     newFulfillmentStatus,
     cancelReason,
+    order.cancelled_at as string | null,
   );
 
   // If Shopify says cancelled (has cancel_reason or cancelled_at),
@@ -1049,15 +1150,12 @@ async function handleOrderUpdated(
   );
   const newTaxAmount = Number(order.total_tax) || 0;
   const newDiscountAmount = Number(order.total_discounts) || 0;
-  // Prefer total_shipping_price_set (accurate after order edits)
-  // over shipping_lines[0].price (stays at original value).
-  const totalShippingSet = order.total_shipping_price_set as
-    Record<string, Record<string, unknown>> | undefined;
-  const shippingLine = (order.shipping_lines ?? [])[0];
-  const newShippingCost =
-    totalShippingSet?.shop_money?.amount != null ?
-      Number(totalShippingSet.shop_money.amount) || 0 :
-      (shippingLine ? Number(shippingLine.price) || 0 : 0);
+  // Use discounted_price (net of shipping discounts)
+  const newShippingCost = round2(
+    ((order.shipping_lines ?? []) as Array<Record<string, unknown>>).reduce(
+      (s, sl) => s + (Number(sl.discounted_price ?? sl.price) || 0), 0,
+    )
+  );
   const newTotal = round2(
     newSubtotal + newTaxAmount - newDiscountAmount + newShippingCost
   );
@@ -1111,10 +1209,11 @@ async function handleOrderUpdated(
 
     // Update sale items and financial fields
     updates.items = newSaleItems;
-    updates._item_fingerprint = newItemKeys;
     updates.tax_amount = newTaxAmount;
     updates.discount_amount = newDiscountAmount;
     updates.shipping_cost = newShippingCost;
+    // Note: _item_fingerprint is set atomically inside the stock
+    // transaction below to prevent double stock adjustments.
 
     // ── Update Revenue transaction ──────────────────────
     const revTxnId = `sale_rev_${saleId}`;
@@ -1126,16 +1225,29 @@ async function handleOrderUpdated(
     if (revTxnSnap.exists) {
       const revData = revTxnSnap.data()!;
       const oldRevAmount = Number(revData.amount) || 0;
-      // Only update if not already cancelled/reversed
-      if (!revData.exclude_from_pl && oldRevAmount !== newTotal) {
+      // Only update if not already cancelled/reversed.
+      // Exclude shipping discounts from product revenue deduction.
+      const newShippingDiscount = round2(
+        ((order.shipping_lines ?? []) as Array<Record<string, unknown>>)
+          .reduce((s, sl) => {
+            const gross = Number(sl.price) || 0;
+            const net = Number(sl.discounted_price ?? sl.price) || 0;
+            return s + (gross - net);
+          }, 0)
+      );
+      const newProductDiscount = round2(
+        newDiscountAmount - newShippingDiscount
+      );
+      const newNetRevenue = round2(newSubtotal - newProductDiscount);
+      if (!revData.exclude_from_pl && oldRevAmount !== newNetRevenue) {
         await db.collection("transactions").doc(revTxnId).update({
-          amount: newTotal,
+          amount: newNetRevenue,
           updated_at: now,
         });
         logger.info("Revenue txn updated", {
           revTxnId,
           oldAmount: oldRevAmount,
-          newAmount: newTotal,
+          newAmount: newNetRevenue,
         });
       }
     }
@@ -1171,7 +1283,7 @@ async function handleOrderUpdated(
       .collection("transactions")
       .doc(shipTxnId)
       .get();
-    const newShipAmount = -round2(newShippingCost);
+    const newShipAmount = round2(newShippingCost);
 
     if (newShippingCost > 0) {
       if (shipTxnSnap.exists) {
@@ -1209,7 +1321,9 @@ async function handleOrderUpdated(
     }
 
     // ── Adjust inventory for the delta ──────────────────
-    if (inventorySyncEnabled) {
+    // Wrapped in a transaction with atomic fingerprint check to prevent
+    // double stock adjustments from concurrent webhooks.
+    if (inventorySyncEnabled && itemsChanged) {
       // Build quantity maps: key = "productId::variantId"
       const oldQtyMap = new Map<string, number>();
       for (const item of oldItems) {
@@ -1260,26 +1374,67 @@ async function handleOrderUpdated(
         }
       }
 
-      if (restoreItems.length > 0) {
-        await adjustStockForItems(
-          db, userId, restoreItems, "restore",
-          "Shopify order edited (item removed/reduced)",
-          valMethod
-        );
-      }
-      if (deductItems.length > 0) {
-        await adjustStockForItems(
-          db, userId, deductItems, "deduct",
-          "Shopify order edited (item added/increased)",
-          valMethod
-        );
-      }
+      if (restoreItems.length > 0 || deductItems.length > 0) {
+        // Atomic: re-read sale → check fingerprint → claim → adjust stock
+        await db.runTransaction(async (txn) => {
+          const freshSnap = await txn.get(saleDoc.ref);
+          if (!freshSnap.exists) return;
+          const currentFingerprint =
+            freshSnap.data()!._item_fingerprint as string | undefined;
 
-      logger.info("Inventory adjusted for order edit", {
-        shopifyOrderId,
-        restoredKeys: restoreItems.length,
-        deductedKeys: deductItems.length,
-      });
+          // If fingerprint already matches, another execution handled this
+          if (currentFingerprint === newItemKeys) {
+            logger.info(
+              "Fingerprint race: skipping duplicate stock adjustment",
+              {shopifyOrderId},
+            );
+            return;
+          }
+
+          // Claim the fingerprint atomically
+          txn.update(saleDoc.ref, {_item_fingerprint: newItemKeys});
+
+          // Read all product docs needed for stock adjustments
+          const allStockItems = [...restoreItems, ...deductItems];
+          const uniquePids = new Set<string>();
+          for (const it of allStockItems) {
+            const pid = it.product_id as string | undefined;
+            if (pid) uniquePids.add(pid);
+          }
+          const snapshots = new Map<
+            string,
+            FirebaseFirestore.DocumentSnapshot
+          >();
+          for (const pid of uniquePids) {
+            snapshots.set(
+              pid,
+              await txn.get(db.collection("products").doc(pid)),
+            );
+          }
+
+          if (restoreItems.length > 0) {
+            applyStockInTransaction(
+              txn, restoreItems, snapshots, "restore", valMethod,
+              "Shopify order edited (item removed/reduced)",
+            );
+          }
+          if (deductItems.length > 0) {
+            applyStockInTransaction(
+              txn, deductItems, snapshots, "deduct", valMethod,
+              "Shopify order edited (item added/increased)",
+            );
+          }
+        });
+
+        logger.info("Inventory adjusted for order edit", {
+          shopifyOrderId,
+          restoredKeys: restoreItems.length,
+          deductedKeys: deductItems.length,
+        });
+      }
+    } else if (itemsChanged) {
+      // Inventory sync disabled but items changed — still claim fingerprint
+      await saleDoc.ref.update({_item_fingerprint: newItemKeys});
     }
   }
 
@@ -1354,25 +1509,38 @@ async function handleOrderUpdated(
         .get();
       if (existingRefund.exists) continue;
 
-      // Sum this individual refund's monetary amount
-      const txns = (
-        refund.transactions as Record<string, unknown>[]
-      ) ?? [];
-      let refundAmount = 0;
-      for (const tx of txns) {
-        refundAmount += Number(tx.amount) || 0;
-      }
-      refundAmount = round2(refundAmount);
-      if (refundAmount <= 0) continue;
-
-      // Count refunded qty for the note
+      // Sum this individual refund's monetary amount.
+      // Primary source: refund_line_items (subtotal + total_tax)
+      // plus order_adjustments (e.g. shipping refunds).
+      // Fallback: refund.transactions (may be empty in webhooks).
       const refundLineItems = (
         refund.refund_line_items as Record<string, unknown>[]
       ) ?? [];
+      let refundAmount = 0;
       let refundedQty = 0;
       for (const ri of refundLineItems) {
+        refundAmount += Number(ri.subtotal) || 0;
+        refundAmount += Number(ri.total_tax) || 0;
         refundedQty += Number(ri.quantity) || 0;
       }
+      // Add order adjustments (shipping refunds, etc.)
+      const orderAdjs = (
+        refund.order_adjustments as Record<string, unknown>[]
+      ) ?? [];
+      for (const adj of orderAdjs) {
+        refundAmount += Math.abs(Number(adj.amount) || 0);
+      }
+      // Fallback to refund.transactions if line items gave 0
+      if (refundAmount <= 0) {
+        const txns = (
+          refund.transactions as Record<string, unknown>[]
+        ) ?? [];
+        for (const tx of txns) {
+          refundAmount += Number(tx.amount) || 0;
+        }
+      }
+      refundAmount = round2(refundAmount);
+      if (refundAmount <= 0) continue;
 
       // Determine note
       const isFullRefund = financialStatus === "refunded";
@@ -1394,6 +1562,7 @@ async function handleOrderUpdated(
         payment_method: "shopify",
         sale_id: saleId,
         shopify_refund_id: shopifyRefundId,
+        exclude_from_pl: false,
         created_at: now,
       });
       refundsCreated++;
@@ -1490,6 +1659,9 @@ async function handleOrderCancelled(
   const saleData = saleDoc.data();
   const saleId = saleData.id as string;
   const now = Timestamp.now();
+  // Use the Shopify cancelled_at date for reversals so they land in the
+  // same period Shopify attributes the return to (event-date attribution).
+  const reversalDate = toTs(order.cancelled_at as string | null);
 
   // Already cancelled — idempotent guard
   if (saleData.order_status === 4) {
@@ -1532,10 +1704,10 @@ async function handleOrderCancelled(
       // Refund amounts are negative — sum their absolute value
       alreadyRefundedRevenue += Math.abs(Number(doc.data().amount) || 0);
       hasExistingRefunds = true;
-      // Mark the refund txn as excluded (cancel supersedes refund)
+      // Mark the refund txn as cancelled (keep visible for audit trail)
       batch.update(doc.ref, {
         title: `[Cancelled] ${doc.data().title || "Refund"}`,
-        exclude_from_pl: true,
+        exclude_from_pl: false,
         updated_at: now,
       });
     }
@@ -1551,7 +1723,7 @@ async function handleOrderCancelled(
     hasExistingRefunds = true;
     batch.update(legacyRefundSnap.ref, {
       title: `[Cancelled] ${refundData.title || "Refund"}`,
-      exclude_from_pl: true,
+      exclude_from_pl: false,
       updated_at: now,
     });
   }
@@ -1563,10 +1735,10 @@ async function handleOrderCancelled(
     const revData = revTxnSnap.data()!;
     const origAmount = Number(revData.amount) || 0;
 
-    // Mark original as cancelled (keep original amount for audit)
+    // Mark original as cancelled (keep visible for audit trail)
     batch.update(revTxnSnap.ref, {
       title: `[Cancelled] ${revData.title || "Revenue"}`,
-      exclude_from_pl: true,
+      exclude_from_pl: false,
       updated_at: now,
     });
 
@@ -1580,13 +1752,13 @@ async function handleOrderCancelled(
         user_id: userId,
         title: `[Reversal] ${revData.title || "Revenue"}`,
         amount: netToReverse !== 0 ? -netToReverse : 0,
-        date_time: now,
+        date_time: reversalDate,
         category_id: revData.category_id || "cat_sales_revenue",
         note: alreadyRefundedRevenue > 0
           ? `Auto-reversal — Shopify order cancelled (adjusted for refund of ${alreadyRefundedRevenue})`
           : "Auto-reversal — Shopify order cancelled",
         sale_id: saleId,
-        exclude_from_pl: true,
+        exclude_from_pl: false,
         created_at: now,
         updated_at: now,
       });
@@ -1597,10 +1769,10 @@ async function handleOrderCancelled(
     const cogsData = cogsTxnSnap.data()!;
     const origAmount = Number(cogsData.amount) || 0;
 
-    // Mark original as cancelled
+    // Mark original as cancelled (keep visible for audit trail)
     batch.update(cogsTxnSnap.ref, {
       title: `[Cancelled] ${cogsData.title || "COGS"}`,
-      exclude_from_pl: true,
+      exclude_from_pl: false,
       updated_at: now,
     });
 
@@ -1612,11 +1784,11 @@ async function handleOrderCancelled(
         user_id: userId,
         title: `[Reversal] ${cogsData.title || "COGS"}`,
         amount: -origAmount,
-        date_time: now,
+        date_time: reversalDate,
         category_id: cogsData.category_id || "cat_cogs",
         note: "Auto-reversal — Shopify order cancelled",
         sale_id: saleId,
-        exclude_from_pl: true,
+        exclude_from_pl: false,
         created_at: now,
         updated_at: now,
       });
@@ -1631,7 +1803,7 @@ async function handleOrderCancelled(
 
     batch.update(shipTxnSnap.ref, {
       title: `[Cancelled] ${shipData.title || "Shipping"}`,
-      exclude_from_pl: true,
+      exclude_from_pl: false,
       updated_at: now,
     });
 
@@ -1642,11 +1814,11 @@ async function handleOrderCancelled(
         user_id: userId,
         title: `[Reversal] ${shipData.title || "Shipping"}`,
         amount: -origAmount,
-        date_time: now,
+        date_time: reversalDate,
         category_id: "cat_shipping",
         note: "Auto-reversal — Shopify order cancelled",
         sale_id: saleId,
-        exclude_from_pl: true,
+        exclude_from_pl: false,
         created_at: now,
         updated_at: now,
       });
@@ -2492,11 +2664,14 @@ async function handleInventoryUpdate(
           if (delta > 0) {
             // Stock increased — add a correction layer at current WAC
             const layerCost = wacFromLayers(layers, fallbackCost);
-            layers.push({
-              date: now,
-              unit_cost: layerCost,
-              remaining_qty: delta,
-            });
+            layers = [
+              ...layers,
+              {
+                date: now,
+                unit_cost: layerCost,
+                remaining_qty: delta,
+              },
+            ];
             costPrice = wacFromLayers(layers, fallbackCost);
           } else {
             // Stock decreased — consume layers
@@ -2749,8 +2924,124 @@ async function getRevvoCostPrice(
 }
 
 /**
+ * Applies stock adjustments within an existing Firestore transaction.
+ * Groups items by product_id to handle multiple variants per product.
+ * All product docs must already be read via txn.get() and passed in.
+ */
+function applyStockInTransaction(
+  txn: FirebaseFirestore.Transaction,
+  items: Record<string, unknown>[],
+  productSnapshots: Map<string, FirebaseFirestore.DocumentSnapshot>,
+  mode: "deduct" | "restore",
+  valuationMethod: string,
+  customReason?: string,
+): void {
+  const method = valuationMethod || "fifo";
+
+  // Group items by product → variant, accumulating qty
+  const grouped = new Map<
+    string,
+    Map<string, {qty: number; costPrice: number}>
+  >();
+  for (const item of items) {
+    const productId = item.product_id as string | undefined;
+    const variantId = item.variant_id as string | undefined;
+    const qty = Number(item.quantity) || 0;
+    if (!productId || !variantId || qty === 0) continue;
+    if (!grouped.has(productId)) grouped.set(productId, new Map());
+    const variants = grouped.get(productId)!;
+    const existing = variants.get(variantId);
+    if (existing) {
+      existing.qty += qty;
+    } else {
+      variants.set(variantId, {
+        qty,
+        costPrice: Number(item.cost_price) || 0,
+      });
+    }
+  }
+
+  const now = new Date().toISOString();
+
+  for (const [productId, variantChanges] of grouped) {
+    const prodSnap = productSnapshots.get(productId);
+    if (!prodSnap?.exists) continue;
+    const prodData = prodSnap.data()!;
+    const variants: Record<string, unknown>[] =
+      prodData.variants ?? [];
+
+    const updatedVariants = variants.map(
+      (v: Record<string, unknown>) => {
+        const change = variantChanges.get(v.id as string);
+        if (!change) return v;
+
+        const curStock = Number(v.current_stock) || 0;
+        const delta = mode === "deduct" ? -change.qty : change.qty;
+        const newStock = Math.max(0, curStock + delta);
+        const fallbackCost = Number(v.cost_price) || 0;
+        const movements: Record<string, unknown>[] =
+          (v.movements as Record<string, unknown>[]) ?? [];
+
+        let layers = effectiveCostLayers(v);
+        let movementUnitCost = fallbackCost;
+
+        if (mode === "deduct") {
+          const result = consumeCostLayers(
+            layers, change.qty, method, fallbackCost,
+          );
+          layers = result.layers;
+          movementUnitCost = result.unitCost;
+        } else {
+          const itemCost = change.costPrice || fallbackCost;
+          if (itemCost > 0) {
+            layers = [
+              ...layers,
+              {
+                date: now,
+                unit_cost: itemCost,
+                remaining_qty: change.qty,
+              },
+            ];
+            movementUnitCost = itemCost;
+          }
+        }
+
+        const newCostPrice = wacFromLayers(layers, fallbackCost);
+
+        return {
+          ...v,
+          current_stock: newStock,
+          cost_price: newCostPrice,
+          cost_layers: layers,
+          movements: [
+            ...movements,
+            {
+              date_time: now,
+              quantity: delta,
+              unit_cost: movementUnitCost,
+              note: customReason || (mode === "deduct" ?
+                "Shopify order" :
+                "Shopify order cancelled"),
+              type: mode === "deduct" ? "Sale" : "Return",
+            },
+          ],
+        };
+      },
+    );
+
+    txn.update(prodSnap.ref, {
+      variants: updatedVariants,
+      updated_at: now,
+      _last_modified_by: "shopify_order",
+    });
+  }
+}
+
+/**
  * Adjusts stock for sale items (deduct or restore).
  * Cost-layer aware: consumes layers on deduct, adds layers on restore.
+ * Groups all items by product and processes in a single transaction
+ * (chunked by 25 products to limit contention).
  * @param {FirebaseFirestore.Firestore} db Firestore instance.
  * @param {string} userId Revvo user ID.
  * @param {Record<string, unknown>[]} items Sale items.
@@ -2766,86 +3057,40 @@ async function adjustStockForItems(
   customReason?: string,
   valuationMethod?: string,
 ): Promise<void> {
-  const method = valuationMethod || "fifo";
+  // Collect unique product IDs
+  const uniqueProductIds = new Set<string>();
   for (const item of items) {
-    const productId = item.product_id as string | undefined;
-    const variantId = item.variant_id as string | undefined;
-    const qty = Number(item.quantity) || 0;
-    if (!productId || !variantId || qty === 0) continue;
+    const pid = item.product_id as string | undefined;
+    if (pid) uniqueProductIds.add(pid);
+  }
+  if (uniqueProductIds.size === 0) return;
 
-    const prodRef = db.collection("products").doc(productId);
+  // Process in chunks to limit transaction contention
+  const productIds = [...uniqueProductIds];
+  const CHUNK_SIZE = 25;
+
+  for (let i = 0; i < productIds.length; i += CHUNK_SIZE) {
+    const chunk = productIds.slice(i, i + CHUNK_SIZE);
+    const chunkItems = items.filter((it) =>
+      chunk.includes(it.product_id as string),
+    );
 
     await db.runTransaction(async (txn) => {
-      const prodSnap = await txn.get(prodRef);
-      if (!prodSnap.exists) return;
+      const snapshots = new Map<
+        string,
+        FirebaseFirestore.DocumentSnapshot
+      >();
+      for (const pid of chunk) {
+        snapshots.set(
+          pid,
+          await txn.get(db.collection("products").doc(pid)),
+        );
+      }
 
-      const prodData = prodSnap.data();
-      if (!prodData) return;
-      const variants: Record<string, unknown>[] =
-        prodData.variants ?? [];
-      const delta = mode === "deduct" ? -qty : qty;
-      const now = new Date().toISOString();
-
-      const updatedVariants = variants.map(
-        (v: Record<string, unknown>) => {
-          if (v.id === variantId) {
-            const curStock = Number(v.current_stock) || 0;
-            const newStock = Math.max(0, curStock + delta);
-            const movements: Record<string, unknown>[] =
-              (v.movements as Record<string, unknown>[]) ?? [];
-            const fallbackCost = Number(v.cost_price) || 0;
-
-            let layers = effectiveCostLayers(v);
-            let movementUnitCost = fallbackCost;
-
-            if (mode === "deduct") {
-              // Consume layers based on valuation method
-              const result = consumeCostLayers(layers, qty, method, fallbackCost);
-              layers = result.layers;
-              movementUnitCost = result.unitCost;
-            } else {
-              // Restore: add a layer with the item's cost_price
-              const itemCost = Number(item.cost_price) || fallbackCost;
-              if (itemCost > 0) {
-                layers.push({
-                  date: now,
-                  unit_cost: itemCost,
-                  remaining_qty: qty,
-                });
-                movementUnitCost = itemCost;
-              }
-            }
-
-            const newCostPrice = wacFromLayers(layers, fallbackCost);
-
-            return {
-              ...v,
-              current_stock: newStock,
-              cost_price: newCostPrice,
-              cost_layers: layers,
-              movements: [
-                ...movements,
-                {
-                  date_time: now,
-                  quantity: delta,
-                  unit_cost: movementUnitCost,
-                  note: customReason || (mode === "deduct" ?
-                    "Shopify order" :
-                    "Shopify order cancelled"),
-                  type: mode === "deduct" ? "Sale" : "Return",
-                },
-              ],
-            };
-          }
-          return v;
-        }
+      applyStockInTransaction(
+        txn, chunkItems, snapshots, mode,
+        valuationMethod || "fifo", customReason,
       );
-
-      txn.update(prodRef, {
-        variants: updatedVariants,
-        updated_at: now,
-        _last_modified_by: "shopify_order",
-      });
     });
   }
 }
@@ -3093,6 +3338,522 @@ async function handleShopRedact(
     userId, shopDomain,
   });
 }
+
+// ═══════════════════════════════════════════════════════════
+//  REFRESH: Pull latest order state from Shopify and re-sync
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Callable Cloud Function that fetches the latest state of a single
+ * Shopify order and feeds it through the existing handleOrderUpdated
+ * (or handleOrderCancelled) pipeline so Revvo is 100 % in sync.
+ *
+ * Params:
+ *  - saleId: the Revvo sale document ID
+ */
+export const refreshShopifyOrder = onCall(
+  {
+    region: "us-central1",
+    secrets: [tokenEncryptionKey],
+    timeoutSeconds: 60,
+  },
+  async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+      throw new HttpsError("unauthenticated", "Must be authenticated");
+    }
+
+    const {saleId} = request.data as {saleId?: string};
+    if (!saleId) {
+      throw new HttpsError("invalid-argument", "Missing saleId");
+    }
+
+    const db = getDb();
+
+    // 1. Load the sale doc to get the external_order_id
+    const saleDoc = await db.collection("sales").doc(saleId).get();
+    if (!saleDoc.exists) {
+      throw new HttpsError("not-found", "Sale not found");
+    }
+    const saleData = saleDoc.data()!;
+    if (saleData.user_id !== userId) {
+      throw new HttpsError("permission-denied", "Not your sale");
+    }
+    const externalOrderId = saleData.external_order_id as string | undefined;
+    if (!externalOrderId) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This sale is not linked to a Shopify order",
+      );
+    }
+
+    // 2. Get the Shopify connection
+    const connDoc = await db
+      .collection("shopify_connections")
+      .doc(userId)
+      .get();
+    if (!connDoc.exists || connDoc.data()?.status !== "active") {
+      throw new HttpsError(
+        "failed-precondition",
+        "No active Shopify connection",
+      );
+    }
+    const conn = connDoc.data()!;
+    const shopDomain = conn.shop_domain as string;
+
+    // Validate shop domain to prevent SSRF
+    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shopDomain)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Invalid Shopify shop domain",
+      );
+    }
+
+    const encryptedToken = conn.access_token as string;
+    const accessToken = decrypt(
+      encryptedToken,
+      tokenEncryptionKey.value().trim(),
+    );
+
+    // 3. Fetch the single order from Shopify REST Admin API
+    const url =
+      `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}` +
+      `/orders/${externalOrderId}.json`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": accessToken,
+      },
+    });
+
+    if (res.status === 401) {
+      await db
+        .collection("shopify_connections")
+        .doc(userId)
+        .update({status: "disconnected"});
+      throw new HttpsError(
+        "unauthenticated",
+        "Shopify token revoked. Please reconnect.",
+      );
+    }
+    if (!res.ok) {
+      const body = await res.text();
+      logger.error("Shopify API error during order refresh", {
+        status: res.status,
+        externalOrderId,
+        body: body.substring(0, 300),
+      });
+      throw new HttpsError(
+        "internal",
+        `Shopify API ${res.status}: ${body.substring(0, 200)}`,
+      );
+    }
+
+    const json = (await res.json()) as {order?: Record<string, unknown>};
+    const order = json.order;
+    if (!order) {
+      throw new HttpsError(
+        "not-found",
+        "Order no longer exists on Shopify",
+      );
+    }
+
+    // 4. Route through the appropriate handler directly
+    //    (same logic the webhook processor uses)
+    const shopifyOrder = order as unknown as ShopifyOrder;
+    const isCancelled = !!(
+      shopifyOrder.cancel_reason || shopifyOrder.cancelled_at
+    );
+
+    if (isCancelled && saleData.order_status !== 4) {
+      await handleOrderCancelled(userId, shopifyOrder);
+    } else {
+      await handleOrderUpdated(userId, shopifyOrder);
+    }
+
+    logger.info("Manual order refresh completed", {
+      userId,
+      saleId,
+      externalOrderId,
+      wasCancelled: isCancelled,
+    });
+
+    return {success: true};
+  },
+);
+
+// ═══════════════════════════════════════════════════════════
+//  REFRESH ALL: Pull latest state of all Shopify orders
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Callable Cloud Function that fetches the latest state of ALL Shopify
+ * orders linked to the user and re-syncs each through the existing
+ * handleOrderUpdated / handleOrderCancelled pipeline.
+ *
+ * Uses Shopify's `ids` query parameter to batch-fetch orders efficiently
+ * (up to 50 per page), respecting rate limits.
+ *
+ * Returns: { total, synced, failed }
+ */
+export const refreshAllShopifyOrders = onCall(
+  {
+    region: "us-central1",
+    secrets: [tokenEncryptionKey],
+    timeoutSeconds: 300,
+  },
+  async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+      throw new HttpsError("unauthenticated", "Must be authenticated");
+    }
+
+    const db = getDb();
+
+    // 1. Get the Shopify connection
+    const connDoc = await db
+      .collection("shopify_connections")
+      .doc(userId)
+      .get();
+    if (!connDoc.exists || connDoc.data()?.status !== "active") {
+      throw new HttpsError(
+        "failed-precondition",
+        "No active Shopify connection",
+      );
+    }
+    const conn = connDoc.data()!;
+    const shopDomain = conn.shop_domain as string;
+
+    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shopDomain)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Invalid Shopify shop domain",
+      );
+    }
+
+    const encryptedToken = conn.access_token as string;
+    const accessToken = decrypt(
+      encryptedToken,
+      tokenEncryptionKey.value().trim(),
+    );
+
+    // 2. Load all Shopify sales for this user
+    const salesSnap = await db
+      .collection("sales")
+      .where("user_id", "==", userId)
+      .where("external_source", "==", "shopify")
+      .select("external_order_id", "order_status")
+      .get();
+
+    if (salesSnap.empty) {
+      return {total: 0, synced: 0, failed: 0};
+    }
+
+    // Collect external order IDs
+    const orderIdToSaleData = new Map<
+      string,
+      {saleDocId: string; orderStatus: number}
+    >();
+    for (const doc of salesSnap.docs) {
+      const data = doc.data();
+      const extId = data.external_order_id as string | undefined;
+      if (extId) {
+        orderIdToSaleData.set(extId, {
+          saleDocId: doc.id,
+          orderStatus: (data.order_status as number) ?? 1,
+        });
+      }
+    }
+
+    const allExternalIds = Array.from(orderIdToSaleData.keys());
+    const total = allExternalIds.length;
+    let synced = 0;
+    let failed = 0;
+
+    // 3. Batch-fetch from Shopify in chunks of 50 (Shopify ids filter limit)
+    const CHUNK = 50;
+    const apiBase =
+      `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}`;
+
+    for (let i = 0; i < allExternalIds.length; i += CHUNK) {
+      const chunk = allExternalIds.slice(i, i + CHUNK);
+      const qs = new URLSearchParams({
+        ids: chunk.join(","),
+        status: "any",
+        limit: String(CHUNK),
+      });
+      const url = `${apiBase}/orders.json?${qs.toString()}`;
+
+      let orders: Array<Record<string, unknown>>;
+      try {
+        const res = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": accessToken,
+          },
+        });
+
+        if (res.status === 401) {
+          await db
+            .collection("shopify_connections")
+            .doc(userId)
+            .update({status: "disconnected"});
+          throw new HttpsError(
+            "unauthenticated",
+            "Shopify token revoked. Please reconnect.",
+          );
+        }
+        if (!res.ok) {
+          const body = await res.text();
+          logger.error("Shopify bulk fetch error", {
+            status: res.status,
+            body: body.substring(0, 300),
+          });
+          failed += chunk.length;
+          continue;
+        }
+
+        const json = (await res.json()) as {
+          orders?: Array<Record<string, unknown>>;
+        };
+        orders = json.orders ?? [];
+      } catch (e) {
+        if (e instanceof HttpsError) throw e;
+        logger.error("Shopify bulk fetch exception", {error: String(e)});
+        failed += chunk.length;
+        continue;
+      }
+
+      // 4. Process each order through the existing handlers
+      for (const order of orders) {
+        try {
+          const shopifyOrder = order as unknown as ShopifyOrder;
+          const extId = String(shopifyOrder.id);
+          const saleInfo = orderIdToSaleData.get(extId);
+          const isCancelled = !!(
+            shopifyOrder.cancel_reason || shopifyOrder.cancelled_at
+          );
+
+          if (isCancelled && saleInfo && saleInfo.orderStatus !== 4) {
+            await handleOrderCancelled(userId, shopifyOrder);
+          } else {
+            await handleOrderUpdated(userId, shopifyOrder);
+          }
+          synced++;
+        } catch (e) {
+          logger.error("Failed to sync individual order", {
+            orderId: order.id,
+            error: String(e),
+          });
+          failed++;
+        }
+      }
+
+      // Small delay between Shopify API batches to respect rate limits
+      if (i + CHUNK < allExternalIds.length) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+
+    logger.info("Bulk Shopify order refresh completed", {
+      userId,
+      total,
+      synced,
+      failed,
+    });
+
+    return {total, synced, failed};
+  },
+);
+
+// ═══════════════════════════════════════════════════════════
+//  SCHEDULED: Reconcile Shopify orders every 5 minutes
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Scheduled Cloud Function that runs every 5 minutes and syncs
+ * recently-updated Shopify orders for all active connections.
+ *
+ * For each user with an active Shopify connection:
+ *  1. Read `last_reconciled_at` from the connection doc
+ *  2. Fetch orders from Shopify with `updated_at_min` (delta only)
+ *  3. Process each through handleOrderUpdated / handleOrderCancelled
+ *  4. Update `last_reconciled_at` on the connection doc
+ *
+ * This ensures missed/failed webhooks are caught automatically
+ * without needing to re-fetch all 100k+ orders every time.
+ */
+export const reconcileShopifyOrders = onSchedule(
+  {
+    schedule: "every 5 minutes",
+    timeZone: "UTC",
+    secrets: [tokenEncryptionKey],
+    timeoutSeconds: 300,
+    memory: "512MiB",
+  },
+  async () => {
+    const db = getDb();
+
+    // 1. Find all active Shopify connections
+    const connSnap = await db
+      .collection("shopify_connections")
+      .where("status", "==", "active")
+      .get();
+
+    if (connSnap.empty) {
+      logger.info("reconcileShopifyOrders: no active connections");
+      return;
+    }
+
+    for (const connDoc of connSnap.docs) {
+      const userId = connDoc.id;
+      const conn = connDoc.data();
+
+      try {
+        const shopDomain = conn.shop_domain as string;
+
+        // Validate shop domain to prevent SSRF
+        if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shopDomain)) {
+          logger.warn("reconcileShopifyOrders: invalid shop domain", {
+            userId,
+            shopDomain,
+          });
+          continue;
+        }
+
+        const encryptedToken = conn.access_token as string;
+        const accessToken = decrypt(
+          encryptedToken,
+          tokenEncryptionKey.value().trim(),
+        );
+
+        // 2. Determine the time window
+        //    Default to 10 minutes ago if no last_reconciled_at
+        //    (slightly overlapping with schedule to avoid gaps)
+        const now = new Date();
+        const lastReconciled = conn.last_reconciled_at?.toDate?.() ??
+          new Date(now.getTime() - 10 * 60 * 1000);
+
+        // Subtract 1 minute overlap for safety against clock skew
+        const updatedAtMin = new Date(
+          lastReconciled.getTime() - 60 * 1000,
+        );
+        const updatedAtMinISO = updatedAtMin.toISOString();
+
+        // 3. Fetch recently-updated orders from Shopify
+        const apiBaseUrl =
+          `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}`;
+
+        let allOrders: Array<Record<string, unknown>> = [];
+        const qs = new URLSearchParams({
+          updated_at_min: updatedAtMinISO,
+          status: "any",
+          limit: "250",
+        });
+        let url: string | null =
+          `${apiBaseUrl}/orders.json?${qs.toString()}`;
+
+        // Paginate (up to 20 pages = 5000 orders per 5-min window max)
+        for (let page = 0; page < 20 && url; page++) {
+          const res: Response = await fetch(url, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Shopify-Access-Token": accessToken,
+            },
+          });
+
+          if (res.status === 401) {
+            logger.warn("reconcileShopifyOrders: token revoked", {userId});
+            await connDoc.ref.update({status: "disconnected"});
+            break;
+          }
+          if (!res.ok) {
+            const body = await res.text();
+            logger.error("reconcileShopifyOrders: Shopify API error", {
+              userId,
+              status: res.status,
+              body: body.substring(0, 300),
+            });
+            break;
+          }
+
+          const json = (await res.json()) as {
+            orders?: Array<Record<string, unknown>>;
+          };
+          const orders = json.orders ?? [];
+          allOrders = allOrders.concat(orders);
+
+          // Parse Link header for pagination
+          const linkHeader: string | null = res.headers.get("link");
+          url = null;
+          if (linkHeader) {
+            const nextMatch: RegExpMatchArray | null = linkHeader.match(
+              /<([^>]+)>;\s*rel="next"/,
+            );
+            if (nextMatch) {
+              url = nextMatch[1];
+            }
+          }
+
+          // Respect rate limits
+          if (url) {
+            await new Promise((r) => setTimeout(r, 500));
+          }
+        }
+
+        // 4. Process each order
+        let synced = 0;
+        let failed = 0;
+        for (const order of allOrders) {
+          try {
+            const shopifyOrder = order as unknown as ShopifyOrder;
+            const isCancelled = !!(
+              shopifyOrder.cancel_reason || shopifyOrder.cancelled_at
+            );
+
+            if (isCancelled) {
+              await handleOrderCancelled(userId, shopifyOrder);
+            } else {
+              await handleOrderUpdated(userId, shopifyOrder);
+            }
+            synced++;
+          } catch (e) {
+            logger.error("reconcileShopifyOrders: order sync failed", {
+              userId,
+              orderId: order.id,
+              error: String(e),
+            });
+            failed++;
+          }
+        }
+
+        // 5. Update last_reconciled_at
+        await connDoc.ref.update({
+          last_reconciled_at: Timestamp.fromDate(now),
+        });
+
+        if (allOrders.length > 0) {
+          logger.info("reconcileShopifyOrders: user synced", {
+            userId,
+            fetched: allOrders.length,
+            synced,
+            failed,
+            updatedAtMin: updatedAtMinISO,
+          });
+        }
+      } catch (e) {
+        logger.error("reconcileShopifyOrders: user failed", {
+          userId,
+          error: String(e),
+        });
+      }
+    }
+  },
+);
 
 // ═══════════════════════════════════════════════════════════
 //  MIGRATION: Backfill fulfillment_status for existing Shopify sales

@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../../../l10n/app_localizations.dart';
+import '../../shopify/providers/shopify_connection_provider.dart';
 
 enum DashboardPeriod {
   today,
@@ -168,8 +170,20 @@ class DashboardState {
 
   const DashboardState({required this.period, required this.range});
 
-  static DashboardDateRange _computeRange(DashboardPeriod period) {
-    final now = DateTime.now();
+  static DashboardDateRange _computeRange(DashboardPeriod period, {String? timezone}) {
+    // Use the store timezone for period boundaries so they match Shopify.
+    // Falls back to device-local time when no timezone is configured.
+    late final DateTime now;
+    if (timezone != null) {
+      try {
+        final loc = tz.getLocation(timezone);
+        now = tz.TZDateTime.now(loc);
+      } catch (_) {
+        now = DateTime.now();
+      }
+    } else {
+      now = DateTime.now();
+    }
     final today = DateTime(now.year, now.month, now.day);
 
     DateTime start;
@@ -185,13 +199,13 @@ class DashboardState {
             .subtract(const Duration(microseconds: 1));
         isLive = false;
       case DashboardPeriod.last7Days:
-        start = today.subtract(const Duration(days: 6));
+        start = today.subtract(const Duration(days: 7));
       case DashboardPeriod.last30Days:
-        start = today.subtract(const Duration(days: 29));
+        start = today.subtract(const Duration(days: 30));
       case DashboardPeriod.last90Days:
-        start = today.subtract(const Duration(days: 89));
+        start = today.subtract(const Duration(days: 90));
       case DashboardPeriod.last365Days:
-        start = today.subtract(const Duration(days: 364));
+        start = today.subtract(const Duration(days: 365));
       case DashboardPeriod.lastMonth:
         start = DateTime(now.year, now.month - 1, 1);
         end = DateTime(now.year, now.month, 0, 23, 59, 59);
@@ -246,8 +260,8 @@ class DashboardState {
     );
   }
 
-  factory DashboardState.fromPeriod(DashboardPeriod period) {
-    return DashboardState(period: period, range: _computeRange(period));
+  factory DashboardState.fromPeriod(DashboardPeriod period, {String? timezone}) {
+    return DashboardState(period: period, range: _computeRange(period, timezone: timezone));
   }
 
   factory DashboardState.customRange(DateTime start, DateTime end) {
@@ -259,13 +273,16 @@ class DashboardState {
 }
 
 class DashboardStateNotifier extends Notifier<DashboardState> {
+  String? get _shopTimezone =>
+      ref.read(shopifyConnectionProvider).value?.shopTimezone;
+
   @override
   DashboardState build() =>
-      DashboardState.fromPeriod(DashboardPeriod.today);
+      DashboardState.fromPeriod(DashboardPeriod.today, timezone: _shopTimezone);
 
   void setPeriod(DashboardPeriod period) {
     if (period == DashboardPeriod.custom) return;
-    state = DashboardState.fromPeriod(period);
+    state = DashboardState.fromPeriod(period, timezone: _shopTimezone);
   }
 
   void setCustomRange(DateTime start, DateTime end) {

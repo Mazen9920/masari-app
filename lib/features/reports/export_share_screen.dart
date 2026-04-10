@@ -10,14 +10,7 @@ import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/export_providers.dart';
 import '../../core/services/share_service.dart';
 import '../../shared/utils/money_utils.dart';
-
-const _plExcludedCats = {
-  'cat_investments',
-  'cat_loan_received',
-  'cat_loan_repayment',
-  'cat_equity_injection',
-  'cat_owner_withdrawal',
-};
+import '../../shared/utils/report_constants.dart';
 
 class ExportShareScreen extends ConsumerStatefulWidget {
   const ExportShareScreen({super.key});
@@ -72,7 +65,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
     final l10n = AppLocalizations.of(context)!;
     final transactions = ref.read(transactionsProvider).value ?? [];
     final sales = ref.read(salesProvider).value ?? [];
-    final products = ref.read(inventoryProvider).value ?? [];
+    final products = ref.read(filteredInventoryProvider).value ?? [];
     final bs = ref.read(balanceSheetEntriesProvider);
     final purchases = ref.read(purchasesProvider).value ?? [];
     final settings = ref.read(appSettingsProvider);
@@ -158,7 +151,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
 
     // Filter out investments for P&L
     final plTransactions = transactions.where((tx) =>
-        !_plExcludedCats.contains(tx.categoryId)).toList();
+        !plExcludedCats.contains(tx.categoryId)).toList();
 
     final now = DateTime.now();
     late DateTime periodStart;

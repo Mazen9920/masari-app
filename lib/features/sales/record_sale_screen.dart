@@ -708,7 +708,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
 
   /// Opens a bottom sheet with the full product list + search for picking a product.
   void _showInventoryPicker(int idx) {
-    final products = ref.read(inventoryProvider).value ?? [];
+    final products = ref.read(filteredInventoryProvider).value ?? [];
     final sellable = products.where((p) => !p.isMaterial).toList();
     if (sellable.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -852,6 +852,8 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                                                     fit: BoxFit.cover,
                                                     width: 42,
                                                     height: 42,
+                                                    memCacheWidth: 84,
+                                                    memCacheHeight: 84,
                                                   ),
                                                 )
                                               : CachedNetworkImage(
@@ -859,6 +861,8 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                                                   fit: BoxFit.cover,
                                                   width: 42,
                                                   height: 42,
+                                                  memCacheWidth: 84,
+                                                  memCacheHeight: 84,
                                                   placeholder: (_, _) => Icon(
                                                     product.icon,
                                                     color: product.color,
@@ -1627,23 +1631,21 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
         (t) => t!.saleId == sale.id && t.categoryId == 'cat_cogs',
         orElse: () => null,
       );
-      // Sync excludeFromPL with the current payment status so
-      // cash-basis reports stay accurate after edits.
-      final isUnpaidOrPartial = sale.paymentStatus == PaymentStatus.unpaid ||
-          sale.paymentStatus == PaymentStatus.partial;
+      // Accrual accounting: revenue recognised at point of sale,
+      // regardless of payment status. Never exclude from P&L.
       if (revTxn != null) {
         transNotifier.updateTransaction(revTxn.copyWith(
           amount: sale.netRevenue,
           dateTime: sale.date,
           title: 'Sale${sale.customerName != null ? ' to ${sale.customerName}' : ''}',
-          excludeFromPL: isUnpaidOrPartial,
+          excludeFromPL: false,
         ));
       }
       if (cogsTxn != null) {
         transNotifier.updateTransaction(cogsTxn.copyWith(
           amount: -sale.totalCogs,
           dateTime: sale.date,
-          excludeFromPL: isUnpaidOrPartial,
+          excludeFromPL: false,
         ));
       }
 
@@ -1655,21 +1657,21 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
       if (sale.shippingCost > 0) {
         if (shipTxn != null) {
           transNotifier.updateTransaction(shipTxn.copyWith(
-            amount: -sale.shippingCost,
+            amount: sale.shippingCost,
             dateTime: sale.date,
-            excludeFromPL: isUnpaidOrPartial,
+            excludeFromPL: false,
           ));
         } else {
           final newShipTxn = Transaction(
             id: 'sale_ship_${sale.id}',
             userId: uid,
             title: 'Shipping — ${sale.customerName ?? 'Sale'}',
-            amount: -sale.shippingCost,
+            amount: sale.shippingCost,
             dateTime: sale.date,
             categoryId: 'cat_shipping',
-            note: 'Auto-generated shipping expense',
+            note: 'Auto-generated shipping revenue',
             saleId: sale.id,
-            excludeFromPL: isUnpaidOrPartial,
+            excludeFromPL: false,
             createdAt: DateTime.now(),
           );
           transNotifier.addTransaction(newShipTxn);
@@ -1680,11 +1682,8 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
     } else {
       // Auto-create Revenue + COGS transactions for P&L integration
       // Revenue = netRevenue (subtotal − discount), excluding tax
-      // (collected liability) and shipping (separate expense).
-      // Unpaid/partial sales: exclude from P&L and cash-basis reports
-      // so that revenue is only recognised when cash is actually received.
-      final isUnpaidOrPartial = sale.paymentStatus == PaymentStatus.unpaid ||
-          sale.paymentStatus == PaymentStatus.partial;
+      // (collected liability) and shipping (separate revenue transaction).
+      // Accrual accounting: always include in P&L at point of sale.
       final revTxn = Transaction(
         id: 'sale_rev_${sale.id}',
         userId: uid,
@@ -1695,7 +1694,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
         note: sale.notes,
         paymentMethod: sale.paymentMethod,
         saleId: sale.id,
-        excludeFromPL: isUnpaidOrPartial,
+        excludeFromPL: false,
         createdAt: DateTime.now(),
       );
       final cogsTxn = Transaction(
@@ -1707,23 +1706,23 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
         categoryId: 'cat_cogs',
         note: 'Auto-generated from sale',
         saleId: sale.id,
-        excludeFromPL: isUnpaidOrPartial,
+        excludeFromPL: false,
         createdAt: DateTime.now(),
       );
 
-      // Shipping expense transaction (if applicable)
+      // Shipping revenue transaction (if applicable)
       final List<Transaction> saleTxns = [revTxn, cogsTxn];
       if (sale.shippingCost > 0) {
         saleTxns.add(Transaction(
           id: 'sale_ship_${sale.id}',
           userId: uid,
           title: 'Shipping — ${sale.customerName ?? 'Sale'}',
-          amount: -sale.shippingCost,
+          amount: sale.shippingCost,
           dateTime: sale.date,
           categoryId: 'cat_shipping',
-          note: 'Auto-generated shipping expense',
+          note: 'Auto-generated shipping revenue',
           saleId: sale.id,
-          excludeFromPL: isUnpaidOrPartial,
+          excludeFromPL: false,
           createdAt: DateTime.now(),
         ));
       }

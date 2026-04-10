@@ -36,6 +36,13 @@ class NotificationService {
 
     if (kDebugMode) debugPrint('[FCM] Permission: ${settings.authorizationStatus}');
 
+    // iOS: show notification banners even when app is in foreground
+    await _messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
     // Get and persist the device token
     await _saveToken();
 

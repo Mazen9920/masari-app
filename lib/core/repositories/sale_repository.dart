@@ -20,7 +20,21 @@ class StockDeduction {
 /// Contract for sale data operations.
 abstract class SaleRepository {
   /// Fetches all sales for the current user, optionally paginated.
-  Future<Result<List<Sale>>> getSales({int? limit, String? startAfterId});
+  /// When [startDate] and/or [endDate] are provided the query is bounded
+  /// server-side so only matching documents are read from Firestore.
+  Future<Result<List<Sale>>> getSales({
+    int? limit,
+    String? startAfterId,
+    DateTime? startDate,
+    DateTime? endDate,
+  });
+
+  /// Fetches all sales whose date falls within [start, end].
+  /// Uses server-side date filtering (no pagination needed for bounded ranges).
+  Future<Result<List<Sale>>> getSalesInRange({
+    required DateTime start,
+    required DateTime end,
+  });
 
   /// Fetches a single sale by ID.
   Future<Result<Sale>> getSaleById(String id);
@@ -56,4 +70,7 @@ abstract class SaleRepository {
 
   /// Deletes a sale by ID.
   Future<Result<void>> deleteSale(String id);
+
+  /// Clears any in-memory cache for range queries.
+  void clearRangeCache() {}
 }

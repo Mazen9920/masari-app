@@ -8,7 +8,9 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/app_settings_provider.dart';
 import '../../../core/navigation/app_router.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/report_constants.dart';
 import '../providers/dashboard_state_provider.dart';
+import '../providers/dashboard_data_provider.dart';
 import '../../../shared/models/category_data.dart';
 
 /// A data-driven insight generated from real financial data.
@@ -48,17 +50,8 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
     final currency = ref.watch(appSettingsProvider).currency;
     final fmt = NumberFormat.compactCurrency(symbol: '$currency ');
 
-    final allTxns = ref.watch(transactionsProvider).value ?? [];
-    final inventory = ref.watch(inventoryProvider).value ?? [];
-
-    // Categories excluded from P&L (CF investing activities / BS only)
-    const plExcludedCats = {
-      'cat_investments',
-      'cat_loan_received',
-      'cat_loan_repayment',
-      'cat_equity_injection',
-      'cat_owner_withdrawal',
-    };
+    final allTxns = ref.watch(dashboardDataProvider).value?.transactions ?? [];
+    final inventory = ref.watch(filteredInventoryProvider).value ?? [];
 
     bool inPL(t) => !t.excludeFromPL && !plExcludedCats.contains(t.categoryId);
 
@@ -78,25 +71,38 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
 
     // Revenue (accrual basis — operating income only)
     // Refund transactions (negative cat_sales_revenue) reduce revenue, not add to expenses.
-    final curRevenue = curTxns
-        .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount.abs())
-      + curTxns
-        .where((t) => !t.isIncome && (t.categoryId == 'cat_sales_revenue'))
-        .fold<double>(0, (sum, t) => sum - t.amount.abs());
-    final prevRevenue = prevTxns
-        .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount.abs())
-      + prevTxns
-        .where((t) => !t.isIncome && (t.categoryId == 'cat_sales_revenue'))
-        .fold<double>(0, (sum, t) => sum - t.amount.abs());
-    // Expenses: exclude refund txns (cat_sales_revenue) which reduce revenue instead
-    final curExpenses = curTxns
-        .where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')
-        .fold<double>(0, (sum, t) => sum + t.amount.abs());
-    final prevExpenses = prevTxns
-        .where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')
-        .fold<double>(0, (sum, t) => sum + t.amount.abs());
+    // Revenue: signed sales_rev + signed shipping + other income.
+    // Exclude cat_cogs (it's a cost, not revenue).
+    double _revenue(List<dynamic> txns) {
+      double r = 0;
+      for (final t in txns) {
+        if (t.categoryId == 'cat_cogs') continue;
+        if (t.categoryId == 'cat_sales_revenue' || t.categoryId == 'cat_shipping') {
+          r += t.amount; // signed: positive = income, negative = refund
+        } else if (t.isIncome) {
+          r += t.amount.abs();
+        }
+      }
+      return r;
+    }
+    // Expenses: exclude sales/shipping reversals (reduce revenue) and handle COGS reversals.
+    double _expenses(List<dynamic> txns) {
+      double e = 0;
+      for (final t in txns) {
+        if (t.categoryId == 'cat_cogs') {
+          e -= t.amount; // -(-X)=+X for cost, -(+X)=-X for reversal
+        } else if (!t.isIncome &&
+            t.categoryId != 'cat_sales_revenue' &&
+            t.categoryId != 'cat_shipping') {
+          e += t.amount.abs();
+        }
+      }
+      return e;
+    }
+    final curRevenue = _revenue(curTxns);
+    final prevRevenue = _revenue(prevTxns);
+    final curExpenses = _expenses(curTxns);
+    final prevExpenses = _expenses(prevTxns);
 
     final vsLabel = ds.period.localizedVsLabel(l10n);
 
@@ -104,13 +110,21 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
     if (curTxns.isNotEmpty && prevTxns.isNotEmpty) {
       final curByCategory = <String, double>{};
       final prevByCategory = <String, double>{};
-      for (final t in curTxns.where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')) {
-        curByCategory[t.categoryId] =
-            (curByCategory[t.categoryId] ?? 0) + t.amount.abs();
+      for (final t in curTxns) {
+        if (t.categoryId == 'cat_sales_revenue' || t.categoryId == 'cat_shipping') continue;
+        if (t.categoryId == 'cat_cogs') {
+          curByCategory[t.categoryId] = (curByCategory[t.categoryId] ?? 0) - t.amount;
+        } else if (!t.isIncome) {
+          curByCategory[t.categoryId] = (curByCategory[t.categoryId] ?? 0) + t.amount.abs();
+        }
       }
-      for (final t in prevTxns.where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')) {
-        prevByCategory[t.categoryId] =
-            (prevByCategory[t.categoryId] ?? 0) + t.amount.abs();
+      for (final t in prevTxns) {
+        if (t.categoryId == 'cat_sales_revenue' || t.categoryId == 'cat_shipping') continue;
+        if (t.categoryId == 'cat_cogs') {
+          prevByCategory[t.categoryId] = (prevByCategory[t.categoryId] ?? 0) - t.amount;
+        } else if (!t.isIncome) {
+          prevByCategory[t.categoryId] = (prevByCategory[t.categoryId] ?? 0) + t.amount.abs();
+        }
       }
 
       String? spikeCat;

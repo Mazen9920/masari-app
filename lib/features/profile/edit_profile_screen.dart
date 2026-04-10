@@ -183,6 +183,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                     width: 100,
                                     height: 100,
                                     fit: BoxFit.cover,
+                                    memCacheWidth: 200,
+                                    memCacheHeight: 200,
                                     placeholder: (_, _) => Center(
                                       child: Text(profile.initials, style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: AppColors.primaryNavy)),
                                     ),

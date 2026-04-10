@@ -243,11 +243,25 @@ export const shopifyHealthCheck = onSchedule(
           // Connection is healthy — also ensure all webhooks are registered
           await reconcileWebhooks(shopDomain, accessToken, doc);
 
-          await doc.ref.update({
+          // Sync shop timezone if not already stored
+          const updateFields: Record<string, unknown> = {
             health_status: "healthy",
             health_check_at: FieldValue.serverTimestamp(),
             health_error: null,
-          });
+          };
+          if (!data.shop_timezone) {
+            try {
+              const shopBody = await response.json() as {
+                shop: {iana_timezone?: string};
+              };
+              if (shopBody.shop?.iana_timezone) {
+                updateFields.shop_timezone = shopBody.shop.iana_timezone;
+              }
+            } catch (_) {
+              // response already consumed or parse error — skip
+            }
+          }
+          await doc.ref.update(updateFields);
           healthy++;
         } else {
           // Unexpected status — log but don't disconnect

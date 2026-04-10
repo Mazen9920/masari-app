@@ -23,8 +23,9 @@ class FirestoreConversionOrderRepository implements ConversionOrderRepository {
   Future<Result<List<ConversionOrder>>> getOrders({int? limit}) async {
     try {
       Query<Map<String, dynamic>> query =
-          _collection.where('user_id', isEqualTo: _uid);
-      if (limit != null) query = query.limit(limit);
+          _collection.where('user_id', isEqualTo: _uid)
+              .orderBy('date', descending: true);
+      query = query.limit(limit ?? 500);
 
       final snapshot = await query.get();
       final orders = snapshot.docs.map((doc) {
@@ -32,8 +33,6 @@ class FirestoreConversionOrderRepository implements ConversionOrderRepository {
         data['id'] = doc.id;
         return ConversionOrder.fromJson(data);
       }).toList();
-
-      orders.sort((a, b) => b.date.compareTo(a.date));
       return Result.success(orders);
     } catch (e) {
       return Result.failure( 'Failed to fetch conversion orders: $e');
@@ -47,6 +46,8 @@ class FirestoreConversionOrderRepository implements ConversionOrderRepository {
       final snapshot = await _collection
           .where('user_id', isEqualTo: _uid)
           .where('product_id', isEqualTo: productId)
+          .orderBy('date', descending: true)
+          .limit(500)
           .get();
 
       final orders = snapshot.docs.map((doc) {
@@ -54,8 +55,6 @@ class FirestoreConversionOrderRepository implements ConversionOrderRepository {
         data['id'] = doc.id;
         return ConversionOrder.fromJson(data);
       }).toList();
-
-      orders.sort((a, b) => b.date.compareTo(a.date));
       return Result.success(orders);
     } catch (e) {
       return Result.failure( 'Failed to fetch conversion orders: $e');

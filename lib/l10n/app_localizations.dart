@@ -3186,6 +3186,18 @@ abstract class AppLocalizations {
   /// **'Fixed dates'**
   String get fixedDates;
 
+  /// No description provided for @categoryLast.
+  ///
+  /// In en, this message translates to:
+  /// **'Last'**
+  String get categoryLast;
+
+  /// No description provided for @categoryPeriodToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Period to date'**
+  String get categoryPeriodToDate;
+
   /// No description provided for @apply.
   ///
   /// In en, this message translates to:
@@ -3287,6 +3299,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Custom'**
   String get periodCustom;
+
+  /// No description provided for @periodSingleDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Single Day'**
+  String get periodSingleDay;
+
+  /// No description provided for @periodDateRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Date Range'**
+  String get periodDateRange;
 
   /// No description provided for @vsYesterday.
   ///
@@ -9558,6 +9582,18 @@ abstract class AppLocalizations {
   /// **'Hide Shopify products with draft status'**
   String get hideDraftedProductsDesc;
 
+  /// No description provided for @hideShopifyBundles.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide bundles'**
+  String get hideShopifyBundles;
+
+  /// No description provided for @hideShopifyBundlesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide Shopify products with bundle type'**
+  String get hideShopifyBundlesDesc;
+
   /// No description provided for @inventorySyncLabel.
   ///
   /// In en, this message translates to:
@@ -13393,6 +13429,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This is tax you collected on behalf of the government — it is not revenue.'**
   String get taxCollectedNote;
+
+  /// No description provided for @incomeSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Income Sources'**
+  String get incomeSources;
+
+  /// No description provided for @systemCategories.
+  ///
+  /// In en, this message translates to:
+  /// **'System Categories'**
+  String get systemCategories;
+
+  /// No description provided for @financingEquity.
+  ///
+  /// In en, this message translates to:
+  /// **'Financing & Equity'**
+  String get financingEquity;
+
+  /// No description provided for @nCategoriesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} categories'**
+  String nCategoriesCount(int count);
+
+  /// No description provided for @autoManaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-managed'**
+  String get autoManaged;
+
+  /// No description provided for @budgetPerMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount}/mo'**
+  String budgetPerMonth(String amount);
+
+  /// No description provided for @expenseBudgets.
+  ///
+  /// In en, this message translates to:
+  /// **'Expense Budgets'**
+  String get expenseBudgets;
+
+  /// No description provided for @incomeTargets.
+  ///
+  /// In en, this message translates to:
+  /// **'Income Targets'**
+  String get incomeTargets;
+
+  /// No description provided for @budgetUsedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Budget Used'**
+  String get budgetUsedLabel;
+
+  /// No description provided for @incomeProgressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Income Progress'**
+  String get incomeProgressLabel;
+
+  /// No description provided for @monthlyTargetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly Target'**
+  String get monthlyTargetLabel;
+
+  /// No description provided for @metStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Met'**
+  String get metStatus;
+
+  /// No description provided for @belowStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Below'**
+  String get belowStatus;
+
+  /// No description provided for @targetMetBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Target Met!'**
+  String get targetMetBadge;
+
+  /// No description provided for @earnedOf.
+  ///
+  /// In en, this message translates to:
+  /// **'Earned {amount} of {target}'**
+  String earnedOf(String amount, String target);
+
+  /// No description provided for @noBudgetsSet.
+  ///
+  /// In en, this message translates to:
+  /// **'No expense budgets set yet'**
+  String get noBudgetsSet;
+
+  /// No description provided for @noTargetsSet.
+  ///
+  /// In en, this message translates to:
+  /// **'No income targets set yet'**
+  String get noTargetsSet;
+
+  /// No description provided for @currentEarnings.
+  ///
+  /// In en, this message translates to:
+  /// **'CURRENT EARNINGS'**
+  String get currentEarnings;
+
+  /// No description provided for @percentEarned.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% Earned'**
+  String percentEarned(int percent);
+
+  /// No description provided for @approachingTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Approaching target!'**
+  String get approachingTarget;
+
+  /// No description provided for @systemCategoryInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'This category is auto-managed by the system'**
+  String get systemCategoryInfo;
+
+  /// No description provided for @monthlyEarningTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly Earning Target'**
+  String get monthlyEarningTarget;
+
+  /// No description provided for @enableMonthlyTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable Monthly Target'**
+  String get enableMonthlyTarget;
+
+  /// No description provided for @targetAlertHint.
+  ///
+  /// In en, this message translates to:
+  /// **'We will track your progress toward this earning target.'**
+  String get targetAlertHint;
+
+  /// No description provided for @refreshFromShopify.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh from Shopify'**
+  String get refreshFromShopify;
+
+  /// No description provided for @refreshingFromShopify.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing with Shopify…'**
+  String get refreshingFromShopify;
+
+  /// No description provided for @refreshFromShopifySuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Order synced with Shopify'**
+  String get refreshFromShopifySuccess;
+
+  /// No description provided for @refreshFromShopifyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to sync with Shopify'**
+  String get refreshFromShopifyFailed;
 }
 
 class _AppLocalizationsDelegate

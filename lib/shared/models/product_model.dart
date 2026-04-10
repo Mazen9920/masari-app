@@ -383,6 +383,12 @@ class Product {
   /// Shopify product status: 'active', 'draft', or 'archived'.
   final String? shopifyStatus;
 
+  /// Shopify product type (e.g. 'bundle', 'gift_card', etc.).
+  final String? shopifyProductType;
+
+  /// Comma-separated Shopify product tags (e.g. 'bundle, sale').
+  final String? shopifyTags;
+
   /// Up to 3 user-defined option types (e.g. Color, Size, Material).
   final List<ProductOption> options;
 
@@ -415,6 +421,8 @@ class Product {
     this.updatedAt,
     this.shopifyProductId,
     this.shopifyStatus,
+    this.shopifyProductType,
+    this.shopifyTags,
     this.options = const [],
     this.variants = const [],
     this.breakdownRecipe,
@@ -526,6 +534,8 @@ class Product {
     DateTime? updatedAt,
     String? shopifyProductId,
     String? shopifyStatus,
+    String? shopifyProductType,
+    String? shopifyTags,
     List<ProductOption>? options,
     List<ProductVariant>? variants,
     BreakdownRecipe? breakdownRecipe,
@@ -548,6 +558,8 @@ class Product {
       updatedAt: updatedAt ?? this.updatedAt,
       shopifyProductId: shopifyProductId ?? this.shopifyProductId,
       shopifyStatus: shopifyStatus ?? this.shopifyStatus,
+      shopifyProductType: shopifyProductType ?? this.shopifyProductType,
+      shopifyTags: shopifyTags ?? this.shopifyTags,
       options: options ?? this.options,
       variants: variants ?? this.variants,
       breakdownRecipe: breakdownRecipe ?? this.breakdownRecipe,
@@ -575,6 +587,8 @@ class Product {
       if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
       if (shopifyProductId != null) 'shopify_product_id': shopifyProductId,
       if (shopifyStatus != null) 'shopify_status': shopifyStatus,
+      if (shopifyProductType != null) 'shopify_product_type': shopifyProductType,
+      if (shopifyTags != null) 'shopify_tags': shopifyTags,
       'options': options.map((o) => o.toJson()).toList(),
       'variants': variants.map((v) => v.toJson()).toList(),
       if (breakdownRecipe != null)
@@ -651,6 +665,8 @@ class Product {
           : null,
       shopifyProductId: json['shopify_product_id'] as String?,
       shopifyStatus: json['shopify_status'] as String?,
+      shopifyProductType: json['shopify_product_type'] as String?,
+      shopifyTags: json['shopify_tags'] as String?,
       options: optionsList,
       variants: variantsList,
       breakdownRecipe: json['breakdown_recipe'] != null

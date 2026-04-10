@@ -26,7 +26,7 @@ class FirestoreCategoryRepository implements CategoryRepository {
   Future<Result<List<CategoryData>>> getCategories() async {
     try {
       final snapshot =
-          await _collection.where('user_id', isEqualTo: _uid).get();
+          await _collection.where('user_id', isEqualTo: _uid).limit(200).get();
 
       final custom = snapshot.docs.map((doc) {
         final data = doc.data();
@@ -34,11 +34,11 @@ class FirestoreCategoryRepository implements CategoryRepository {
         return CategoryData.fromJson(data);
       }).toList();
 
-      // Merge: user overrides replace system defaults by name
-      final customNames = custom.map((c) => c.name).toSet();
+      // Merge: user overrides replace system defaults by ID
+      final customIds = custom.map((c) => c.id).toSet();
       final merged = [
         for (final s in CategoryData.all)
-          if (!customNames.contains(s.name)) s,
+          if (!customIds.contains(s.id)) s,
         ...custom,
       ];
       return Result.success(merged);
@@ -104,18 +104,15 @@ class FirestoreCategoryRepository implements CategoryRepository {
 
   @override
   Future<Result<void>> deleteCategory(String id) async {
+    // System/built-in categories don't have Firestore docs — skip the round-trip.
+    final isBuiltIn = CategoryData.all.any((c) => c.id == id);
+    if (isBuiltIn) return Result.success(null);
+
     try {
-      final doc = _collection.doc(id);
-      final snapshot = await doc.get();
-
-      if (!snapshot.exists) {
-        return Result.failure('Category "$id" not found');
-      }
-
-      await doc.delete();
+      await _collection.doc(id).delete();
       return Result.success(null);
     } catch (e) {
-      return Result.failure( 'Failed to delete category: $e');
+      return Result.failure('Failed to delete category: $e');
     }
   }
 }

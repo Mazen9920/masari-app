@@ -161,7 +161,25 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     
     String finalCategoryId = _selectedCategoryId ?? '';
     if (customCatText.isNotEmpty) {
-      finalCategoryId = 'cat_uncategorized';
+      // Auto-create a custom category from the typed text
+      final catId = 'cat_${customCatText.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
+      final existing = CategoryData.findById(catId);
+      if (existing.id == 'cat_other') {
+        // Category doesn't exist yet — create it
+        final newCat = CategoryData(
+          id: catId,
+          userId: '',
+          name: customCatText,
+          iconName: 'grid_view',
+          colorValue: 0xFF9E9E9E,
+          bgColorValue: 0xFFF5F5F5,
+          isExpense: _isExpense,
+        );
+        await ref.read(categoriesProvider.notifier).addCategory(newCat);
+        finalCategoryId = catId;
+      } else {
+        finalCategoryId = catId;
+      }
     }
 
     final category = CategoryData.findById(finalCategoryId);

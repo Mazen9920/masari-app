@@ -1690,6 +1690,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get fixedDates => 'تواريخ محددة';
 
   @override
+  String get categoryLast => 'آخر';
+
+  @override
+  String get categoryPeriodToDate => 'حتى تاريخه';
+
+  @override
   String get apply => 'تطبيق';
 
   @override
@@ -1739,6 +1745,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get periodCustom => 'مخصص';
+
+  @override
+  String get periodSingleDay => 'يوم واحد';
+
+  @override
+  String get periodDateRange => 'نطاق تواريخ';
 
   @override
   String get vsYesterday => 'مقارنة بأمس';
@@ -5282,6 +5294,12 @@ class AppLocalizationsAr extends AppLocalizations {
       'إخفاء منتجات Shopify اللي حالتها مسودة';
 
   @override
+  String get hideShopifyBundles => 'إخفاء الحزم';
+
+  @override
+  String get hideShopifyBundlesDesc => 'إخفاء منتجات Shopify اللي نوعها حزمة';
+
+  @override
   String get inventorySyncLabel => 'مزامنة المخزون';
 
   @override
@@ -7434,4 +7452,96 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get taxCollectedNote =>
       'هذه ضريبة حصّلتها نيابةً عن الحكومة — وليست إيراداً.';
+
+  @override
+  String get incomeSources => 'مصادر الدخل';
+
+  @override
+  String get systemCategories => 'فئات النظام';
+
+  @override
+  String get financingEquity => 'التمويل وحقوق الملكية';
+
+  @override
+  String nCategoriesCount(int count) {
+    return '$count فئات';
+  }
+
+  @override
+  String get autoManaged => 'مُدار تلقائياً';
+
+  @override
+  String budgetPerMonth(String amount) {
+    return '$amount/شهر';
+  }
+
+  @override
+  String get expenseBudgets => 'ميزانيات المصروفات';
+
+  @override
+  String get incomeTargets => 'أهداف الدخل';
+
+  @override
+  String get budgetUsedLabel => 'المستخدم من الميزانية';
+
+  @override
+  String get incomeProgressLabel => 'تقدم الدخل';
+
+  @override
+  String get monthlyTargetLabel => 'الهدف الشهري';
+
+  @override
+  String get metStatus => 'تم';
+
+  @override
+  String get belowStatus => 'أقل';
+
+  @override
+  String get targetMetBadge => 'تم تحقيق الهدف!';
+
+  @override
+  String earnedOf(String amount, String target) {
+    return 'تم جمع $amount من $target';
+  }
+
+  @override
+  String get noBudgetsSet => 'لم يتم تعيين ميزانيات مصروفات بعد';
+
+  @override
+  String get noTargetsSet => 'لم يتم تعيين أهداف دخل بعد';
+
+  @override
+  String get currentEarnings => 'الأرباح الحالية';
+
+  @override
+  String percentEarned(int percent) {
+    return '$percent% مكتسب';
+  }
+
+  @override
+  String get approachingTarget => 'اقتراب من الهدف!';
+
+  @override
+  String get systemCategoryInfo => 'هذه الفئة تدار تلقائياً بواسطة النظام';
+
+  @override
+  String get monthlyEarningTarget => 'هدف الدخل الشهري';
+
+  @override
+  String get enableMonthlyTarget => 'تفعيل الهدف الشهري';
+
+  @override
+  String get targetAlertHint => 'سنتتبع تقدمك نحو هدف الدخل هذا.';
+
+  @override
+  String get refreshFromShopify => 'تحديث من Shopify';
+
+  @override
+  String get refreshingFromShopify => 'جاري المزامنة مع Shopify…';
+
+  @override
+  String get refreshFromShopifySuccess => 'تم مزامنة الطلب مع Shopify';
+
+  @override
+  String get refreshFromShopifyFailed => 'فشل المزامنة مع Shopify';
 }

@@ -63,23 +63,20 @@ class FirestoreShopifySyncLogRepository implements ShopifySyncLogRepository {
   @override
   Future<Result<void>> clearLogs() async {
     try {
-      final snapshot =
-          await _collection.where('user_id', isEqualTo: _uid).get();
-      if (snapshot.docs.isEmpty) return Result.success(null);
-      // Batch delete in chunks of 500 (Firestore limit)
-      const batchLimit = 500;
-      var batch = _firestore.batch();
-      var count = 0;
-      for (final doc in snapshot.docs) {
-        batch.delete(doc.reference);
-        count++;
-        if (count >= batchLimit) {
-          await batch.commit();
-          batch = _firestore.batch();
-          count = 0;
+      // Paginated delete to avoid loading all docs into memory at once
+      const pageSize = 500;
+      while (true) {
+        final snapshot = await _collection
+            .where('user_id', isEqualTo: _uid)
+            .limit(pageSize)
+            .get();
+        if (snapshot.docs.isEmpty) break;
+        final batch = _firestore.batch();
+        for (final doc in snapshot.docs) {
+          batch.delete(doc.reference);
         }
+        await batch.commit();
       }
-      if (count > 0) await batch.commit();
       return Result.success(null);
     } catch (e) {
       return Result.failure( 'Failed to clear sync logs: $e');

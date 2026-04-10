@@ -548,6 +548,30 @@ export const storeAuthCallback = onRequest(
         }
       }
 
+      // ── 5b. Fetch shop timezone ────────────────────────
+      let shopTimezone: string | null = null;
+      try {
+        const shopRes = await fetch(
+          `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/shop.json`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Shopify-Access-Token": tokenData.access_token,
+            },
+          },
+        );
+        if (shopRes.ok) {
+          const shopData = (await shopRes.json()) as {
+            shop: {iana_timezone?: string};
+          };
+          shopTimezone = shopData.shop?.iana_timezone || null;
+          logger.info("Fetched shop timezone", {shopTimezone});
+        }
+      } catch (tzErr) {
+        logger.warn("Failed to fetch shop timezone", {tzErr});
+      }
+
       // ── 6. Save complete connection ──────────────────────
       // Full .set() (no merge) — replaces the pending doc entirely,
       // which also removes the temporary `nonce` field.
@@ -567,6 +591,7 @@ export const storeAuthCallback = onRequest(
         connected_at: FieldValue.serverTimestamp(),
         status: "active",
         updated_at: FieldValue.serverTimestamp(),
+        ...(shopTimezone ? {shop_timezone: shopTimezone} : {}),
       });
 
       logger.info("Shopify OAuth completed", {

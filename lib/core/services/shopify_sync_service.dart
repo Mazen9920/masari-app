@@ -1,5 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../shared/models/sale_model.dart';
 import '../../shared/models/product_model.dart';
@@ -823,6 +823,20 @@ class ShopifySyncService {
         productChanged = true;
       }
 
+      // Sync product type (e.g. 'bundle')
+      final shopifyProductType = sp['product_type']?.toString();
+      if (shopifyProductType != null &&
+          product.shopifyProductType != shopifyProductType) {
+        productChanged = true;
+      }
+
+      // Sync product tags
+      final shopifyTags = sp['tags']?.toString();
+      if (shopifyTags != null &&
+          product.shopifyTags != shopifyTags) {
+        productChanged = true;
+      }
+
       // Sync product image
       final imageData = sp['image'];
       final shopifyImageUrl = imageData is Map
@@ -991,6 +1005,8 @@ class ShopifySyncService {
             ? shopifyImageUrl
             : product.imageUrl,
         shopifyStatus: shopifyStatus ?? product.shopifyStatus,
+        shopifyProductType: shopifyProductType ?? product.shopifyProductType,
+        shopifyTags: shopifyTags ?? product.shopifyTags,
         options: newOptions.isNotEmpty ? newOptions : product.options,
         variants: finalVariants,
       );
@@ -1180,6 +1196,8 @@ class ShopifySyncService {
       isMaterial: false,
       shopifyProductId: shopifyProdId,
       shopifyStatus: sp['status']?.toString(),
+      shopifyProductType: sp['product_type']?.toString(),
+      shopifyTags: sp['tags']?.toString(),
       imageUrl: imageUrl,
       options: revvoOptions,
       variants: revvoVariants,
@@ -1544,18 +1562,32 @@ class ShopifySyncService {
     );
     final taxAmount =
         double.tryParse(order['total_tax']?.toString() ?? '0') ?? 0;
-    final discountAmount = double.tryParse(
+    final totalDiscounts = double.tryParse(
           order['total_discounts']?.toString() ?? '0',
         ) ??
         0;
-    final shippingCost = shippingLines.isNotEmpty
-        ? (double.tryParse(
-              Map<String, dynamic>.from(shippingLines[0] as Map)['price']
-                      ?.toString() ??
-                  '0',
-            ) ??
-            0)
-        : 0.0;
+    // Use discounted_price (net of shipping discounts) — what the customer
+    // actually paid for shipping.  Falls back to price if unavailable.
+    final shippingCost = shippingLines.fold<double>(0, (sum, sl) {
+      final line = Map<String, dynamic>.from(sl as Map);
+      return sum +
+          (double.tryParse(
+                (line['discounted_price'] ?? line['price'])?.toString() ?? '0',
+              ) ??
+              0);
+    });
+    // Shipping discounts are included in total_discounts but should only
+    // reduce shipping revenue, not product revenue.
+    final shippingDiscount = shippingLines.fold<double>(0, (sum, sl) {
+      final line = Map<String, dynamic>.from(sl as Map);
+      final gross = double.tryParse(line['price']?.toString() ?? '0') ?? 0;
+      final net = double.tryParse(
+            (line['discounted_price'] ?? line['price'])?.toString() ?? '0',
+          ) ??
+          0;
+      return sum + (gross - net);
+    });
+    final discountAmount = totalDiscounts - shippingDiscount;
 
     final paymentStatus = _mapPaymentStatus(
       order['financial_status'] as String?,
@@ -1567,6 +1599,7 @@ class ShopifySyncService {
       paymentStatus,
       fulfillmentStatus,
       order['cancel_reason'] as String?,
+      order['cancelled_at'] as String?,
     );
 
     final fulfillments = order['fulfillments'] as List<dynamic>? ?? [];
@@ -1574,7 +1607,9 @@ class ShopifySyncService {
         ? Map<String, dynamic>.from(fulfillments[0] as Map)
         : null;
 
-    final saleId = const Uuid().v4();
+    // Use deterministic ID matching webhook pattern to prevent duplicates
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final saleId = 'shopify_${uid}_$shopifyOrderId';
     final sale = Sale(
       id: saleId,
       userId: '', // will be injected by repo
@@ -1596,7 +1631,8 @@ class ShopifySyncService {
           'Shopify',
       paymentStatus: paymentStatus,
       amountPaid: paymentStatus == PaymentStatus.paid
-          ? subtotal + taxAmount - discountAmount + shippingCost
+          ? subtotal + taxAmount - totalDiscounts + shippingCost +
+              shippingDiscount
           : 0,
       orderStatus: orderStatus,
       fulfillmentStatus: fulfillmentStatus,
@@ -1617,75 +1653,77 @@ class ShopifySyncService {
 
     // ── Build Accounting Transactions ─────────────────────
     final transactionTime = sale.date;
-    final isUnpaidOrPending = sale.paymentStatus == PaymentStatus.unpaid ||
-        sale.orderStatus == OrderStatus.pending;
     final transactions = <transaction_model.Transaction>[];
 
-    // Revenue
-    transactions.add(transaction_model.Transaction(
-      id: 'sale_rev_$saleId',
-      userId: '',
-      amount: sale.total,
-      categoryId: 'cat_sales_revenue',
-      dateTime: transactionTime,
-      title: 'Sale Revenue (Shopify)',
-      note: sale.customerName != null
-          ? 'Customer: ${sale.customerName}'
-          : null,
-      paymentMethod: sale.paymentMethod,
-      saleId: saleId,
-      excludeFromPL: isUnpaidOrPending,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    ));
-
-    // COGS — always create even if $0, matching webhook processor behavior
-    transactions.add(transaction_model.Transaction(
-      id: 'sale_cogs_$saleId',
-      userId: '',
-      amount: -sale.totalCogs,
-      categoryId: 'cat_cogs',
-      dateTime: transactionTime,
-      title: 'Cost of Goods Sold (Shopify)',
-      note: 'Auto-generated from Shopify order',
-      saleId: saleId,
-      excludeFromPL: isUnpaidOrPending,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    ));
-
-    // Shipping expense
-    if (sale.shippingCost > 0) {
+    // Skip financial transactions for already-cancelled orders —
+    // they have no P&L impact and don't need reversals.
+    if (orderStatus != OrderStatus.cancelled) {
+      // Revenue (netRevenue = subtotal − discount, excludes tax & shipping)
       transactions.add(transaction_model.Transaction(
-        id: 'sale_ship_$saleId',
+        id: 'sale_rev_$saleId',
         userId: '',
-        amount: -sale.shippingCost,
-        categoryId: 'cat_shipping',
+        amount: sale.netRevenue,
+        categoryId: 'cat_sales_revenue',
         dateTime: transactionTime,
-        title: 'Shipping — ${sale.customerName ?? 'Shopify Order'}',
-        note: 'Auto-generated shipping expense',
+        title: 'Sale Revenue (Shopify)',
+        note: sale.customerName != null
+            ? 'Customer: ${sale.customerName}'
+            : null,
+        paymentMethod: sale.paymentMethod,
         saleId: saleId,
-        excludeFromPL: isUnpaidOrPending,
+        excludeFromPL: false,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       ));
-    }
 
-    // Tax
-    if (sale.taxAmount > 0) {
+      // COGS — always create even if $0, matching webhook processor behavior
       transactions.add(transaction_model.Transaction(
-        id: 'sale_tax_$saleId',
+        id: 'sale_cogs_$saleId',
         userId: '',
-        amount: -sale.taxAmount,
-        categoryId: 'cat_tax_payable',
+        amount: -sale.totalCogs,
+        categoryId: 'cat_cogs',
         dateTime: transactionTime,
-        title: 'Sales Tax / VAT (Shopify)',
+        title: 'Cost of Goods Sold (Shopify)',
+        note: 'Auto-generated from Shopify order',
         saleId: saleId,
-        excludeFromPL: isUnpaidOrPending,
+        excludeFromPL: false,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       ));
-    }
+
+      // Shipping revenue (customer-paid shipping = income)
+      if (sale.shippingCost > 0) {
+        transactions.add(transaction_model.Transaction(
+          id: 'sale_ship_$saleId',
+          userId: '',
+          amount: sale.shippingCost,
+          categoryId: 'cat_shipping',
+          dateTime: transactionTime,
+          title: 'Shipping — ${sale.customerName ?? 'Shopify Order'}',
+          note: 'Auto-generated shipping revenue',
+          saleId: saleId,
+          excludeFromPL: false,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ));
+      }
+
+      // Tax
+      if (sale.taxAmount > 0) {
+        transactions.add(transaction_model.Transaction(
+          id: 'sale_tax_$saleId',
+          userId: '',
+          amount: -sale.taxAmount,
+          categoryId: 'cat_tax_payable',
+          dateTime: transactionTime,
+          title: 'Sales Tax / VAT (Shopify)',
+          saleId: saleId,
+          excludeFromPL: false,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ));
+      }
+    } // end if (orderStatus != OrderStatus.cancelled)
 
     // ── Atomic write: sale + all transactions in one batch ─
     final writeResult =
@@ -1694,17 +1732,19 @@ class ShopifySyncService {
       throw Exception(writeResult.error ?? 'Failed to save order');
     }
 
-    // ── Deduct Inventory ──────────────────────────────────
-    for (final item in sale.items) {
-      if (item.productId != null && item.quantity > 0) {
-        final vId = item.variantId ?? '${item.productId}_v0';
-        await _productRepo.adjustStock(
-          item.productId!,
-          vId,
-          -item.quantity.toInt(),
-          'Shopify order imported',
-          valuationMethod: valuationMethod,
-        );
+    // ── Deduct Inventory (skip for cancelled orders) ─────
+    if (orderStatus != OrderStatus.cancelled) {
+      for (final item in sale.items) {
+        if (item.productId != null && item.quantity > 0) {
+          final vId = item.variantId ?? '${item.productId}_v0';
+          await _productRepo.adjustStock(
+            item.productId!,
+            vId,
+            -item.quantity.toInt(),
+            'Shopify order imported',
+            valuationMethod: valuationMethod,
+          );
+        }
       }
     }
   }
@@ -1738,8 +1778,10 @@ class ShopifySyncService {
     PaymentStatus payment,
     FulfillmentStatus fulfillment,
     String? cancelReason,
+    [String? cancelledAt,]
   ) {
-    if (cancelReason == 'declined' || cancelReason == 'fraud') {
+    if (cancelledAt != null && cancelledAt.isNotEmpty ||
+        cancelReason == 'declined' || cancelReason == 'fraud') {
       return OrderStatus.cancelled;
     }
     if (payment == PaymentStatus.paid &&

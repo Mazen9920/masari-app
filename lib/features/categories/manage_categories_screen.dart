@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/category_data.dart';
 import '../../l10n/app_localizations.dart';
 import 'add_category_sheet.dart';
@@ -22,6 +24,17 @@ class ManageCategoriesScreen extends ConsumerStatefulWidget {
 class _ManageCategoriesScreenState
     extends ConsumerState<ManageCategoriesScreen> {
   bool _showAiSuggestion = true;
+  final _expandedSections = <CategoryGroup>{
+    CategoryGroup.operatingExpense,
+    CategoryGroup.income,
+  };
+
+  static const _sectionOrder = [
+    CategoryGroup.operatingExpense,
+    CategoryGroup.income,
+    CategoryGroup.autoSystem,
+    CategoryGroup.financing,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +49,12 @@ class _ManageCategoriesScreenState
       txCountMap[cat.name] = (txCountMap[cat.name] ?? 0) + 1;
     }
 
+    // Group categories by logical group
+    final grouped = <CategoryGroup, List<CategoryData>>{};
+    for (final cat in categories) {
+      (grouped[cat.categoryGroup] ??= []).add(cat);
+    }
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: SafeArea(
@@ -46,8 +65,7 @@ class _ManageCategoriesScreenState
             Expanded(
               child: Stack(
                 children: [
-                  // Category list
-                  _buildCategoryList(categories, txCountMap),
+                  _buildGroupedList(grouped, txCountMap),
                   // AI suggestion banner
                   if (_showAiSuggestion && categories.length >= 2)
                     Positioned(
@@ -129,28 +147,199 @@ class _ManageCategoriesScreenState
   }
 
   // ═══════════════════════════════════════════════════════
-  //  CATEGORY LIST
+  //  GROUPED LIST
   // ═══════════════════════════════════════════════════════
-  Widget _buildCategoryList(
-      List<CategoryData> categories, Map<String, int> txCountMap) {
-    return ReorderableListView.builder(
+  Widget _buildGroupedList(
+      Map<CategoryGroup, List<CategoryData>> grouped,
+      Map<String, int> txCountMap) {
+    return ListView(
       padding: EdgeInsets.fromLTRB(
           16, 12, 16, _showAiSuggestion ? 140 : 40),
+      children: [
+        for (final group in _sectionOrder)
+          if ((grouped[group] ?? []).isNotEmpty)
+            _buildSection(group, grouped[group]!, txCountMap),
+      ],
+    );
+  }
+
+  Widget _buildSection(
+      CategoryGroup group, List<CategoryData> cats, Map<String, int> txCountMap) {
+    final l10n = AppLocalizations.of(context)!;
+    final isExpanded = _expandedSections.contains(group);
+    final isLocked =
+        group == CategoryGroup.autoSystem || group == CategoryGroup.financing;
+
+    final (title, icon, color) = switch (group) {
+      CategoryGroup.operatingExpense => (
+        l10n.operatingExpenses,
+        Icons.receipt_long_rounded,
+        const Color(0xFFE67E22),
+      ),
+      CategoryGroup.income => (
+        l10n.incomeSources,
+        Icons.trending_up_rounded,
+        const Color(0xFF27AE60),
+      ),
+      CategoryGroup.autoSystem => (
+        l10n.systemCategories,
+        Icons.sync_rounded,
+        const Color(0xFF6366F1),
+      ),
+      CategoryGroup.financing => (
+        l10n.financingEquity,
+        Icons.account_balance_rounded,
+        const Color(0xFF3B82F6),
+      ),
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section header
+        GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            setState(() {
+              if (isExpanded) {
+                _expandedSections.remove(group);
+              } else {
+                _expandedSections.add(group);
+              }
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 16, color: color),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTypography.labelMedium.copyWith(
+                          color: AppColors.primaryNavy,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        l10n.nCategoriesCount(cats.length),
+                        style: AppTypography.captionSmall.copyWith(
+                          color: AppColors.textTertiary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isLocked) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.borderLight.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.lock_rounded,
+                            size: 11, color: AppColors.textTertiary),
+                        const SizedBox(width: 3),
+                        Text(
+                          l10n.autoManaged,
+                          style: AppTypography.captionSmall.copyWith(
+                            color: AppColors.textTertiary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                AnimatedRotation(
+                  turns: isExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    Icons.expand_more_rounded,
+                    size: 22,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Section content
+        AnimatedCrossFade(
+          firstChild: isLocked
+              ? _buildLockedSection(cats, txCountMap)
+              : _buildReorderableSection(group, cats, txCountMap),
+          secondChild: const SizedBox.shrink(),
+          crossFadeState:
+              isExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+          duration: const Duration(milliseconds: 250),
+          sizeCurve: Curves.easeInOut,
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildLockedSection(
+      List<CategoryData> cats, Map<String, int> txCountMap) {
+    final currency = ref.watch(currencyProvider);
+    return Column(
+      children: [
+        for (int i = 0; i < cats.length; i++)
+          _CategoryTile(
+            key: ValueKey(cats[i].name),
+            category: cats[i],
+            itemCount: txCountMap[cats[i].name] ?? 0,
+            index: i,
+            isLocked: true,
+            currency: currency,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => CategoryDetailScreen(category: cats[i]),
+                ),
+              );
+            },
+            onArchive: () {},
+            onDelete: () {},
+          ),
+      ],
+    );
+  }
+
+  Widget _buildReorderableSection(CategoryGroup group,
+      List<CategoryData> cats, Map<String, int> txCountMap) {
+    final currency = ref.watch(currencyProvider);
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       proxyDecorator: _proxyDecorator,
-      itemCount: categories.length,
-      onReorder: (oldIndex, newIndex) {
-        HapticFeedback.lightImpact();
-        if (newIndex > oldIndex) newIndex--;
-        final cats = ref.read(categoriesProvider.notifier);
-        final list = List<CategoryData>.from(ref.read(categoriesProvider).value ?? []);
-        final item = list.removeAt(oldIndex);
-        list.insert(newIndex, item);
-        // Update state
-        // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
-        cats.state = AsyncValue.data(list);
-      },
+      itemCount: cats.length,
+      onReorder: (oldIndex, newIndex) =>
+          _reorderInGroup(group, oldIndex, newIndex),
       itemBuilder: (context, index) {
-        final cat = categories[index];
+        final cat = cats[index];
         final count = txCountMap[cat.name] ?? 0;
 
         return _CategoryTile(
@@ -158,6 +347,8 @@ class _ManageCategoriesScreenState
           category: cat,
           itemCount: count,
           index: index,
+          isLocked: false,
+          currency: currency,
           onTap: () {
             HapticFeedback.lightImpact();
             Navigator.of(context).push(
@@ -168,11 +359,11 @@ class _ManageCategoriesScreenState
           },
           onArchive: () {
             HapticFeedback.mediumImpact();
-            // Actually remove the category
             ref.read(categoriesProvider.notifier).removeCategory(cat.id);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(AppLocalizations.of(context)!.categoryArchived(cat.localizedName(AppLocalizations.of(context)!))),
+                content: Text(AppLocalizations.of(context)!.categoryArchived(
+                    cat.localizedName(AppLocalizations.of(context)!))),
                 backgroundColor: AppColors.primaryNavy,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
@@ -181,7 +372,6 @@ class _ManageCategoriesScreenState
                   label: AppLocalizations.of(context)!.undoLabel,
                   textColor: const Color(0xFFE67E22),
                   onPressed: () {
-                    // Re-add the category to undo
                     ref.read(categoriesProvider.notifier).addCategory(cat);
                   },
                 ),
@@ -195,6 +385,39 @@ class _ManageCategoriesScreenState
         );
       },
     );
+  }
+
+  void _reorderInGroup(CategoryGroup group, int oldIdx, int newIdx) {
+    HapticFeedback.lightImpact();
+    if (newIdx > oldIdx) newIdx--;
+    if (oldIdx == newIdx) return;
+
+    final allCats =
+        List<CategoryData>.from(ref.read(categoriesProvider).value ?? []);
+
+    // Extract positions and items belonging to this group
+    final indices = <int>[];
+    final items = <CategoryData>[];
+    for (int i = 0; i < allCats.length; i++) {
+      if (allCats[i].categoryGroup == group) {
+        indices.add(i);
+        items.add(allCats[i]);
+      }
+    }
+
+    if (oldIdx >= items.length || newIdx >= items.length) return;
+
+    // Reorder within the group
+    final item = items.removeAt(oldIdx);
+    items.insert(newIdx, item);
+
+    // Place reordered items back at the same global positions
+    for (int i = 0; i < indices.length; i++) {
+      allCats[indices[i]] = items[i];
+    }
+
+    // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
+    ref.read(categoriesProvider.notifier).state = AsyncValue.data(allCats);
   }
 
   void _showDeleteDialog(CategoryData cat) {
@@ -284,6 +507,8 @@ class _CategoryTile extends StatefulWidget {
   final CategoryData category;
   final int itemCount;
   final int index;
+  final bool isLocked;
+  final String currency;
   final VoidCallback onTap;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
@@ -293,6 +518,8 @@ class _CategoryTile extends StatefulWidget {
     required this.category,
     required this.itemCount,
     required this.index,
+    required this.isLocked,
+    required this.currency,
     required this.onTap,
     required this.onArchive,
     required this.onDelete,
@@ -347,6 +574,111 @@ class _CategoryTileState extends State<_CategoryTile>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final budget = widget.category.budgetLimit;
+    final hasBudget = budget != null && budget > 0;
+
+    // Format budget pill text
+    String? budgetText;
+    if (hasBudget) {
+      final fmt = NumberFormat('#,##0', 'en');
+      budgetText = l10n.budgetPerMonth(
+          '${widget.currency} ${fmt.format(budget)}');
+    }
+
+    // Locked tiles: simple card, no swipe
+    if (widget.isLocked) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            height: 68,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.borderLight.withValues(alpha: 0.5),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                // Lock icon instead of drag handle
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Icon(
+                    Icons.lock_rounded,
+                    size: 16,
+                    color: AppColors.borderLight,
+                  ),
+                ),
+                // Category icon
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: widget.category.displayBgColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    widget.category.iconData,
+                    size: 20,
+                    color: widget.category.displayColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Text
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        widget.category
+                            .localizedName(l10n),
+                        style: AppTypography.labelMedium.copyWith(
+                          color: AppColors.primaryNavy,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.nItems(widget.itemCount),
+                        style: AppTypography.captionSmall.copyWith(
+                          color: AppColors.textTertiary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: AppColors.borderLight,
+                ),
+              ],
+            ),
+          ),
+        ),
+      )
+          .animate()
+          .fadeIn(duration: 200.ms, delay: (50 + widget.index * 30).ms);
+    }
+
+    // Normal (unlocked) tiles: swipe-to-reveal actions
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: ClipRRect(
@@ -382,7 +714,7 @@ class _CategoryTileState extends State<_CategoryTile>
                                   color: Colors.white, size: 20),
                               const SizedBox(height: 2),
                               Text(
-                                AppLocalizations.of(context)!.archiveAction,
+                                l10n.archiveAction,
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 9,
@@ -416,7 +748,7 @@ class _CategoryTileState extends State<_CategoryTile>
                                   color: Colors.white, size: 20),
                               const SizedBox(height: 2),
                               Text(
-                                AppLocalizations.of(context)!.deleteAction,
+                                l10n.deleteAction,
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 9,
@@ -500,7 +832,8 @@ class _CategoryTileState extends State<_CategoryTile>
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                widget.category.localizedName(AppLocalizations.of(context)!),
+                                widget.category
+                                    .localizedName(l10n),
                                 style: AppTypography.labelMedium.copyWith(
                                   color: AppColors.primaryNavy,
                                   fontWeight: FontWeight.w600,
@@ -510,12 +843,41 @@ class _CategoryTileState extends State<_CategoryTile>
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 2),
-                              Text(
-                                AppLocalizations.of(context)!.nItems(widget.itemCount),
-                                style: AppTypography.captionSmall.copyWith(
-                                  color: AppColors.textTertiary,
-                                  fontSize: 11,
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    l10n.nItems(widget.itemCount),
+                                    style:
+                                        AppTypography.captionSmall.copyWith(
+                                      color: AppColors.textTertiary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  if (budgetText != null) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: widget.category.isExpense
+                                            ? const Color(0xFFFFF3E0)
+                                            : const Color(0xFFE8F5E9),
+                                        borderRadius:
+                                            BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        budgetText,
+                                        style: TextStyle(
+                                          color: widget.category.isExpense
+                                              ? const Color(0xFFE65100)
+                                              : const Color(0xFF2E7D32),
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
                           ),

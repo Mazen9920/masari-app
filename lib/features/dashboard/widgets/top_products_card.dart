@@ -4,10 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
-import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/app_settings_provider.dart';
 import '../../../core/navigation/app_router.dart';
 import '../providers/dashboard_state_provider.dart';
+import '../providers/dashboard_data_provider.dart';
 import '../../../shared/models/sale_model.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -20,8 +20,7 @@ class TopProductsCard extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final dashState = ref.watch(dashboardStateProvider);
     final range = dashState.range;
-    final salesAsync = ref.watch(salesProvider);
-    final sales = salesAsync.value ?? [];
+    final sales = ref.watch(dashboardDataProvider).value?.sales ?? [];
     final currency = ref.watch(appSettingsProvider).currency;
     final fmt = NumberFormat.compactCurrency(symbol: '$currency ');
 

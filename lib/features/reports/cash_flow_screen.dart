@@ -8,14 +8,15 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
-import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/services/share_service.dart';
 import '../../core/providers/export_providers.dart';
+import '../../core/providers/repository_providers.dart';
 import '../cash_flow/providers/scheduled_transactions_provider.dart';
 import '../cash_flow/widgets/add_recurring_sheet.dart';
 import 'widgets/financial_period_sheet.dart';
 import '../../shared/utils/money_utils.dart';
+import '../../shared/utils/report_constants.dart';
 import '../../shared/models/category_data.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../l10n/app_localizations.dart';
@@ -30,7 +31,8 @@ class CashFlowScreen extends ConsumerStatefulWidget {
   ConsumerState<CashFlowScreen> createState() => _CashFlowScreenState();
 }
 
-class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
+class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
+    with AutomaticKeepAliveClientMixin {
   FinancialPeriodResult _period = FinancialPeriodResult(
     type: FinancialPeriodType.monthEnd,
     range: DateTimeRange(
@@ -42,45 +44,72 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
   /// false = In/Out bar chart, true = cumulative balance line chart
   bool _showBalanceTrend = false;
 
+  // Local data fetched via direct repo query (no loadAll on shared provider)
+  List<Transaction> _transactions = [];
+  bool _isLoading = true;
+
   DateTimeRange _getDateRange() => _period.range;
 
   Future<void> _openDatePicker() async {
     final result = await showFinancialPeriodSheet(context, current: _period);
     if (result == null) return;
     setState(() => _period = result);
+    _loadData();
   }
 
   @override
   void initState() {
     super.initState();
-    // Reports need the full dataset, not just the first page.
-    Future.microtask(() {
-      ref.read(transactionsProvider.notifier).loadAll();
-    });
+    Future.microtask(_loadData);
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final txnRepo = ref.read(transactionRepositoryProvider);
+      // Fetch all transactions up to the period end (includes pre-period
+      // transactions needed for the opening balance calculation).
+      final result = await txnRepo.getTransactionsInRange(
+        start: DateTime(2000),
+        end: _period.range.end,
+      );
+      if (mounted) {
+        setState(() {
+          _transactions = result.data ?? [];
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
-    final transactions = ref.watch(transactionsProvider).value ?? [];
+    super.build(context);
+    final transactions = _isLoading ? <Transaction>[] : _transactions;
     final fmt = NumberFormat('#,##0', 'en');
     final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
     
     // Calculate Money In / Out for selected period
     // Exclude cat_cogs — COGS is a non-cash accrual P&L entry.
     // The actual cash outflow for inventory is recorded as cat_supplier_payment.
-    // Exclude excludeFromPL transactions — these are unpaid/partial sale revenue;
-    // no cash was received, so they must not appear in cash flow.
+    // Include cat_supplier_payment even though excludeFromPL is true — real cash.
     final dateRange = _getDateRange();
     final periodTransactions = transactions.where((t) => 
       !t.dateTime.isBefore(dateRange.start) && !t.dateTime.isAfter(dateRange.end)
-        && t.categoryId != 'cat_cogs'
-        && !t.excludeFromPL
+        && isCashFlowTransaction(t)
     ).toList();
 
     final double moneyIn = roundMoney(periodTransactions
         .where((t) => t.isIncome)
         .fold(0.0, (sum, t) => sum + t.amount.abs()));
 
+    // All non-income transactions are cash outflows — including refunds
+    // (negative cat_sales_revenue / cat_shipping returning cash to customer)
     final double moneyOut = roundMoney(periodTransactions
         .where((t) => !t.isIncome)
         .fold(0.0, (sum, t) => sum + t.amount.abs()));
@@ -109,9 +138,9 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
 
     // Period Opening Balance = user-set seed + all cash transactions BEFORE period start
     // (excludes cat_cogs — non-cash accrual entry)
-    // (excludes excludeFromPL — unpaid sale revenue is not cash)
+    // (includes cat_supplier_payment — real cash outflow)
     final double periodOpeningBalance = roundMoney(openingCash + transactions
-        .where((t) => t.dateTime.isBefore(dateRange.start) && t.categoryId != 'cat_cogs' && !t.excludeFromPL)
+        .where((t) => t.dateTime.isBefore(dateRange.start) && isCashFlowTransaction(t))
         .fold(
       0.0,
       (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
@@ -127,7 +156,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
       body: Stack(
         children: [
           RefreshIndicator(
-            onRefresh: () => ref.read(transactionsProvider.notifier).refreshAll(),
+            onRefresh: _loadData,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(
                   parent: BouncingScrollPhysics()),
@@ -511,11 +540,24 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
   }
 
   Widget _buildAIForecastCard(double balance, double monthlyIn, double monthlyOut, NumberFormat fmt) {
-    // Calculate remaining expected flow (simple: assume same daily rate for rest of month)
+    // Calculate remaining expected flow based on the selected period
+    final range = _getDateRange();
     final now = DateTime.now();
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
-    final daysPassed = now.day;
-    final daysRemaining = daysInMonth - daysPassed;
+    final daysInPeriod = range.end.difference(range.start).inDays + 1;
+    final int daysPassed;
+    final int daysRemaining;
+    if (now.isAfter(range.end)) {
+      // Past period — fully complete
+      daysPassed = daysInPeriod;
+      daysRemaining = 0;
+    } else if (now.isBefore(range.start)) {
+      // Future period — no data yet
+      daysPassed = 0;
+      daysRemaining = daysInPeriod;
+    } else {
+      daysPassed = now.difference(range.start).inDays + 1;
+      daysRemaining = daysInPeriod - daysPassed;
+    }
     final dailyNetRate = daysPassed > 0 ? (monthlyIn - monthlyOut) / daysPassed : 0.0;
     final expectedRemainingFlow = dailyNetRate * daysRemaining;
     final forecastAmount = balance + expectedRemainingFlow;
@@ -1039,7 +1081,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
   }
 
   Widget _buildChartSection() {
-    final transactions = ref.watch(transactionsProvider).value ?? [];
+    final transactions = _isLoading ? <Transaction>[] : _transactions;
     final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
     final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(appSettingsProvider).currency;
@@ -1051,7 +1093,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
       final periodTxs = transactions.where((t) =>
           t.dateTime.year == date.year &&
           t.dateTime.month == date.month &&
-          t.categoryId != 'cat_cogs');
+          isCashFlowTransaction(t));
       double inflow = 0, outflow = 0;
       for (final t in periodTxs) {
         if (t.isIncome) {
@@ -1072,7 +1114,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
     for (int i = 0; i < buckets.length; i++) {
       final monthEnd = DateTime(buckets[i].month.year, buckets[i].month.month + 1, 0, 23, 59, 59);
       buckets[i].cumulativeBalance = roundMoney(openingCash + transactions
-          .where((t) => !t.dateTime.isAfter(monthEnd) && t.categoryId != 'cat_cogs')
+          .where((t) => !t.dateTime.isAfter(monthEnd) && isCashFlowTransaction(t))
           .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
     }
 
@@ -1582,7 +1624,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen> {
           final reportSvc = ref.read(reportServiceProvider);
           final shareSvc = ref.read(shareServiceProvider);
           final settings = ref.read(appSettingsProvider);
-          final txs = await ref.read(transactionsProvider.future);
+          final txs = _transactions;
           final range = _getDateRange();
           final bytes = await reportSvc.generateCashFlowPdf(
             l10n: l10n,

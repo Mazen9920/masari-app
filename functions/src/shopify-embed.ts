@@ -370,7 +370,11 @@ export async function handleEmbedApi(
       try {
         const ur = await getAuth().getUser(accUserId);
         accEmail = ur.email ?? null;
-      } catch (_) { /* user may not exist */ }
+      } catch (err) {
+        logger.debug("Could not fetch user for accounts", {
+          userId: accUserId, error: String(err),
+        });
+      }
       res.json({
         accounts: [{
           id: conn.id,
@@ -484,7 +488,11 @@ export async function handleEmbedApi(
         try {
           const ur = await getAuth().getUser(uid as string);
           if (ur.email) emailMap[uid as string] = ur.email;
-        } catch (_) { /* skip */ }
+        } catch (err) {
+          logger.debug("Could not fetch user for sync log", {
+            uid, error: String(err),
+          });
+        }
       }
 
       const logs = logSnap.docs.map((d) => {

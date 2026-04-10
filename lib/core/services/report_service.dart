@@ -6,6 +6,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../l10n/app_localizations.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/sale_model.dart';
+import '../../shared/utils/report_constants.dart';
 import '../../shared/models/product_model.dart';
 import '../../shared/models/balance_sheet_entries.dart';
 import '../../shared/models/category_data.dart';
@@ -18,14 +19,6 @@ String _r(String text) => ArabicPdfReshaper.reshape(text);
 /// Centralised report generation service.
 /// Produces real PDF bytes and CSV strings from live app data.
 class ReportService {
-  // Categories excluded from P&L (non-operating)
-  static const _plExcludedCats = {
-    'cat_investments',
-    'cat_loan_received',
-    'cat_loan_repayment',
-    'cat_equity_injection',
-    'cat_owner_withdrawal',
-  };
 
   // ──────────────────────────────────────────────────────
   //  COLOUR PALETTE (PdfColors for PDF widgets)
@@ -105,7 +98,7 @@ class ReportService {
 
     // ── Filter by period ──
     final filtered = transactions.where((tx) {
-      if (tx.excludeFromPL || _plExcludedCats.contains(tx.categoryId)) return false;
+      if (tx.excludeFromPL || plExcludedCats.contains(tx.categoryId)) return false;
       if (isMonthly) {
         return tx.dateTime.year == periodStart.year &&
             tx.dateTime.month == periodStart.month;
@@ -122,11 +115,18 @@ class ReportService {
     for (final tx in filtered) {
       final amt = tx.amount.abs();
       if (tx.categoryId == 'cat_sales_revenue') {
-        salesRevenue += amt;
-        revenueMap[tx.categoryId] = (revenueMap[tx.categoryId] ?? 0) + amt;
+        // Use signed amount: refunds are negative and should reduce revenue
+        salesRevenue += tx.amount;
+        revenueMap[tx.categoryId] = (revenueMap[tx.categoryId] ?? 0) + tx.amount;
       } else if (tx.categoryId == 'cat_cogs') {
-        cogs += amt;
-        cogsMap[tx.categoryId] = (cogsMap[tx.categoryId] ?? 0) + amt;
+        // Signed: negative amount = cost, positive = reversal from cancelled order
+        final cogsAmt = -tx.amount;
+        cogs += cogsAmt;
+        cogsMap[tx.categoryId] = (cogsMap[tx.categoryId] ?? 0) + cogsAmt;
+      } else if (tx.categoryId == 'cat_shipping') {
+        // Shipping revenue: signed so cancellation reversals reduce revenue
+        otherIncome += tx.amount;
+        revenueMap[tx.categoryId] = (revenueMap[tx.categoryId] ?? 0) + tx.amount;
       } else if (tx.isIncome) {
         otherIncome += amt;
         revenueMap[tx.categoryId] = (revenueMap[tx.categoryId] ?? 0) + amt;
@@ -324,16 +324,16 @@ class ReportService {
         :  l10n.yearPeriod(periodStart.year);
 
     // Compute the period's opening balance from seed + all pre-period cash transactions
-    // (excludes COGS — non-cash accrual entry).
+    // (uses canonical cash-flow filter: excludes COGS, respects excludeFromPL,
+    //  keeps cat_supplier_payment).
     final double periodOpening = openingBalance + transactions
-        .where((tx) => tx.dateTime.isBefore(periodStart) && tx.categoryId != 'cat_cogs')
+        .where((tx) => tx.dateTime.isBefore(periodStart) && isCashFlowTransaction(tx))
         .fold(0.0, (sum, tx) => sum + (tx.isIncome ? tx.amount.abs() : -tx.amount.abs()));
 
-    // Filter to period and exclude COGS (non-cash accrual P&L entry —
-    // actual cash outflow for inventory is captured by cat_supplier_payment).
+    // Filter to period using same canonical cash-flow filter.
     final filtered = transactions.where((tx) =>
       !tx.dateTime.isBefore(periodStart) && !tx.dateTime.isAfter(periodEnd)
-        && tx.categoryId != 'cat_cogs'
+        && isCashFlowTransaction(tx)
     ).toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
@@ -493,7 +493,7 @@ class ReportService {
 
     // ── P&L aggregation ──
     final plTx = transactions.where((tx) {
-      if (tx.excludeFromPL || _plExcludedCats.contains(tx.categoryId)) return false;
+      if (tx.excludeFromPL || plExcludedCats.contains(tx.categoryId)) return false;
       return tx.dateTime.year == month.year &&
           tx.dateTime.month == month.month;
     }).toList();
@@ -502,9 +502,14 @@ class ReportService {
     for (final tx in plTx) {
       final amt = tx.amount.abs();
       if (tx.categoryId == 'cat_sales_revenue') {
-        salesRevenue += amt;
+        // Use signed amount: refunds are negative and should reduce revenue
+        salesRevenue += tx.amount;
       } else if (tx.categoryId == 'cat_cogs') {
-        cogsCost += amt;
+        // Signed: negative = cost, positive = reversal from cancelled order
+        cogsCost -= tx.amount;
+      } else if (tx.categoryId == 'cat_shipping') {
+        // Shipping: use signed amount so reversals reduce revenue
+        otherIncome += tx.amount;
       } else if (tx.isIncome) {
         otherIncome += amt;
       } else {

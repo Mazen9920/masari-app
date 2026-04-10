@@ -25,6 +25,24 @@ import '../../core/navigation/app_router.dart';
 import '../../shared/utils/safe_pop.dart';
 import '../../l10n/app_localizations.dart';
 
+class _InventorySnapshot {
+  final List<Product> filtered;
+  final int inStock;
+  final int lowStock;
+  final int outOfStock;
+  final double costValue;
+  final double sellingValue;
+
+  const _InventorySnapshot({
+    required this.filtered,
+    required this.inStock,
+    required this.lowStock,
+    required this.outOfStock,
+    required this.costValue,
+    required this.sellingValue,
+  });
+}
+
 // Persistent filter state — survives navigation via Notifier providers
 class _TabNotifier extends Notifier<int> {
   @override
@@ -132,21 +150,55 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
     super.dispose();
   }
 
-  List<Product> get _filteredProducts {
+  /// Cached result of filtering + aggregation.
+  /// Invalidated whenever inventory/filter/search/settings change (all watched in build).
+  _InventorySnapshot? _cachedSnapshot;
+  Object? _lastSnapshotKey;
+
+  _InventorySnapshot _computeSnapshot() {
     final products = ref.read(inventoryProvider).value ?? [];
     final hideOos = ref.watch(appSettingsProvider).hideOutOfStock;
     final hideDrafts = ref.watch(appSettingsProvider).hideShopifyDrafts;
+    final hideBundles = ref.watch(appSettingsProvider).hideShopifyBundles;
+
+    // Build a cache key from all inputs that affect the result
+    final key = Object.hashAll([
+      products.length,
+      products.isEmpty ? 0 : products.first.hashCode,
+      products.isEmpty ? 0 : products.last.hashCode,
+      hideOos, hideDrafts, hideBundles,
+      _isMaterialsView,
+      _searchQuery,
+      _selectedFilter,
+      _filterResult,
+    ]);
+
+    if (_cachedSnapshot != null && _lastSnapshotKey == key) {
+      return _cachedSnapshot!;
+    }
+
+    // Count by status (unfiltered, but scoped to material/product view)
+    int inStock = 0, lowStock = 0, outOfStock = 0;
+    double costValue = 0.0, sellingValue = 0.0;
+    for (final p in products) {
+      if (p.isMaterial != _isMaterialsView) continue;
+      if (hideDrafts && p.shopifyStatus == 'draft') continue;
+      if (hideBundles && isShopifyBundle(p)) continue;
+      switch (p.status) {
+        case StockStatus.inStock: inStock++;
+        case StockStatus.lowStock: lowStock++;
+        case StockStatus.outOfStock: outOfStock++;
+      }
+      costValue += p.totalCostValue;
+      sellingValue += p.totalValue;
+    }
+
+    // Filtered list
     var list = products.where((p) {
-      // 1. Filter by Type (Product vs Material)
       if (p.isMaterial != _isMaterialsView) return false;
-
-      // 1b. Hide out-of-stock if setting is on
       if (hideOos && p.status == StockStatus.outOfStock) return false;
-
-      // 1c. Hide Shopify drafted products if setting is on
       if (hideDrafts && p.shopifyStatus == 'draft') return false;
-
-      // 2. Filter by Search
+      if (hideBundles && isShopifyBundle(p)) return false;
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
         if (!p.name.toLowerCase().contains(q) &&
@@ -155,18 +207,14 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
           return false;
         }
       }
-
-      // 3. Filter by Stock Status (chip tabs)
       switch (_selectedFilter) {
         case 1:
-          if (p.status != StockStatus.lowStock) { return false; }
+          if (p.status != StockStatus.lowStock) return false;
         case 2:
-          if (p.status != StockStatus.outOfStock) { return false; }
+          if (p.status != StockStatus.outOfStock) return false;
         default:
           break;
       }
-
-      // 4. Advanced filter sheet — status
       if (_filterResult.statusFilters.isNotEmpty) {
         final statusLabel = switch (p.status) {
           StockStatus.inStock    => 'In Stock',
@@ -175,35 +223,36 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
         };
         if (!_filterResult.statusFilters.contains(statusLabel)) return false;
       }
-
-      // 5. Advanced filter sheet — category
       if (_filterResult.categories.isNotEmpty &&
-          !_filterResult.categories.contains(p.category)) { return false; }
-
-      // 6. Advanced filter sheet — supplier
+          !_filterResult.categories.contains(p.category)) {
+        return false;
+      }
       if (_filterResult.suppliers.isNotEmpty &&
-          !_filterResult.suppliers.contains(p.supplier)) { return false; }
-
-      // 7. Advanced filter sheet — price range (sellingPrice)
+          !_filterResult.suppliers.contains(p.supplier)) {
+        return false;
+      }
       if (_filterResult.minPrice != null && p.sellingPrice < _filterResult.minPrice!) return false;
       if (_filterResult.maxPrice != null && p.sellingPrice > _filterResult.maxPrice!) return false;
-
       return true;
     }).toList();
 
-    // 8. Sort from the filter sheet
     switch (_filterResult.sortIndex) {
-      case 0: // Stock: Low → High
-        list.sort((a, b) => a.currentStock.compareTo(b.currentStock));
-      case 1: // Stock: High → Low
-        list.sort((a, b) => b.currentStock.compareTo(a.currentStock));
-      case 2: // Name: A-Z
-        list.sort((a, b) => a.name.compareTo(b.name));
-      case 3: // Value: High → Low
-        list.sort((a, b) => b.totalValue.compareTo(a.totalValue));
+      case 0: list.sort((a, b) => a.currentStock.compareTo(b.currentStock));
+      case 1: list.sort((a, b) => b.currentStock.compareTo(a.currentStock));
+      case 2: list.sort((a, b) => a.name.compareTo(b.name));
+      case 3: list.sort((a, b) => b.totalValue.compareTo(a.totalValue));
     }
 
-    return list;
+    _lastSnapshotKey = key;
+    _cachedSnapshot = _InventorySnapshot(
+      filtered: list,
+      inStock: inStock,
+      lowStock: lowStock,
+      outOfStock: outOfStock,
+      costValue: costValue,
+      sellingValue: sellingValue,
+    );
+    return _cachedSnapshot!;
   }
 
   bool get _hasActiveFilters =>
@@ -213,27 +262,6 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       _filterResult.suppliers.isNotEmpty ||
       _filterResult.minPrice != null ||
       _filterResult.maxPrice != null;
-
-  int _countByStatus(StockStatus status) {
-    final products = ref.read(inventoryProvider).value ?? [];
-    return products
-        .where((p) => p.status == status && p.isMaterial == _isMaterialsView)
-        .length;
-  }
-
-  double _calculateCostValue() {
-    final products = ref.read(inventoryProvider).value ?? [];
-    return products
-        .where((p) => p.isMaterial == _isMaterialsView)
-        .fold(0.0, (sum, p) => sum + p.totalCostValue);
-  }
-
-  double _calculateSellingValue() {
-    final products = ref.read(inventoryProvider).value ?? [];
-    return products
-        .where((p) => p.isMaterial == _isMaterialsView)
-        .fold(0.0, (sum, p) => sum + p.totalValue);
-  }
 
   /// Whether "always on" Shopify sync mode is active.
   bool get _isAlwaysOnSync {
@@ -291,12 +319,13 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                 value: productsAsync,
                 onRetry: () => ref.read(inventoryProvider.notifier).refresh(),
                 data: (products) {
-                  final filtered = _filteredProducts;
-                  final inStock = _countByStatus(StockStatus.inStock);
-                  final lowStock = _countByStatus(StockStatus.lowStock);
-                  final outOfStock = _countByStatus(StockStatus.outOfStock);
-                  final costValue = _calculateCostValue();
-                  final sellingValue = _calculateSellingValue();
+                  final snap = _computeSnapshot();
+                  final filtered = snap.filtered;
+                  final inStock = snap.inStock;
+                  final lowStock = snap.lowStock;
+                  final outOfStock = snap.outOfStock;
+                  final costValue = snap.costValue;
+                  final sellingValue = snap.sellingValue;
                   final isPageLoading = ref.watch(inventoryProvider.notifier).hasMore;
 
                   return RefreshIndicator(
@@ -324,7 +353,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                         const SizedBox(height: 16),
                         _buildQuickActions(),
                         const SizedBox(height: 16),
-                        _buildFilterChips(products.length, lowStock, outOfStock),
+                        _buildFilterChips(inStock + lowStock + outOfStock, lowStock, outOfStock),
                         const SizedBox(height: 16),
                         _buildProductList(filtered),
                         if (isPageLoading)
@@ -570,8 +599,12 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
   //  MISSING COST BANNER
   // ═══════════════════════════════════════════════════
   Widget _buildMissingCostBanner(List<Product> products) {
-    final missingCount = products.where((p) =>
-        p.variants.any((v) => v.costPrice <= 0)).length;
+    final settings = ref.watch(appSettingsProvider);
+    final missingCount = products.where((p) {
+      if (settings.hideShopifyDrafts && p.shopifyStatus == 'draft') return false;
+      if (settings.hideShopifyBundles && isShopifyBundle(p)) return false;
+      return p.variants.any((v) => v.costPrice <= 0);
+    }).length;
     if (missingCount == 0) return const SizedBox.shrink();
 
     return Padding(
@@ -2125,19 +2158,30 @@ class _QuickActionButton extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════
 //  PRODUCT CARD
 // ═══════════════════════════════════════════════════════════
-class _ProductCard extends ConsumerWidget {
+class _ProductCard extends ConsumerStatefulWidget {
   final Product product;
   final int index;
 
   const _ProductCard({required this.product, required this.index});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends ConsumerState<_ProductCard> {
+  bool _expanded = false;
+
+  Product get product => widget.product;
+  int get index => widget.index;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final isOutOfStock = product.status == StockStatus.outOfStock;
+    final showVariants = product.hasVariants && product.variants.length > 1;
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -2150,148 +2194,214 @@ class _ProductCard extends ConsumerWidget {
           ),
         ],
       ),
-      child: Opacity(
-        opacity: isOutOfStock ? 0.7 : 1.0,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Product icon / image
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: product.color.withValues(alpha: isOutOfStock ? 0.05 : 0.1),
-              ),
-              child: product.imageUrl != null && product.imageUrl!.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: CachedNetworkImage(
-                        imageUrl: product.imageUrl!,
-                        fit: BoxFit.cover,
-                        width: 56,
-                        height: 56,
-                        placeholder: (_, _) => Icon(
-                          product.icon,
-                          size: 26,
-                          color: isOutOfStock
-                              ? AppColors.textTertiary
-                              : product.color,
-                        ),
-                        errorWidget: (_, _, _) => Icon(
-                          product.icon,
-                          size: 26,
-                          color: isOutOfStock
-                              ? AppColors.textTertiary
-                              : product.color,
-                        ),
-                      ),
-                    )
-                  : Icon(
-                      product.icon,
-                      size: 26,
-                      color: isOutOfStock
-                          ? AppColors.textTertiary
-                          : product.color,
-                    ),
-            ),
-            const SizedBox(width: 12),
-            // Product info
-            Expanded(
-              child: Column(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Opacity(
+              opacity: isOutOfStock ? 0.7 : 1.0,
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product.name,
-                              style: AppTypography.labelMedium.copyWith(
+                  // Product icon / image
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: product.color.withValues(alpha: isOutOfStock ? 0.05 : 0.1),
+                    ),
+                    child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CachedNetworkImage(
+                              imageUrl: product.imageUrl!,
+                              fit: BoxFit.cover,
+                              width: 56,
+                              height: 56,
+                              memCacheWidth: 112,
+                              memCacheHeight: 112,
+                              placeholder: (_, _) => Icon(
+                                product.icon,
+                                size: 26,
                                 color: isOutOfStock
                                     ? AppColors.textTertiary
-                                    : AppColors.textPrimary,
-                                fontWeight: FontWeight.w700,
+                                    : product.color,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              errorWidget: (_, _, _) => Icon(
+                                product.icon,
+                                size: 26,
+                                color: isOutOfStock
+                                    ? AppColors.textTertiary
+                                    : product.color,
+                              ),
                             ),
-                            const SizedBox(height: 2),
+                          )
+                        : Icon(
+                            product.icon,
+                            size: 26,
+                            color: isOutOfStock
+                                ? AppColors.textTertiary
+                                : product.color,
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Product info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    product.name,
+                                    style: AppTypography.labelMedium.copyWith(
+                                      color: isOutOfStock
+                                          ? AppColors.textTertiary
+                                          : AppColors.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${l10n.skuLabel(product.sku)}${product.category.isNotEmpty && !{'shopify import', 'shopify_import'}.contains(product.category.toLowerCase()) ? ' • ${product.category}' : ''}',
+                                    style: AppTypography.captionSmall.copyWith(
+                                      color: AppColors.textTertiary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    children: [
+                                      if (product.supplier.isNotEmpty && product.supplier.toLowerCase() != 'shopify')
+                                        Text(
+                                          l10n.supplierInfoLabel(product.supplier),
+                                          style: AppTypography.captionSmall.copyWith(
+                                            color: AppColors.textTertiary.withValues(alpha: 0.7),
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                      if (product.shopifyProductId != null && product.shopifyProductId!.isNotEmpty) ...[
+                                        if (product.supplier.isNotEmpty && product.supplier.toLowerCase() != 'shopify') const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF96BF48).withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            l10n.shopifyBadge,
+                                            style: AppTypography.captionSmall.copyWith(
+                                              color: const Color(0xFF5E8E3E),
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                             Text(
-                              '${l10n.skuLabel(product.sku)}${product.category.isNotEmpty && !{'shopify import', 'shopify_import'}.contains(product.category.toLowerCase()) ? ' • ${product.category}' : ''}',
+                              '${product.currentStock} ${product.unitOfMeasure}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: _stockColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _StatusBadge(status: product.status),
+                            Text(
+                              product.isMaterial
+                                  ? l10n.costLabel(ref.watch(appSettingsProvider).currency, product.costPrice.toStringAsFixed(2))
+                                  : '${ref.watch(appSettingsProvider).currency} ${product.sellingPrice.toStringAsFixed(2)}',
                               style: AppTypography.captionSmall.copyWith(
                                 color: AppColors.textTertiary,
                                 fontSize: 11,
                               ),
                             ),
-                            const SizedBox(height: 3),
-                            Row(
-                              children: [
-                                if (product.supplier.isNotEmpty && product.supplier.toLowerCase() != 'shopify')
-                                  Text(
-                                    l10n.supplierInfoLabel(product.supplier),
-                                    style: AppTypography.captionSmall.copyWith(
-                                      color: AppColors.textTertiary.withValues(alpha: 0.7),
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                if (product.shopifyProductId != null && product.shopifyProductId!.isNotEmpty) ...[
-                                  if (product.supplier.isNotEmpty && product.supplier.toLowerCase() != 'shopify') const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF96BF48).withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      l10n.shopifyBadge,
-                                      style: AppTypography.captionSmall.copyWith(
-                                        color: const Color(0xFF5E8E3E),
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
                           ],
                         ),
-                      ),
-                      Text(
-                        '${product.currentStock} ${product.unitOfMeasure}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: _stockColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _StatusBadge(status: product.status),
-                      Text(
-                        product.isMaterial
-                            ? l10n.costLabel(ref.watch(appSettingsProvider).currency, product.costPrice.toStringAsFixed(2))
-                            : '${ref.watch(appSettingsProvider).currency} ${product.sellingPrice.toStringAsFixed(2)}',
-                        style: AppTypography.captionSmall.copyWith(
-                          color: AppColors.textTertiary,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+          // Variant expand/collapse toggle
+          if (showVariants)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _expanded = !_expanded);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundLight.withValues(alpha: 0.5),
+                  border: Border(
+                    top: BorderSide(color: AppColors.borderLight.withValues(alpha: 0.4)),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.style_rounded,
+                      size: 13,
+                      color: AppColors.textTertiary,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${product.variants.length} variants',
+                      style: AppTypography.captionSmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    AnimatedRotation(
+                      turns: _expanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 16,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // Variant rows
+          if (showVariants)
+            AnimatedCrossFade(
+              firstChild: const SizedBox.shrink(),
+              secondChild: _buildVariantList(l10n),
+              crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+              duration: const Duration(milliseconds: 200),
+              sizeCurve: Curves.easeInOut,
+            ),
+        ],
       ),
     )
         .animate()
@@ -2303,6 +2413,99 @@ class _ProductCard extends ConsumerWidget {
             end: 0,
             duration: 300.ms,
             delay: Duration(milliseconds: 40 * index));
+  }
+
+  Widget _buildVariantList(AppLocalizations l10n) {
+    final currency = ref.watch(appSettingsProvider).currency;
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLight.withValues(alpha: 0.3),
+      ),
+      child: Column(
+        children: [
+          for (int i = 0; i < product.variants.length; i++)
+            _buildVariantRow(product.variants[i], currency, l10n, isLast: i == product.variants.length - 1),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVariantRow(ProductVariant variant, String currency, AppLocalizations l10n, {required bool isLast}) {
+    final isOos = variant.currentStock <= 0;
+    final statusColor = switch (variant.status) {
+      StockStatus.inStock => AppColors.success,
+      StockStatus.lowStock => AppColors.warning,
+      StockStatus.outOfStock => AppColors.danger,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : Border(bottom: BorderSide(color: AppColors.borderLight.withValues(alpha: 0.3))),
+      ),
+      child: Row(
+        children: [
+          // Status dot
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: statusColor,
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Variant name
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  variant.localizedDisplayName(l10n),
+                  style: AppTypography.captionSmall.copyWith(
+                    color: isOos ? AppColors.textTertiary : AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (variant.sku.isNotEmpty)
+                  Text(
+                    variant.sku,
+                    style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.textTertiary,
+                      fontSize: 10,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Price
+          Text(
+            product.isMaterial
+                ? '$currency ${variant.costPrice.toStringAsFixed(2)}'
+                : '$currency ${variant.sellingPrice.toStringAsFixed(2)}',
+            style: AppTypography.captionSmall.copyWith(
+              color: AppColors.textTertiary,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Stock
+          Text(
+            '${variant.currentStock} ${product.unitOfMeasure}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: isOos ? AppColors.danger : AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Color get _stockColor {

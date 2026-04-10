@@ -339,7 +339,6 @@ class TransactionDetailScreen extends ConsumerWidget {
               ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             label,
@@ -348,25 +347,33 @@ class TransactionDetailScreen extends ConsumerWidget {
               fontWeight: FontWeight.w500,
             ),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (leadingWidget != null) ...[
-                leadingWidget,
-                const SizedBox(width: 6),
-              ],
-              Text(
-                value,
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.textPrimary,
-                  fontFamily: isMono ? 'monospace' : 'Inter',
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (leadingWidget != null) ...[
+                  leadingWidget,
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(
+                    value,
+                    style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.textPrimary,
+                      fontFamily: isMono ? 'monospace' : 'Inter',
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    textAlign: TextAlign.end,
+                  ),
                 ),
-              ),
-              if (trailingWidget != null) ...[
-                const SizedBox(width: 8),
-                trailingWidget,
+                if (trailingWidget != null) ...[
+                  const SizedBox(width: 8),
+                  trailingWidget,
+                ],
               ],
-            ],
+            ),
           ),
         ],
       ),

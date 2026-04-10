@@ -19,7 +19,7 @@ class DateRangeResult {
         customRange = r;
 }
 
-/// Shopify-style date range bottom sheet.
+/// Shopify-style date range bottom sheet with categorised navigation.
 Future<DateRangeResult?> showDateRangeSheet(
   BuildContext context, {
   required DashboardPeriod currentPeriod,
@@ -28,6 +28,7 @@ Future<DateRangeResult?> showDateRangeSheet(
   return showModalBottomSheet<DateRangeResult>(
     context: context,
     isScrollControlled: true,
+    useRootNavigator: true,
     backgroundColor: Colors.transparent,
     builder: (_) => _DateRangeSheet(
       currentPeriod: currentPeriod,
@@ -35,6 +36,9 @@ Future<DateRangeResult?> showDateRangeSheet(
     ),
   );
 }
+
+// ── Navigation views within the sheet ──────────────────
+enum _SheetView { main, last, periodToDate, calendar }
 
 class _DateRangeSheet extends StatefulWidget {
   final DashboardPeriod currentPeriod;
@@ -49,10 +53,8 @@ class _DateRangeSheet extends StatefulWidget {
   State<_DateRangeSheet> createState() => _DateRangeSheetState();
 }
 
-enum _SheetView { list, calendar }
-
 class _DateRangeSheetState extends State<_DateRangeSheet> {
-  _SheetView _view = _SheetView.list;
+  _SheetView _view = _SheetView.main;
 
   // Calendar state
   late DateTime _focusedMonth;
@@ -71,10 +73,8 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
     }
   }
 
-  /// The preset periods shown in the list (excluding custom).
-  static const _presets = [
-    DashboardPeriod.today,
-    DashboardPeriod.yesterday,
+  // ── "Last" category presets ─────────────────────────────
+  static const _lastPresets = [
     DashboardPeriod.last7Days,
     DashboardPeriod.last30Days,
     DashboardPeriod.last90Days,
@@ -82,6 +82,10 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
     DashboardPeriod.lastMonth,
     DashboardPeriod.last12Months,
     DashboardPeriod.lastYear,
+  ];
+
+  // ── "Period to date" category presets ───────────────────
+  static const _ptdPresets = [
     DashboardPeriod.weekToDate,
     DashboardPeriod.monthToDate,
     DashboardPeriod.quarterToDate,
@@ -110,6 +114,47 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
     });
   }
 
+  String get _headerTitle {
+    final l10n = AppLocalizations.of(context)!;
+    switch (_view) {
+      case _SheetView.main:
+        return l10n.dateRange;
+      case _SheetView.last:
+        return l10n.dateRange;
+      case _SheetView.periodToDate:
+        return l10n.dateRange;
+      case _SheetView.calendar:
+        return l10n.fixedDates;
+    }
+  }
+
+  String? get _headerSubtitle {
+    switch (_view) {
+      case _SheetView.last:
+        return _lastCategoryLabel;
+      case _SheetView.periodToDate:
+        return _ptdCategoryLabel;
+      default:
+        return null;
+    }
+  }
+
+  String get _lastCategoryLabel =>
+      AppLocalizations.of(context)!.categoryLast;
+
+  String get _ptdCategoryLabel =>
+      AppLocalizations.of(context)!.categoryPeriodToDate;
+
+  bool get _canGoBack =>
+      _view == _SheetView.last ||
+      _view == _SheetView.periodToDate ||
+      _view == _SheetView.calendar;
+
+  void _goBack() {
+    HapticFeedback.selectionClick();
+    setState(() => _view = _SheetView.main);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).viewPadding.bottom;
@@ -122,147 +167,203 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 10),
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.borderLight,
-                borderRadius: BorderRadius.circular(2),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 10),
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 8, 0),
-            child: Row(
-              children: [
-                Text(
-                  AppLocalizations.of(context)!.dateRange,
-                  style: AppTypography.h3.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const Spacer(),
-                if (_view == _SheetView.calendar)
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded, size: 20),
-                    color: AppColors.textSecondary,
-                    onPressed: () => setState(() => _view = _SheetView.list),
-                  ),
-              ],
-            ),
-          ),
-          if (_view == _SheetView.list) ...[
-            // Subtitle
+            // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  widget.currentPeriod == DashboardPeriod.custom &&
-                          widget.currentRange != null
-                      ? widget.currentRange!.formattedRange
-                      : widget.currentPeriod.localizedLabel(AppLocalizations.of(context)!),
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textTertiary,
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+              child: Row(
+                children: [
+                  if (_canGoBack)
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                      color: AppColors.textSecondary,
+                      onPressed: _goBack,
+                      splashRadius: 20,
+                    )
+                  else
+                    const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_headerSubtitle != null)
+                          Text(
+                            _headerSubtitle!,
+                            style: AppTypography.h3.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          )
+                        else
+                          Text(
+                            _headerTitle,
+                            style: AppTypography.h3.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Current selection subtitle (main view only)
+            if (_view == _SheetView.main)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    widget.currentPeriod == DashboardPeriod.custom &&
+                            widget.currentRange != null
+                        ? widget.currentRange!.formattedRange
+                        : widget.currentPeriod.localizedLabel(
+                            AppLocalizations.of(context)!),
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textTertiary,
+                    ),
                   ),
                 ),
               ),
-            ),
+            const Divider(height: 1, color: AppColors.dividerLight),
+            // Body — all content is fixed-height, no Expanded/Flexible needed
+            _buildBody(bottomPad),
           ],
-          const Divider(height: 1, color: AppColors.dividerLight),
-          // Body
-          Flexible(
-            child: _view == _SheetView.list
-                ? _buildListView(bottomPad)
-                : _buildCalendarView(bottomPad),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  // ─── List View ────────────────────────────────────────────
+  Widget _buildBody(double bottomPad) {
+    switch (_view) {
+      case _SheetView.main:
+        return _buildMainView(bottomPad);
+      case _SheetView.last:
+        return _buildLastView(bottomPad);
+      case _SheetView.periodToDate:
+        return _buildPtdView(bottomPad);
+      case _SheetView.calendar:
+        return _buildCalendarView(bottomPad);
+    }
+  }
 
-  Widget _buildListView(double bottomPad) {
-    return ListView(
-      padding: EdgeInsets.only(bottom: bottomPad + 16),
+  // ═══════════════════════════════════════════════════════════
+  //  MAIN VIEW — Top-level categories
+  // ═══════════════════════════════════════════════════════════
+
+  Widget _buildMainView(double bottomPad) {
+    return Column(
+      key: const ValueKey('main'),
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // "Fixed dates" row → opens calendar
-        _buildActionTile(
-          icon: Icons.calendar_today_rounded,
-          title: AppLocalizations.of(context)!.fixedDates,
-          subtitle: _calStart != null && _calEnd != null
-              ? '${DateFormat('MMM d').format(_calStart!)} – ${DateFormat('MMM d').format(_calEnd!)}'
-              : null,
-          onTap: () => setState(() => _view = _SheetView.calendar),
-          trailing: const Icon(Icons.chevron_right_rounded,
-              color: AppColors.textTertiary, size: 22),
+        // Today
+        _buildPresetTile(DashboardPeriod.today,
+            widget.currentPeriod == DashboardPeriod.today),
+        _thinDivider(),
+        // Yesterday
+        _buildPresetTile(DashboardPeriod.yesterday,
+            widget.currentPeriod == DashboardPeriod.yesterday),
+        _sectionDivider(),
+        // Last →
+        _buildCategoryTile(
+          title: _lastCategoryLabel,
+          isActive: _lastPresets.contains(widget.currentPeriod),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() => _view = _SheetView.last);
+          },
         ),
-        const Divider(height: 1, indent: 56, color: AppColors.dividerLight),
-        // Preset periods
-        ..._presets.map((p) {
-          final isActive = widget.currentPeriod == p;
-          return Column(
-            children: [
-              _buildPresetTile(p, isActive),
-              const Divider(
-                  height: 1, indent: 20, endIndent: 20, color: AppColors.dividerLight),
-            ],
-          );
-        }),
+        _thinDivider(),
+        // Period to date →
+        _buildCategoryTile(
+          title: _ptdCategoryLabel,
+          isActive: _ptdPresets.contains(widget.currentPeriod),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() => _view = _SheetView.periodToDate);
+          },
+        ),
+        _sectionDivider(),
+        // Custom range →
+        _buildCategoryTile(
+          title: AppLocalizations.of(context)!.fixedDates,
+          isActive: widget.currentPeriod == DashboardPeriod.custom,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() => _view = _SheetView.calendar);
+          },
+          icon: Icons.calendar_today_rounded,
+        ),
+        SizedBox(height: bottomPad + 16),
       ],
     );
   }
 
-  Widget _buildActionTile({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    required VoidCallback onTap,
-    Widget? trailing,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: AppColors.textSecondary),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (subtitle != null)
-                    Text(
-                      subtitle,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textTertiary,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            ?trailing,
-          ],
-        ),
-      ),
+  // ═══════════════════════════════════════════════════════════
+  //  "LAST" VIEW — Last N days / Last month / Last year etc.
+  // ═══════════════════════════════════════════════════════════
+
+  Widget _buildLastView(double bottomPad) {
+    return Column(
+      key: const ValueKey('last'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ..._lastPresets.map((p) {
+          final isActive = widget.currentPeriod == p;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildPresetTile(p, isActive),
+              _thinDivider(),
+            ],
+          );
+        }),
+        SizedBox(height: bottomPad + 16),
+      ],
     );
   }
+
+  // ═══════════════════════════════════════════════════════════
+  //  "PERIOD TO DATE" VIEW — WTD / MTD / QTD / YTD
+  // ═══════════════════════════════════════════════════════════
+
+  Widget _buildPtdView(double bottomPad) {
+    return Column(
+      key: const ValueKey('ptd'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ..._ptdPresets.map((p) {
+          final isActive = widget.currentPeriod == p;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildPresetTile(p, isActive),
+              _thinDivider(),
+            ],
+          );
+        }),
+        SizedBox(height: bottomPad + 16),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  SHARED TILE WIDGETS
+  // ═══════════════════════════════════════════════════════════
 
   Widget _buildPresetTile(DashboardPeriod p, bool isActive) {
     final l10n = AppLocalizations.of(context)!;
@@ -290,16 +391,68 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
     );
   }
 
-  // ─── Calendar View ────────────────────────────────────────
+  Widget _buildCategoryTile({
+    required String title,
+    required bool isActive,
+    required VoidCallback onTap,
+    IconData? icon,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 18, color: AppColors.textSecondary),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Text(
+                title,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+            if (isActive)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 8),
+                child: const Icon(Icons.check_rounded,
+                    color: AppColors.textPrimary, size: 20),
+              ),
+            const Icon(Icons.chevron_right_rounded,
+                color: AppColors.textTertiary, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _thinDivider() =>
+      const Divider(height: 1, indent: 20, endIndent: 20,
+          color: AppColors.dividerLight);
+
+  Widget _sectionDivider() => Container(
+        height: 8,
+        color: AppColors.backgroundLight,
+      );
+
+  // ═══════════════════════════════════════════════════════════
+  //  CALENDAR VIEW — Custom date range
+  // ═══════════════════════════════════════════════════════════
 
   Widget _buildCalendarView(double bottomPad) {
     return Column(
+      key: const ValueKey('calendar'),
+      mainAxisSize: MainAxisSize.min,
       children: [
         // Range display
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
           child: Align(
-            alignment: Alignment.centerLeft,
+            alignment: AlignmentDirectional.centerStart,
             child: Text(
               _calStart != null && _calEnd != null
                   ? '${DateFormat('MMM d, yyyy').format(_calStart!)} – ${DateFormat('MMM d, yyyy').format(_calEnd!)}'
@@ -317,13 +470,9 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
         _buildMonthNav(),
         // Weekday header
         _buildWeekdayHeader(),
-        // Grid
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _buildCalendarGrid(),
-          ),
-        ),
+        // Grid — fixed height, no Expanded/Flexible needed
+        _buildCalendarGrid(),
+        const SizedBox(height: 8),
         // Apply button
         _buildApplyBar(bottomPad),
       ],
@@ -381,11 +530,12 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
   }
 
   Widget _buildWeekdayHeader() {
-    // Use intl for localized single-letter weekday abbreviations
     final now = DateTime(2024, 1, 7); // a known Sunday
     final localizedDays = List.generate(7, (i) {
       final day = now.add(Duration(days: i));
-      return DateFormat.E(Localizations.localeOf(context).languageCode).format(day).substring(0, 1);
+      return DateFormat.E(Localizations.localeOf(context).languageCode)
+          .format(day)
+          .substring(0, 1);
     });
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -465,7 +615,7 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
       ),
       child: SizedBox(
         width: double.infinity,
-        height: 48,
+        height: 52,
         child: ElevatedButton(
           onPressed: canApply
               ? () {
@@ -484,14 +634,19 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
             foregroundColor: Colors.white,
             disabledForegroundColor: AppColors.textTertiary,
             elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: Text(
-            AppLocalizations.of(context)!.apply,
-            style: AppTypography.labelLarge.copyWith(
-              color: canApply ? Colors.white : AppColors.textTertiary,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              AppLocalizations.of(context)!.apply,
+              style: AppTypography.labelLarge.copyWith(
+                color: canApply ? Colors.white : AppColors.textTertiary,
+                height: 1.0,
+              ),
             ),
           ),
         ),

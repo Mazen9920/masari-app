@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/category_data.dart';
@@ -66,103 +67,284 @@ final userProvider = NotifierProvider<UserNotifier, UserState>(() {
 
 class TransactionsNotifier extends AsyncNotifier<List<Transaction>> {
   String? _lastDocId;
-  final int _limit = 20;
+  final int _limit = 50;
   bool _hasMore = true;
   bool _isLoadingMore = false;
   Completer<void>? _loadAllCompleter;
   int _buildGeneration = 0;
 
+  /// Active date bounds for server-side filtering.
+  DateTime? _startDate;
+  DateTime? _endDate;
+
+  /// Last pagination error (cleared on successful load).
+  Object? _paginationError;
+
   bool get hasMore => _hasMore;
+  bool get isLoadingMore => _isLoadingMore;
+  DateTime? get startDate => _startDate;
+  DateTime? get endDate => _endDate;
+  Object? get paginationError => _paginationError;
+
+  /// Clears the repo-level range cache so the next fetch hits Firestore.
+  void _invalidateCaches() {
+    ref.read(transactionRepositoryProvider).clearRangeCache();
+  }
 
   @override
   Future<List<Transaction>> build() async {
+    // Keep data alive across tab switches so returning is instant.
+    ref.keepAlive();
+
+    // Default to "This Month" so the first fetch is date-bounded.
+    if (_startDate == null && _endDate == null) {
+      final now = DateTime.now();
+      _startDate = DateTime(now.year, now.month, 1);
+      _endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    }
+
     _lastDocId = null;
-    _hasMore = true;
+    _hasMore = false;
     _buildGeneration++;
     final repo = ref.read(transactionRepositoryProvider);
-    final result = await repo.getTransactions(limit: _limit);
+
+    // Always use a single range query — no pagination needed.
+    final queryStart = _startDate ?? DateTime(2020);
+    final now = DateTime.now();
+    final queryEnd = _endDate ?? DateTime(now.year, now.month, now.day, 23, 59, 59);
+    final result = await repo.getTransactionsInRange(
+      start: queryStart,
+      end: queryEnd,
+    );
     if (result.isSuccess && result.data != null) {
-      final newItems = result.data!;
-      _hasMore = newItems.length == _limit;
-      if (newItems.isNotEmpty) _lastDocId = newItems.last.id;
-      return newItems;
+      return result.data!;
     }
     throw Exception(result.error ?? 'Failed to load transactions');
+  }
+
+  /// Sets the active date bounds and re-fetches from server.
+  /// Pass null for both to clear the bounds (fetch all).
+  Future<void> setPeriod(DateTime? start, DateTime? end) async {
+    // Same period and already fully loaded — instant return.
+    if (_sameDay(_startDate, start) && _sameDay(_endDate, end) &&
+        state.hasValue && !_hasMore) {
+      return;
+    }
+
+    _startDate = start;
+    _endDate = end;
+    _loadAllCompleter = null;
+    _buildGeneration++;
+    final gen = _buildGeneration;
+
+    // For unbounded "All" — use a wide date range so we get a single
+    // Firestore query that returns everything (no pagination needed).
+    final queryStart = start ?? DateTime(2020);
+    final now = DateTime.now();
+    final queryEnd = end ?? DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    final repo = ref.read(transactionRepositoryProvider);
+    try {
+      final result = await repo.getTransactionsInRange(
+        start: queryStart,
+        end: queryEnd,
+      );
+      if (gen != _buildGeneration) return;
+      if (result.isSuccess && result.data != null) {
+        _hasMore = false;
+        _lastDocId = null;
+        state = AsyncData(result.data!);
+        return;
+      }
+    } catch (_) {
+      if (!state.hasValue) rethrow;
+    }
+  }
+
+  static bool _sameDay(DateTime? a, DateTime? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   Future<void> loadMore() async {
     if (_isLoadingMore || !_hasMore) return;
     
     _isLoadingMore = true;
+    _paginationError = null;
     final gen = _buildGeneration;
-    try {
-      final repo = ref.read(transactionRepositoryProvider);
-      final result = await repo.getTransactions(
-        limit: _limit,
-        startAfterId: _lastDocId,
-      );
-      
-      if (gen != _buildGeneration) return; // refresh() happened, discard
-      if (result.isSuccess && result.data != null) {
-        final newItems = result.data!;
-        _hasMore = newItems.length == _limit;
-        if (newItems.isNotEmpty) _lastDocId = newItems.last.id;
+
+    const maxRetries = 2;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        final repo = ref.read(transactionRepositoryProvider);
+        final result = await repo.getTransactions(
+          limit: _limit,
+          startAfterId: _lastDocId,
+          startDate: _startDate,
+          endDate: _endDate,
+        );
         
-        final currentList = state.value ?? [];
-        final existingIds = currentList.map((t) => t.id).toSet();
-        final deduped = newItems.where((t) => !existingIds.contains(t.id)).toList();
-        if (deduped.isNotEmpty) {
-          state = AsyncValue.data([...currentList, ...deduped]);
+        if (gen != _buildGeneration) return; // refresh() happened, discard
+        if (result.isSuccess && result.data != null) {
+          final newItems = result.data!;
+          _hasMore = newItems.length == _limit;
+          if (newItems.isNotEmpty) _lastDocId = newItems.last.id;
+          
+          final currentList = state.value ?? [];
+          final existingIds = currentList.map((t) => t.id).toSet();
+          final deduped = newItems.where((t) => !existingIds.contains(t.id)).toList();
+          if (deduped.isNotEmpty) {
+            state = AsyncValue.data([...currentList, ...deduped]);
+          }
+          _paginationError = null;
+          break; // Success — exit retry loop
         }
+        // Non-success result — treat as error for retry
+        if (attempt == maxRetries) {
+          _paginationError = result.error ?? 'Failed to load more';
+        }
+      } catch (e) {
+        if (gen != _buildGeneration) return;
+        if (attempt < maxRetries) {
+          await Future.delayed(Duration(seconds: attempt + 1));
+          continue;
+        }
+        _paginationError = e;
       }
-    } catch (e) {
-      // Don't throw here to avoid blowing away the main list state,
-      // just let the UI know it failed (could show a snackbar)
-    } finally {
-      _isLoadingMore = false;
     }
+    _isLoadingMore = false;
   }
 
   /// Loads all remaining pages. Used by report screens that need complete data.
+  /// Accumulates pages privately and emits a single state update at the end
+  /// to avoid incremental UI rebuilds (e.g. revenue cards flickering).
   Future<void> loadAll() async {
-    if (_loadAllCompleter != null) return _loadAllCompleter!.future;
-    _loadAllCompleter = Completer<void>();
+    final existing = _loadAllCompleter;
+    if (existing != null) return existing.future;
+    final completer = Completer<void>();
+    _loadAllCompleter = completer;
+    final gen = _buildGeneration;
     try {
+      final accumulated = <Transaction>[...state.value ?? []];
+      final seenIds = accumulated.map((t) => t.id).toSet();
+      final repo = ref.read(transactionRepositoryProvider);
+      var consecutiveFailures = 0;
       while (_hasMore) {
-        await loadMore();
+        if (gen != _buildGeneration) break;
+        try {
+          final result = await repo.getTransactions(
+            limit: _limit,
+            startAfterId: _lastDocId,
+            startDate: _startDate,
+            endDate: _endDate,
+          );
+          if (gen != _buildGeneration) break;
+          if (result.isSuccess && result.data != null) {
+            consecutiveFailures = 0;
+            final newItems = result.data!;
+            _hasMore = newItems.length == _limit;
+            if (newItems.isNotEmpty) _lastDocId = newItems.last.id;
+            for (final item in newItems) {
+              if (seenIds.add(item.id)) accumulated.add(item);
+            }
+          } else {
+            consecutiveFailures++;
+            if (consecutiveFailures > 2) break;
+            await Future.delayed(Duration(seconds: consecutiveFailures));
+          }
+        } catch (_) {
+          consecutiveFailures++;
+          if (consecutiveFailures > 2) break;
+          await Future.delayed(Duration(seconds: consecutiveFailures));
+        }
       }
-      _loadAllCompleter!.complete();
+      if (gen == _buildGeneration) {
+        // Merge any optimistic entries added while we were paginating.
+        final optimistic = state.value ?? [];
+        final accIds = accumulated.map((t) => t.id).toSet();
+        for (final t in optimistic) {
+          if (!accIds.contains(t.id)) accumulated.insert(0, t);
+        }
+        state = AsyncValue.data(accumulated);
+      }
+      completer.complete();
     } catch (e) {
-      _loadAllCompleter!.completeError(e);
+      completer.completeError(e);
     } finally {
-      _loadAllCompleter = null;
+      if (_loadAllCompleter == completer) _loadAllCompleter = null;
     }
   }
 
+  /// Whether [dateTime] falls within the active date bounds.
+  bool _isWithinBounds(DateTime dateTime) {
+    if (_startDate != null && dateTime.isBefore(_startDate!)) return false;
+    if (_endDate != null && dateTime.isAfter(_endDate!)) return false;
+    return true;
+  }
+
   Future<void> addTransaction(Transaction transaction) async {
-    // Optimistic: update state immediately so UI reflects the change
+    _invalidateCaches();
+    // Optimistic: only insert into state if it falls within the active
+    // date window, otherwise it would appear and then vanish on next refresh.
+    final inBounds = _isWithinBounds(transaction.dateTime);
     final previous = state.value ?? [];
-    state = AsyncValue.data([transaction, ...previous]);
+    if (inBounds) {
+      state = AsyncValue.data([transaction, ...previous]);
+    }
 
     final repo = ref.read(transactionRepositoryProvider);
     final result = await repo.createTransaction(transaction);
     if (result.isSuccess && result.data != null) {
-      // Replace optimistic entry with server-confirmed data
-      final current = state.value ?? [];
-      state = AsyncValue.data([
-        for (final t in current)
-          if (t.id == transaction.id) result.data! else t,
-      ]);
+      if (inBounds) {
+        // Replace optimistic entry with server-confirmed data
+        final current = state.value ?? [];
+        state = AsyncValue.data([
+          for (final t in current)
+            if (t.id == transaction.id) result.data! else t,
+        ]);
+      }
     } else if (!result.isSuccess) {
-      // Rollback on failure
-      final current = state.value ?? [];
-      state = AsyncValue.data(
-        current.where((t) => t.id != transaction.id).toList(),
-      );
+      if (inBounds) {
+        // Rollback on failure
+        final current = state.value ?? [];
+        state = AsyncValue.data(
+          current.where((t) => t.id != transaction.id).toList(),
+        );
+      }
     }
   }
 
+  /// Batch-insert transactions into state (single rebuild).
+  /// Only items within the active date bounds are added to the visible list.
+  /// Does NOT write to the server — callers handle persistence separately.
+  void insertTransactionsLocally(List<Transaction> transactions) {
+    if (transactions.isEmpty) return;
+    _invalidateCaches();
+    final current = state.value ?? [];
+    final existingIds = current.map((t) => t.id).toSet();
+    final toAdd = transactions
+        .where((t) => !existingIds.contains(t.id) && _isWithinBounds(t.dateTime))
+        .toList();
+    if (toAdd.isNotEmpty) {
+      state = AsyncValue.data([...toAdd, ...current]);
+    }
+  }
+
+  /// Batch-remove transactions from state by IDs (single rebuild).
+  /// Does NOT delete from the server — callers handle persistence separately.
+  void removeTransactionsLocally(List<String> ids) {
+    if (ids.isEmpty) return;
+    _invalidateCaches();
+    final idSet = ids.toSet();
+    final current = state.value ?? [];
+    state = AsyncValue.data(
+      current.where((t) => !idSet.contains(t.id)).toList(),
+    );
+  }
+
   Future<void> removeTransaction(String id) async {
+    _invalidateCaches();
     // Optimistic: remove from state immediately
     final previous = state.value ?? [];
     state = AsyncValue.data(previous.where((t) => t.id != id).toList());
@@ -176,12 +358,22 @@ class TransactionsNotifier extends AsyncNotifier<List<Transaction>> {
   }
 
   Future<void> updateTransaction(Transaction transaction) async {
-    // Optimistic: update state immediately
+    _invalidateCaches();
+    // Optimistic: update state immediately.
+    // If the edited transaction's date is now outside the active window,
+    // remove it from state instead of leaving a stale entry.
     final previous = state.value ?? [];
-    state = AsyncValue.data([
-      for (final t in previous)
-        if (t.id == transaction.id) transaction else t,
-    ]);
+    final inBounds = _isWithinBounds(transaction.dateTime);
+    if (inBounds) {
+      state = AsyncValue.data([
+        for (final t in previous)
+          if (t.id == transaction.id) transaction else t,
+      ]);
+    } else {
+      state = AsyncValue.data(
+        previous.where((t) => t.id != transaction.id).toList(),
+      );
+    }
 
     final repo = ref.read(transactionRepositoryProvider);
     final result = await repo.updateTransaction(transaction);
@@ -191,15 +383,48 @@ class TransactionsNotifier extends AsyncNotifier<List<Transaction>> {
     }
   }
 
+  /// Refresh without flashing a loading spinner.
+  /// Old data stays visible while the new fetch runs.
   Future<void> refresh() async {
-    state = await AsyncValue.guard(() => build());
+    _lastDocId = null;
+    _hasMore = false;
+    _buildGeneration++;
+    _loadAllCompleter = null;
+    _invalidateCaches();
+    final gen = _buildGeneration;
+    final repo = ref.read(transactionRepositoryProvider);
+
+    // Always use a single range query — no pagination needed.
+    final queryStart = _startDate ?? DateTime(2020);
+    final now = DateTime.now();
+    final queryEnd = _endDate ?? DateTime(now.year, now.month, now.day, 23, 59, 59);
+    try {
+      final result = await repo.getTransactionsInRange(
+        start: queryStart,
+        end: queryEnd,
+      );
+      if (gen != _buildGeneration) return;
+      if (result.isSuccess && result.data != null) {
+        state = AsyncData(result.data!);
+      }
+    } catch (_) {
+      // On error keep previous data visible.
+      if (!state.hasValue) rethrow;
+    }
   }
 
   /// Resets to page 1 then loads ALL remaining pages in one call.
   /// Use this instead of refresh() when a screen needs complete data.
   Future<void> refreshAll() async {
-    state = await AsyncValue.guard(() => build());
+    await refresh();
     await loadAll();
+  }
+
+  /// Clears date bounds and loads the entire dataset.
+  /// Used by report screens that need all-time data regardless of what
+  /// period the transactions list screen may have set.
+  Future<void> loadAllUnbounded() async {
+    await setPeriod(null, null);
   }
 }
 
@@ -213,18 +438,27 @@ final transactionsProvider =
 // ═══════════════════════════════════════════════════════════
 
 class CategoriesNotifier extends AsyncNotifier<List<CategoryData>> {
+  /// IDs deleted during this session — survives provider rebuilds because
+  /// the notifier instance is retained by Riverpod.
+  final Set<String> _deletedIds = {};
+
   @override
   Future<List<CategoryData>> build() async {
     final repo = ref.read(categoryRepositoryProvider);
     final result = await repo.getCategories();
     if (result.isSuccess && result.data != null) {
-      CategoryData.customCategories = result.data!;
-      return result.data!;
+      // Filter out any categories the user deleted this session
+      final filtered = result.data!
+          .where((c) => !_deletedIds.contains(c.id))
+          .toList();
+      CategoryData.customCategories = filtered;
+      return filtered;
     }
     throw Exception(result.error ?? 'Failed to load categories');
   }
 
   Future<void> addCategory(CategoryData category) async {
+    _deletedIds.remove(category.id); // un-delete if re-added
     final current = state.value ?? [];
     final newList = [...current, category];
     CategoryData.customCategories = newList;
@@ -247,24 +481,27 @@ class CategoriesNotifier extends AsyncNotifier<List<CategoryData>> {
   }
 
   Future<void> removeCategory(String id) async {
+    _deletedIds.add(id);
     final current = state.value ?? [];
     final newList = current.where((c) => c.id != id).toList();
     CategoryData.customCategories = newList;
     state = AsyncValue.data(newList);
 
-    // Reassign ALL orphaned transactions to Uncategorized (server-side batch)
+    final repo = ref.read(categoryRepositoryProvider);
+    final result = await repo.deleteCategory(id);
+    if (!result.isSuccess) {
+      _deletedIds.remove(id);
+      CategoryData.customCategories = current;
+      state = AsyncValue.data(current);
+      return;
+    }
+
+    // Only reassign transactions after successful delete
     final txRepo = ref.read(transactionRepositoryProvider);
     await txRepo.reassignCategory(id, 'cat_uncategorized');
 
     // Refresh loaded transactions to reflect the reassignment
     ref.read(transactionsProvider.notifier).refresh();
-
-    final repo = ref.read(categoryRepositoryProvider);
-    final result = await repo.deleteCategory(id);
-    if (!result.isSuccess) {
-      CategoryData.customCategories = current;
-      state = AsyncValue.data(current);
-    }
   }
 
   Future<void> updateCategory(CategoryData updated) async {
@@ -357,19 +594,44 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
   }
 
   /// Loads all remaining pages. Used by report screens that need complete data.
+  /// Accumulates pages privately and emits a single state update at the end.
   Completer<void>? _loadAllCompleter;
   Future<void> loadAll() async {
-    if (_loadAllCompleter != null) return _loadAllCompleter!.future;
-    _loadAllCompleter = Completer<void>();
+    final existing = _loadAllCompleter;
+    if (existing != null) return existing.future;
+    final completer = Completer<void>();
+    _loadAllCompleter = completer;
+    final gen = _buildGeneration;
     try {
+      final accumulated = <Product>[...state.value ?? []];
+      final seenIds = accumulated.map((p) => p.id).toSet();
+      final repo = ref.read(productRepositoryProvider);
       while (_hasMore) {
-        await loadMore();
+        if (gen != _buildGeneration) break;
+        final result = await repo.getProducts(
+          limit: _limit,
+          startAfterId: _lastDocId,
+        );
+        if (gen != _buildGeneration) break;
+        if (result.isSuccess && result.data != null) {
+          final newItems = result.data!;
+          _hasMore = newItems.length == _limit;
+          if (newItems.isNotEmpty) _lastDocId = newItems.last.id;
+          for (final item in newItems) {
+            if (seenIds.add(item.id)) accumulated.add(item);
+          }
+        } else {
+          break;
+        }
       }
-      _loadAllCompleter!.complete();
+      if (gen == _buildGeneration) {
+        state = AsyncValue.data(accumulated);
+      }
+      completer.complete();
     } catch (e) {
-      _loadAllCompleter!.completeError(e);
+      completer.completeError(e);
     } finally {
-      _loadAllCompleter = null;
+      if (_loadAllCompleter == completer) _loadAllCompleter = null;
     }
   }
 
@@ -770,6 +1032,31 @@ final inventoryProvider =
   return InventoryNotifier();
 });
 
+/// Returns true if the product looks like a Shopify bundle.
+bool isShopifyBundle(Product p) {
+  final type = p.shopifyProductType?.toLowerCase() ?? '';
+  if (type.contains('bundle')) return true;
+  final tags = p.shopifyTags?.toLowerCase() ?? '';
+  if (tags.contains('bundle')) return true;
+  return false;
+}
+
+/// Derived provider that filters out hidden draft / bundle products
+/// based on user settings. Use this for display, calculations, alerts,
+/// and reports.  Use the raw [inventoryProvider] only for mutations
+/// (add / update / delete / stock-adjust) and Shopify sync.
+final filteredInventoryProvider = Provider<AsyncValue<List<Product>>>((ref) {
+  final asyncProducts = ref.watch(inventoryProvider);
+  final settings = ref.watch(appSettingsProvider);
+  return asyncProducts.whenData((products) {
+    return products.where((p) {
+      if (settings.hideShopifyDrafts && p.shopifyStatus == 'draft') return false;
+      if (settings.hideShopifyBundles && isShopifyBundle(p)) return false;
+      return true;
+    }).toList();
+  });
+});
+
 // ═══════════════════════════════════════════════════════════
 // SUPPLIERS  — AsyncNotifier with loading/error states
 // ═══════════════════════════════════════════════════════════
@@ -830,17 +1117,19 @@ class SuppliersNotifier extends AsyncNotifier<List<Supplier>> {
   /// Loads all remaining pages.
   Completer<void>? _loadAllCompleter;
   Future<void> loadAll() async {
-    if (_loadAllCompleter != null) return _loadAllCompleter!.future;
-    _loadAllCompleter = Completer<void>();
+    final existing = _loadAllCompleter;
+    if (existing != null) return existing.future;
+    final completer = Completer<void>();
+    _loadAllCompleter = completer;
     try {
       while (_hasMore) {
         await loadMore();
       }
-      _loadAllCompleter!.complete();
+      completer.complete();
     } catch (e) {
-      _loadAllCompleter!.completeError(e);
+      completer.completeError(e);
     } finally {
-      _loadAllCompleter = null;
+      if (_loadAllCompleter == completer) _loadAllCompleter = null;
     }
   }
 
@@ -1062,19 +1351,63 @@ final paymentsProvider = AsyncNotifierProvider<PaymentsNotifier, List<Payment>>(
 
 class SalesNotifier extends AsyncNotifier<List<Sale>> {
   String? _lastDocId;
-  final int _limit = 20;
+  final int _limit = 50;
   bool _hasMore = true;
   bool _isLoadingMore = false;
   int _buildGeneration = 0;
 
+  /// Active date bounds for server-side filtering.
+  DateTime? _startDate;
+  DateTime? _endDate;
+
+  /// In-memory cache of previously fetched period results.
+  final Map<String, List<Sale>> _periodCache = {};
+
+  static String _periodKey(DateTime? s, DateTime? e) =>
+      '${s?.year}-${s?.month}-${s?.day}_${e?.year}-${e?.month}-${e?.day}';
+
+  /// Last pagination error (cleared on successful load).
+  Object? _paginationError;
+
   bool get hasMore => _hasMore;
+  bool get isLoadingMore => _isLoadingMore;
+  DateTime? get startDate => _startDate;
+  DateTime? get endDate => _endDate;
+  Object? get paginationError => _paginationError;
 
   @override
   Future<List<Sale>> build() async {
+    // Keep data alive across tab switches so returning is instant.
+    ref.keepAlive();
+
+    // Default to "This Month" so the first fetch is date-bounded and
+    // subsequent setPeriod("This Month") calls return instantly.
+    if (_startDate == null && _endDate == null) {
+      final now = DateTime.now();
+      _startDate = DateTime(now.year, now.month, 1);
+      _endDate = now;
+    }
+
     _lastDocId = null;
-    _hasMore = true;
+    _hasMore = false;
     _buildGeneration++;
     final repo = ref.read(saleRepositoryProvider);
+
+    // Date-bounded: single range query returns everything — no pagination.
+    if (_startDate != null && _endDate != null) {
+      final result = await repo.getSalesInRange(
+        start: _startDate!,
+        end: _endDate!,
+      );
+      if (result.isSuccess && result.data != null) {
+        _periodCache[_periodKey(_startDate, _endDate)] = result.data!;
+        return result.data!;
+      }
+      throw Exception(result.error ?? 'Failed to load sales');
+    }
+
+    // Unbounded: paginate.
+    _hasMore = true;
     final result = await repo.getSales(limit: _limit);
     if (result.isSuccess && result.data != null) {
       final newItems = result.data!;
@@ -1085,56 +1418,169 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
     throw Exception(result.error ?? 'Failed to load sales');
   }
 
+  /// Sets the active date bounds and re-fetches from server.
+  /// Pass null for both to clear the bounds (fetch all).
+  Future<void> setPeriod(DateTime? start, DateTime? end) async {
+    // Same period and already fully loaded — instant return.
+    if (_sameDay(_startDate, start) && _sameDay(_endDate, end) &&
+        state.hasValue && !_hasMore) {
+      return;
+    }
+
+    _startDate = start;
+    _endDate = end;
+    _loadAllCompleter = null;
+    _buildGeneration++;
+    final gen = _buildGeneration;
+
+    // Check in-memory cache — instant period switching.
+    final key = _periodKey(start, end);
+    final cached = _periodCache[key];
+    if (cached != null) {
+      _hasMore = false;
+      _lastDocId = null;
+      state = AsyncData(cached);
+      return;
+    }
+
+    final repo = ref.read(saleRepositoryProvider);
+
+    // Date-bounded: single range query — all data in one call.
+    if (start != null && end != null) {
+      try {
+        final result = await repo.getSalesInRange(
+          start: start,
+          end: end,
+        );
+        if (gen != _buildGeneration) return;
+        if (result.isSuccess && result.data != null) {
+          _hasMore = false;
+          _lastDocId = null;
+          _periodCache[key] = result.data!;
+          state = AsyncData(result.data!);
+          return;
+        }
+      } catch (_) {
+        if (!state.hasValue) rethrow;
+      }
+      return;
+    }
+
+    // Unbounded: paginated refresh + load all.
+    await refresh();
+    await loadAll();
+  }
+
+  static bool _sameDay(DateTime? a, DateTime? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   Future<void> loadMore() async {
     if (_isLoadingMore || !_hasMore) return;
 
     _isLoadingMore = true;
+    _paginationError = null;
     final gen = _buildGeneration;
-    try {
-      final repo = ref.read(saleRepositoryProvider);
-      final result = await repo.getSales(
-        limit: _limit,
-        startAfterId: _lastDocId,
-      );
 
-      if (gen != _buildGeneration) return; // refresh() happened, discard
-      if (result.isSuccess && result.data != null) {
-        final newItems = result.data!;
-        _hasMore = newItems.length == _limit;
-        if (newItems.isNotEmpty) _lastDocId = newItems.last.id;
+    const maxRetries = 2;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        final repo = ref.read(saleRepositoryProvider);
+        final result = await repo.getSales(
+          limit: _limit,
+          startAfterId: _lastDocId,
+          startDate: _startDate,
+          endDate: _endDate,
+        );
 
-        final currentList = state.value ?? [];
-        final existingIds = currentList.map((s) => s.id).toSet();
-        final deduped = newItems.where((s) => !existingIds.contains(s.id)).toList();
-        if (deduped.isNotEmpty) {
-          state = AsyncValue.data([...currentList, ...deduped]);
+        if (gen != _buildGeneration) return;
+        if (result.isSuccess && result.data != null) {
+          final newItems = result.data!;
+          _hasMore = newItems.length == _limit;
+          if (newItems.isNotEmpty) _lastDocId = newItems.last.id;
+
+          final currentList = state.value ?? [];
+          final existingIds = currentList.map((s) => s.id).toSet();
+          final deduped = newItems.where((s) => !existingIds.contains(s.id)).toList();
+          if (deduped.isNotEmpty) {
+            state = AsyncValue.data([...currentList, ...deduped]);
+          }
+          _paginationError = null;
+          break;
         }
+        if (attempt == maxRetries) {
+          _paginationError = result.error ?? 'Failed to load more';
+        }
+      } catch (e) {
+        if (gen != _buildGeneration) return;
+        if (attempt < maxRetries) {
+          await Future.delayed(Duration(seconds: attempt + 1));
+          continue;
+        }
+        _paginationError = e;
       }
-    } catch (e) {
-      // Silently fail pagination
-    } finally {
-      _isLoadingMore = false;
     }
+    _isLoadingMore = false;
   }
 
   /// Loads all remaining pages. Used by report screens that need complete data.
+  /// Accumulates pages privately and emits a single state update at the end.
   Completer<void>? _loadAllCompleter;
   Future<void> loadAll() async {
-    if (_loadAllCompleter != null) return _loadAllCompleter!.future;
-    _loadAllCompleter = Completer<void>();
+    final existing = _loadAllCompleter;
+    if (existing != null) return existing.future;
+    final completer = Completer<void>();
+    _loadAllCompleter = completer;
+    final gen = _buildGeneration;
     try {
+      final accumulated = <Sale>[...state.value ?? []];
+      final seenIds = accumulated.map((s) => s.id).toSet();
+      final repo = ref.read(saleRepositoryProvider);
+      var consecutiveFailures = 0;
       while (_hasMore) {
-        await loadMore();
+        if (gen != _buildGeneration) break;
+        try {
+          final result = await repo.getSales(
+            limit: _limit,
+            startAfterId: _lastDocId,
+            startDate: _startDate,
+            endDate: _endDate,
+          );
+          if (gen != _buildGeneration) break;
+          if (result.isSuccess && result.data != null) {
+            consecutiveFailures = 0;
+            final newItems = result.data!;
+            _hasMore = newItems.length == _limit;
+            if (newItems.isNotEmpty) _lastDocId = newItems.last.id;
+            for (final item in newItems) {
+              if (seenIds.add(item.id)) accumulated.add(item);
+            }
+          } else {
+            consecutiveFailures++;
+            if (consecutiveFailures > 2) break;
+            await Future.delayed(Duration(seconds: consecutiveFailures));
+          }
+        } catch (_) {
+          consecutiveFailures++;
+          if (consecutiveFailures > 2) break;
+          await Future.delayed(Duration(seconds: consecutiveFailures));
+        }
       }
-      _loadAllCompleter!.complete();
+      if (gen == _buildGeneration) {
+        state = AsyncValue.data(accumulated);
+      }
+      completer.complete();
     } catch (e) {
-      _loadAllCompleter!.completeError(e);
+      completer.completeError(e);
     } finally {
-      _loadAllCompleter = null;
+      if (_loadAllCompleter == completer) _loadAllCompleter = null;
     }
   }
 
   Future<void> addSale(Sale sale) async {
+    _periodCache.clear();
     final repo = ref.read(saleRepositoryProvider);
     final result = await repo.createSale(sale);
     if (result.isSuccess && result.data != null) {
@@ -1155,17 +1601,15 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
   /// TransactionsNotifier state so the UI is consistent.
   Future<bool> addSaleAtomic(Sale sale, List<Transaction> transactions,
       {List<StockDeduction> stockDeductions = const []}) async {
+    _periodCache.clear();
     // Optimistic: update state immediately
     final previousSales = state.value ?? [];
     state = AsyncValue.data([sale, ...previousSales]);
 
-    final currentTxns = ref.read(transactionsProvider).value ?? [];
-    final existingIds = currentTxns.map((t) => t.id).toSet();
-    final newTxns = transactions.where((t) => !existingIds.contains(t.id)).toList();
-    if (newTxns.isNotEmpty) {
-      ref.read(transactionsProvider.notifier).state =
-          AsyncValue.data([...newTxns, ...currentTxns]);
-    }
+    // Insert linked transactions via the notifier's batch method so
+    // date-bounds are respected and only one state rebuild fires.
+    final transNotifier = ref.read(transactionsProvider.notifier);
+    transNotifier.insertTransactionsLocally(transactions);
 
     final repo = ref.read(saleRepositoryProvider);
     final Result<Sale> result;
@@ -1203,10 +1647,9 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
     }
     // Rollback on failure
     state = AsyncValue.data(previousSales);
-    if (newTxns.isNotEmpty) {
-      ref.read(transactionsProvider.notifier).state =
-          AsyncValue.data(currentTxns);
-    }
+    transNotifier.removeTransactionsLocally(
+      transactions.map((t) => t.id).toList(),
+    );
     return false;
   }
 
@@ -1217,6 +1660,7 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
   /// must be cancelled separately on Shopify. Prefer [updateSale] with
   /// `orderStatus: OrderStatus.cancelled` + reversal entries instead.
   Future<void> removeSale(String id) async {
+    _periodCache.clear();
     final current = state.value ?? [];
     final sale = current.where((s) => s.id == id).firstOrNull;
 
@@ -1245,12 +1689,16 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
       }
     }
 
-    // 2. Delete linked revenue & COGS transactions
+    // 2. Delete linked revenue & COGS transactions in a single state update.
     final txns = ref.read(transactionsProvider).value ?? [];
-    final linked = txns.where((t) => t.saleId == id).toList();
+    final linkedIds = txns.where((t) => t.saleId == id).map((t) => t.id).toList();
     final transNotifier = ref.read(transactionsProvider.notifier);
-    for (final tx in linked) {
-      await transNotifier.removeTransaction(tx.id);
+    // Remove from local state in one shot (no N sequential rebuilds).
+    transNotifier.removeTransactionsLocally(linkedIds);
+    // Fire-and-forget server deletes (individual docs).
+    final txRepo = ref.read(transactionRepositoryProvider);
+    for (final txId in linkedIds) {
+      await txRepo.deleteTransaction(txId);
     }
 
     // 3. Delete the sale itself — optimistic
@@ -1265,6 +1713,7 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
   }
 
   Future<void> updateSale(Sale sale) async {
+    _periodCache.clear();
     // Optimistic: update state immediately
     final previous = state.value ?? [];
     state = AsyncValue.data([
@@ -1280,15 +1729,65 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
     }
   }
 
+  /// Refresh without flashing a loading spinner.
+  /// Old data stays visible while the new fetch runs.
   Future<void> refresh() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => build());
+    _lastDocId = null;
+    _hasMore = false;
+    _buildGeneration++;
+    _loadAllCompleter = null;
+    final gen = _buildGeneration;
+    final repo = ref.read(saleRepositoryProvider);
+    final key = _periodKey(_startDate, _endDate);
+    try {
+      // Date-bounded: single range query.
+      if (_startDate != null && _endDate != null) {
+        final result = await repo.getSalesInRange(
+          start: _startDate!,
+          end: _endDate!,
+        );
+        if (gen != _buildGeneration) return;
+        if (result.isSuccess && result.data != null) {
+          _periodCache[key] = result.data!;
+          state = AsyncData(result.data!);
+        }
+        return;
+      }
+      // Unbounded: paginated first page.
+      _hasMore = true;
+      final result = await repo.getSales(
+        limit: _limit,
+        startDate: _startDate,
+        endDate: _endDate,
+      );
+      if (gen != _buildGeneration) return;
+      if (result.isSuccess && result.data != null) {
+        final newItems = result.data!;
+        _hasMore = newItems.length == _limit;
+        if (newItems.isNotEmpty) _lastDocId = newItems.last.id;
+        state = AsyncData(newItems);
+      }
+    } catch (_) {
+      // On error keep previous data visible.
+      if (!state.hasValue) rethrow;
+    }
   }
 
   /// Resets to page 1 then loads ALL remaining pages in one call.
   Future<void> refreshAll() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => build());
+    await refresh();
+    await loadAll();
+  }
+
+  /// Clears date bounds and loads the entire dataset.
+  /// Used by report screens that need all-time data.
+  Future<void> loadAllUnbounded() async {
+    if (_startDate != null || _endDate != null) {
+      _startDate = null;
+      _endDate = null;
+      _loadAllCompleter = null;
+      await refresh();
+    }
     await loadAll();
   }
 }
@@ -1306,12 +1805,20 @@ final salesProvider =
 // ═══════════════════════════════════════════════════════════
 
 final saleTxnMigrationProvider = FutureProvider<void>((ref) async {
+  // Only run this migration once per device.
+  const key = 'saleTxnMigrationDone';
+  final prefs = await SharedPreferences.getInstance();
+  if (prefs.getBool(key) == true) return;
+
   // Ensure ALL pages are loaded before migrating, not just page 1.
-  await ref.read(salesProvider.notifier).loadAll();
-  await ref.read(transactionsProvider.notifier).loadAll();
+  await ref.read(salesProvider.notifier).loadAllUnbounded();
+  await ref.read(transactionsProvider.notifier).loadAllUnbounded();
   final sales = ref.read(salesProvider).value ?? [];
   final txns = ref.read(transactionsProvider).value ?? [];
-  if (sales.isEmpty || txns.isEmpty) return;
+  if (sales.isEmpty || txns.isEmpty) {
+    await prefs.setBool(key, true);
+    return;
+  }
 
   final saleIdSet = sales.map((s) => s.id).toSet();
 
@@ -1348,6 +1855,8 @@ final saleTxnMigrationProvider = FutureProvider<void>((ref) async {
           );
     }
   }
+
+  await prefs.setBool(key, true);
 });
 
 // ═══════════════════════════════════════════════════════════

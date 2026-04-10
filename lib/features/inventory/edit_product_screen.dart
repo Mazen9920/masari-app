@@ -613,6 +613,8 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
                       fit: BoxFit.cover,
                       width: double.infinity,
                       height: 180,
+                      memCacheWidth: 720,
+                      memCacheHeight: 360,
                       placeholder: (_, _) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                       errorWidget: (_, _, _) => const Center(child: Icon(Icons.broken_image_rounded, size: 48, color: AppColors.textTertiary)),
                     ),

@@ -1034,6 +1034,8 @@ class _ProductHeader extends StatelessWidget {
                     fit: BoxFit.cover,
                     width: 80,
                     height: 80,
+                    memCacheWidth: 160,
+                    memCacheHeight: 160,
                     placeholder: (_, _) => Icon(product.icon, size: 36, color: product.color),
                     errorWidget: (_, _, _) => Icon(product.icon, size: 36, color: product.color),
                   ),

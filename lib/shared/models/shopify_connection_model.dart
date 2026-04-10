@@ -57,6 +57,10 @@ class ShopifyConnection {
   /// Whether the setup wizard has been completed.
   final bool setupCompleted;
 
+  /// IANA timezone of the Shopify store (e.g. "Africa/Cairo").
+  /// Used for timezone-aware period boundary calculations.
+  final String? shopTimezone;
+
   const ShopifyConnection({
     required this.userId,
     required this.shopDomain,
@@ -74,6 +78,7 @@ class ShopifyConnection {
     this.shopifyLocationId,
     this.shopifyLocationName,
     this.setupCompleted = false,
+    this.shopTimezone,
   });
 
   // ── Computed ─────────────────────────────────────────────
@@ -107,6 +112,7 @@ class ShopifyConnection {
     String? shopifyLocationId,
     String? shopifyLocationName,
     bool? setupCompleted,
+    String? shopTimezone,
   }) {
     return ShopifyConnection(
       userId: userId ?? this.userId,
@@ -125,6 +131,7 @@ class ShopifyConnection {
       shopifyLocationId: shopifyLocationId ?? this.shopifyLocationId,
       shopifyLocationName: shopifyLocationName ?? this.shopifyLocationName,
       setupCompleted: setupCompleted ?? this.setupCompleted,
+      shopTimezone: shopTimezone ?? this.shopTimezone,
     );
   }
 
@@ -154,6 +161,8 @@ class ShopifyConnection {
         if (shopifyLocationName != null)
           'shopify_location_name': shopifyLocationName,
         'setup_completed': setupCompleted,
+        if (shopTimezone != null)
+          'shop_timezone': shopTimezone,
       };
 
   factory ShopifyConnection.fromJson(Map<String, dynamic> json) {
@@ -177,6 +186,7 @@ class ShopifyConnection {
       shopifyLocationId: json['shopify_location_id'] as String?,
       shopifyLocationName: json['shopify_location_name'] as String?,
       setupCompleted: json['setup_completed'] as bool? ?? false,
+      shopTimezone: json['shop_timezone'] as String?,
     );
   }
 

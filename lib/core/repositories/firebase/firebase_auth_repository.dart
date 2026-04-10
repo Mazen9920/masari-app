@@ -154,6 +154,9 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<AuthUser?> getCurrentUser() async {
     final user = _auth.currentUser;
     if (user != null) {
+      // Force a token refresh so deleted / revoked users are detected
+      // immediately instead of waiting up to 1 hour for expiry.
+      await user.getIdToken(true);
       return _mapFirebaseUser(user);
     }
     return null;

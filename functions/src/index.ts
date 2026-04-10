@@ -27,7 +27,7 @@ import {notifyUser} from "./notify.js";
 export {shopifyAuthStart} from "./shopify-auth.js";
 export {storeAuthCallback} from "./shopify-auth.js";
 export {storeWebhook} from "./shopify-webhooks.js";
-export {processShopifyWebhook, backfillFulfillmentStatus} from "./shopify-processor.js";
+export {processShopifyWebhook, backfillFulfillmentStatus, refreshShopifyOrder, refreshAllShopifyOrders, reconcileShopifyOrders} from "./shopify-processor.js";
 export {shopifyProxy} from "./shopify-proxy.js";
 export {shopifyHealthCheck} from "./shopify-health.js";
 export {shopifyDisconnect} from "./shopify-disconnect.js";

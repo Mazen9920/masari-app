@@ -13,8 +13,14 @@ class LocalTransactionRepository implements TransactionRepository {
     TransactionFilter? filter,
     int? limit,
     String? startAfterId,
+    DateTime? startDate,
+    DateTime? endDate,
   }) async {
     var list = List<Transaction>.from(_transactions);
+
+    // Date bounds
+    if (startDate != null) list = list.where((t) => !t.dateTime.isBefore(startDate)).toList();
+    if (endDate != null) list = list.where((t) => !t.dateTime.isAfter(endDate)).toList();
 
     if (filter != null) {
       // Type filter
@@ -105,4 +111,17 @@ class LocalTransactionRepository implements TransactionRepository {
     }
     return Result.success(null);
   }
+
+  @override
+  Future<Result<List<Transaction>>> getTransactionsInRange({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final filtered = _transactions.where((t) =>
+        !t.dateTime.isBefore(start) && !t.dateTime.isAfter(end)).toList();
+    return Result.success(filtered);
+  }
+
+  @override
+  void clearRangeCache() {}
 }

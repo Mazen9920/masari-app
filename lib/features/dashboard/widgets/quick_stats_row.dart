@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_styles.dart';
-import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/app_settings_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../providers/dashboard_state_provider.dart';
+import '../providers/dashboard_data_provider.dart';
 
 /// Horizontal scrolling row of stat cards: Revenue, Expenses, Net Profit.
 class QuickStatsRow extends ConsumerWidget {
@@ -15,74 +15,24 @@ class QuickStatsRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ds = ref.watch(dashboardStateProvider);
-    final range = ds.range;
     final currency = ref.watch(appSettingsProvider).currency;
     final fmt = NumberFormat.compactCurrency(symbol: '$currency ');
 
-    final allTxns = ref.watch(transactionsProvider).value ?? [];
+    final dashData = ref.watch(dashboardDataProvider).value;
+    final cur = dashData?.currentMetrics ?? const PeriodMetrics();
+    final prev = dashData?.previousMetrics ?? const PeriodMetrics();
 
-    // Categories excluded from P&L (CF investing activities / BS only)
-    const plExcludedCats = {
-      'cat_investments',
-      'cat_loan_received',
-      'cat_loan_repayment',
-      'cat_equity_injection',
-      'cat_owner_withdrawal',
-    };
+    final revenuePct = prev.revenue.abs() > 0
+        ? ((cur.revenue - prev.revenue) / prev.revenue.abs() * 100)
+        : (cur.revenue > 0 ? 100.0 : 0.0);
 
-    bool inPL(t) => !t.excludeFromPL && !plExcludedCats.contains(t.categoryId);
+    final expensesPct = prev.expenses > 0
+        ? ((cur.expenses - prev.expenses) / prev.expenses * 100)
+        : (cur.expenses > 0 ? 100.0 : 0.0);
 
-    // Current period
-    final curTxns = allTxns
-        .where((t) =>
-            inPL(t) &&
-            !t.dateTime.isBefore(range.start) &&
-            !t.dateTime.isAfter(range.end))
-        .toList();
-
-    // Previous period
-    final prevTxns = allTxns
-        .where((t) =>
-            inPL(t) &&
-            !t.dateTime.isBefore(range.previousStart) &&
-            !t.dateTime.isAfter(range.previousEnd))
-        .toList();
-
-    // Revenue: sum of positive amounts from income transactions.
-    // Refund transactions (negative cat_sales_revenue) reduce revenue, not add to expenses.
-    final curRevenue = curTxns
-        .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount.abs())
-      + curTxns
-        .where((t) => !t.isIncome && (t.categoryId == 'cat_sales_revenue'))
-        .fold<double>(0, (sum, t) => sum - t.amount.abs());
-    final prevRevenue = prevTxns
-        .where((t) => t.isIncome)
-        .fold<double>(0, (sum, t) => sum + t.amount.abs())
-      + prevTxns
-        .where((t) => !t.isIncome && (t.categoryId == 'cat_sales_revenue'))
-        .fold<double>(0, (sum, t) => sum - t.amount.abs());
-    final revenuePct = prevRevenue.abs() > 0
-        ? ((curRevenue - prevRevenue) / prevRevenue.abs() * 100)
-        : (curRevenue > 0 ? 100.0 : 0.0);
-
-    // Expenses (negative amounts = expenses, excluding refunds which reduce revenue)
-    final curExpenses = curTxns
-        .where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')
-        .fold<double>(0, (sum, t) => sum + t.amount.abs());
-    final prevExpenses = prevTxns
-        .where((t) => !t.isIncome && t.categoryId != 'cat_sales_revenue')
-        .fold<double>(0, (sum, t) => sum + t.amount.abs());
-    final expensesPct = prevExpenses > 0
-        ? ((curExpenses - prevExpenses) / prevExpenses * 100)
-        : (curExpenses > 0 ? 100.0 : 0.0);
-
-    // Net Profit
-    final curProfit = curRevenue - curExpenses;
-    final prevProfit = prevRevenue - prevExpenses;
-    final profitPct = prevProfit.abs() > 0
-        ? ((curProfit - prevProfit) / prevProfit.abs() * 100)
-        : (curProfit > 0 ? 100.0 : (curProfit < 0 ? -100.0 : 0.0));
+    final profitPct = prev.netProfit.abs() > 0
+        ? ((cur.netProfit - prev.netProfit) / prev.netProfit.abs() * 100)
+        : (cur.netProfit > 0 ? 100.0 : (cur.netProfit < 0 ? -100.0 : 0.0));
 
     final l10n = AppLocalizations.of(context)!;
     final vsLabel = ds.period.localizedVsLabel(l10n);
@@ -96,7 +46,7 @@ class QuickStatsRow extends ConsumerWidget {
         children: [
           _StatCard(
             label: l10n.revenue,
-            amount: fmt.format(curRevenue),
+            amount: fmt.format(cur.revenue),
             change: '${revenuePct >= 0 ? '+' : ''}${revenuePct.toStringAsFixed(1)}% $vsLabel',
             changePositive: revenuePct >= 0,
             icon: Icons.trending_up_rounded,
@@ -105,7 +55,7 @@ class QuickStatsRow extends ConsumerWidget {
           const SizedBox(width: 12),
           _StatCard(
             label: l10n.expenses,
-            amount: fmt.format(curExpenses),
+            amount: fmt.format(cur.expenses),
             change: '${expensesPct >= 0 ? '+' : ''}${expensesPct.toStringAsFixed(1)}% $vsLabel',
             changePositive: expensesPct <= 0, // lower expenses = positive
             icon: Icons.trending_down_rounded,
@@ -114,11 +64,11 @@ class QuickStatsRow extends ConsumerWidget {
           const SizedBox(width: 12),
           _StatCard(
             label: l10n.netProfit,
-            amount: fmt.format(curProfit),
-            change: curProfit >= 0
+            amount: fmt.format(cur.netProfit),
+            change: cur.netProfit >= 0
                 ? '${profitPct >= 0 ? '+' : ''}${profitPct.toStringAsFixed(1)}% $vsLabel'
                 : '${l10n.lossLabel} $vsLabel',
-            changePositive: curProfit >= 0 && profitPct >= 0,
+            changePositive: cur.netProfit >= 0 && profitPct >= 0,
             icon: Icons.monetization_on_rounded,
             accentColor: AppColors.accentOrange,
           ),

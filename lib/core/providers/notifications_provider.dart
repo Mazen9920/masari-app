@@ -113,7 +113,7 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
 
   // ─── 1. Low stock alerts ────────────────────────────
   if (settings.lowStockAlerts) {
-    final products = ref.watch(inventoryProvider).value ?? [];
+    final products = ref.watch(filteredInventoryProvider).value ?? [];
     for (final p in products) {
       if (p.status == StockStatus.outOfStock) {
         notifications.add(AppNotification(

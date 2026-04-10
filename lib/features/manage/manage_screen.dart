@@ -26,7 +26,7 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
   @override
   Widget build(BuildContext context) {
     // Live stats
-    final products = ref.watch(inventoryProvider).value ?? [];
+    final products = ref.watch(filteredInventoryProvider).value ?? [];
     final categories = ref.watch(categoriesProvider).value ?? [];
     final suppliers = ref.watch(suppliersProvider).value ?? [];
     final lowStockCount =
@@ -640,7 +640,7 @@ class _InsightsBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     // Compute a real insight from live data
-    final products = ref.watch(inventoryProvider).value ?? [];
+    final products = ref.watch(filteredInventoryProvider).value ?? [];
     final suppliers = ref.watch(suppliersProvider).value ?? [];
     final lowStockCount = products.where((p) => p.status.name == 'lowStock').length;
     final outOfStockCount = products.where((p) => p.status.name == 'outOfStock').length;

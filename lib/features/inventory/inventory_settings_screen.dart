@@ -26,6 +26,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
   bool _hideOutOfStock = false;
   bool _breakdownEnabled = false;
   bool _hideShopifyDrafts = false;
+  bool _hideShopifyBundles = false;
 
   String _defaultUnit = 'pcs';
   String _valuationMethod = 'FIFO (Default)';
@@ -56,6 +57,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
     _hideOutOfStock = s.hideOutOfStock;
     _breakdownEnabled = s.breakdownEnabled;
     _hideShopifyDrafts = s.hideShopifyDrafts;
+    _hideShopifyBundles = s.hideShopifyBundles;
     _defaultUnit = _units.contains(s.defaultUnit) ? s.defaultUnit : 'pcs';
     _currency = _currencies.contains(s.currency) ? s.currency : 'EGP';
     _valuationMethod = _keyToValuation[s.valuationMethod] ?? 'FIFO (Default)';
@@ -77,6 +79,7 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
     notifier.setHideOutOfStock(_hideOutOfStock);
     notifier.setBreakdownEnabled(_breakdownEnabled);
     notifier.setHideShopifyDrafts(_hideShopifyDrafts);
+    notifier.setHideShopifyBundles(_hideShopifyBundles);
     notifier.setDefaultUnit(_defaultUnit);
     notifier.setValuationMethod(_valuationToKey[_valuationMethod] ?? 'fifo');
     notifier.setCurrency(_currency);
@@ -441,6 +444,14 @@ class _InventorySettingsScreenState extends ConsumerState<InventorySettingsScree
               subtitle: l10n.hideDraftedProductsDesc,
               value: _hideShopifyDrafts,
               onChanged: (v) => setState(() => _hideShopifyDrafts = v),
+            ),
+            _divider(),
+            // Hide bundle products toggle
+            _toggleRow(
+              title: l10n.hideShopifyBundles,
+              subtitle: l10n.hideShopifyBundlesDesc,
+              value: _hideShopifyBundles,
+              onChanged: (v) => setState(() => _hideShopifyBundles = v),
             ),
             _divider(),
             // Inventory sync toggle

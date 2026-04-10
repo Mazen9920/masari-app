@@ -11,6 +11,17 @@ class FirestoreTransactionRepository implements TransactionRepository {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
+  /// Cached cursor from the last page for efficient pagination.
+  DocumentSnapshot? _lastCursor;
+
+  /// In-memory cache for [getTransactionsInRange] queries.
+  /// Keyed by "startMs_endMs". Caches the Future itself so concurrent
+  /// callers with the same range share a single Firestore round-trip.
+  final Map<String, Future<Result<List<Transaction>>>> _rangeCache = {};
+
+  @override
+  void clearRangeCache() => _rangeCache.clear();
+
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection('transactions');
 
@@ -25,16 +36,22 @@ class FirestoreTransactionRepository implements TransactionRepository {
     TransactionFilter? filter,
     int? limit,
     String? startAfterId,
+    DateTime? startDate,
+    DateTime? endDate,
   }) async {
     try {
       Query<Map<String, dynamic>> query =
           _collection.where('user_id', isEqualTo: _uid);
 
-      // Apply type filter (server-side only when supplier filter is off,
-      // because Firestore disallows two inequality filters on different fields)
+      final hasDateBounds = startDate != null || endDate != null;
+
+      // Apply type filter (server-side only when no supplier filter AND no
+      // date bounds, because Firestore disallows inequality filters on
+      // different fields in the same query).
       final hasTypeFilter = filter != null && filter.type != TransactionType.all;
       final hasSupplierFilter = filter != null && filter.onlySuppliers;
-      if (hasTypeFilter && !hasSupplierFilter) {
+      final canServerType = hasTypeFilter && !hasSupplierFilter && !hasDateBounds;
+      if (canServerType) {
         if (filter.type == TransactionType.income) {
           query = query.where('amount', isGreaterThan: 0);
         } else {
@@ -47,25 +64,54 @@ class FirestoreTransactionRepository implements TransactionRepository {
         query = query.where('supplier_id', isNull: false);
       }
 
+      // Apply category filter server-side when <= 30 categories and no
+      // inequality filter is active (Firestore can't combine whereIn with
+      // inequality on a different field).
+      final canServerCategory = filter != null &&
+          filter.selectedCategories.isNotEmpty &&
+          filter.selectedCategories.length <= 30 &&
+          !hasTypeFilter &&
+          !hasDateBounds;
+      if (canServerCategory) {
+        query = query.where('category_id',
+            whereIn: filter.selectedCategories.toList());
+      }
+
+      // Server-side date bounds — dramatically reduces reads for large datasets.
+      // Inequality on date_time is compatible with equality on user_id and
+      // orderBy on the same field (uses the user_id + date_time composite index).
+      if (startDate != null) {
+        query = query.where('date_time',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate));
+      }
+      if (endDate != null) {
+        query = query.where('date_time',
+            isLessThanOrEqualTo: Timestamp.fromDate(endDate));
+      }
+
       // Order by date descending
       query = query.orderBy('date_time', descending: true);
 
       // Cursor-based pagination
       if (startAfterId != null) {
-        final cursorDoc = await _collection.doc(startAfterId).get();
-        if (cursorDoc.exists) {
-          query = query.startAfterDocument(cursorDoc);
+        // Reuse cached cursor when it matches, avoiding an extra Firestore read.
+        DocumentSnapshot? cursor = _lastCursor;
+        if (cursor == null || cursor.id != startAfterId) {
+          cursor = await _collection.doc(startAfterId).get();
+        }
+        if (cursor.exists) {
+          query = query.startAfterDocument(cursor);
         }
       }
 
-      // Determine if client-side filters will be applied
+      // Determine if client-side filters will still be applied
       final hasClientSideFilter = filter != null &&
-          (filter.selectedCategories.isNotEmpty ||
+          ((hasTypeFilter && !canServerType) ||
+              (!canServerCategory && filter.selectedCategories.isNotEmpty) ||
               filter.amountRange.start > 0 ||
               filter.amountRange.end < double.infinity);
 
-      // Over-fetch when client-side filters are active to compensate for
-      // items that will be filtered out after the Firestore query.
+      // Over-fetch only when client-side filters remain active
       final fetchLimit = (limit != null && hasClientSideFilter) ? limit * 3 : limit;
 
       // Apply limit
@@ -83,6 +129,12 @@ class FirestoreTransactionRepository implements TransactionRepository {
         if (fetchLimit != null) fallback = fallback.limit(fetchLimit);
         snapshot = await fallback.get();
       }
+
+      // Cache last doc for the next loadMore() call.
+      if (snapshot.docs.isNotEmpty) {
+        _lastCursor = snapshot.docs.last;
+      }
+
       List<Transaction> transactions = <Transaction>[];
       for (final doc in snapshot.docs) {
         try {
@@ -96,8 +148,9 @@ class FirestoreTransactionRepository implements TransactionRepository {
 
       // Apply client-side filters that can't be combined as Firestore queries
       if (filter != null) {
-        // Type filter applied client-side when supplier filter was server-side
-        if (hasTypeFilter && hasSupplierFilter) {
+        // Type filter applied client-side when it couldn't be server-side
+        // (when supplier filter or date bounds prevented it)
+        if (hasTypeFilter && !canServerType) {
           if (filter.type == TransactionType.income) {
             transactions = transactions.where((t) => t.amount > 0).toList();
           } else {
@@ -105,13 +158,13 @@ class FirestoreTransactionRepository implements TransactionRepository {
           }
         }
 
-        // Supplier filter applied client-side when type filter was server-side
+        // Supplier filter applied client-side when type filter prevented it
         if (hasSupplierFilter && hasTypeFilter) {
           transactions = transactions.where((t) => t.supplierId != null).toList();
         }
 
-        // Category filter
-        if (filter.selectedCategories.isNotEmpty) {
+        // Category filter (skip if already applied server-side)
+        if (!canServerCategory && filter.selectedCategories.isNotEmpty) {
           transactions = transactions
               .where((t) => filter.selectedCategories.contains(t.categoryId))
               .toList();
@@ -168,6 +221,7 @@ class FirestoreTransactionRepository implements TransactionRepository {
 
       // Preserve client-side ID so sale↔transaction linking survives Firestore reload
       await _collection.doc(transaction.id).set(json);
+      _rangeCache.clear();
       return Result.success(transaction);
     } catch (e) {
       return Result.failure( 'Failed to create transaction: $e');
@@ -184,6 +238,7 @@ class FirestoreTransactionRepository implements TransactionRepository {
       json.remove('id');
 
       await _collection.doc(transaction.id).update(json);
+      _rangeCache.clear();
       return Result.success(transaction);
     } catch (e) {
       return Result.failure( 'Failed to update transaction: $e');
@@ -194,6 +249,7 @@ class FirestoreTransactionRepository implements TransactionRepository {
   Future<Result<void>> deleteTransaction(String id) async {
     try {
       await _collection.doc(id).delete();
+      _rangeCache.clear();
       return Result.success(null);
     } catch (e) {
       return Result.failure( 'Failed to delete transaction: $e');
@@ -201,39 +257,100 @@ class FirestoreTransactionRepository implements TransactionRepository {
   }
 
   @override
+  Future<Result<List<Transaction>>> getTransactionsInRange({
+    required DateTime start,
+    required DateTime end,
+  }) {
+    final key = '${start.millisecondsSinceEpoch}_${end.millisecondsSinceEpoch}';
+    final cached = _rangeCache[key];
+    if (cached != null) return cached;
+
+    final future = _doGetTransactionsInRange(start, end);
+    _rangeCache[key] = future;
+    // Evict on failure so the next call retries
+    future.then((r) { if (!r.isSuccess) _rangeCache.remove(key); });
+    return future;
+  }
+
+  Future<Result<List<Transaction>>> _doGetTransactionsInRange(
+      DateTime start, DateTime end) async {
+    try {
+      final startTs = Timestamp.fromDate(start);
+      final endTs = Timestamp.fromDate(end);
+
+      final query = _collection
+          .where('user_id', isEqualTo: _uid)
+          .where('date_time', isGreaterThanOrEqualTo: startTs)
+          .where('date_time', isLessThanOrEqualTo: endTs)
+          .orderBy('date_time', descending: true);
+
+      // Try disk cache first for instant startup / period switching,
+      // then update from server in the background.
+      QuerySnapshot<Map<String, dynamic>> snapshot;
+      try {
+        snapshot = await query.get(const GetOptions(source: Source.cache));
+      } catch (_) {
+        // Cache miss — fall through to server.
+        snapshot = await query.get();
+      }
+
+      final transactions = _parseSnapshots(snapshot);
+
+      // If we got data from cache, kick off a background server fetch
+      // so the Firestore disk cache stays fresh for next time.
+      if (snapshot.metadata.isFromCache && transactions.isNotEmpty) {
+        query.get(const GetOptions(source: Source.server)).then((_) {},
+            onError: (_) {});
+      }
+
+      return Result.success(transactions);
+    } catch (e) {
+      return Result.failure('Failed to fetch transactions in range: $e');
+    }
+  }
+
+  List<Transaction> _parseSnapshots(
+      QuerySnapshot<Map<String, dynamic>> snapshot) {
+    final transactions = <Transaction>[];
+    for (final doc in snapshot.docs) {
+      try {
+        final data = doc.data();
+        data['id'] = doc.id;
+        transactions.add(Transaction.fromJson(data));
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[TxnRepo] Failed to parse transaction ${doc.id}: $e');
+        }
+      }
+    }
+    return transactions;
+  }
+
+  @override
   Future<Result<void>> reassignCategory(
       String oldCategoryId, String newCategoryId) async {
     try {
-      // Query ALL transactions with the old category for this user
-      QuerySnapshot<Map<String, dynamic>> snapshot = await _collection
-          .where('user_id', isEqualTo: _uid)
-          .where('category_id', isEqualTo: oldCategoryId)
-          .get();
+      // Paginated reassign — avoids loading all matching docs at once
+      const pageSize = 500;
+      while (true) {
+        final snapshot = await _collection
+            .where('user_id', isEqualTo: _uid)
+            .where('category_id', isEqualTo: oldCategoryId)
+            .limit(pageSize)
+            .get();
+        if (snapshot.docs.isEmpty) break;
 
-      if (snapshot.docs.isEmpty) return Result.success(null);
-
-      // Batch update in groups of 500 (Firestore batch limit)
-      final batches = <WriteBatch>[];
-      var currentBatch = _firestore.batch();
-      var count = 0;
-
-      for (final doc in snapshot.docs) {
-        currentBatch.update(doc.reference, {
-          'category_id': newCategoryId,
-          'updated_at': FieldValue.serverTimestamp(),
-        });
-        count++;
-        if (count % 500 == 0) {
-          batches.add(currentBatch);
-          currentBatch = _firestore.batch();
+        final batch = _firestore.batch();
+        for (final doc in snapshot.docs) {
+          batch.update(doc.reference, {
+            'category_id': newCategoryId,
+            'updated_at': FieldValue.serverTimestamp(),
+          });
         }
-      }
-      batches.add(currentBatch);
-
-      for (final batch in batches) {
         await batch.commit();
       }
 
+      _rangeCache.clear();
       return Result.success(null);
     } catch (e) {
       return Result.failure('Failed to reassign transactions: $e');

@@ -24,10 +24,17 @@ class CategoryDetailScreen extends ConsumerWidget {
 
     // Watch the live category from provider (so edits reflect immediately)
     final categories = ref.watch(categoriesProvider).value ?? [];
-    final liveCategory = categories.firstWhere(
-      (c) => c.id == category.id,
-      orElse: () => category,
-    );
+    final found = categories.any((c) => c.id == category.id);
+
+    // Category was deleted — pop back to list
+    if (!found) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) Navigator.of(context).pop();
+      });
+      return const SizedBox.shrink();
+    }
+
+    final liveCategory = categories.firstWhere((c) => c.id == category.id);
 
     final categoryTx = allTransactions
         .where((t) => t.categoryId == liveCategory.id)
@@ -68,17 +75,20 @@ class CategoryDetailScreen extends ConsumerWidget {
                       currency: currency,
                     ),
                     const SizedBox(height: 16),
-                    _BudgetControl(
-                      category: liveCategory,
-                      currency: currency,
-                      onBudgetChanged: (newBudget) {
-                        final updated = liveCategory.copyWith(
-                          budgetLimit: newBudget,
-                          updatedAt: DateTime.now(),
-                        );
-                        ref.read(categoriesProvider.notifier).updateCategory(updated);
-                      },
-                    ),
+                    if (liveCategory.isSystemLocked)
+                      _SystemInfoBanner()
+                    else
+                      _BudgetControl(
+                        category: liveCategory,
+                        currency: currency,
+                        onBudgetChanged: (newBudget) {
+                          final updated = liveCategory.copyWith(
+                            budgetLimit: newBudget,
+                            updatedAt: DateTime.now(),
+                          );
+                          ref.read(categoriesProvider.notifier).updateCategory(updated);
+                        },
+                      ),
                     const SizedBox(height: 20),
                     _TrendChart(
                       category: liveCategory,
@@ -120,18 +130,21 @@ class CategoryDetailScreen extends ConsumerWidget {
               ),
             ),
           ),
-          IconButton(
-          onPressed: () {
-            HapticFeedback.lightImpact();
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => EditCategoryScreen(category: liveCategory),
-              ),
-            );
-          },
-          icon: const Icon(Icons.edit_rounded),
-          color: AppColors.primaryNavy,
-        ),
+          if (!liveCategory.isSystemLocked)
+            IconButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => EditCategoryScreen(category: liveCategory),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.edit_rounded),
+              color: AppColors.primaryNavy,
+            )
+          else
+            const SizedBox(width: 48),
         ],
       ),
     );
@@ -219,12 +232,16 @@ class _BudgetControlState extends State<_BudgetControl> {
   }
 
   Widget _buildViewMode(bool hasBudget) {
+    final l10n = AppLocalizations.of(context)!;
+    final isIncome = !widget.category.isExpense;
+    final accent = isIncome ? const Color(0xFF16A34A) : AppColors.primaryNavy;
+
     return Row(
       children: [
         Icon(
-          Icons.account_balance_wallet_rounded,
+          isIncome ? Icons.trending_up_rounded : Icons.account_balance_wallet_rounded,
           size: 20,
-          color: hasBudget ? AppColors.primaryNavy : AppColors.textTertiary,
+          color: hasBudget ? accent : AppColors.textTertiary,
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -232,7 +249,7 @@ class _BudgetControlState extends State<_BudgetControl> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                AppLocalizations.of(context)!.monthlyBudgetLabel,
+                isIncome ? l10n.monthlyTargetLabel : l10n.monthlyBudgetLabel,
                 style: AppTypography.captionSmall.copyWith(
                   color: AppColors.textTertiary,
                   fontWeight: FontWeight.w700,
@@ -244,9 +261,9 @@ class _BudgetControlState extends State<_BudgetControl> {
               Text(
                 hasBudget
                     ? '${widget.currency} ${widget.category.budgetLimit!.toStringAsFixed(0)}'
-                    : AppLocalizations.of(context)!.noBudgetSet,
+                    : l10n.noBudgetSet,
                 style: AppTypography.labelMedium.copyWith(
-                  color: hasBudget ? AppColors.primaryNavy : AppColors.textTertiary,
+                  color: hasBudget ? accent : AppColors.textTertiary,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -261,13 +278,13 @@ class _BudgetControlState extends State<_BudgetControl> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.accentOrange.withValues(alpha: 0.1),
+              color: (isIncome ? const Color(0xFF16A34A) : AppColors.accentOrange).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              hasBudget ? AppLocalizations.of(context)!.editLabel : AppLocalizations.of(context)!.setBudget,
+              hasBudget ? l10n.editLabel : l10n.setBudget,
               style: TextStyle(
-                color: AppColors.accentOrange,
+                color: isIncome ? const Color(0xFF16A34A) : AppColors.accentOrange,
                 fontWeight: FontWeight.w700,
                 fontSize: 12,
               ),
@@ -408,12 +425,18 @@ class _SpendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final isIncome = !category.isExpense;
     final isNearLimit = usedPercent >= 80;
     final now = DateTime.now();
     const months = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
+
+    // Colors: income uses green accent, expense uses navy/orange
+    final accentColor = isIncome ? const Color(0xFF16A34A) : AppColors.primaryNavy;
+    final warnColor = isIncome ? const Color(0xFF16A34A) : AppColors.accentOrange;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -449,7 +472,7 @@ class _SpendCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    AppLocalizations.of(context)!.currentSpend,
+                    isIncome ? l10n.currentEarnings : l10n.currentSpend,
                     style: AppTypography.captionSmall.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w700,
@@ -480,96 +503,154 @@ class _SpendCard extends StatelessWidget {
               Text(
                 '$currency ${totalSpend.toStringAsFixed(0)}',
                 style: AppTypography.h1.copyWith(
-                  color: AppColors.primaryNavy,
+                  color: accentColor,
                   fontWeight: FontWeight.w800,
                   fontSize: 30,
                   letterSpacing: -1,
                 ),
               ),
-              const SizedBox(width: 4),
-              Text(
-                '/ ${budget.toStringAsFixed(0)}',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textTertiary,
-                  fontWeight: FontWeight.w500,
+              if (budget > 0) ...[
+                const SizedBox(width: 4),
+                Text(
+                  '/ ${budget.toStringAsFixed(0)}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textTertiary,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
 
           const SizedBox(height: 4),
           Text(
-            AppLocalizations.of(context)!.nTransactionsThisMonth(transactionCount),
+            l10n.nTransactionsThisMonth(transactionCount),
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textTertiary,
             ),
           ),
 
-          const SizedBox(height: 18),
+          if (budget > 0) ...[
+            const SizedBox(height: 18),
 
-          // Progress bar
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                AppLocalizations.of(context)!.percentUsed(usedPercent),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: isNearLimit ? AppColors.accentOrange : AppColors.primaryNavy,
-                ),
-              ),
-              Text(
-                AppLocalizations.of(context)!.amountLeft(currency, remaining.toStringAsFixed(0)),
-                style: AppTypography.captionSmall.copyWith(
-                  color: AppColors.textTertiary,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(50),
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: usedPercent / 100),
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.easeOutCubic,
-              builder: (_, value, _) {
-                return SizedBox(
-                  height: 8,
-                  child: LinearProgressIndicator(
-                    value: value,
-                    backgroundColor: const Color(0xFFF0F1F3),
-                    valueColor: AlwaysStoppedAnimation(
-                      isNearLimit ? AppColors.accentOrange : AppColors.primaryNavy,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          if (isNearLimit) ...[
-            const SizedBox(height: 10),
+            // Progress bar
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.warning_rounded, size: 14, color: AppColors.accentOrange),
-                const SizedBox(width: 4),
                 Text(
-                  AppLocalizations.of(context)!.approachingBudgetLimit,
+                  isIncome
+                      ? l10n.percentEarned(usedPercent)
+                      : l10n.percentUsed(usedPercent),
                   style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.accentOrange,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isNearLimit ? warnColor : accentColor,
+                  ),
+                ),
+                Text(
+                  isIncome
+                      ? l10n.amountLeft(currency, remaining.toStringAsFixed(0))
+                      : l10n.amountLeft(currency, remaining.toStringAsFixed(0)),
+                  style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.textTertiary,
+                    fontSize: 11,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(50),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: usedPercent / 100),
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.easeOutCubic,
+                builder: (_, value, _) {
+                  return SizedBox(
+                    height: 8,
+                    child: LinearProgressIndicator(
+                      value: value,
+                      backgroundColor: const Color(0xFFF0F1F3),
+                      valueColor: AlwaysStoppedAnimation(
+                        isNearLimit ? warnColor : accentColor,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            if (isNearLimit && !isIncome) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(Icons.warning_rounded, size: 14, color: AppColors.accentOrange),
+                  const SizedBox(width: 4),
+                  Text(
+                    l10n.approachingBudgetLimit,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.accentOrange,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (isNearLimit && isIncome) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(Icons.trending_up_rounded, size: 14, color: const Color(0xFF16A34A)),
+                  const SizedBox(width: 4),
+                  Text(
+                    l10n.approachingTarget,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF16A34A),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ],
       ),
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.04, end: 0);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SYSTEM INFO BANNER — shown for auto-managed categories
+// ═══════════════════════════════════════════════════════════
+class _SystemInfoBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primaryNavy.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primaryNavy.withValues(alpha: 0.10)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline_rounded, size: 20, color: AppColors.primaryNavy.withValues(alpha: 0.5)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              l10n.systemCategoryInfo,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textTertiary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

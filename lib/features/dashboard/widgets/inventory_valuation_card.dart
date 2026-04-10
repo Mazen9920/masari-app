@@ -15,7 +15,7 @@ class InventoryValuationCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final inventoryAsync = ref.watch(inventoryProvider);
+    final inventoryAsync = ref.watch(filteredInventoryProvider);
     final products = inventoryAsync.value ?? [];
     final currency = ref.watch(appSettingsProvider).currency;
     final fmt = NumberFormat.compactCurrency(symbol: '$currency ');

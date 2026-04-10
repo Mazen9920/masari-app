@@ -3,6 +3,7 @@ import 'package:revvo_app/shared/models/transaction_model.dart';
 import 'package:revvo_app/shared/models/balance_sheet_entries.dart';
 import 'package:revvo_app/shared/models/category_data.dart';
 import 'package:revvo_app/shared/utils/money_utils.dart';
+import 'package:revvo_app/shared/utils/report_constants.dart';
 
 // ────────────────────────────────────────────────────────
 //  Test helpers
@@ -26,17 +27,9 @@ Transaction _tx({
 }
 
 // P&L aggregation: mirrors the logic in balance_sheet_screen.dart / profit_loss_screen.dart
-const _plExcludedCats = {
-  'cat_investments',
-  'cat_loan_received',
-  'cat_loan_repayment',
-  'cat_equity_injection',
-  'cat_owner_withdrawal',
-};
-
 double _computeNetIncome(List<Transaction> txs) {
   return roundMoney(txs
-      .where((t) => !t.excludeFromPL && !_plExcludedCats.contains(t.categoryId))
+      .where((t) => !t.excludeFromPL && !plExcludedCats.contains(t.categoryId))
       .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
 }
 
@@ -214,7 +207,7 @@ void main() {
 
       final plEligible = txs
           .where((t) => !t.dateTime.isAfter(periodEnd))
-          .where((t) => !t.excludeFromPL && !_plExcludedCats.contains(t.categoryId));
+          .where((t) => !t.excludeFromPL && !plExcludedCats.contains(t.categoryId));
 
       final retainedEarnings = roundMoney(plEligible
           .where((t) => t.dateTime.isBefore(periodStart))
@@ -235,7 +228,7 @@ void main() {
       ];
 
       final plEligible = txs
-          .where((t) => !t.excludeFromPL && !_plExcludedCats.contains(t.categoryId));
+          .where((t) => !t.excludeFromPL && !plExcludedCats.contains(t.categoryId));
 
       final retainedEarnings = roundMoney(plEligible
           .where((t) => t.dateTime.isBefore(periodStart))
