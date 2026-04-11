@@ -149,6 +149,14 @@ class Sale {
   // Sequential order number for manual orders (e.g. 1001, 1002, ...)
   final int? orderNumber;
 
+  // Bosta shipping integration
+  final String? bostaDeliveryId;
+  final int? bostaState;
+  final String? bostaStateValue;
+  final double? bostaFees;
+  final Map<String, double>? bostaFeeBreakdown;
+  final DateTime? bostaSyncedAt;
+
   const Sale({
     required this.id,
     required this.userId,
@@ -177,6 +185,12 @@ class Sale {
     this.trackingNumber,
     this.deliveryStatus,
     this.orderNumber,
+    this.bostaDeliveryId,
+    this.bostaState,
+    this.bostaStateValue,
+    this.bostaFees,
+    this.bostaFeeBreakdown,
+    this.bostaSyncedAt,
   });
 
   // ── Computed fields ──────────────────────────────────────
@@ -199,6 +213,9 @@ class Sale {
 
   /// Gross profit = net revenue – COGS.
   double get grossProfit => roundMoney(netRevenue - totalCogs);
+
+  /// Whether this sale has a linked Bosta shipment.
+  bool get hasBostaShipment => bostaDeliveryId != null;
 
   /// Outstanding balance remaining (clamped to zero on overpayment).
   double get outstanding =>
@@ -260,6 +277,12 @@ class Sale {
     String? trackingNumber,
     String? deliveryStatus,
     int? orderNumber,
+    String? bostaDeliveryId,
+    int? bostaState,
+    String? bostaStateValue,
+    double? bostaFees,
+    Map<String, double>? bostaFeeBreakdown,
+    DateTime? bostaSyncedAt,
   }) {
     return Sale(
       id: id ?? this.id,
@@ -289,6 +312,12 @@ class Sale {
       trackingNumber: trackingNumber ?? this.trackingNumber,
       deliveryStatus: deliveryStatus ?? this.deliveryStatus,
       orderNumber: orderNumber ?? this.orderNumber,
+      bostaDeliveryId: bostaDeliveryId ?? this.bostaDeliveryId,
+      bostaState: bostaState ?? this.bostaState,
+      bostaStateValue: bostaStateValue ?? this.bostaStateValue,
+      bostaFees: bostaFees ?? this.bostaFees,
+      bostaFeeBreakdown: bostaFeeBreakdown ?? this.bostaFeeBreakdown,
+      bostaSyncedAt: bostaSyncedAt ?? this.bostaSyncedAt,
     );
   }
 
@@ -322,6 +351,12 @@ class Sale {
         if (trackingNumber != null) 'tracking_number': trackingNumber,
         if (deliveryStatus != null) 'delivery_status': deliveryStatus,
         if (orderNumber != null) 'order_number': orderNumber,
+        if (bostaDeliveryId != null) 'bosta_delivery_id': bostaDeliveryId,
+        if (bostaState != null) 'bosta_state': bostaState,
+        if (bostaStateValue != null) 'bosta_state_value': bostaStateValue,
+        if (bostaFees != null) 'bosta_fees': bostaFees,
+        if (bostaFeeBreakdown != null) 'bosta_fee_breakdown': bostaFeeBreakdown,
+        if (bostaSyncedAt != null) 'bosta_synced_at': Timestamp.fromDate(bostaSyncedAt!),
       };
 
   /// Safely parse a dynamic Firestore field to [DateTime].
@@ -420,6 +455,20 @@ class Sale {
       trackingNumber: json['tracking_number']?.toString(),
       deliveryStatus: json['delivery_status']?.toString(),
       orderNumber: (json['order_number'] as num?)?.toInt(),
+      bostaDeliveryId: json['bosta_delivery_id']?.toString(),
+      bostaState: (json['bosta_state'] as num?)?.toInt(),
+      bostaStateValue: json['bosta_state_value']?.toString(),
+      bostaFees: (json['bosta_fees'] as num?)?.toDouble(),
+      bostaFeeBreakdown: _parseFeeBreakdown(json['bosta_fee_breakdown']),
+      bostaSyncedAt: _parseDateNullable(json['bosta_synced_at']),
     );
+  }
+
+  static Map<String, double>? _parseFeeBreakdown(dynamic value) {
+    if (value == null) return null;
+    if (value is Map) {
+      return value.map((k, v) => MapEntry(k.toString(), (v as num).toDouble()));
+    }
+    return null;
   }
 }

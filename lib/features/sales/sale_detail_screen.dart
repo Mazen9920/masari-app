@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -7,11 +8,13 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/navigation/app_router.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/services/shopify_sync_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
+import '../../shared/models/bosta_shipment_model.dart';
 import '../../shared/models/sale_model.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
 import '../shopify/widgets/shopify_badges.dart';
@@ -115,6 +118,12 @@ class SaleDetailScreen extends ConsumerWidget {
                       _buildTrackingCard(context, live)
                           .animate()
                           .fadeIn(duration: 250.ms, delay: 220.ms),
+                    ],
+                    if (live.hasBostaShipment) ...[
+                      const SizedBox(height: 14),
+                      _buildBostaCard(context, live)
+                          .animate()
+                          .fadeIn(duration: 250.ms, delay: 240.ms),
                     ],
                     if (live.shippingAddress != null &&
                         live.shippingAddress!.isNotEmpty) ...[
@@ -1376,6 +1385,19 @@ class SaleDetailScreen extends ConsumerWidget {
             ),
           ),
         ],
+        if (live.bostaFees != null && live.bostaFees! > 0 && live.totalCogs > 0) ...[
+          const SizedBox(height: 6),
+          _row(l10n.categoryShippingExpense,
+              '- $currency ${fmt.format(live.bostaFees!)}',
+              valueColor: AppColors.danger),
+          const SizedBox(height: 4),
+          _row(l10n.netProfit,
+              '$currency ${fmt.format(live.grossProfit - live.bostaFees!)}',
+              bold: true,
+              valueColor: (live.grossProfit - live.bostaFees!) >= 0
+                  ? AppColors.success
+                  : AppColors.danger),
+        ],
         if (live.outstanding > 0) ...[
           const Divider(height: 16),
           _row(l10n.outstanding, '$currency ${fmt.format(live.outstanding)}',
@@ -1782,6 +1804,194 @@ class SaleDetailScreen extends ConsumerWidget {
         ],
       ],
     );
+  }
+
+  // ── Bosta Shipping ───────────────────────────────────────
+
+  Widget _buildBostaCard(BuildContext context, Sale live) {
+    final l10n = AppLocalizations.of(context)!;
+    final feeFmt = NumberFormat('#,##0.00');
+    final state = live.bostaState ?? 0;
+    final stateColor = _bostaStateColor(state);
+    final stateIcon = _bostaStateIcon(state);
+    final hasFees = live.bostaFees != null && live.bostaFees! > 0;
+    final stateLabel = (live.bostaStateValue != null && live.bostaStateValue!.isNotEmpty)
+        ? live.bostaStateValue!
+        : l10n.bostaPendingSettlement;
+
+    return _Card(
+      title: l10n.bostaShippingCard,
+      children: [
+        GestureDetector(
+          onTap: () => _navigateToBostaShipment(context, live),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
+            ),
+            child: Column(
+              children: [
+                // Top row: state icon + label + fee
+                Row(
+                  children: [
+                    // State badge
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: stateColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(stateIcon, color: stateColor, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    // State label + tracking
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            stateLabel,
+                            style: AppTypography.labelSmall.copyWith(
+                              color: stateColor,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (live.bostaDeliveryId != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              live.bostaDeliveryId!,
+                              style: AppTypography.captionSmall.copyWith(
+                                color: AppColors.textTertiary,
+                                fontSize: 10,
+                                fontFamily: 'monospace',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    // Fee or pending badge
+                    if (hasFees)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'EGP ${feeFmt.format(live.bostaFees)}',
+                            style: AppTypography.labelMedium.copyWith(
+                              color: AppColors.danger,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            l10n.bostaActualFee,
+                            style: AppTypography.captionSmall.copyWith(
+                              color: AppColors.textTertiary,
+                              fontSize: 9,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          l10n.bostaPending,
+                          style: AppTypography.captionSmall.copyWith(
+                            color: AppColors.warning,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+
+                // Divider + View Shipment row
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.only(top: 10),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(
+                          color: AppColors.borderLight.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.local_shipping_rounded,
+                            size: 14, color: Color(0xFF3B82F6)),
+                        const SizedBox(width: 6),
+                        Text(
+                          l10n.bostaViewShipment,
+                          style: AppTypography.labelSmall.copyWith(
+                            color: const Color(0xFF3B82F6),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        const Icon(Icons.chevron_right_rounded,
+                            size: 16, color: Color(0xFF3B82F6)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _navigateToBostaShipment(BuildContext context, Sale live) async {
+    if (live.bostaDeliveryId == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('bosta_shipments')
+          .doc(live.bostaDeliveryId)
+          .get();
+      if (!doc.exists || !context.mounted) return;
+      final shipment = BostaShipment.fromJson(doc.data()!);
+      if (context.mounted) {
+        context.push(
+          AppRoutes.bostaShipmentDetail,
+          extra: {'shipment': shipment},
+        );
+      }
+    } catch (_) {
+      // Silently fail — shipment may not exist
+    }
+  }
+
+  static Color _bostaStateColor(int state) {
+    return switch (state) {
+      45 => AppColors.success,
+      60 => AppColors.danger,
+      46 => AppColors.warning,
+      _ => AppColors.textTertiary,
+    };
+  }
+
+  static IconData _bostaStateIcon(int state) {
+    return switch (state) {
+      45 => Icons.check_circle_rounded,
+      60 => Icons.undo_rounded,
+      46 => Icons.assignment_return_rounded,
+      _ => Icons.local_shipping_rounded,
+    };
   }
 
   // ── Shipping Info ───────────────────────────────────────

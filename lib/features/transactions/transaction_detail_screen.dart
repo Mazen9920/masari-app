@@ -3,11 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import '../../l10n/app_localizations.dart';
+import '../../core/navigation/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/category_data.dart';
+import '../../shared/models/bosta_shipment_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
@@ -89,6 +93,11 @@ class TransactionDetailScreen extends ConsumerWidget {
           body: const Center(child: CircularProgressIndicator()),
         );
       }
+    }
+
+    // 3) Bosta daily grouped transactions → show full breakdown view
+    if (liveTx.isEstimate || liveTx.isReconciliation) {
+      return _BostaBreakdownView(transaction: liveTx);
     }
 
     final displayTransaction = liveTx;
@@ -469,5 +478,560 @@ class TransactionDetailScreen extends ConsumerWidget {
         ),
       ],
     );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Full Bosta Daily Transaction Breakdown View
+// ══════════════════════════════════════════════════════════════
+
+class _BostaBreakdownView extends StatelessWidget {
+  final Transaction transaction;
+  const _BostaBreakdownView({required this.transaction});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final feeFmt = NumberFormat('#,##0.00');
+    final isEstimate = transaction.isEstimate;
+    final typeColor =
+        isEstimate ? const Color(0xFF3B82F6) : AppColors.accentOrange;
+
+    // Extract date from ID
+    String dateStr = '';
+    if (transaction.id.startsWith('bosta_est_daily_')) {
+      dateStr = transaction.id.substring('bosta_est_daily_'.length);
+    } else if (transaction.id.startsWith('bosta_rec_daily_')) {
+      dateStr = transaction.id.substring('bosta_rec_daily_'.length);
+    }
+
+    final txField = isEstimate
+        ? 'estimate_transaction_id'
+        : 'reconciliation_transaction_id';
+
+    return Scaffold(
+      backgroundColor: AppColors.backgroundLight,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => context.pop(),
+          icon: const Icon(
+              Icons.arrow_back_rounded, color: AppColors.textPrimary),
+        ),
+        title: Text(
+          isEstimate
+              ? l10n.bostaEstimateTransaction
+              : l10n.bostaReconciliationTransaction,
+          style: AppTypography.h3.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: FutureBuilder<QuerySnapshot>(
+        future: FirebaseFirestore.instance
+            .collection('bosta_shipments')
+            .where('user_id',
+                isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+            .where(txField, isEqualTo: transaction.id)
+            .get(),
+        builder: (context, snap) {
+          final shipments = (snap.data?.docs ?? [])
+              .map((d) => BostaShipment.fromJson(
+                  d.data() as Map<String, dynamic>))
+              .toList();
+
+          // Stats
+          final totalEstimated = shipments.fold<double>(
+              0, (acc, s) => acc + (s.estimatedFee ?? 0));
+          final settledCount =
+              shipments.where((s) => s.totalFees != null).length;
+          final totalActual = shipments.fold<double>(
+              0, (acc, s) => acc + (s.totalFees ?? 0));
+          final totalAdjustment =
+              settledCount > 0 ? totalActual - totalEstimated : 0.0;
+
+          return SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Hero Amount ──
+                Center(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: typeColor.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isEstimate
+                              ? Icons.calculate_rounded
+                              : Icons.swap_vert_rounded,
+                          color: typeColor,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'EGP ${feeFmt.format(transaction.amount.abs())}',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primaryNavy,
+                          fontFamily: 'Inter',
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        dateStr,
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Type badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: typeColor.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: typeColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          isEstimate
+                              ? l10n.bostaEstimateTransaction
+                              : l10n.bostaReconciliationTransaction,
+                          style: AppTypography.captionSmall.copyWith(
+                            color: typeColor,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // ── Summary Stats ──
+                if (snap.connectionState == ConnectionState.done)
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                          color: AppColors.borderLight
+                              .withValues(alpha: 0.4)),
+                    ),
+                    child: Column(
+                      children: [
+                        _summaryRow(
+                          l10n.bostaShipmentCount,
+                          '${shipments.length}',
+                        ),
+                        _summaryRow(
+                          l10n.bostaTotalEstimates,
+                          'EGP ${feeFmt.format(totalEstimated)}',
+                        ),
+                        if (settledCount > 0) ...[
+                          _summaryRow(
+                            l10n.bostaReconciled,
+                            '$settledCount / ${shipments.length}',
+                            valueColor: settledCount == shipments.length
+                                ? AppColors.success
+                                : AppColors.warning,
+                          ),
+                          _summaryRow(
+                            l10n.bostaNetActual,
+                            'EGP ${feeFmt.format(totalActual)}',
+                          ),
+                          _summaryRow(
+                            l10n.bostaTotalAdjustments,
+                            '${totalAdjustment > 0 ? '+' : ''}${feeFmt.format(totalAdjustment)}',
+                            valueColor: totalAdjustment.abs() < 0.01
+                                ? AppColors.textTertiary
+                                : totalAdjustment > 0
+                                    ? AppColors.danger
+                                    : AppColors.success,
+                            isLast: true,
+                          ),
+                        ] else
+                          _summaryRow(
+                            l10n.bostaPendingSettlement,
+                            '${shipments.length} ${l10n.bostaShipmentCount.toLowerCase()}',
+                            valueColor: AppColors.warning,
+                            isLast: true,
+                          ),
+                      ],
+                    ),
+                  ),
+
+                const SizedBox(height: 24),
+
+                // ── Shipment Breakdown ──
+                Text(
+                  l10n.bostaShipmentCount,
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                if (snap.connectionState == ConnectionState.waiting)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else if (shipments.isEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        l10n.bostaShipmentsEmpty,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  ...shipments.map(
+                    (s) => _ShipmentBreakdownTile(
+                      shipment: s,
+                      onTap: () => context.push(
+                        AppRoutes.bostaShipmentDetail,
+                        extra: {'shipment': s},
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 16),
+
+                // ── Audit link ──
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () => context.push(AppRoutes.bostaAudit),
+                    icon: const Icon(Icons.fact_check_rounded, size: 16),
+                    label: Text(l10n.bostaViewAudit),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primaryNavy,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _summaryRow(
+    String label,
+    String value, {
+    Color? valueColor,
+    bool isLast = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : Border(
+                bottom: BorderSide(
+                  color: AppColors.borderLight.withValues(alpha: 0.4),
+                ),
+              ),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: AppTypography.labelMedium.copyWith(
+              color: valueColor ?? AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShipmentBreakdownTile extends StatelessWidget {
+  final BostaShipment shipment;
+  final VoidCallback onTap;
+
+  const _ShipmentBreakdownTile({
+    required this.shipment,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final feeFmt = NumberFormat('#,##0.00');
+    final dateFmt = DateFormat('MMM dd, yyyy');
+
+    final estimated = shipment.estimatedFee ?? 0;
+    final actual = shipment.totalFees;
+    final hasActual = actual != null && actual > 0;
+    final adjustment = hasActual ? (actual - estimated) : 0.0;
+
+    // Status
+    final isReconciled = shipment.isReconciled;
+    final hasEstimate = shipment.estimateRecorded;
+    final statusColor = isReconciled
+        ? AppColors.success
+        : hasEstimate
+            ? const Color(0xFF3B82F6)
+            : AppColors.warning;
+    final statusLabel = isReconciled
+        ? '✓ Settled'
+        : hasEstimate
+            ? 'Est. Only'
+            : 'Pending';
+
+    // State
+    final stateColor = _stateColor(shipment.state);
+    final stateIcon = _stateIcon(shipment.state);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: AppColors.borderLight.withValues(alpha: 0.4)),
+          ),
+          child: Column(
+            children: [
+              // Row 1: State icon + tracking + status badge
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: stateColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(stateIcon, size: 16, color: stateColor),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      shipment.trackingNumber,
+                      style: AppTypography.labelSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      statusLabel,
+                      style: AppTypography.captionSmall.copyWith(
+                        color: statusColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right_rounded,
+                      size: 16, color: AppColors.textTertiary),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              // Row 2: Fee breakdown
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    // Estimated
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text(
+                            'Estimated',
+                            style: AppTypography.captionSmall.copyWith(
+                              color: AppColors.textTertiary,
+                              fontSize: 9,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            estimated > 0
+                                ? feeFmt.format(estimated)
+                                : '-',
+                            style: AppTypography.labelSmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Arrow
+                    Icon(Icons.arrow_forward_rounded,
+                        size: 12, color: AppColors.textTertiary),
+                    // Actual
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text(
+                            'Actual',
+                            style: AppTypography.captionSmall.copyWith(
+                              color: AppColors.textTertiary,
+                              fontSize: 9,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            hasActual ? feeFmt.format(actual) : '—',
+                            style: AppTypography.labelSmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: hasActual
+                                  ? AppColors.textPrimary
+                                  : AppColors.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // = Adjustment
+                    if (hasActual) ...[
+                      Text('=',
+                          style: TextStyle(
+                              color: AppColors.textTertiary, fontSize: 12)),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Text(
+                              'Adj.',
+                              style: AppTypography.captionSmall.copyWith(
+                                color: AppColors.textTertiary,
+                                fontSize: 9,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              adjustment.abs() < 0.01
+                                  ? '±0'
+                                  : '${adjustment > 0 ? '+' : ''}${feeFmt.format(adjustment)}',
+                              style: AppTypography.labelSmall.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: adjustment.abs() < 0.01
+                                    ? AppColors.textTertiary
+                                    : adjustment > 0
+                                        ? AppColors.danger
+                                        : AppColors.success,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Row 3: Dates
+              if (shipment.bostaCreatedAt != null ||
+                  shipment.depositedAt != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (shipment.bostaCreatedAt != null) ...[
+                      Icon(Icons.flight_takeoff_rounded,
+                          size: 10, color: AppColors.textTertiary),
+                      const SizedBox(width: 3),
+                      Text(
+                        dateFmt.format(shipment.bostaCreatedAt!),
+                        style: AppTypography.captionSmall.copyWith(
+                          color: AppColors.textTertiary,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                    if (shipment.bostaCreatedAt != null &&
+                        shipment.depositedAt != null)
+                      const SizedBox(width: 12),
+                    if (shipment.depositedAt != null) ...[
+                      Icon(Icons.account_balance_rounded,
+                          size: 10, color: AppColors.success),
+                      const SizedBox(width: 3),
+                      Text(
+                        dateFmt.format(shipment.depositedAt!),
+                        style: AppTypography.captionSmall.copyWith(
+                          color: AppColors.success,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Color _stateColor(int state) {
+    return switch (state) {
+      45 => AppColors.success,
+      60 => AppColors.danger,
+      46 => AppColors.warning,
+      _ => AppColors.textTertiary,
+    };
+  }
+
+  static IconData _stateIcon(int state) {
+    return switch (state) {
+      45 => Icons.check_circle_rounded,
+      60 => Icons.undo_rounded,
+      46 => Icons.assignment_return_rounded,
+      _ => Icons.local_shipping_rounded,
+    };
   }
 }

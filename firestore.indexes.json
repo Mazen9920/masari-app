@@ -251,6 +251,77 @@
         { "fieldPath": "plan", "order": "ASCENDING" },
         { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "bosta_shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "deposited_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bosta_shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "expense_recorded", "order": "ASCENDING" },
+        { "fieldPath": "deposited_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bosta_shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "awaiting_settlement", "order": "ASCENDING" },
+        { "fieldPath": "deposited_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bosta_shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "matched", "order": "ASCENDING" },
+        { "fieldPath": "deposited_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bosta_shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "expense_recorded", "order": "ASCENDING" },
+        { "fieldPath": "total_fees", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bosta_shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "estimate_recorded", "order": "ASCENDING" },
+        { "fieldPath": "deposited_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "is_estimate", "order": "ASCENDING" },
+        { "fieldPath": "payment_method", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "is_reconciliation", "order": "ASCENDING" },
+        { "fieldPath": "payment_method", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

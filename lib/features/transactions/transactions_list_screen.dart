@@ -1869,9 +1869,14 @@ class _TransactionTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      transaction.title == category.name
-                          ? category.localizedName(AppLocalizations.of(context)!)
-                          : transaction.title,
+                      () {
+                        final base = transaction.title == category.name
+                            ? category.localizedName(AppLocalizations.of(context)!)
+                            : transaction.title;
+                        if (transaction.isEstimate) return '$base (Est.)';
+                        if (transaction.isReconciliation) return '$base (Adj.)';
+                        return base;
+                      }(),
                       style: AppTypography.labelLarge.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w700,

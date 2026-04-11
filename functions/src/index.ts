@@ -32,6 +32,10 @@ export {shopifyProxy} from "./shopify-proxy.js";
 export {shopifyHealthCheck} from "./shopify-health.js";
 export {shopifyDisconnect} from "./shopify-disconnect.js";
 
+// ── Bosta (Shipping Expense Integration) ───────────────────
+export {bostaProxy} from "./bosta-proxy.js";
+export {syncBostaShipments, scheduledBostaSyncDaily, connectBosta, disconnectBosta, migrateBostaToDaily} from "./bosta-sync.js";
+
 // ── Account Management ─────────────────────────────────────
 export {deleteUserData} from "./delete-user-data.js";
 

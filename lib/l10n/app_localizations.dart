@@ -13028,6 +13028,12 @@ abstract class AppLocalizations {
   /// **'Shipping Fees'**
   String get categoryShippingFees;
 
+  /// No description provided for @categoryShippingExpense.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping Expense'**
+  String get categoryShippingExpense;
+
   /// No description provided for @categoryLoanReceived.
   ///
   /// In en, this message translates to:
@@ -13597,6 +13603,792 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to sync with Shopify'**
   String get refreshFromShopifyFailed;
+
+  /// No description provided for @bostaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bosta Shipping'**
+  String get bostaTitle;
+
+  /// No description provided for @bostaConnectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect Bosta'**
+  String get bostaConnectTitle;
+
+  /// No description provided for @bostaConnectSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Link your Bosta account to automatically track shipping expenses from settled deliveries.'**
+  String get bostaConnectSubtitle;
+
+  /// No description provided for @bostaApiKeyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Bosta API Key'**
+  String get bostaApiKeyLabel;
+
+  /// No description provided for @bostaApiKeyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste your Bosta API key'**
+  String get bostaApiKeyHint;
+
+  /// No description provided for @bostaBusinessIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Business ID (optional)'**
+  String get bostaBusinessIdLabel;
+
+  /// No description provided for @bostaBusinessIdHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Bosta business ID'**
+  String get bostaBusinessIdHint;
+
+  /// No description provided for @bostaConnectButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to Bosta'**
+  String get bostaConnectButton;
+
+  /// No description provided for @bostaDisconnectButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect Bosta'**
+  String get bostaDisconnectButton;
+
+  /// No description provided for @bostaDisconnectConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect Bosta?'**
+  String get bostaDisconnectConfirmTitle;
+
+  /// No description provided for @bostaDisconnectConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This will stop syncing shipping expenses from Bosta. Existing transactions won\'t be affected.'**
+  String get bostaDisconnectConfirmBody;
+
+  /// No description provided for @bostaConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting…'**
+  String get bostaConnecting;
+
+  /// No description provided for @bostaConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get bostaConnected;
+
+  /// No description provided for @bostaNotConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected'**
+  String get bostaNotConnected;
+
+  /// No description provided for @bostaConnectionError.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection error'**
+  String get bostaConnectionError;
+
+  /// No description provided for @bostaSectionConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'CONNECTION'**
+  String get bostaSectionConnection;
+
+  /// No description provided for @bostaSectionSync.
+  ///
+  /// In en, this message translates to:
+  /// **'SYNC'**
+  String get bostaSectionSync;
+
+  /// No description provided for @bostaSectionShipments.
+  ///
+  /// In en, this message translates to:
+  /// **'SHIPMENTS'**
+  String get bostaSectionShipments;
+
+  /// No description provided for @bostaSectionActions.
+  ///
+  /// In en, this message translates to:
+  /// **'ACTIONS'**
+  String get bostaSectionActions;
+
+  /// No description provided for @bostaStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get bostaStatus;
+
+  /// No description provided for @bostaConnectedSince.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected since'**
+  String get bostaConnectedSince;
+
+  /// No description provided for @bostaLastSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Last sync'**
+  String get bostaLastSync;
+
+  /// No description provided for @bostaAutoSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily auto-sync'**
+  String get bostaAutoSync;
+
+  /// No description provided for @bostaAutoSyncDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically sync new shipments every day'**
+  String get bostaAutoSyncDesc;
+
+  /// No description provided for @bostaSyncNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now'**
+  String get bostaSyncNow;
+
+  /// No description provided for @bostaSyncNowDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch latest shipments from Bosta'**
+  String get bostaSyncNowDesc;
+
+  /// No description provided for @bostaNextSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Next sync'**
+  String get bostaNextSync;
+
+  /// No description provided for @bostaFullSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Full sync'**
+  String get bostaFullSync;
+
+  /// No description provided for @bostaFullSyncDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-sync all shipments from scratch'**
+  String get bostaFullSyncDesc;
+
+  /// No description provided for @bostaViewShipments.
+  ///
+  /// In en, this message translates to:
+  /// **'View Shipments'**
+  String get bostaViewShipments;
+
+  /// No description provided for @bostaViewShipmentsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse all synced Bosta deliveries'**
+  String get bostaViewShipmentsDesc;
+
+  /// No description provided for @bostaSyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing…'**
+  String get bostaSyncing;
+
+  /// No description provided for @bostaSyncSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync complete'**
+  String get bostaSyncSuccess;
+
+  /// No description provided for @bostaSyncFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync failed'**
+  String get bostaSyncFailed;
+
+  /// No description provided for @bostaSyncPhaseCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning deliveries…'**
+  String get bostaSyncPhaseCatalog;
+
+  /// No description provided for @bostaSyncPhaseSettlement.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking settlements…'**
+  String get bostaSyncPhaseSettlement;
+
+  /// No description provided for @bostaSyncPhaseStats.
+  ///
+  /// In en, this message translates to:
+  /// **'Computing stats…'**
+  String get bostaSyncPhaseStats;
+
+  /// No description provided for @bostaShipmentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bosta Shipments'**
+  String get bostaShipmentsTitle;
+
+  /// No description provided for @bostaShipmentsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No shipments found'**
+  String get bostaShipmentsEmpty;
+
+  /// No description provided for @bostaShipmentsEmptyDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Synced Bosta deliveries will appear here'**
+  String get bostaShipmentsEmptyDesc;
+
+  /// No description provided for @bostaFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get bostaFilterAll;
+
+  /// No description provided for @bostaFilterSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled'**
+  String get bostaFilterSettled;
+
+  /// No description provided for @bostaFilterPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get bostaFilterPending;
+
+  /// No description provided for @bostaFilterMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Matched'**
+  String get bostaFilterMatched;
+
+  /// No description provided for @bostaFilterUnlinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlinked'**
+  String get bostaFilterUnlinked;
+
+  /// No description provided for @bostaShipmentDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipment Detail'**
+  String get bostaShipmentDetail;
+
+  /// No description provided for @bostaTrackingNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking Number'**
+  String get bostaTrackingNumber;
+
+  /// No description provided for @bostaState.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get bostaState;
+
+  /// No description provided for @bostaType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get bostaType;
+
+  /// No description provided for @bostaBusinessRef.
+  ///
+  /// In en, this message translates to:
+  /// **'Business Reference'**
+  String get bostaBusinessRef;
+
+  /// No description provided for @bostaLinkedSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale'**
+  String get bostaLinkedSale;
+
+  /// No description provided for @bostaUnlinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlinked'**
+  String get bostaUnlinked;
+
+  /// No description provided for @bostaSettled.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled'**
+  String get bostaSettled;
+
+  /// No description provided for @bostaPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending settlement'**
+  String get bostaPending;
+
+  /// No description provided for @bostaFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Fees'**
+  String get bostaFees;
+
+  /// No description provided for @bostaTotalFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Fees'**
+  String get bostaTotalFees;
+
+  /// No description provided for @bostaFeeBreakdown.
+  ///
+  /// In en, this message translates to:
+  /// **'FEE BREAKDOWN'**
+  String get bostaFeeBreakdown;
+
+  /// No description provided for @bostaShipmentInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'SHIPMENT INFO'**
+  String get bostaShipmentInfo;
+
+  /// No description provided for @bostaExpenseInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'EXPENSE'**
+  String get bostaExpenseInfo;
+
+  /// No description provided for @bostaExpenseRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Expense recorded'**
+  String get bostaExpenseRecorded;
+
+  /// No description provided for @bostaExpenseNotRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Not yet recorded'**
+  String get bostaExpenseNotRecorded;
+
+  /// No description provided for @bostaCOD.
+  ///
+  /// In en, this message translates to:
+  /// **'COD Amount'**
+  String get bostaCOD;
+
+  /// No description provided for @bostaDepositedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposited'**
+  String get bostaDepositedAt;
+
+  /// No description provided for @bostaSyncedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Last synced'**
+  String get bostaSyncedAt;
+
+  /// No description provided for @bostaShippingFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping'**
+  String get bostaShippingFees;
+
+  /// No description provided for @bostaFulfillmentFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Fulfillment'**
+  String get bostaFulfillmentFees;
+
+  /// No description provided for @bostaVat.
+  ///
+  /// In en, this message translates to:
+  /// **'VAT'**
+  String get bostaVat;
+
+  /// No description provided for @bostaCodFees.
+  ///
+  /// In en, this message translates to:
+  /// **'COD fees'**
+  String get bostaCodFees;
+
+  /// No description provided for @bostaInsuranceFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Insurance'**
+  String get bostaInsuranceFees;
+
+  /// No description provided for @bostaExpediteFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Expedite'**
+  String get bostaExpediteFees;
+
+  /// No description provided for @bostaOpeningPackageFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening package'**
+  String get bostaOpeningPackageFees;
+
+  /// No description provided for @bostaFlexShipFees.
+  ///
+  /// In en, this message translates to:
+  /// **'FlexShip'**
+  String get bostaFlexShipFees;
+
+  /// No description provided for @bostaPosFees.
+  ///
+  /// In en, this message translates to:
+  /// **'POS'**
+  String get bostaPosFees;
+
+  /// No description provided for @bostaCollectionFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Collection'**
+  String get bostaCollectionFees;
+
+  /// No description provided for @bostaStatsTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get bostaStatsTotal;
+
+  /// No description provided for @bostaStatsMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Matched'**
+  String get bostaStatsMatched;
+
+  /// No description provided for @bostaStatsUnlinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlinked'**
+  String get bostaStatsUnlinked;
+
+  /// No description provided for @bostaStatsTotalFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Total fees'**
+  String get bostaStatsTotalFees;
+
+  /// No description provided for @bostaInfoSecureKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Secure API Key'**
+  String get bostaInfoSecureKey;
+
+  /// No description provided for @bostaInfoSecureKeyDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Your API key is encrypted and stored securely on our servers — it never touches your device.'**
+  String get bostaInfoSecureKeyDesc;
+
+  /// No description provided for @bostaInfoAutoExpense.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto Expense Tracking'**
+  String get bostaInfoAutoExpense;
+
+  /// No description provided for @bostaInfoAutoExpenseDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Settled Bosta fees are automatically recorded as shipping expenses in your P&L.'**
+  String get bostaInfoAutoExpenseDesc;
+
+  /// No description provided for @bostaInfoSaleMatching.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale Matching'**
+  String get bostaInfoSaleMatching;
+
+  /// No description provided for @bostaInfoSaleMatchingDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipments are matched to your Revvo sales by order reference for full traceability.'**
+  String get bostaInfoSaleMatchingDesc;
+
+  /// No description provided for @bostaInfoDisconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect Anytime'**
+  String get bostaInfoDisconnect;
+
+  /// No description provided for @bostaInfoDisconnectDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'You can disconnect Bosta at any time. Existing expense records won\'t be affected.'**
+  String get bostaInfoDisconnectDesc;
+
+  /// No description provided for @bostaSyncPeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync period'**
+  String get bostaSyncPeriod;
+
+  /// No description provided for @bostaSyncLast7Days.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get bostaSyncLast7Days;
+
+  /// No description provided for @bostaSyncLast30Days.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 30 days'**
+  String get bostaSyncLast30Days;
+
+  /// No description provided for @bostaSyncLast3Months.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 3 months'**
+  String get bostaSyncLast3Months;
+
+  /// No description provided for @bostaSyncAllTime.
+  ///
+  /// In en, this message translates to:
+  /// **'All time'**
+  String get bostaSyncAllTime;
+
+  /// No description provided for @bostaSyncCustomRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom range'**
+  String get bostaSyncCustomRange;
+
+  /// No description provided for @bostaSyncStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start sync'**
+  String get bostaSyncStart;
+
+  /// No description provided for @profileBostaIntegration.
+  ///
+  /// In en, this message translates to:
+  /// **'Bosta Shipping'**
+  String get profileBostaIntegration;
+
+  /// No description provided for @profileBostaConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get profileBostaConnected;
+
+  /// No description provided for @profileBostaNotConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected'**
+  String get profileBostaNotConnected;
+
+  /// No description provided for @featureBostaIntegration.
+  ///
+  /// In en, this message translates to:
+  /// **'Bosta Integration'**
+  String get featureBostaIntegration;
+
+  /// No description provided for @featureBostaIntegrationDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Track shipping expenses automatically from your Bosta deliveries'**
+  String get featureBostaIntegrationDesc;
+
+  /// No description provided for @bostaShippingCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Bosta Shipping'**
+  String get bostaShippingCard;
+
+  /// No description provided for @bostaEstimatedFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated Fee'**
+  String get bostaEstimatedFee;
+
+  /// No description provided for @bostaActualFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Actual Fee'**
+  String get bostaActualFee;
+
+  /// No description provided for @bostaViewShipment.
+  ///
+  /// In en, this message translates to:
+  /// **'View Shipment'**
+  String get bostaViewShipment;
+
+  /// No description provided for @bostaAuditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bosta Accrual Audit'**
+  String get bostaAuditTitle;
+
+  /// No description provided for @bostaTotalEstimates.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Estimates'**
+  String get bostaTotalEstimates;
+
+  /// No description provided for @bostaTotalAdjustments.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Adjustments'**
+  String get bostaTotalAdjustments;
+
+  /// No description provided for @bostaNetActual.
+  ///
+  /// In en, this message translates to:
+  /// **'Net Actual'**
+  String get bostaNetActual;
+
+  /// No description provided for @bostaRunningAverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Running Average'**
+  String get bostaRunningAverage;
+
+  /// No description provided for @bostaEstimateOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated Only'**
+  String get bostaEstimateOnly;
+
+  /// No description provided for @bostaFullyReconciled.
+  ///
+  /// In en, this message translates to:
+  /// **'Fully Reconciled'**
+  String get bostaFullyReconciled;
+
+  /// No description provided for @bostaPendingEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending Estimate'**
+  String get bostaPendingEstimate;
+
+  /// No description provided for @bostaAdjustment.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjustment'**
+  String get bostaAdjustment;
+
+  /// No description provided for @bostaContainsShipments.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} shipments'**
+  String bostaContainsShipments(int count);
+
+  /// No description provided for @bostaFulfillmentDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Fulfillment Date'**
+  String get bostaFulfillmentDate;
+
+  /// No description provided for @bostaSettlementDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Settlement Date'**
+  String get bostaSettlementDate;
+
+  /// No description provided for @bostaFilterReconciled.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconciled'**
+  String get bostaFilterReconciled;
+
+  /// No description provided for @bostaFilterEstimateOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Est. Only'**
+  String get bostaFilterEstimateOnly;
+
+  /// No description provided for @bostaAccrualInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'ACCRUAL'**
+  String get bostaAccrualInfo;
+
+  /// No description provided for @bostaEstRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate recorded'**
+  String get bostaEstRecorded;
+
+  /// No description provided for @bostaReconciled.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconciled'**
+  String get bostaReconciled;
+
+  /// No description provided for @bostaPendingSettlement.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending settlement'**
+  String get bostaPendingSettlement;
+
+  /// No description provided for @bostaNoAdjustment.
+  ///
+  /// In en, this message translates to:
+  /// **'No adjustment'**
+  String get bostaNoAdjustment;
+
+  /// No description provided for @bostaExtraExpense.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra expense'**
+  String get bostaExtraExpense;
+
+  /// No description provided for @bostaCreditBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Credit back'**
+  String get bostaCreditBack;
+
+  /// No description provided for @bostaTransactionType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get bostaTransactionType;
+
+  /// No description provided for @bostaEstimateTransaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping Estimate'**
+  String get bostaEstimateTransaction;
+
+  /// No description provided for @bostaReconciliationTransaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipping Adjustment'**
+  String get bostaReconciliationTransaction;
+
+  /// No description provided for @bostaShipmentCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Shipments'**
+  String get bostaShipmentCount;
+
+  /// No description provided for @bostaViewAudit.
+  ///
+  /// In en, this message translates to:
+  /// **'View Accrual Audit'**
+  String get bostaViewAudit;
+
+  /// No description provided for @bostaSortFulfillment.
+  ///
+  /// In en, this message translates to:
+  /// **'Fulfillment'**
+  String get bostaSortFulfillment;
+
+  /// No description provided for @bostaSortSettlement.
+  ///
+  /// In en, this message translates to:
+  /// **'Settlement'**
+  String get bostaSortSettlement;
+
+  /// No description provided for @bostaSortAdjustment.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjustment'**
+  String get bostaSortAdjustment;
 }
 
 class _AppLocalizationsDelegate

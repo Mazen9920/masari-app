@@ -12,6 +12,7 @@ import '../../core/providers/business_profile_provider.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/navigation/app_router.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
+import '../../core/providers/bosta_connection_provider.dart';
 import '../../shared/utils/safe_pop.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -32,6 +33,9 @@ class ProfileScreen extends ConsumerWidget {
         ? ref.watch(shopifyConnectionProvider).value
         : null;
     final isShopifyConnected = shopifyConn?.isActive ?? false;
+
+    // Bosta connection status
+    final isBostaConnected = ref.watch(isBostaConnectedProvider);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -120,6 +124,15 @@ class ProfileScreen extends ConsumerWidget {
                         title: l10n.profileShopifyIntegration,
                         subtitle: isShopifyConnected ? l10n.profileShopifyConnected : l10n.profileShopifyNotConnected,
                         onTap: () => context.push(AppRoutes.shopify),
+                      ),
+                    if (hasShopifyAccess)
+                      _SettingItem(
+                        icon: Icons.local_shipping_rounded,
+                        iconBg: const Color(0xFFFEF2F2),
+                        iconColor: const Color(0xFFE2342D),
+                        title: l10n.profileBostaIntegration,
+                        subtitle: isBostaConnected ? l10n.profileBostaConnected : l10n.profileBostaNotConnected,
+                        onTap: () => context.push(AppRoutes.bosta),
                       ),
                     _SettingItem(
                       icon: Icons.lock_outline_rounded,

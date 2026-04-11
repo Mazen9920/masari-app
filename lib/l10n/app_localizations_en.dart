@@ -7335,6 +7335,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get categoryShippingFees => 'Shipping Fees';
 
   @override
+  String get categoryShippingExpense => 'Shipping Expense';
+
+  @override
   String get categoryLoanReceived => 'Loan Received';
 
   @override
@@ -7643,4 +7646,407 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refreshFromShopifyFailed => 'Failed to sync with Shopify';
+
+  @override
+  String get bostaTitle => 'Bosta Shipping';
+
+  @override
+  String get bostaConnectTitle => 'Connect Bosta';
+
+  @override
+  String get bostaConnectSubtitle =>
+      'Link your Bosta account to automatically track shipping expenses from settled deliveries.';
+
+  @override
+  String get bostaApiKeyLabel => 'Bosta API Key';
+
+  @override
+  String get bostaApiKeyHint => 'Paste your Bosta API key';
+
+  @override
+  String get bostaBusinessIdLabel => 'Business ID (optional)';
+
+  @override
+  String get bostaBusinessIdHint => 'Your Bosta business ID';
+
+  @override
+  String get bostaConnectButton => 'Connect to Bosta';
+
+  @override
+  String get bostaDisconnectButton => 'Disconnect Bosta';
+
+  @override
+  String get bostaDisconnectConfirmTitle => 'Disconnect Bosta?';
+
+  @override
+  String get bostaDisconnectConfirmBody =>
+      'This will stop syncing shipping expenses from Bosta. Existing transactions won\'t be affected.';
+
+  @override
+  String get bostaConnecting => 'Connecting…';
+
+  @override
+  String get bostaConnected => 'Connected';
+
+  @override
+  String get bostaNotConnected => 'Not connected';
+
+  @override
+  String get bostaConnectionError => 'Connection error';
+
+  @override
+  String get bostaSectionConnection => 'CONNECTION';
+
+  @override
+  String get bostaSectionSync => 'SYNC';
+
+  @override
+  String get bostaSectionShipments => 'SHIPMENTS';
+
+  @override
+  String get bostaSectionActions => 'ACTIONS';
+
+  @override
+  String get bostaStatus => 'Status';
+
+  @override
+  String get bostaConnectedSince => 'Connected since';
+
+  @override
+  String get bostaLastSync => 'Last sync';
+
+  @override
+  String get bostaAutoSync => 'Daily auto-sync';
+
+  @override
+  String get bostaAutoSyncDesc => 'Automatically sync new shipments every day';
+
+  @override
+  String get bostaSyncNow => 'Sync now';
+
+  @override
+  String get bostaSyncNowDesc => 'Fetch latest shipments from Bosta';
+
+  @override
+  String get bostaNextSync => 'Next sync';
+
+  @override
+  String get bostaFullSync => 'Full sync';
+
+  @override
+  String get bostaFullSyncDesc => 'Re-sync all shipments from scratch';
+
+  @override
+  String get bostaViewShipments => 'View Shipments';
+
+  @override
+  String get bostaViewShipmentsDesc => 'Browse all synced Bosta deliveries';
+
+  @override
+  String get bostaSyncing => 'Syncing…';
+
+  @override
+  String get bostaSyncSuccess => 'Sync complete';
+
+  @override
+  String get bostaSyncFailed => 'Sync failed';
+
+  @override
+  String get bostaSyncPhaseCatalog => 'Scanning deliveries…';
+
+  @override
+  String get bostaSyncPhaseSettlement => 'Checking settlements…';
+
+  @override
+  String get bostaSyncPhaseStats => 'Computing stats…';
+
+  @override
+  String get bostaShipmentsTitle => 'Bosta Shipments';
+
+  @override
+  String get bostaShipmentsEmpty => 'No shipments found';
+
+  @override
+  String get bostaShipmentsEmptyDesc =>
+      'Synced Bosta deliveries will appear here';
+
+  @override
+  String get bostaFilterAll => 'All';
+
+  @override
+  String get bostaFilterSettled => 'Settled';
+
+  @override
+  String get bostaFilterPending => 'Pending';
+
+  @override
+  String get bostaFilterMatched => 'Matched';
+
+  @override
+  String get bostaFilterUnlinked => 'Unlinked';
+
+  @override
+  String get bostaShipmentDetail => 'Shipment Detail';
+
+  @override
+  String get bostaTrackingNumber => 'Tracking Number';
+
+  @override
+  String get bostaState => 'State';
+
+  @override
+  String get bostaType => 'Type';
+
+  @override
+  String get bostaBusinessRef => 'Business Reference';
+
+  @override
+  String get bostaLinkedSale => 'Sale';
+
+  @override
+  String get bostaUnlinked => 'Unlinked';
+
+  @override
+  String get bostaSettled => 'Settled';
+
+  @override
+  String get bostaPending => 'Pending settlement';
+
+  @override
+  String get bostaFees => 'Fees';
+
+  @override
+  String get bostaTotalFees => 'Total Fees';
+
+  @override
+  String get bostaFeeBreakdown => 'FEE BREAKDOWN';
+
+  @override
+  String get bostaShipmentInfo => 'SHIPMENT INFO';
+
+  @override
+  String get bostaExpenseInfo => 'EXPENSE';
+
+  @override
+  String get bostaExpenseRecorded => 'Expense recorded';
+
+  @override
+  String get bostaExpenseNotRecorded => 'Not yet recorded';
+
+  @override
+  String get bostaCOD => 'COD Amount';
+
+  @override
+  String get bostaDepositedAt => 'Deposited';
+
+  @override
+  String get bostaSyncedAt => 'Last synced';
+
+  @override
+  String get bostaShippingFees => 'Shipping';
+
+  @override
+  String get bostaFulfillmentFees => 'Fulfillment';
+
+  @override
+  String get bostaVat => 'VAT';
+
+  @override
+  String get bostaCodFees => 'COD fees';
+
+  @override
+  String get bostaInsuranceFees => 'Insurance';
+
+  @override
+  String get bostaExpediteFees => 'Expedite';
+
+  @override
+  String get bostaOpeningPackageFees => 'Opening package';
+
+  @override
+  String get bostaFlexShipFees => 'FlexShip';
+
+  @override
+  String get bostaPosFees => 'POS';
+
+  @override
+  String get bostaCollectionFees => 'Collection';
+
+  @override
+  String get bostaStatsTotal => 'Total';
+
+  @override
+  String get bostaStatsMatched => 'Matched';
+
+  @override
+  String get bostaStatsUnlinked => 'Unlinked';
+
+  @override
+  String get bostaStatsTotalFees => 'Total fees';
+
+  @override
+  String get bostaInfoSecureKey => 'Secure API Key';
+
+  @override
+  String get bostaInfoSecureKeyDesc =>
+      'Your API key is encrypted and stored securely on our servers — it never touches your device.';
+
+  @override
+  String get bostaInfoAutoExpense => 'Auto Expense Tracking';
+
+  @override
+  String get bostaInfoAutoExpenseDesc =>
+      'Settled Bosta fees are automatically recorded as shipping expenses in your P&L.';
+
+  @override
+  String get bostaInfoSaleMatching => 'Sale Matching';
+
+  @override
+  String get bostaInfoSaleMatchingDesc =>
+      'Shipments are matched to your Revvo sales by order reference for full traceability.';
+
+  @override
+  String get bostaInfoDisconnect => 'Disconnect Anytime';
+
+  @override
+  String get bostaInfoDisconnectDesc =>
+      'You can disconnect Bosta at any time. Existing expense records won\'t be affected.';
+
+  @override
+  String get bostaSyncPeriod => 'Sync period';
+
+  @override
+  String get bostaSyncLast7Days => 'Last 7 days';
+
+  @override
+  String get bostaSyncLast30Days => 'Last 30 days';
+
+  @override
+  String get bostaSyncLast3Months => 'Last 3 months';
+
+  @override
+  String get bostaSyncAllTime => 'All time';
+
+  @override
+  String get bostaSyncCustomRange => 'Custom range';
+
+  @override
+  String get bostaSyncStart => 'Start sync';
+
+  @override
+  String get profileBostaIntegration => 'Bosta Shipping';
+
+  @override
+  String get profileBostaConnected => 'Connected';
+
+  @override
+  String get profileBostaNotConnected => 'Not connected';
+
+  @override
+  String get featureBostaIntegration => 'Bosta Integration';
+
+  @override
+  String get featureBostaIntegrationDesc =>
+      'Track shipping expenses automatically from your Bosta deliveries';
+
+  @override
+  String get bostaShippingCard => 'Bosta Shipping';
+
+  @override
+  String get bostaEstimatedFee => 'Estimated Fee';
+
+  @override
+  String get bostaActualFee => 'Actual Fee';
+
+  @override
+  String get bostaViewShipment => 'View Shipment';
+
+  @override
+  String get bostaAuditTitle => 'Bosta Accrual Audit';
+
+  @override
+  String get bostaTotalEstimates => 'Total Estimates';
+
+  @override
+  String get bostaTotalAdjustments => 'Total Adjustments';
+
+  @override
+  String get bostaNetActual => 'Net Actual';
+
+  @override
+  String get bostaRunningAverage => 'Running Average';
+
+  @override
+  String get bostaEstimateOnly => 'Estimated Only';
+
+  @override
+  String get bostaFullyReconciled => 'Fully Reconciled';
+
+  @override
+  String get bostaPendingEstimate => 'Pending Estimate';
+
+  @override
+  String get bostaAdjustment => 'Adjustment';
+
+  @override
+  String bostaContainsShipments(int count) {
+    return '$count shipments';
+  }
+
+  @override
+  String get bostaFulfillmentDate => 'Fulfillment Date';
+
+  @override
+  String get bostaSettlementDate => 'Settlement Date';
+
+  @override
+  String get bostaFilterReconciled => 'Reconciled';
+
+  @override
+  String get bostaFilterEstimateOnly => 'Est. Only';
+
+  @override
+  String get bostaAccrualInfo => 'ACCRUAL';
+
+  @override
+  String get bostaEstRecorded => 'Estimate recorded';
+
+  @override
+  String get bostaReconciled => 'Reconciled';
+
+  @override
+  String get bostaPendingSettlement => 'Pending settlement';
+
+  @override
+  String get bostaNoAdjustment => 'No adjustment';
+
+  @override
+  String get bostaExtraExpense => 'Extra expense';
+
+  @override
+  String get bostaCreditBack => 'Credit back';
+
+  @override
+  String get bostaTransactionType => 'Type';
+
+  @override
+  String get bostaEstimateTransaction => 'Shipping Estimate';
+
+  @override
+  String get bostaReconciliationTransaction => 'Shipping Adjustment';
+
+  @override
+  String get bostaShipmentCount => 'Shipments';
+
+  @override
+  String get bostaViewAudit => 'View Accrual Audit';
+
+  @override
+  String get bostaSortFulfillment => 'Fulfillment';
+
+  @override
+  String get bostaSortSettlement => 'Settlement';
+
+  @override
+  String get bostaSortAdjustment => 'Adjustment';
 }

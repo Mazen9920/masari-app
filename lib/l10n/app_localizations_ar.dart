@@ -7239,6 +7239,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get categoryShippingFees => 'رسوم الشحن';
 
   @override
+  String get categoryShippingExpense => 'مصاريف الشحن';
+
+  @override
   String get categoryLoanReceived => 'قرض مُستلَم';
 
   @override
@@ -7544,4 +7547,406 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get refreshFromShopifyFailed => 'فشل المزامنة مع Shopify';
+
+  @override
+  String get bostaTitle => 'شحن بوسطة';
+
+  @override
+  String get bostaConnectTitle => 'ربط بوسطة';
+
+  @override
+  String get bostaConnectSubtitle =>
+      'اربط حسابك على بوسطة لتتبع مصاريف الشحن تلقائياً من الشحنات المُسوّاة.';
+
+  @override
+  String get bostaApiKeyLabel => 'مفتاح API بوسطة';
+
+  @override
+  String get bostaApiKeyHint => 'الصق مفتاح API الخاص ببوسطة';
+
+  @override
+  String get bostaBusinessIdLabel => 'رقم النشاط (اختياري)';
+
+  @override
+  String get bostaBusinessIdHint => 'رقم نشاطك في بوسطة';
+
+  @override
+  String get bostaConnectButton => 'ربط بوسطة';
+
+  @override
+  String get bostaDisconnectButton => 'قطع اتصال بوسطة';
+
+  @override
+  String get bostaDisconnectConfirmTitle => 'قطع اتصال بوسطة؟';
+
+  @override
+  String get bostaDisconnectConfirmBody =>
+      'سيتوقف مزامنة مصاريف الشحن من بوسطة. المعاملات الحالية لن تتأثر.';
+
+  @override
+  String get bostaConnecting => 'جاري الربط…';
+
+  @override
+  String get bostaConnected => 'متصل';
+
+  @override
+  String get bostaNotConnected => 'غير متصل';
+
+  @override
+  String get bostaConnectionError => 'خطأ في الاتصال';
+
+  @override
+  String get bostaSectionConnection => 'الاتصال';
+
+  @override
+  String get bostaSectionSync => 'المزامنة';
+
+  @override
+  String get bostaSectionShipments => 'الشحنات';
+
+  @override
+  String get bostaSectionActions => 'الإجراءات';
+
+  @override
+  String get bostaStatus => 'الحالة';
+
+  @override
+  String get bostaConnectedSince => 'متصل منذ';
+
+  @override
+  String get bostaLastSync => 'آخر مزامنة';
+
+  @override
+  String get bostaAutoSync => 'مزامنة يومية تلقائية';
+
+  @override
+  String get bostaAutoSyncDesc => 'مزامنة الشحنات الجديدة تلقائياً كل يوم';
+
+  @override
+  String get bostaSyncNow => 'مزامنة الآن';
+
+  @override
+  String get bostaSyncNowDesc => 'جلب أحدث الشحنات من بوسطة';
+
+  @override
+  String get bostaNextSync => 'المزامنة القادمة';
+
+  @override
+  String get bostaFullSync => 'مزامنة كاملة';
+
+  @override
+  String get bostaFullSyncDesc => 'إعادة مزامنة كل الشحنات من البداية';
+
+  @override
+  String get bostaViewShipments => 'عرض الشحنات';
+
+  @override
+  String get bostaViewShipmentsDesc => 'تصفح جميع شحنات بوسطة المُزامنة';
+
+  @override
+  String get bostaSyncing => 'جاري المزامنة…';
+
+  @override
+  String get bostaSyncSuccess => 'تمت المزامنة';
+
+  @override
+  String get bostaSyncFailed => 'فشلت المزامنة';
+
+  @override
+  String get bostaSyncPhaseCatalog => 'جاري فحص الشحنات…';
+
+  @override
+  String get bostaSyncPhaseSettlement => 'جاري فحص التسويات…';
+
+  @override
+  String get bostaSyncPhaseStats => 'جاري حساب الإحصائيات…';
+
+  @override
+  String get bostaShipmentsTitle => 'شحنات بوسطة';
+
+  @override
+  String get bostaShipmentsEmpty => 'لا توجد شحنات';
+
+  @override
+  String get bostaShipmentsEmptyDesc => 'ستظهر شحنات بوسطة المُزامنة هنا';
+
+  @override
+  String get bostaFilterAll => 'الكل';
+
+  @override
+  String get bostaFilterSettled => 'مُسوّاة';
+
+  @override
+  String get bostaFilterPending => 'معلقة';
+
+  @override
+  String get bostaFilterMatched => 'مرتبطة';
+
+  @override
+  String get bostaFilterUnlinked => 'غير مرتبطة';
+
+  @override
+  String get bostaShipmentDetail => 'تفاصيل الشحنة';
+
+  @override
+  String get bostaTrackingNumber => 'رقم التتبع';
+
+  @override
+  String get bostaState => 'الحالة';
+
+  @override
+  String get bostaType => 'النوع';
+
+  @override
+  String get bostaBusinessRef => 'مرجع الطلب';
+
+  @override
+  String get bostaLinkedSale => 'الطلب';
+
+  @override
+  String get bostaUnlinked => 'غير مرتبطة';
+
+  @override
+  String get bostaSettled => 'مُسوّاة';
+
+  @override
+  String get bostaPending => 'في انتظار التسوية';
+
+  @override
+  String get bostaFees => 'الرسوم';
+
+  @override
+  String get bostaTotalFees => 'إجمالي الرسوم';
+
+  @override
+  String get bostaFeeBreakdown => 'تفصيل الرسوم';
+
+  @override
+  String get bostaShipmentInfo => 'معلومات الشحنة';
+
+  @override
+  String get bostaExpenseInfo => 'المصروف';
+
+  @override
+  String get bostaExpenseRecorded => 'تم تسجيل المصروف';
+
+  @override
+  String get bostaExpenseNotRecorded => 'لم يُسجل بعد';
+
+  @override
+  String get bostaCOD => 'مبلغ الدفع عند الاستلام';
+
+  @override
+  String get bostaDepositedAt => 'تاريخ الإيداع';
+
+  @override
+  String get bostaSyncedAt => 'آخر مزامنة';
+
+  @override
+  String get bostaShippingFees => 'الشحن';
+
+  @override
+  String get bostaFulfillmentFees => 'التوصيل';
+
+  @override
+  String get bostaVat => 'ضريبة القيمة المضافة';
+
+  @override
+  String get bostaCodFees => 'رسوم الدفع عند الاستلام';
+
+  @override
+  String get bostaInsuranceFees => 'التأمين';
+
+  @override
+  String get bostaExpediteFees => 'الشحن السريع';
+
+  @override
+  String get bostaOpeningPackageFees => 'فتح الطرد';
+
+  @override
+  String get bostaFlexShipFees => 'FlexShip';
+
+  @override
+  String get bostaPosFees => 'نقطة البيع';
+
+  @override
+  String get bostaCollectionFees => 'التحصيل';
+
+  @override
+  String get bostaStatsTotal => 'الإجمالي';
+
+  @override
+  String get bostaStatsMatched => 'مرتبطة';
+
+  @override
+  String get bostaStatsUnlinked => 'غير مرتبطة';
+
+  @override
+  String get bostaStatsTotalFees => 'إجمالي الرسوم';
+
+  @override
+  String get bostaInfoSecureKey => 'مفتاح API آمن';
+
+  @override
+  String get bostaInfoSecureKeyDesc =>
+      'مفتاح API مشفر ومحفوظ بأمان على خوادمنا — لا يمر بجهازك أبداً.';
+
+  @override
+  String get bostaInfoAutoExpense => 'تتبع المصاريف تلقائياً';
+
+  @override
+  String get bostaInfoAutoExpenseDesc =>
+      'رسوم بوسطة المُسوّاة تُسجل تلقائياً كمصاريف شحن في قائمة الدخل.';
+
+  @override
+  String get bostaInfoSaleMatching => 'ربط المبيعات';
+
+  @override
+  String get bostaInfoSaleMatchingDesc =>
+      'تُربط الشحنات بمبيعات Revvo عبر رقم الطلب لتتبع كامل.';
+
+  @override
+  String get bostaInfoDisconnect => 'قطع الاتصال في أي وقت';
+
+  @override
+  String get bostaInfoDisconnectDesc =>
+      'يمكنك قطع اتصال بوسطة في أي وقت. السجلات الحالية لن تتأثر.';
+
+  @override
+  String get bostaSyncPeriod => 'فترة المزامنة';
+
+  @override
+  String get bostaSyncLast7Days => 'آخر ٧ أيام';
+
+  @override
+  String get bostaSyncLast30Days => 'آخر ٣٠ يوم';
+
+  @override
+  String get bostaSyncLast3Months => 'آخر ٣ أشهر';
+
+  @override
+  String get bostaSyncAllTime => 'الكل';
+
+  @override
+  String get bostaSyncCustomRange => 'فترة مخصصة';
+
+  @override
+  String get bostaSyncStart => 'بدء المزامنة';
+
+  @override
+  String get profileBostaIntegration => 'شحن بوسطة';
+
+  @override
+  String get profileBostaConnected => 'متصل';
+
+  @override
+  String get profileBostaNotConnected => 'غير متصل';
+
+  @override
+  String get featureBostaIntegration => 'تكامل بوسطة';
+
+  @override
+  String get featureBostaIntegrationDesc =>
+      'تتبع مصاريف الشحن تلقائياً من شحنات بوسطة';
+
+  @override
+  String get bostaShippingCard => 'شحن بوسطة';
+
+  @override
+  String get bostaEstimatedFee => 'الرسوم المُقدَّرة';
+
+  @override
+  String get bostaActualFee => 'الرسوم الفعلية';
+
+  @override
+  String get bostaViewShipment => 'عرض الشحنة';
+
+  @override
+  String get bostaAuditTitle => 'تدقيق استحقاق بوسطة';
+
+  @override
+  String get bostaTotalEstimates => 'إجمالي التقديرات';
+
+  @override
+  String get bostaTotalAdjustments => 'إجمالي التسويات';
+
+  @override
+  String get bostaNetActual => 'صافي الفعلي';
+
+  @override
+  String get bostaRunningAverage => 'المتوسط المتحرك';
+
+  @override
+  String get bostaEstimateOnly => 'تقدير فقط';
+
+  @override
+  String get bostaFullyReconciled => 'تمت التسوية';
+
+  @override
+  String get bostaPendingEstimate => 'في انتظار التقدير';
+
+  @override
+  String get bostaAdjustment => 'التسوية';
+
+  @override
+  String bostaContainsShipments(int count) {
+    return '$count شحنات';
+  }
+
+  @override
+  String get bostaFulfillmentDate => 'تاريخ التنفيذ';
+
+  @override
+  String get bostaSettlementDate => 'تاريخ التسوية';
+
+  @override
+  String get bostaFilterReconciled => 'مُسوّاة';
+
+  @override
+  String get bostaFilterEstimateOnly => 'تقدير فقط';
+
+  @override
+  String get bostaAccrualInfo => 'الاستحقاق';
+
+  @override
+  String get bostaEstRecorded => 'تم تسجيل التقدير';
+
+  @override
+  String get bostaReconciled => 'تمت التسوية';
+
+  @override
+  String get bostaPendingSettlement => 'في انتظار التسوية';
+
+  @override
+  String get bostaNoAdjustment => 'لا تسوية';
+
+  @override
+  String get bostaExtraExpense => 'مصروف إضافي';
+
+  @override
+  String get bostaCreditBack => 'استرداد';
+
+  @override
+  String get bostaTransactionType => 'النوع';
+
+  @override
+  String get bostaEstimateTransaction => 'تقدير الشحن';
+
+  @override
+  String get bostaReconciliationTransaction => 'تسوية الشحن';
+
+  @override
+  String get bostaShipmentCount => 'الشحنات';
+
+  @override
+  String get bostaViewAudit => 'عرض تدقيق الاستحقاق';
+
+  @override
+  String get bostaSortFulfillment => 'التنفيذ';
+
+  @override
+  String get bostaSortSettlement => 'التسوية';
+
+  @override
+  String get bostaSortAdjustment => 'التعديل';
 }

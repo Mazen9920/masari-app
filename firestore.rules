@@ -370,6 +370,29 @@ service cloud.firestore {
         && validConversionOrderFields();
     }
 
+    // Bosta Connections (API key managed by CF, client reads + updates sync settings)
+    match /bosta_connections/{docId} {
+      allow read: if request.auth != null
+        && request.auth.uid == docId;
+      allow update: if request.auth != null
+        && request.auth.uid == docId
+        // Client may only toggle auto_sync_enabled
+        && (!('api_key_encrypted' in request.resource.data)
+            || request.resource.data.api_key_encrypted
+               == resource.data.api_key_encrypted)
+        && (!('status' in request.resource.data)
+            || request.resource.data.status
+               == resource.data.status);
+      // create & delete handled by Cloud Functions (Admin SDK)
+    }
+
+    // Bosta Shipments (Cloud Functions write, client reads)
+    match /bosta_shipments/{docId} {
+      allow read: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      // No client-side write — only Cloud Functions (Admin SDK) write here
+    }
+
     // Deny everything else by default (Firestore's implicit behavior)
   }
 }

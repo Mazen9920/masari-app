@@ -74,6 +74,11 @@ import '../../features/shopify/screens/shopify_product_mapping_screen.dart';
 import '../../features/shopify/screens/shopify_import_screen.dart';
 import '../../features/shopify/screens/shopify_inventory_sync_screen.dart';
 import '../../features/shopify/screens/shopify_sync_history_screen.dart';
+import '../../features/bosta/screens/bosta_connect_screen.dart';
+import '../../features/bosta/screens/bosta_shipments_screen.dart';
+import '../../features/bosta/screens/bosta_audit_screen.dart';
+import '../../features/bosta/screens/bosta_shipment_detail_screen.dart';
+import '../../shared/models/bosta_shipment_model.dart';
 import '../../shared/models/sale_model.dart';
 import '../../shared/models/goods_receipt_model.dart';
 import '../../shared/widgets/feature_gate.dart';
@@ -124,6 +129,12 @@ abstract class AppRoutes {
   static const shopifyImport = '/manage/shopify/import';
   static const shopifyInventorySync = '/manage/shopify/inventory';
   static const shopifySyncHistory = '/manage/shopify/history';
+
+  // Bosta
+  static const bosta = '/manage/bosta';
+  static const bostaShipments = '/manage/bosta/shipments';
+  static const bostaShipmentDetail = '/manage/bosta/shipments/detail';
+  static const bostaAudit = '/manage/bosta/audit';
 }
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -826,6 +837,45 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
           appBarTitle: AppLocalizations.of(context)!.syncHistoryTitle,
           child: const ShopifySyncHistoryScreen(),
         ),
+      ),
+
+      // ── Bosta ──────────────────────────────────────────
+      GoRoute(
+        name: 'BostaConnectScreen',
+        path: AppRoutes.bosta,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => FeatureGateScreen(
+          feature: GrowthFeature.bostaIntegration,
+          appBarTitle: AppLocalizations.of(context)!.bostaTitle,
+          child: const BostaConnectScreen(),
+        ),
+      ),
+      GoRoute(
+        name: 'BostaShipmentsScreen',
+        path: AppRoutes.bostaShipments,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => FeatureGateScreen(
+          feature: GrowthFeature.bostaIntegration,
+          appBarTitle: AppLocalizations.of(context)!.bostaShipmentsTitle,
+          child: const BostaShipmentsScreen(),
+        ),
+      ),
+      GoRoute(
+        name: 'BostaShipmentDetailScreen',
+        path: AppRoutes.bostaShipmentDetail,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>;
+          return BostaShipmentDetailScreen(
+            shipment: extra['shipment'] as BostaShipment,
+          );
+        },
+      ),
+      GoRoute(
+        name: 'BostaAuditScreen',
+        path: AppRoutes.bostaAudit,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const BostaAuditScreen(),
       ),
     ],
   );

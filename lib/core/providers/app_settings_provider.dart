@@ -89,6 +89,7 @@ enum GrowthFeature {
   salesSystem('Sales & COGS', 'Record sales, track cost of goods sold & gross profit'),
   supplierPaymentToggle('Payment Settings', 'Control whether supplier payments create transactions'),
   shopifyIntegration('Shopify Integration', 'Connect your Shopify store for two-way order and inventory sync'),
+  bostaIntegration('Bosta Integration', 'Track shipping expenses automatically from your Bosta deliveries'),
   manufacturingMode('Manufacturing Mode', 'Flag products as manufactured to decouple goods receipt from cost layers'),
   supplierManagement('Supplier Management', 'Track suppliers, record purchases & payments'),
   fullCashFlow('Full Cash Flow Analysis', 'GAAP operating, investing & financing breakdown with drill-down');
@@ -114,6 +115,7 @@ enum GrowthFeature {
     GrowthFeature.salesSystem           => l10n.featureSalesCogs,
     GrowthFeature.supplierPaymentToggle => l10n.featurePaymentSettings,
     GrowthFeature.shopifyIntegration    => l10n.featureShopifyIntegration,
+    GrowthFeature.bostaIntegration      => l10n.featureBostaIntegration,
     GrowthFeature.manufacturingMode     => l10n.featureManufacturingMode,
     GrowthFeature.supplierManagement    => l10n.featureSupplierManagement,
     GrowthFeature.fullCashFlow          => l10n.featureFullCashFlow,
@@ -136,6 +138,7 @@ enum GrowthFeature {
     GrowthFeature.salesSystem           => l10n.featureSalesCogsDesc,
     GrowthFeature.supplierPaymentToggle => l10n.featurePaymentSettingsDesc,
     GrowthFeature.shopifyIntegration    => l10n.featureShopifyIntegrationDesc,
+    GrowthFeature.bostaIntegration      => l10n.featureBostaIntegrationDesc,
     GrowthFeature.manufacturingMode     => l10n.featureManufacturingModeDesc,
     GrowthFeature.supplierManagement    => l10n.featureSupplierManagementDesc,
     GrowthFeature.fullCashFlow          => l10n.featureFullCashFlowDesc,

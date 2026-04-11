@@ -17,6 +17,8 @@ class Transaction {
   final String? supplierId;
   final String? saleId;
   final bool excludeFromPL;
+  final bool isEstimate;
+  final bool isReconciliation;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -32,6 +34,8 @@ class Transaction {
     this.supplierId,
     this.saleId,
     this.excludeFromPL = false,
+    this.isEstimate = false,
+    this.isReconciliation = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -48,6 +52,8 @@ class Transaction {
     Object? supplierId = const _Sentinel(),
     Object? saleId = const _Sentinel(),
     bool? excludeFromPL,
+    bool? isEstimate,
+    bool? isReconciliation,
     Object? createdAt = const _Sentinel(),
     Object? updatedAt = const _Sentinel(),
   }) {
@@ -63,6 +69,8 @@ class Transaction {
       supplierId: supplierId is _Sentinel ? this.supplierId : supplierId as String?,
       saleId: saleId is _Sentinel ? this.saleId : saleId as String?,
       excludeFromPL: excludeFromPL ?? this.excludeFromPL,
+      isEstimate: isEstimate ?? this.isEstimate,
+      isReconciliation: isReconciliation ?? this.isReconciliation,
       createdAt: createdAt is _Sentinel ? this.createdAt : createdAt as DateTime?,
       updatedAt: updatedAt is _Sentinel ? this.updatedAt : updatedAt as DateTime?,
     );
@@ -105,6 +113,8 @@ class Transaction {
       'supplier_id': supplierId,
       'sale_id': saleId,
       'exclude_from_pl': excludeFromPL,
+      'is_estimate': isEstimate,
+      'is_reconciliation': isReconciliation,
       if (createdAt != null) 'created_at': Timestamp.fromDate(createdAt!),
       if (updatedAt != null) 'updated_at': Timestamp.fromDate(updatedAt!),
     };
@@ -161,6 +171,8 @@ class Transaction {
       supplierId: json['supplier_id']?.toString(),
       saleId: json['sale_id']?.toString(),
       excludeFromPL: json['exclude_from_pl'] as bool? ?? false,
+      isEstimate: json['is_estimate'] as bool? ?? false,
+      isReconciliation: json['is_reconciliation'] as bool? ?? false,
       createdAt: _parseDateNullable(json['created_at']),
       updatedAt: _parseDateNullable(json['updated_at']),
     );
