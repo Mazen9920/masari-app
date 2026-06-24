@@ -116,6 +116,7 @@ class LocalTransactionRepository implements TransactionRepository {
   Future<Result<List<Transaction>>> getTransactionsInRange({
     required DateTime start,
     required DateTime end,
+    bool forceServer = false,
   }) async {
     final filtered = _transactions.where((t) =>
         !t.dateTime.isBefore(start) && !t.dateTime.isAfter(end)).toList();

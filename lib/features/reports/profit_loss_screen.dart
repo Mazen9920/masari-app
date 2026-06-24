@@ -21,6 +21,7 @@ import '../../l10n/app_localizations.dart';
 import 'widgets/financial_period_sheet.dart';
 import 'widgets/report_card.dart';
 import 'widgets/chart_toggle.dart';
+import 'widgets/category_breakdown_sheet.dart';
 
 class ProfitLossScreen extends ConsumerStatefulWidget {
   const ProfitLossScreen({super.key});
@@ -49,6 +50,10 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
   bool _isLoading = true;
   Object? _loadError;
 
+  /// Guards against out-of-order async loads (e.g. switching period while a
+  /// previous load's background fetch is still in flight).
+  int _loadGen = 0;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -58,35 +63,55 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
     Future.microtask(_loadData);
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({bool silent = false, bool forceServer = false}) async {
     if (!mounted) return;
-    setState(() { _isLoading = true; _loadError = null; });
+    if (!silent) setState(() { _isLoading = true; _loadError = null; });
+    final gen = ++_loadGen;
     try {
       final dateRange = _getDateRange();
-      // Compute previous period so we fetch both ranges in one pass
       final periodDuration = dateRange.end.difference(dateRange.start);
-      final prevStart = dateRange.start.subtract(periodDuration).subtract(const Duration(seconds: 1));
+      final prevStart = dateRange.start
+          .subtract(periodDuration)
+          .subtract(const Duration(seconds: 1));
+      final prevEnd = dateRange.start.subtract(const Duration(seconds: 1));
 
       final txnRepo = ref.read(transactionRepositoryProvider);
       final saleRepo = ref.read(saleRepositoryProvider);
 
-      final results = await Future.wait([
-        txnRepo.getTransactionsInRange(start: prevStart, end: dateRange.end),
-        saleRepo.getSalesInRange(start: dateRange.start, end: dateRange.end),
-      ]);
+      // 1) Fetch ONLY the current period first so the P&L paints as soon as
+      //    possible. For large accrual datasets this roughly halves the number
+      //    of documents parsed before first render.
+      final txnResult = await txnRepo.getTransactionsInRange(
+          start: dateRange.start, end: dateRange.end, forceServer: forceServer);
 
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
 
-      final txnResult = results[0] as dynamic;
-      final saleResult = results[1] as dynamic;
-
+      final current = (txnResult.data as List<Transaction>?) ?? [];
       setState(() {
-        _transactions = (txnResult.data as List<Transaction>?) ?? [];
-        _sales = (saleResult.data as List<Sale>?) ?? [];
+        _transactions = current;
         _isLoading = false;
+        if (!txnResult.isSuccess) _loadError = txnResult.error;
+      });
+
+      // 2) Fetch the previous period (for the "vs last period" delta) and the
+      //    sales (for the informational tax line) in the background, then merge
+      //    them in. These are not needed for the headline P&L figures.
+      Future.wait([
+        txnRepo.getTransactionsInRange(
+            start: prevStart, end: prevEnd, forceServer: forceServer),
+        saleRepo.getSalesInRange(
+            start: dateRange.start, end: dateRange.end, forceServer: forceServer),
+      ]).then((results) {
+        if (!mounted || gen != _loadGen) return;
+        final prev = (results[0].data as List<Transaction>?) ?? [];
+        final sales = (results[1].data as List<Sale>?) ?? [];
+        setState(() {
+          _transactions = [...current, ...prev];
+          _sales = sales;
+        });
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
       setState(() { _loadError = e; _isLoading = false; });
     }
   }
@@ -244,7 +269,7 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       body: RefreshIndicator(
-            onRefresh: _loadData,
+            onRefresh: () => _loadData(forceServer: true),
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(24, 24, 24, 100 + MediaQuery.of(context).padding.bottom),
               physics: const AlwaysScrollableScrollPhysics(
@@ -292,6 +317,8 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
                       items: revenueItems,
                       fmt: fmt,
                       currency: currency,
+                      isExpense: false,
+                      accent: const Color(0xFF10B981),
                     ).animate().fadeIn(duration: 400.ms, delay: 200.ms),
                     const SizedBox(height: 16),
                   ],
@@ -303,6 +330,8 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
                       items: cogsItems,
                       fmt: fmt,
                       currency: currency,
+                      isExpense: true,
+                      accent: const Color(0xFFEF4444),
                     ).animate().fadeIn(duration: 400.ms, delay: 250.ms),
                     const SizedBox(height: 16),
                   ],
@@ -314,6 +343,8 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
                       items: opexItems,
                       fmt: fmt,
                       currency: currency,
+                      isExpense: true,
+                      accent: const Color(0xFF3B82F6),
                     ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
                     const SizedBox(height: 20),
                   ],
@@ -1136,6 +1167,8 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
     required List<_BreakdownItem> items,
     required NumberFormat fmt,
     required String currency,
+    required bool isExpense,
+    required Color accent,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1152,7 +1185,8 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
                 child: InkWell(
                   onTap: () {
                     HapticFeedback.lightImpact();
-                    _navigateToCategoryTransactions(item.label, item.categoryId);
+                    _navigateToCategoryTransactions(
+                        item.label, item.categoryId, isExpense, accent);
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
@@ -1203,22 +1237,102 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
     );
   }
 
-  void _navigateToCategoryTransactions(String displayName, String categoryId) {
-    // categoryId may be comma-separated for the "Other" bucket
+  void _navigateToCategoryTransactions(
+      String displayName, String categoryId, bool isExpense, Color accent) {
+    // categoryId may be comma-separated for the "Other" bucket.
     final ids = categoryId.split(',').toSet();
-    final filter = TransactionFilter(
-        type: TransactionType.all,
-        selectedCategories: ids,
-    );
+    final range = _getDateRange();
 
-    context.pushNamed(
-      'TransactionsListScreen',
-      extra: {
-        'pageTitle': '$displayName Transactions',
-        'showBackButton': true,
-        'initialFilter': filter,
+    // Rebuild the exact set of transactions that produced this P&L figure,
+    // applying the same period, exclusions and sign conventions so the sheet
+    // total reconciles with the number the user tapped.
+    final entries = <CategoryBreakdownEntry>[];
+    for (final tx in _transactions) {
+      if (tx.excludeFromPL || plExcludedCats.contains(tx.categoryId)) continue;
+      if (tx.dateTime.isBefore(range.start) || tx.dateTime.isAfter(range.end)) {
+        continue;
+      }
+      if (!ids.contains(tx.categoryId)) continue;
+
+      final double contribution;
+      if (tx.categoryId == 'cat_sales_revenue') {
+        contribution = tx.amount; // signed: refunds reduce revenue
+      } else if (tx.categoryId == 'cat_cogs') {
+        contribution = -tx.amount; // signed: positive tx = reversal
+      } else if (tx.categoryId == 'cat_shipping') {
+        contribution = tx.amount; // signed: reversals reduce shipping revenue
+      } else if (tx.isIncome) {
+        contribution = tx.amount.abs();
+      } else {
+        contribution = tx.amount.abs();
+      }
+      entries.add(CategoryBreakdownEntry(
+          transaction: tx, contribution: contribution));
+    }
+
+    final total = entries.fold<double>(0, (sum, e) => sum + e.contribution);
+
+    showCategoryBreakdownSheet(
+      context: context,
+      title: displayName,
+      periodLabel: _period.label,
+      entries: entries,
+      total: total,
+      currency: ref.read(appSettingsProvider).currency,
+      accent: accent,
+      isExpenseSection: isExpense,
+      onTapTransaction: (tx) async {
+        // The breakdown sheet is on the root navigator (useRootNavigator), so
+        // close it via the root navigator — popping the shell navigator would
+        // crash go_router ("popped the last page off the stack").
+        Navigator.of(context, rootNavigator: true).pop();
+        await context.pushNamed(
+          'TransactionDetailScreen',
+          extra: {'transaction': tx},
+        );
+        // Read from the local cache (which already reflects any edit) instead
+        // of forcing a slow server round-trip.
+        if (mounted) _loadData(silent: true);
       },
+      onEditTransaction: (tx) async {
+        Navigator.of(context, rootNavigator: true).pop(); // close the sheet
+        await context.pushNamed(
+          'EditTransactionScreen',
+          extra: {'transaction': tx},
+        );
+        if (mounted) _loadData(silent: true);
+      },
+      onExport: () => _exportCategoryBreakdown(displayName, entries),
     );
+  }
+
+  Future<void> _exportCategoryBreakdown(
+      String name, List<CategoryBreakdownEntry> entries) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    if (entries.isEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.noTransactionsFound)));
+      return;
+    }
+    try {
+      final reportSvc = ref.read(reportServiceProvider);
+      final shareSvc = ref.read(shareServiceProvider);
+      final currency = ref.read(appSettingsProvider).currency;
+      final origin = ShareService.originFrom(context);
+
+      final txns = entries.map((e) => e.transaction).toList()
+        ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+      final csv = reportSvc.exportTransactionsCsv(txns, currency);
+      final fmt = DateFormat('yyyyMMdd');
+      final safeName = name.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
+      final fileName =
+          'PnL_${safeName}_${fmt.format(_period.range.start)}_${fmt.format(_period.range.end)}.csv';
+      await shareSvc.shareCsv(csv, fileName,
+          subject: '$name · ${_period.label}', origin: origin);
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.somethingWentWrong)));
+    }
   }
 
   Widget _buildNetProfitCard(NumberFormat fmt, String currency, double netProfit) {

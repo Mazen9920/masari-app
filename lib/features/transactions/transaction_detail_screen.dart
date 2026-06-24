@@ -304,11 +304,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                 size: 14, color: AppColors.textTertiary),
           ),
           if (hasNote)
-            _infoRow(
-              l10n.noteLabel,
-              currentTx.note!,
-              isLast: false,
-            ),
+            _noteRow(l10n.noteLabel, currentTx.note!),
           _infoRow(
             l10n.transactionId,
             '#${currentTx.id}',
@@ -321,6 +317,40 @@ class TransactionDetailScreen extends ConsumerWidget {
               },
               child: const Icon(Icons.content_copy_rounded,
                   size: 16, color: AppColors.accentOrange),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _noteRow(String label, String value) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.borderLight.withValues(alpha: 0.5),
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 6),
+          SelectableText(
+            value,
+            style: AppTypography.labelMedium.copyWith(
+              color: AppColors.textPrimary,
+              height: 1.4,
             ),
           ),
         ],

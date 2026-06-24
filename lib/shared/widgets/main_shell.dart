@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/connectivity_helper.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/reports/reports_screen.dart';
 import '../../features/transactions/transactions_list_screen.dart';
@@ -28,18 +29,19 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
-    // Check initial state
-    Connectivity().checkConnectivity().then((results) {
-      if (mounted) {
-        setState(() => _isOffline = results.every((r) => r == ConnectivityResult.none));
-      }
+    // Check initial state (verified probe, not just the interface report).
+    _refreshOffline();
+    // Listen for changes — re-verify with a real reachability probe so a flaky
+    // connectivity_plus "none" (common on macOS desktop / emulators) doesn't
+    // show a false offline banner.
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((_) {
+      _refreshOffline();
     });
-    // Listen for changes
-    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
-      if (mounted) {
-        setState(() => _isOffline = results.every((r) => r == ConnectivityResult.none));
-      }
-    });
+  }
+
+  Future<void> _refreshOffline() async {
+    final online = await hasConnectivity();
+    if (mounted) setState(() => _isOffline = !online);
   }
 
   @override

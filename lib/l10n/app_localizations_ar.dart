@@ -843,6 +843,17 @@ class AppLocalizationsAr extends AppLocalizations {
   String get receiveGoods => 'استلام بضائع';
 
   @override
+  String get receiveAll => 'استلام الكل';
+
+  @override
+  String get remainingLabel => 'المتبقي';
+
+  @override
+  String remainingQty(String qty) {
+    return '$qty متبقي';
+  }
+
+  @override
   String get receivedGoods => 'البضائع المستلمة';
 
   @override
@@ -2441,6 +2452,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get catTaxPayable => 'ضريبة مستحقة';
+
+  @override
+  String get catEmployeeAdvance => 'سلفة';
 
   @override
   String get profileTitle => 'الملف الشخصي';
@@ -5624,6 +5638,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payeeNameOptional => 'اسم المستفيد (اختياري)';
 
   @override
+  String get transactionNameLabel => 'اسم المعاملة';
+
+  @override
   String get addCustomCategory => '+ إضافة فئة مخصصة';
 
   @override
@@ -5820,6 +5837,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get totalDue => 'إجمالي المستحق';
 
   @override
+  String get supplierCreditLabel => 'رصيد مقدم';
+
+  @override
   String get callAction => 'اتصال';
 
   @override
@@ -5974,6 +5994,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get selectCategory => 'اختر الفئة';
 
   @override
+  String get searchCategoriesHint => 'ابحث أو أنشئ فئة…';
+
+  @override
   String get selectLabel => 'اختر';
 
   @override
@@ -6073,6 +6096,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paymentStatusSection => 'حالة الدفع';
 
   @override
+  String get orderSourceSection => 'ORDER SOURCE';
+
+  @override
   String get fullyPaid => 'مدفوع بالكامل';
 
   @override
@@ -6142,6 +6168,25 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get editPurchase => 'تعديل المشتريات';
+
+  @override
+  String get purchaseUpdated => 'تم تحديث المشتريات';
+
+  @override
+  String get saveChangesAction => 'حفظ التغييرات';
+
+  @override
+  String get deletePurchase => 'حذف المشتريات';
+
+  @override
+  String get deletePurchaseConfirm =>
+      'هل أنت متأكد أنك تريد حذف هذه المشتريات؟ سيؤدي ذلك إلى عكس تأثيرها على رصيد المورد ولا يمكن التراجع عنه.';
+
+  @override
+  String get purchaseDeleted => 'تم حذف المشتريات';
+
+  @override
+  String get outstandingPayables => 'المستحقات القائمة';
 
   @override
   String get paymentExceedsOutstanding => 'الدفعة تتجاوز المستحق';
@@ -7261,6 +7306,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get categoryTaxPayable => 'ضريبة مستحقة';
+
+  @override
+  String get categoryEmployeeAdvance => 'سلفة';
 
   @override
   String get preparingReport => 'جارٍ تحضير التقرير…';

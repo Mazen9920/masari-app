@@ -382,7 +382,17 @@ service cloud.firestore {
                == resource.data.api_key_encrypted)
         && (!('status' in request.resource.data)
             || request.resource.data.status
-               == resource.data.status);
+               == resource.data.status)
+        // Dashboard credentials — server-side only
+        && (!('dashboard_email_encrypted' in request.resource.data)
+            || request.resource.data.dashboard_email_encrypted
+               == resource.data.dashboard_email_encrypted)
+        && (!('dashboard_password_encrypted' in request.resource.data)
+            || request.resource.data.dashboard_password_encrypted
+               == resource.data.dashboard_password_encrypted)
+        && (!('dashboard_status' in request.resource.data)
+            || request.resource.data.dashboard_status
+               == resource.data.dashboard_status);
       // create & delete handled by Cloud Functions (Admin SDK)
     }
 
@@ -391,6 +401,34 @@ service cloud.firestore {
       allow read: if request.auth != null
         && resource.data.user_id == request.auth.uid;
       // No client-side write — only Cloud Functions (Admin SDK) write here
+    }
+
+    // Bosta Cashouts (Cloud Functions write, client reads)
+    match /bosta_cashouts/{docId} {
+      allow read: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      // No client-side write — only Cloud Functions (Admin SDK) write here
+    }
+
+    // ─── Fixed Assets: owner-scoped subcollection ─────────────────────
+    // Path: fixed_assets/{userId}/assets/{assetId}
+    match /fixed_assets/{userId}/assets/{assetId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    // ─── Loans: owner-scoped subcollection ────────────────────────────
+    // Path: loans/{userId}/items/{loanId}
+    match /loans/{userId}/items/{loanId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    // ─── Salaries: owner-scoped subcollection ─────────────────────────
+    // Path: salaries/{userId}/items/{salaryId}
+    match /salaries/{userId}/items/{salaryId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
     }
 
     // Deny everything else by default (Firestore's implicit behavior)

@@ -351,6 +351,9 @@ class _BostaAuditScreenState extends ConsumerState<BostaAuditScreen> {
 
   Widget _buildDashboard(AppLocalizations l10n, BostaAuditStats stats) {
     final feeFmt = NumberFormat('#,##0.00');
+    final accuracyPct = stats.totalShipments > 0
+        ? (stats.reconciledCount / stats.totalShipments * 100)
+        : 0.0;
     return Column(
       children: [
         // 2×2 stat grid
@@ -399,7 +402,66 @@ class _BostaAuditScreenState extends ConsumerState<BostaAuditScreen> {
             ),
           ],
         ).animate().fadeIn(duration: 250.ms, delay: 60.ms),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+
+        // Accuracy bar
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: AppColors.borderLight.withValues(alpha: 0.4)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Reconciliation Rate',
+                    style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.textTertiary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                    ),
+                  ),
+                  Text(
+                    '${accuracyPct.toStringAsFixed(0)}%',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: accuracyPct >= 80
+                          ? AppColors.success
+                          : accuracyPct >= 50
+                              ? AppColors.warning
+                              : AppColors.danger,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: stats.totalShipments > 0
+                      ? stats.reconciledCount / stats.totalShipments
+                      : 0,
+                  minHeight: 6,
+                  backgroundColor: AppColors.borderLight,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    accuracyPct >= 80
+                        ? AppColors.success
+                        : accuracyPct >= 50
+                            ? AppColors.warning
+                            : AppColors.danger,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ).animate().fadeIn(duration: 250.ms, delay: 90.ms),
+        const SizedBox(height: 12),
 
         // Count indicators
         Container(
@@ -595,6 +657,44 @@ class _BostaAuditScreenState extends ConsumerState<BostaAuditScreen> {
 
     return Column(
       children: [
+        // Column headers
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(
+            children: [
+              const SizedBox(width: 48), // icon+gap
+              Expanded(
+                child: Text(
+                  'Shipment',
+                  style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.textTertiary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 9,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 80,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Est / Actual',
+                      style: AppTypography.captionSmall.copyWith(
+                        color: AppColors.textTertiary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 9,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 22), // chevron
+            ],
+          ),
+        ),
         for (int i = 0; i < filtered.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),

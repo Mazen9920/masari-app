@@ -63,7 +63,7 @@ class DashboardDataNotifier extends AsyncNotifier<DashboardData> {
     return _fetchAndCompute(ds.range);
   }
 
-  Future<DashboardData> _fetchAndCompute(DashboardDateRange range) async {
+  Future<DashboardData> _fetchAndCompute(DashboardDateRange range, {bool forceServer = false}) async {
     final queryStart = range.previousStart;
     final queryEnd = range.end;
 
@@ -71,8 +71,8 @@ class DashboardDataNotifier extends AsyncNotifier<DashboardData> {
     final saleRepo = ref.read(saleRepositoryProvider);
 
     final results = await Future.wait([
-      txnRepo.getTransactionsInRange(start: queryStart, end: queryEnd),
-      saleRepo.getSalesInRange(start: queryStart, end: queryEnd),
+      txnRepo.getTransactionsInRange(start: queryStart, end: queryEnd, forceServer: forceServer),
+      saleRepo.getSalesInRange(start: queryStart, end: queryEnd, forceServer: forceServer),
     ]);
 
     final txns = results[0].data as List<Transaction>? ?? [];
@@ -99,6 +99,7 @@ class DashboardDataNotifier extends AsyncNotifier<DashboardData> {
   ) {
     double revenue = 0;
     double expenses = 0;
+    double salesRevenue = 0;
 
     for (final t in allTxns) {
       if (t.excludeFromPL || plExcludedCats.contains(t.categoryId)) continue;
@@ -108,8 +109,11 @@ class DashboardDataNotifier extends AsyncNotifier<DashboardData> {
         expenses -= t.amount; // -(-X)=+X for cost, -(+X)=-X for reversal
       } else if (t.categoryId == 'cat_sales_revenue' ||
           t.categoryId == 'cat_shipping') {
-        // Signed: positive = income, negative = refund/reversal
+        // Signed: positive = income, negative = refund/reversal.
+        // Transaction-based so cancellations (negative reversals) are netted
+        // out — this matches Shopify "Total sales" exactly.
         revenue += t.amount;
+        salesRevenue += t.amount;
       } else if (t.isIncome) {
         revenue += t.amount.abs();
       } else {
@@ -117,16 +121,25 @@ class DashboardDataNotifier extends AsyncNotifier<DashboardData> {
       }
     }
 
-    double salesRevenue = 0;
     double totalCogs = 0;
     int orderCount = 0;
 
     for (final s in allSales) {
-      if (s.orderStatus == OrderStatus.cancelled) continue;
       if (s.date.isBefore(start) || s.date.isAfter(end)) continue;
-      salesRevenue += s.netRevenue;
       totalCogs += s.totalCogs;
       orderCount++;
+    }
+
+    // COGS adjustment: reduce COGS for refund-restored cost (positive cat_cogs
+    // non-reversal txns). Revenue is fully transaction-based above.
+    for (final t in allTxns) {
+      if (t.excludeFromPL || plExcludedCats.contains(t.categoryId)) continue;
+      if (t.dateTime.isBefore(start) || t.dateTime.isAfter(end)) continue;
+      if (t.categoryId == 'cat_cogs' &&
+          t.amount > 0 &&
+          !t.id.endsWith('_reversal')) {
+        totalCogs -= t.amount; // reduce COGS for refund-restored cost
+      }
     }
 
     return PeriodMetrics(
@@ -143,7 +156,7 @@ class DashboardDataNotifier extends AsyncNotifier<DashboardData> {
   Future<void> refresh() async {
     final range = ref.read(dashboardStateProvider).range;
     try {
-      final newData = await _fetchAndCompute(range);
+      final newData = await _fetchAndCompute(range, forceServer: true);
       state = AsyncData(newData);
     } catch (_) {
       // On error keep previous data visible.

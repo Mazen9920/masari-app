@@ -54,12 +54,20 @@ const SHOPIFY_SCOPES = [
   "read_inventory",
   "write_inventory",
   "read_locations",
+  "read_returns",
 ].join(",");
 
 const WEBHOOK_TOPICS = [
   "orders/create",
   "orders/updated",
   "orders/cancelled",
+  "returns/request",
+  "returns/approve",
+  "returns/cancel",
+  "returns/decline",
+  "returns/reopen",
+  "returns/close",
+  "returns/update",
   "products/update",
   "products/create",
   "products/delete",

@@ -9,7 +9,9 @@ import '../../core/navigation/app_router.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/force_update_service.dart';
 import '../../core/services/remote_config_service.dart';
+import '../../core/utils/connectivity_helper.dart';
 import '../../l10n/app_localizations.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -130,6 +132,28 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 2200));
     if (!mounted) return;
 
+    // ─── Connectivity gate ───
+    // If the device is offline, we can't validate the Firebase ID token
+    // reliably. Rather than letting the router bounce the user to the
+    // login screen (which wouldn't work offline anyway), show a blocking
+    // "No internet" dialog with a retry button. If a Firebase session is
+    // already cached locally, we proceed straight to the dashboard.
+    if (!await hasConnectivity()) {
+      if (!mounted) return;
+      if (fb.FirebaseAuth.instance.currentUser != null) {
+        // Seed auth state from cached Firebase user so the router
+        // doesn't redirect to login.
+        await ref.read(authProvider.notifier).checkAuthState();
+        if (!mounted) return;
+        if (ref.read(authProvider).isAuthenticated) {
+          context.go(AppRoutes.home);
+          return;
+        }
+      }
+      _showNoInternetDialog();
+      return;
+    }
+
     // ─── Remote Config + Force Update ───
     await RemoteConfigService.init();
     if (!mounted) return;
@@ -150,6 +174,42 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     } else {
       context.go(AppRoutes.onboarding);
     }
+  }
+
+  void _showNoInternetDialog() {
+    final l10n = AppLocalizations.of(context)!;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          icon: const Icon(Icons.wifi_off_rounded,
+              color: AppColors.danger, size: 36),
+          title: Text(
+            Localizations.localeOf(context).languageCode == 'ar'
+                ? 'لا يوجد اتصال بالإنترنت'
+                : 'No Internet Connection',
+            textAlign: TextAlign.center,
+          ),
+          content: Text(
+            Localizations.localeOf(context).languageCode == 'ar'
+                ? 'يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.'
+                : 'Please check your connection and try again.',
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _startAnimations();
+              },
+              child: Text(l10n.retry),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showForceUpdateDialog() {

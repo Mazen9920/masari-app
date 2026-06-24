@@ -16,6 +16,16 @@ import '../providers/app_settings_provider.dart';
 import 'result.dart';
 import 'shopify_api_service.dart';
 
+/// Callback for import progress updates.
+typedef ImportProgressCallback = void Function({
+  required int imported,
+  required int skipped,
+  required int errors,
+  required int total,
+  String? currentOrder,
+  String? phase,
+});
+
 /// High-level Shopify sync orchestrator.
 ///
 /// Coordinates between the local Revvo repositories, the product mapping
@@ -1283,42 +1293,66 @@ class ShopifySyncService {
 
   /// Imports historical Shopify orders as Revvo Sales.
   ///
-  /// Fetches orders between [from] and [to] (max 3 months)
-  /// and creates Sales for any that don't already exist.
+  /// Automatically splits large date ranges into 90-day sub-windows
+  /// so any range (even years) works without hitting API limits.
   ///
-  /// Returns the number of newly imported orders.
+  /// [onProgress] is called after each order is processed, letting
+  /// the UI show a live countdown.
   Future<Result<ImportResult>> importOrders({
     required DateTime from,
     required DateTime to,
+    ImportProgressCallback? onProgress,
   }) async {
-    // Enforce 3-month max window
-    final maxTo = from.add(const Duration(days: 93));
-    final effectiveTo = to.isAfter(maxTo) ? maxTo : to;
-
-    // Fetch orders from Shopify
-    final ordersResult = await _api.fetchOrders(
-      since: from,
-      until: effectiveTo,
+    // ── Phase 1: Fetch all orders (chunked by 90 days) ────
+    onProgress?.call(
+      imported: 0, skipped: 0, errors: 0, total: 0,
+      phase: 'Fetching orders from Shopify…',
     );
-    if (!ordersResult.isSuccess) {
-      return Result.failure(
-        ordersResult.error ?? 'Failed to fetch Shopify orders',
+
+    final allOrders = <Map<String, dynamic>>[];
+    var chunkStart = from;
+    final chunkSize = const Duration(days: 90);
+
+    while (chunkStart.isBefore(to)) {
+      var chunkEnd = chunkStart.add(chunkSize);
+      if (chunkEnd.isAfter(to)) chunkEnd = to;
+
+      final ordersResult = await _api.fetchOrders(
+        since: chunkStart,
+        until: chunkEnd,
       );
+      if (!ordersResult.isSuccess) {
+        return Result.failure(
+          ordersResult.error ?? 'Failed to fetch Shopify orders',
+        );
+      }
+      allOrders.addAll(ordersResult.data!);
+      chunkStart = chunkEnd.add(const Duration(seconds: 1));
     }
 
-    final orders = ordersResult.data!;
-    if (orders.isEmpty) {
-      return Result.success(ImportResult(
-        imported: 0,
-        skipped: 0,
-        errors: 0,
-        total: 0,
+    if (allOrders.isEmpty) {
+      return Result.success(const ImportResult(
+        imported: 0, skipped: 0, errors: 0, total: 0,
       ));
     }
 
-    // Get existing external order IDs to skip duplicates
-    final existingResult = await _saleRepo.getSales();
+    // Deduplicate fetched orders by Shopify ID (overlapping chunks)
+    final seen = <String>{};
+    allOrders.retainWhere((o) {
+      final id = o['id']?.toString();
+      return id != null && seen.add(id);
+    });
+
+    final total = allOrders.length;
+
+    // ── Phase 2: Build existing-order ID set for dedup ────
+    onProgress?.call(
+      imported: 0, skipped: 0, errors: 0, total: total,
+      phase: 'Checking for existing orders…',
+    );
+
     final existingOrderIds = <String>{};
+    final existingResult = await _saleRepo.getSales();
     if (existingResult.isSuccess) {
       for (final sale in existingResult.data!) {
         if (sale.externalOrderId != null) {
@@ -1327,15 +1361,26 @@ class ShopifySyncService {
       }
     }
 
-    var imported = 0;
-    var skipped = 0;
-    var errorCount = 0;
+    // ── Phase 3: Pre-fetch mappings, products & COGS ────
+    onProgress?.call(
+      imported: 0, skipped: 0, errors: 0, total: total,
+      phase: 'Resolving product costs…',
+    );
 
-    // ── Pre-fetch Shopify inventory item costs ────────────
-    // Collect all unique variant IDs and product IDs from orders
+    // 3a. Bulk-fetch ALL user mappings → keyed by shopify_variant_id
+    final mappingCache = <String, List<ShopifyProductMapping>>{};
+    final allMappingsResult = await _mappingRepo.getMappings();
+    if (allMappingsResult.isSuccess) {
+      for (final m in allMappingsResult.data!) {
+        (mappingCache[m.shopifyVariantId] ??= []).add(m);
+      }
+    }
+
+    // 3b. Collect variant IDs & product IDs referenced by new orders
     final variantIdsToFetch = <String>{};
     final productIdsFromOrders = <String>{};
-    for (final order in orders) {
+    final referencedProductIds = <String>{};
+    for (final order in allOrders) {
       final shopifyOrderId = order['id']?.toString();
       if (shopifyOrderId == null ||
           existingOrderIds.contains(shopifyOrderId)) {
@@ -1351,18 +1396,30 @@ class ShopifySyncService {
         if (pid != null && pid != 'null') {
           productIdsFromOrders.add(pid);
         }
+        // Collect Revvo product IDs from mapping cache
+        final cached = mappingCache[svId];
+        if (cached != null && cached.isNotEmpty) {
+          referencedProductIds.add(cached.first.revvoProductId);
+        }
       }
     }
 
-    // Resolve variant IDs → inventory item IDs via existing mappings
-    final costMap = <String, double>{}; // shopifyVariantId → cost
+    // 3c. Bulk-fetch ALL referenced products → keyed by product ID
+    final productCache = <String, Product>{};
+    for (final pid in referencedProductIds) {
+      final r = await _productRepo.getProductById(pid);
+      if (r.isSuccess) productCache[pid] = r.data!;
+    }
+
+    // 3d. Resolve variant IDs → inventory item IDs via cached mappings
+    final costMap = <String, double>{};
     final inventoryItemIds = <String>{};
-    final invItemToVariant = <String, String>{}; // invItemId → variantId
+    final invItemToVariant = <String, String>{};
     final unmappedVariantIds = <String>{};
     for (final svId in variantIdsToFetch) {
-      final mr = await _mappingRepo.getMappingsByShopifyVariantId(svId);
-      if (mr.isSuccess && mr.data!.isNotEmpty) {
-        final invId = mr.data!.first.shopifyInventoryItemId;
+      final cached = mappingCache[svId];
+      if (cached != null && cached.isNotEmpty) {
+        final invId = cached.first.shopifyInventoryItemId;
         if (invId.isNotEmpty) {
           inventoryItemIds.add(invId);
           invItemToVariant[invId] = svId;
@@ -1415,22 +1472,74 @@ class ShopifySyncService {
       }
     }
 
-    for (final order in orders) {
+    // ── Phase 4: Import orders in parallel ────────────────
+    var imported = 0;
+    var skipped = 0;
+    var errorCount = 0;
+    const concurrency = 20;
+
+    // Separate new orders from skipped ones first
+    final newOrders = <Map<String, dynamic>>[];
+    for (final order in allOrders) {
       final shopifyOrderId = order['id']?.toString();
-      if (shopifyOrderId == null) continue;
-
-      // Skip already-imported orders
-      if (existingOrderIds.contains(shopifyOrderId)) {
+      if (shopifyOrderId == null ||
+          existingOrderIds.contains(shopifyOrderId)) {
         skipped++;
-        continue;
+      } else {
+        newOrders.add(order);
+      }
+    }
+
+    // Report skipped count upfront
+    onProgress?.call(
+      imported: 0, skipped: skipped, errors: 0,
+      total: total,
+      phase: 'Importing orders…',
+    );
+
+    // Process new orders in parallel chunks
+    for (var i = 0; i < newOrders.length; i += concurrency) {
+      final end =
+          (i + concurrency < newOrders.length) ? i + concurrency : newOrders.length;
+      final chunk = newOrders.sublist(i, end);
+
+      final results = await Future.wait(
+        chunk.map((order) async {
+          try {
+            await _importSingleOrder(
+              order, costMap,
+              mappingCache: mappingCache,
+              productCache: productCache,
+            );
+            return true;
+          } catch (_) {
+            return false;
+          }
+        }),
+      );
+
+      for (final success in results) {
+        if (success) {
+          imported++;
+        } else {
+          errorCount++;
+        }
       }
 
-      try {
-        await _importSingleOrder(order, costMap);
-        imported++;
-      } catch (e) {
-        errorCount++;
+      // Add imported IDs to prevent re-import on retry
+      for (final order in chunk) {
+        final sid = order['id']?.toString();
+        if (sid != null) existingOrderIds.add(sid);
       }
+
+      final lastOrder = chunk.last;
+      final orderNum =
+          lastOrder['order_number']?.toString() ?? lastOrder['id']?.toString();
+      onProgress?.call(
+        imported: imported, skipped: skipped, errors: errorCount,
+        total: total, currentOrder: '#$orderNum',
+        phase: 'Importing orders…',
+      );
     }
 
     // Update connection's last sync timestamp
@@ -1446,12 +1555,12 @@ class ShopifySyncService {
       direction: 'shopify_to_masari',
       status: errorCount == 0 ? 'success' : 'partial',
       metadata: {
-        'total': orders.length,
+        'total': allOrders.length,
         'imported': imported,
         'skipped': skipped,
         'errors': errorCount,
         'from': from.toIso8601String(),
-        'to': effectiveTo.toIso8601String(),
+        'to': to.toIso8601String(),
       },
       createdAt: DateTime.now(),
     ));
@@ -1460,7 +1569,7 @@ class ShopifySyncService {
       imported: imported,
       skipped: skipped,
       errors: errorCount,
-      total: orders.length,
+      total: total,
     ));
   }
 
@@ -1468,10 +1577,15 @@ class ShopifySyncService {
 
   /// Converts a single Shopify order JSON into a Revvo Sale and
   /// creates it with revenue + COGS transactions.
+  ///
+  /// When [mappingCache] and [productCache] are provided, skips
+  /// individual Firestore reads for mappings and products.
   Future<void> _importSingleOrder(
     Map<String, dynamic> order,
-    Map<String, double> shopifyCostMap,
-  ) async {
+    Map<String, double> shopifyCostMap, {
+    Map<String, List<ShopifyProductMapping>>? mappingCache,
+    Map<String, Product>? productCache,
+  }) async {
     final shopifyOrderId = order['id'].toString();
     final customer = order['customer'] is Map
         ? Map<String, dynamic>.from(order['customer'] as Map)
@@ -1490,27 +1604,40 @@ class ShopifySyncService {
       final shopifyVariantId =
           (lineItem['variant_id'] ?? lineItem['product_id']).toString();
 
-      // Try to resolve mapping
+      // Try to resolve mapping — use cache if available
       String? productId;
       String? variantId;
       String? variantName;
       double costPrice = 0;
 
-      final mappingResult = await _mappingRepo.getMappingsByShopifyVariantId(
-        shopifyVariantId,
-      );
-      if (mappingResult.isSuccess && mappingResult.data!.isNotEmpty) {
-        final m = mappingResult.data!.first;
+      List<ShopifyProductMapping> mappings;
+      if (mappingCache != null) {
+        mappings = mappingCache[shopifyVariantId] ?? [];
+      } else {
+        final mappingResult = await _mappingRepo.getMappingsByShopifyVariantId(
+          shopifyVariantId,
+        );
+        mappings = (mappingResult.isSuccess) ? mappingResult.data! : [];
+      }
+
+      if (mappings.isNotEmpty) {
+        final m = mappings.first;
         productId = m.revvoProductId;
         variantId = m.revvoVariantId;
         variantName = lineItem['variant_title'] as String?;
 
-        // Use Revvo's cost price
-        final prodResult = await _productRepo.getProductById(productId);
-        if (prodResult.isSuccess) {
-          final v = prodResult.data!.variants.firstWhere(
+        // Use Revvo's cost price — from cache or Firestore
+        Product? prod;
+        if (productCache != null) {
+          prod = productCache[productId];
+        } else {
+          final prodResult = await _productRepo.getProductById(productId);
+          if (prodResult.isSuccess) prod = prodResult.data;
+        }
+        if (prod != null) {
+          final v = prod.variants.firstWhere(
             (v) => v.id == variantId,
-            orElse: () => prodResult.data!.variants.first,
+            orElse: () => prod!.variants.first,
           );
           costPrice = v.costPrice;
         }
@@ -1522,9 +1649,14 @@ class ShopifySyncService {
 
         // Backfill cost on the Revvo product so future lookups use it
         if (costPrice > 0 && productId != null && variantId != null) {
-          final prodResult = await _productRepo.getProductById(productId);
-          if (prodResult.isSuccess) {
-            final prod = prodResult.data!;
+          Product? prod;
+          if (productCache != null) {
+            prod = productCache[productId];
+          } else {
+            final prodResult = await _productRepo.getProductById(productId);
+            if (prodResult.isSuccess) prod = prodResult.data;
+          }
+          if (prod != null) {
             final updatedVariants = prod.variants.map((v) {
               if (v.id == variantId && v.costPrice <= 0) {
                 return v.copyWith(costPrice: costPrice);
@@ -1725,6 +1857,117 @@ class ShopifySyncService {
       }
     } // end if (orderStatus != OrderStatus.cancelled)
 
+    // ── Refund transactions for already-refunded orders ───
+    // During historical import, orders may already have refunds.
+    // Process each refund individually with deterministic IDs
+    // matching the webhook handler pattern for idempotency.
+    // Product refunds → cat_sales_revenue, shipping refunds → cat_shipping.
+    final financialStatus =
+        order['financial_status']?.toString() ?? '';
+    if (financialStatus == 'refunded' ||
+        financialStatus == 'partially_refunded') {
+      final refunds = order['refunds'] as List<dynamic>? ?? [];
+      for (final r in refunds) {
+        final refund = Map<String, dynamic>.from(r as Map);
+        final shopifyRefundId = refund['id']?.toString() ?? '';
+        if (shopifyRefundId.isEmpty) continue;
+
+        final refundTxnId =
+            'sale_refund_${saleId}_$shopifyRefundId';
+
+        // Product refund: refund_line_items subtotal only (no tax)
+        final refundLineItems =
+            refund['refund_line_items'] as List<dynamic>? ?? [];
+        var productRefundAmount = 0.0;
+        var refundedQty = 0;
+        for (final ri in refundLineItems) {
+          final item = Map<String, dynamic>.from(ri as Map);
+          productRefundAmount +=
+              double.tryParse(item['subtotal']?.toString() ?? '0') ??
+                  0;
+          refundedQty += (item['quantity'] as int?) ?? 0;
+        }
+
+        // Shipping refund: order_adjustments where kind=shipping_refund
+        var shippingRefundAmount = 0.0;
+        final orderAdjs =
+            refund['order_adjustments'] as List<dynamic>? ?? [];
+        for (final adj in orderAdjs) {
+          final a = Map<String, dynamic>.from(adj as Map);
+          if (a['kind'] == 'shipping_refund') {
+            shippingRefundAmount +=
+                (double.tryParse(a['amount']?.toString() ?? '0') ?? 0)
+                    .abs();
+          }
+          // Other adjustments (refund_discrepancy, etc.) are NOT returns.
+          // Shopify's "Returns" metric counts only refund_line_items, so
+          // we must ignore them to keep Net sales matching.
+        }
+
+        // Fallback removed: Shopify "Returns" counts only
+        // refund_line_items.subtotal (+ shipping_refund adjustments).
+        // A money-only refund (e.g. the settlement leg of a split refund)
+        // must contribute 0, otherwise we double-count returns.
+
+        productRefundAmount =
+            double.parse(productRefundAmount.toStringAsFixed(2));
+        shippingRefundAmount =
+            double.parse(shippingRefundAmount.toStringAsFixed(2));
+        if (productRefundAmount <= 0 && shippingRefundAmount <= 0) {
+          continue;
+        }
+
+        // Date the refund at the refund's own created_at so monthly
+        // "Returns" match Shopify's Sales report (which reports refunds
+        // on the refund date, not the original order date).
+        final refundTime = DateTime.tryParse(
+              refund['created_at']?.toString() ?? '',
+            ) ??
+            transactionTime;
+
+        final isFullRefund = financialStatus == 'refunded';
+        final refundNote = isFullRefund
+            ? 'Full refund from Shopify'
+            : 'Partial refund ($refundedQty items)';
+
+        if (productRefundAmount > 0) {
+          transactions.add(transaction_model.Transaction(
+            id: refundTxnId,
+            userId: '',
+            amount: -productRefundAmount,
+            categoryId: 'cat_sales_revenue',
+            dateTime: refundTime,
+            title:
+                'Refund — #${order['order_number'] ?? ''} — Shopify',
+            note: refundNote,
+            paymentMethod: 'shopify',
+            saleId: saleId,
+            excludeFromPL: false,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ));
+        }
+
+        if (shippingRefundAmount > 0) {
+          transactions.add(transaction_model.Transaction(
+            id: 'sale_ship_refund_${saleId}_$shopifyRefundId',
+            userId: '',
+            amount: -shippingRefundAmount,
+            categoryId: 'cat_shipping',
+            dateTime: refundTime,
+            title:
+                'Shipping Refund — #${order['order_number'] ?? ''} — Shopify',
+            note: refundNote,
+            paymentMethod: 'shopify',
+            saleId: saleId,
+            excludeFromPL: false,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ));
+        }
+      }
+    }
+
     // ── Atomic write: sale + all transactions in one batch ─
     final writeResult =
         await _saleRepo.createSaleWithTransactions(sale, transactions);
@@ -1732,21 +1975,9 @@ class ShopifySyncService {
       throw Exception(writeResult.error ?? 'Failed to save order');
     }
 
-    // ── Deduct Inventory (skip for cancelled orders) ─────
-    if (orderStatus != OrderStatus.cancelled) {
-      for (final item in sale.items) {
-        if (item.productId != null && item.quantity > 0) {
-          final vId = item.variantId ?? '${item.productId}_v0';
-          await _productRepo.adjustStock(
-            item.productId!,
-            vId,
-            -item.quantity.toInt(),
-            'Shopify order imported',
-            valuationMethod: valuationMethod,
-          );
-        }
-      }
-    }
+    // NOTE: Stock deduction is intentionally skipped during historical
+    // import.  Past orders should not modify current inventory — the user
+    // can run an Inventory Sync to reconcile stock with Shopify.
   }
 
   PaymentStatus _mapPaymentStatus(String? status) {

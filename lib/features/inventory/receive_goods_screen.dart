@@ -561,30 +561,68 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
   // ── Items ────────────────────────────────────────────────
 
   Widget _buildItemsSection(String currency) {
+    // Show "Receive All" when at least one line has an ordered/remaining qty
+    // that isn't yet fully matched by the received qty (i.e. linked to a PO).
+    final canReceiveAll = _items.any((li) {
+      final ordered = double.tryParse(li.orderedCtrl.text) ?? 0;
+      return ordered > 0;
+    });
+
     return _Card(
-      title: l10n.itemsReceived,
-      trailing: GestureDetector(
-        onTap: _addLine,
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.accentOrange.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+      title: l10n.itemsCount(_items.length),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (canReceiveAll) ...[
+            GestureDetector(
+              onTap: _receiveAll,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.done_all_rounded,
+                        size: 16, color: Color(0xFF10B981)),
+                    const SizedBox(width: 4),
+                    Text(l10n.receiveAll,
+                        style: AppTypography.labelSmall.copyWith(
+                            color: const Color(0xFF10B981),
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          GestureDetector(
+            onTap: _addLine,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.accentOrange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_rounded,
+                      size: 16, color: AppColors.accentOrange),
+                  const SizedBox(width: 4),
+                  Text(l10n.add,
+                      style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.accentOrange,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.add_rounded,
-                  size: 16, color: AppColors.accentOrange),
-              const SizedBox(width: 4),
-              Text(l10n.add,
-                  style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.accentOrange,
-                      fontWeight: FontWeight.w600)),
-            ],
-          ),
-        ),
+        ],
       ),
       children: [
         for (int i = 0; i < _items.length; i++) ...[
@@ -596,6 +634,19 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
         ],
       ],
     );
+  }
+
+  /// Fills the "received" qty of every line with its ordered/remaining qty.
+  void _receiveAll() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      for (final li in _items) {
+        final ordered = double.tryParse(li.orderedCtrl.text) ?? 0;
+        if (ordered > 0) {
+          li.receivedCtrl.text = ordered.round().toString();
+        }
+      }
+    });
   }
 
   Widget _buildLineRow(int idx, String currency) {
@@ -654,30 +705,147 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
                 label: l10n.ordered,
                 keyboardType: const TextInputType.numberWithOptions(
                     decimal: true),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _compactField(
-                controller: li.receivedCtrl,
-                label: l10n.received,
-                keyboardType: const TextInputType.numberWithOptions(decimal: false),
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 onChanged: (_) => setState(() {}),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: _compactField(
-                controller: li.costCtrl,
-                label: l10n.unitCost,
-                prefix: currency,
-                keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true),
-                onChanged: (_) => setState(() {}),
-              ),
+              flex: 2,
+              child: _receivedStepper(li),
             ),
           ],
+        ),
+        const SizedBox(height: 8),
+        _compactField(
+          controller: li.costCtrl,
+          label: l10n.unitCost,
+          prefix: currency,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 8),
+        _buildLineFooter(li, currency),
+      ],
+    );
+  }
+
+  /// "Received" qty control with − / + steppers around an editable field.
+  Widget _receivedStepper(_ReceiptLine li) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(12),
+        border:
+            Border.all(color: AppColors.borderLight.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          _stepperButton(
+            icon: Icons.remove_rounded,
+            onTap: () {
+              final cur = int.tryParse(li.receivedCtrl.text) ?? 0;
+              if (cur <= 0) return;
+              HapticFeedback.selectionClick();
+              setState(() => li.receivedCtrl.text = (cur - 1).toString());
+            },
+          ),
+          Expanded(
+            child: TextField(
+              controller: li.receivedCtrl,
+              textAlign: TextAlign.center,
+              keyboardType: const TextInputType.numberWithOptions(decimal: false),
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (_) => setState(() {}),
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+              decoration: InputDecoration(
+                labelText: l10n.received,
+                labelStyle: TextStyle(
+                  color: AppColors.textTertiary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+                floatingLabelAlignment: FloatingLabelAlignment.center,
+                floatingLabelBehavior: FloatingLabelBehavior.auto,
+                isDense: true,
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+          _stepperButton(
+            icon: Icons.add_rounded,
+            onTap: () {
+              final cur = int.tryParse(li.receivedCtrl.text) ?? 0;
+              HapticFeedback.selectionClick();
+              setState(() => li.receivedCtrl.text = (cur + 1).toString());
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepperButton({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 36,
+        height: 48,
+        alignment: Alignment.center,
+        child: Icon(icon, size: 18, color: AppColors.primaryNavy),
+      ),
+    );
+  }
+
+  /// Per-line footer: remaining-vs-ordered hint (left) + line subtotal (right).
+  Widget _buildLineFooter(_ReceiptLine li, String currency) {
+    final fmt = NumberFormat('#,##0.00', 'en');
+    final received = double.tryParse(li.receivedCtrl.text) ?? 0;
+    final cost = double.tryParse(li.costCtrl.text) ?? 0;
+    final ordered = double.tryParse(li.orderedCtrl.text) ?? 0;
+    final lineTotal = received * cost;
+    final remaining = ordered - received;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        if (ordered > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: remaining <= 0
+                  ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                  : AppColors.accentOrange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              remaining <= 0
+                  ? l10n.receiveAll
+                  : l10n.remainingQty(remaining.round().toString()),
+              style: AppTypography.caption.copyWith(
+                color: remaining <= 0
+                    ? const Color(0xFF10B981)
+                    : AppColors.accentOrange,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        else
+          const SizedBox.shrink(),
+        Text(
+          '${l10n.subtotal}: $currency ${fmt.format(lineTotal)}',
+          style: AppTypography.caption.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );

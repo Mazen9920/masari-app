@@ -43,6 +43,19 @@ class _ReceivedGoodsSummaryScreenState
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          HapticFeedback.lightImpact();
+          context.pushNamed('ReceiveGoodsScreen');
+        },
+        backgroundColor: AppColors.accentOrange,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_rounded),
+        label: Text(
+          AppLocalizations.of(context)!.receiveGoods,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -147,7 +160,7 @@ class _ReceivedGoodsSummaryScreenState
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -77,6 +77,21 @@ import '../../features/shopify/screens/shopify_sync_history_screen.dart';
 import '../../features/bosta/screens/bosta_connect_screen.dart';
 import '../../features/bosta/screens/bosta_shipments_screen.dart';
 import '../../features/bosta/screens/bosta_audit_screen.dart';
+import '../../features/bosta/screens/bosta_dashboard_screen.dart';
+import '../../features/bosta/screens/rto_orders_screen.dart';
+import '../../features/reports/data_audit_screen.dart';
+import '../../features/sales/widgets/shopify_audit_shield.dart';
+import '../../features/reports/cash_bank_dashboard_screen.dart';
+import '../../features/reports/ar_dashboard_screen.dart';
+import '../../features/reports/fixed_assets_dashboard_screen.dart';
+import '../../features/reports/add_edit_fixed_asset_screen.dart';
+import '../../features/reports/loans_dashboard_screen.dart';
+import '../../features/reports/add_edit_loan_screen.dart';
+import '../../features/reports/salaries_dashboard_screen.dart';
+import '../../features/reports/add_edit_salary_screen.dart';
+import '../../shared/models/fixed_asset_model.dart' show FixedAsset;
+import '../../shared/models/loan_model.dart' show Loan;
+import '../../shared/models/salary_model.dart' show Salary;
 import '../../features/bosta/screens/bosta_shipment_detail_screen.dart';
 import '../../shared/models/bosta_shipment_model.dart';
 import '../../shared/models/sale_model.dart';
@@ -85,6 +100,7 @@ import '../../shared/widgets/feature_gate.dart';
 import '../../shared/widgets/transaction_type_picker.dart';
 import '../providers/app_settings_provider.dart';
 import '../../l10n/app_localizations.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Route path constants.
 abstract class AppRoutes {
@@ -135,6 +151,21 @@ abstract class AppRoutes {
   static const bostaShipments = '/manage/bosta/shipments';
   static const bostaShipmentDetail = '/manage/bosta/shipments/detail';
   static const bostaAudit = '/manage/bosta/audit';
+  static const bostaDashboard = '/manage/bosta/dashboard';
+  static const rtoOrders = '/manage/bosta/rto-orders';
+  static const shopifyAudit = '/sales/shopify-audit';
+  static const dataAudit = '/reports/data-audit';
+  static const cashBankDashboard = '/reports/cash-bank';
+  static const arDashboard = '/reports/ar';
+  static const fixedAssetsDashboard = '/reports/fixed-assets';
+  static const addFixedAsset = '/reports/fixed-assets/add';
+  static const editFixedAsset = '/reports/fixed-assets/edit';
+  static const loansDashboard = '/reports/loans';
+  static const addLoan = '/reports/loans/add';
+  static const editLoan = '/reports/loans/edit';
+  static const salariesDashboard = '/reports/salaries';
+  static const addSalary = '/reports/salaries/add';
+  static const editSalary = '/reports/salaries/edit';
 }
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -469,6 +500,7 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
             showBackButton: args['showBackButton'] ?? true,
             pageTitle: args['pageTitle'] ?? AppLocalizations.of(context)!.transactions,
             initialFilter: args['initialFilter'],
+            initialDateRange: args['initialDateRange'],
           );
         },
       ),
@@ -876,6 +908,192 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         path: AppRoutes.bostaAudit,
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const BostaAuditScreen(),
+      ),
+      GoRoute(
+        name: 'BostaDashboardScreen',
+        path: AppRoutes.bostaDashboard,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const BostaDashboardScreen(),
+      ),
+      GoRoute(
+        name: 'RtoOrdersScreen',
+        path: AppRoutes.rtoOrders,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const RtoOrdersScreen(),
+      ),
+      GoRoute(
+        name: 'ShopifyAuditScreen',
+        path: AppRoutes.shopifyAudit,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const ShopifyAuditScreen(),
+      ),
+      GoRoute(
+        name: 'DataAuditScreen',
+        path: AppRoutes.dataAudit,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const DataAuditScreen(),
+      ),
+      GoRoute(
+        name: 'CashBankDashboard',
+        path: AppRoutes.cashBankDashboard,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const CashBankDashboardScreen(),
+      ),
+      GoRoute(
+        name: 'ArDashboard',
+        path: AppRoutes.arDashboard,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const ArDashboardScreen(),
+      ),
+      GoRoute(
+        name: 'FixedAssetsDashboard',
+        path: AppRoutes.fixedAssetsDashboard,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          const cfUid = 'EGYQnP7ughdUtTbn04UwUET534i1';
+          if (FirebaseAuth.instance.currentUser?.uid == cfUid) {
+            return const FixedAssetsDashboardScreen();
+          }
+          return FeatureGateScreen(
+            feature: GrowthFeature.fixedAssets,
+            requiredTier: SubscriptionTier.pro,
+            child: const FixedAssetsDashboardScreen(),
+          );
+        },
+      ),
+      GoRoute(
+        name: 'AddFixedAsset',
+        path: AppRoutes.addFixedAsset,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          const cfUid = 'EGYQnP7ughdUtTbn04UwUET534i1';
+          if (FirebaseAuth.instance.currentUser?.uid == cfUid) {
+            return const AddEditFixedAssetScreen();
+          }
+          return FeatureGateScreen(
+            feature: GrowthFeature.fixedAssets,
+            requiredTier: SubscriptionTier.pro,
+            child: const AddEditFixedAssetScreen(),
+          );
+        },
+      ),
+      GoRoute(
+        name: 'EditFixedAsset',
+        path: AppRoutes.editFixedAsset,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final asset = extra?['asset'] as FixedAsset?;
+          const cfUid = 'EGYQnP7ughdUtTbn04UwUET534i1';
+          if (FirebaseAuth.instance.currentUser?.uid == cfUid) {
+            return AddEditFixedAssetScreen(asset: asset);
+          }
+          return FeatureGateScreen(
+            feature: GrowthFeature.fixedAssets,
+            requiredTier: SubscriptionTier.pro,
+            child: AddEditFixedAssetScreen(asset: asset),
+          );
+        },
+      ),
+      GoRoute(
+        name: 'LoansDashboard',
+        path: AppRoutes.loansDashboard,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          const cfUid = 'EGYQnP7ughdUtTbn04UwUET534i1';
+          if (FirebaseAuth.instance.currentUser?.uid == cfUid) {
+            return const LoansDashboardScreen();
+          }
+          return FeatureGateScreen(
+            feature: GrowthFeature.loansDashboard,
+            requiredTier: SubscriptionTier.pro,
+            child: const LoansDashboardScreen(),
+          );
+        },
+      ),
+      GoRoute(
+        name: 'AddLoan',
+        path: AppRoutes.addLoan,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          const cfUid = 'EGYQnP7ughdUtTbn04UwUET534i1';
+          if (FirebaseAuth.instance.currentUser?.uid == cfUid) {
+            return const AddEditLoanScreen();
+          }
+          return FeatureGateScreen(
+            feature: GrowthFeature.loansDashboard,
+            requiredTier: SubscriptionTier.pro,
+            child: const AddEditLoanScreen(),
+          );
+        },
+      ),
+      GoRoute(
+        name: 'EditLoan',
+        path: AppRoutes.editLoan,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final loan = extra?['loan'] as Loan?;
+          const cfUid = 'EGYQnP7ughdUtTbn04UwUET534i1';
+          if (FirebaseAuth.instance.currentUser?.uid == cfUid) {
+            return AddEditLoanScreen(loan: loan);
+          }
+          return FeatureGateScreen(
+            feature: GrowthFeature.loansDashboard,
+            requiredTier: SubscriptionTier.pro,
+            child: AddEditLoanScreen(loan: loan),
+          );
+        },
+      ),
+      GoRoute(
+        name: 'SalariesDashboard',
+        path: AppRoutes.salariesDashboard,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          const cfUid = 'EGYQnP7ughdUtTbn04UwUET534i1';
+          if (FirebaseAuth.instance.currentUser?.uid == cfUid) {
+            return const SalariesDashboardScreen();
+          }
+          return FeatureGateScreen(
+            feature: GrowthFeature.salariesDashboard,
+            requiredTier: SubscriptionTier.pro,
+            child: const SalariesDashboardScreen(),
+          );
+        },
+      ),
+      GoRoute(
+        name: 'AddSalary',
+        path: AppRoutes.addSalary,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          const cfUid = 'EGYQnP7ughdUtTbn04UwUET534i1';
+          if (FirebaseAuth.instance.currentUser?.uid == cfUid) {
+            return const AddEditSalaryScreen();
+          }
+          return FeatureGateScreen(
+            feature: GrowthFeature.salariesDashboard,
+            requiredTier: SubscriptionTier.pro,
+            child: const AddEditSalaryScreen(),
+          );
+        },
+      ),
+      GoRoute(
+        name: 'EditSalary',
+        path: AppRoutes.editSalary,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final salary = extra?['salary'] as Salary?;
+          const cfUid = 'EGYQnP7ughdUtTbn04UwUET534i1';
+          if (FirebaseAuth.instance.currentUser?.uid == cfUid) {
+            return AddEditSalaryScreen(salary: salary);
+          }
+          return FeatureGateScreen(
+            feature: GrowthFeature.salariesDashboard,
+            requiredTier: SubscriptionTier.pro,
+            child: AddEditSalaryScreen(salary: salary),
+          );
+        },
       ),
     ],
   );

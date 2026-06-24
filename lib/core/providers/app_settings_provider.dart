@@ -92,7 +92,10 @@ enum GrowthFeature {
   bostaIntegration('Bosta Integration', 'Track shipping expenses automatically from your Bosta deliveries'),
   manufacturingMode('Manufacturing Mode', 'Flag products as manufactured to decouple goods receipt from cost layers'),
   supplierManagement('Supplier Management', 'Track suppliers, record purchases & payments'),
-  fullCashFlow('Full Cash Flow Analysis', 'GAAP operating, investing & financing breakdown with drill-down');
+  fullCashFlow('Full Cash Flow Analysis', 'GAAP operating, investing & financing breakdown with drill-down'),
+  fixedAssets('Fixed Assets', 'Track fixed assets with depreciation schedules & net book values'),
+  loansDashboard('Loans Dashboard', 'Manage loans, track payments & outstanding balances'),
+  salariesDashboard('Salaries Dashboard', 'Track employee salaries, record payments & manage payroll');
 
   const GrowthFeature(this.displayName, this.description);
   final String displayName;
@@ -119,6 +122,9 @@ enum GrowthFeature {
     GrowthFeature.manufacturingMode     => l10n.featureManufacturingMode,
     GrowthFeature.supplierManagement    => l10n.featureSupplierManagement,
     GrowthFeature.fullCashFlow          => l10n.featureFullCashFlow,
+    GrowthFeature.fixedAssets            => displayName,
+    GrowthFeature.loansDashboard         => displayName,
+    GrowthFeature.salariesDashboard      => displayName,
   };
 
   String localizedDescription(AppLocalizations l10n) => switch (this) {
@@ -142,6 +148,9 @@ enum GrowthFeature {
     GrowthFeature.manufacturingMode     => l10n.featureManufacturingModeDesc,
     GrowthFeature.supplierManagement    => l10n.featureSupplierManagementDesc,
     GrowthFeature.fullCashFlow          => l10n.featureFullCashFlowDesc,
+    GrowthFeature.fixedAssets            => description,
+    GrowthFeature.loansDashboard         => description,
+    GrowthFeature.salariesDashboard      => description,
   };
 }
 

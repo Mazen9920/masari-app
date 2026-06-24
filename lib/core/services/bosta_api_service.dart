@@ -185,4 +185,62 @@ class BostaApiService {
       return Result.failure('Failed to disconnect from Bosta: $e');
     }
   }
+
+  // ── Cashout Sync ─────────────────────────────────────────
+
+  /// Triggers an on-demand cashout sync via the `syncBostaCashouts` callable.
+  ///
+  /// Returns the updated CF summary fields. The callable has a 5-minute
+  /// throttle — if called within that window, it returns the cached summary.
+  Future<Result<Map<String, dynamic>>> syncCashouts({String? startDate}) async {
+    _log('syncCashouts(startDate: $startDate)');
+    try {
+      final callable = _functions.httpsCallable(
+        'syncBostaCashouts',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 120)),
+      );
+      final params = <String, dynamic>{};
+      if (startDate != null) params['startDate'] = startDate;
+      final result = await callable.call<Map<String, dynamic>>(params);
+      _log('syncCashouts OK: ${result.data}');
+      return Result.success(result.data);
+    } on FirebaseFunctionsException catch (e) {
+      _log('syncCashouts ERROR: code=${e.code} message=${e.message} details=${e.details}');
+      return Result.failure(e.message ?? 'Cashout sync failed');
+    } catch (e) {
+      _log('syncCashouts EXCEPTION: $e');
+      return Result.failure('Cashout sync failed: $e');
+    }
+  }
+
+  // ── Dashboard Login ──────────────────────────────────────
+
+  /// Connects to the Bosta Dashboard by saving encrypted email + password.
+  ///
+  /// The CF verifies the credentials by logging in first, then stores them.
+  /// Requires that the API key connection already exists.
+  Future<Result<Map<String, dynamic>>> connectDashboard({
+    required String email,
+    required String password,
+  }) async {
+    _log('connectDashboard(email=$email)');
+    try {
+      final callable = _functions.httpsCallable(
+        'connectBostaDashboard',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
+      final result = await callable.call<Map<String, dynamic>>({
+        'email': email,
+        'password': password,
+      });
+      _log('connectDashboard OK: ${result.data}');
+      return Result.success(result.data);
+    } on FirebaseFunctionsException catch (e) {
+      _log('connectDashboard ERROR: code=${e.code} message=${e.message} details=${e.details}');
+      return Result.failure(e.message ?? 'Dashboard login failed');
+    } catch (e) {
+      _log('connectDashboard EXCEPTION: $e');
+      return Result.failure('Dashboard login failed: $e');
+    }
+  }
 }

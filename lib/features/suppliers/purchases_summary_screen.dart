@@ -13,6 +13,7 @@ import '../../shared/models/supplier_model.dart';
 import '../transactions/transactions_list_screen.dart';
 import '../../shared/models/transaction_model.dart';
 import 'purchase_detail_screen.dart';
+import 'record_purchase_screen.dart';
 
 /// Purchases Summary Dashboard — overview of supplier purchase activity.
 class PurchasesSummaryScreen extends ConsumerWidget {
@@ -33,6 +34,10 @@ class PurchasesSummaryScreen extends ConsumerWidget {
     final totalItems = thisMonth.fold<int>(0, (s, p) => s + p.items.length);
     final avgOrder = thisMonth.isEmpty ? 0.0 : totalThisMonth / thisMonth.length;
 
+    // Total outstanding payables across all purchases.
+    final outstandingPayables =
+        purchases.fold<double>(0, (s, p) => s + p.outstanding);
+
     // Recent 5 purchases
     final sorted = List<Purchase>.from(purchases)
       ..sort((a, b) => b.date.compareTo(a.date));
@@ -40,6 +45,22 @@ class PurchasesSummaryScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const RecordPurchaseScreen(),
+            ),
+          );
+        },
+        backgroundColor: AppColors.accentOrange,
+        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        label: Text(
+          l10n.recordPurchaseAction,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+      ),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -48,7 +69,7 @@ class PurchasesSummaryScreen extends ConsumerWidget {
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -60,6 +81,10 @@ class PurchasesSummaryScreen extends ConsumerWidget {
                     _StatsRow(fmt: fmt, currency: currency, totalItems: totalItems, avgOrder: avgOrder)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 60.ms),
+                    const SizedBox(height: 12),
+                    _PayablesCard(fmt: fmt, currency: currency, payables: outstandingPayables)
+                        .animate()
+                        .fadeIn(duration: 250.ms, delay: 90.ms),
                     const SizedBox(height: 20),
                     _TrendsChart(purchases: purchases)
                         .animate()
@@ -321,10 +346,73 @@ class _StatsRow extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
+//  OUTSTANDING PAYABLES CARD
+// ═══════════════════════════════════════════════════════
+class _PayablesCard extends StatelessWidget {
+  final NumberFormat fmt;
+  final String currency;
+  final double payables;
+  const _PayablesCard({required this.fmt, required this.currency, required this.payables});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final settled = payables <= 0;
+    final color = settled ? AppColors.success : const Color(0xFFC0392B);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.account_balance_wallet_rounded, color: color, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              l10n.outstandingPayables,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            '$currency ${fmt.format(payables.clamp(0, double.maxFinite))}',
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: 20,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 //  PURCHASE TRENDS (bar chart)
 // ═══════════════════════════════════════════════════════
-class _TrendsChart extends StatelessWidget {
-  final List<Purchase> purchases;
+class _TrendsChart extends StatelessWidget {  final List<Purchase> purchases;
   const _TrendsChart({required this.purchases});
 
   @override

@@ -28,7 +28,9 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
   AppLocalizations get l10n => AppLocalizations.of(context)!;
   late DateTime _fromDate;
   late DateTime _toDate;
-  final _maxRange = const Duration(days: 90);
+
+  /// Tracks elapsed time for the ETA calculation.
+  DateTime? _importStartedAt;
 
   @override
   void initState() {
@@ -39,7 +41,6 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final syncStatus = ref.watch(shopifySyncProvider);
 
     return Scaffold(
@@ -106,22 +107,26 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
                         fontSize: 11,
                       ),
                     ),
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
                           child: _DatePickerTile(
                             label: l10n.from,
                             date: _fromDate,
-                            onTap: () => _pickDate(isFrom: true),
+                            onTap: syncStatus.isSyncing
+                                ? null
+                                : () => _pickDate(isFrom: true),
                           ),
                         ),
-                        SizedBox(width: 12),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: _DatePickerTile(
                             label: l10n.to,
                             date: _toDate,
-                            onTap: () => _pickDate(isFrom: false),
+                            onTap: syncStatus.isSyncing
+                                ? null
+                                : () => _pickDate(isFrom: false),
                           ),
                         ),
                       ],
@@ -130,18 +135,31 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
                     const SizedBox(height: 12),
                     _RangeInfo(from: _fromDate, to: _toDate),
 
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
+
+                    // ── Live progress panel ───────────────
+                    if (syncStatus.isSyncing)
+                      _ImportProgressPanel(
+                        status: syncStatus,
+                        startedAt: _importStartedAt,
+                      ),
+
+                    // ── Result banner ─────────────────────
+                    if (syncStatus.phase == SyncPhase.success ||
+                        syncStatus.phase == SyncPhase.error) ...[
+                      _ResultBanner(status: syncStatus),
+                      const SizedBox(height: 16),
+                    ],
+
+                    const SizedBox(height: 8),
 
                     // Import button
                     SizedBox(
                       width: double.infinity,
                       child: GestureDetector(
-                        onTap: syncStatus.isSyncing
-                            ? null
-                            : _onImport,
+                        onTap: syncStatus.isSyncing ? null : _onImport,
                         child: Container(
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
                           decoration: BoxDecoration(
                             color: syncStatus.isSyncing
                                 ? AppColors.textTertiary
@@ -166,19 +184,16 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
                                       const SizedBox(
                                         width: 20,
                                         height: 20,
-                                        child:
-                                            CircularProgressIndicator(
+                                        child: CircularProgressIndicator(
                                           strokeWidth: 2.5,
                                           color: Colors.white,
                                         ),
                                       ),
                                       const SizedBox(width: 10),
                                       Text(
-                                        syncStatus.message ??
-                                            l10n.shopifyImporting,
-                                        style: AppTypography
-                                            .labelMedium
-                                            .copyWith(
+                                        'Importing…',
+                                        style:
+                                            AppTypography.labelMedium.copyWith(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -188,16 +203,13 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
                                 : Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(
-                                          Icons.download_rounded,
-                                          color: Colors.white,
-                                          size: 20),
+                                      const Icon(Icons.download_rounded,
+                                          color: Colors.white, size: 20),
                                       const SizedBox(width: 8),
                                       Text(
                                         l10n.importOrders,
-                                        style: AppTypography
-                                            .labelLarge
-                                            .copyWith(
+                                        style:
+                                            AppTypography.labelLarge.copyWith(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -208,30 +220,6 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
                         ),
                       ),
                     ).animate().fadeIn(duration: 250.ms, delay: 200.ms),
-
-                    // Progress bar
-                    if (syncStatus.isSyncing) ...[
-                      const SizedBox(height: 16),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: syncStatus.progress,
-                          minHeight: 6,
-                          backgroundColor:
-                              AppColors.borderLight.withValues(alpha: 0.5),
-                          valueColor:
-                              const AlwaysStoppedAnimation(
-                                  AppColors.secondaryBlue),
-                        ),
-                      ),
-                    ],
-
-                    // Result message
-                    if (syncStatus.phase == SyncPhase.success ||
-                        syncStatus.phase == SyncPhase.error) ...[
-                      const SizedBox(height: 20),
-                      _ResultBanner(status: syncStatus),
-                    ],
                   ],
                 ),
               ),
@@ -243,7 +231,6 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
-      final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
       decoration: BoxDecoration(
@@ -277,12 +264,10 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
   }
 
   Future<void> _pickDate({required bool isFrom}) async {
-    final earliest =
-        DateTime.now().subtract(_maxRange);
     final picked = await showDatePicker(
       context: context,
       initialDate: isFrom ? _fromDate : _toDate,
-      firstDate: earliest,
+      firstDate: DateTime(2015),
       lastDate: DateTime.now(),
       builder: (ctx, child) {
         return Theme(
@@ -302,28 +287,17 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
     setState(() {
       if (isFrom) {
         _fromDate = picked;
-        // Ensure to is not before from
-        if (_toDate.isBefore(_fromDate)) {
-          _toDate = _fromDate;
-        }
-        // Ensure range doesn't exceed 3 months
-        if (_toDate.difference(_fromDate) > _maxRange) {
-          _toDate = _fromDate.add(_maxRange);
-        }
+        if (_toDate.isBefore(_fromDate)) _toDate = _fromDate;
       } else {
         _toDate = picked;
-        if (_fromDate.isAfter(_toDate)) {
-          _fromDate = _toDate;
-        }
-        if (_toDate.difference(_fromDate) > _maxRange) {
-          _fromDate = _toDate.subtract(_maxRange);
-        }
+        if (_fromDate.isAfter(_toDate)) _fromDate = _toDate;
       }
     });
   }
 
   void _onImport() {
     HapticFeedback.mediumImpact();
+    setState(() => _importStartedAt = DateTime.now());
     ref.read(shopifySyncProvider.notifier).importHistorical(
           from: _fromDate,
           to: _toDate,
@@ -338,26 +312,27 @@ class _ShopifyImportScreenState extends ConsumerState<ShopifyImportScreen> {
 class _DatePickerTile extends StatelessWidget {
   final String label;
   final DateTime date;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _DatePickerTile({
     required this.label,
     required this.date,
-    required this.onTap,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final fmt = DateFormat( 'MMM dd, yyyy');
+    final fmt = DateFormat('MMM dd, yyyy');
 
     return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        onTap();
-      },
+      onTap: onTap != null
+          ? () {
+              HapticFeedback.lightImpact();
+              onTap!();
+            }
+          : null,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
@@ -384,7 +359,7 @@ class _DatePickerTile extends StatelessWidget {
             const SizedBox(height: 6),
             Row(
               children: [
-                Icon(Icons.calendar_today_rounded,
+                const Icon(Icons.calendar_today_rounded,
                     size: 16, color: AppColors.primaryNavy),
                 const SizedBox(width: 8),
                 Text(
@@ -421,7 +396,7 @@ class _RangeInfo extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline_rounded,
+          const Icon(Icons.info_outline_rounded,
               size: 16, color: AppColors.primaryNavy),
           const SizedBox(width: 8),
           Text(
@@ -446,6 +421,7 @@ class _ResultBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final isError = status.phase == SyncPhase.error;
+    final fmtNum = NumberFormat('#,###', 'en');
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -460,40 +436,331 @@ class _ResultBanner extends StatelessWidget {
               : AppColors.success.withValues(alpha: 0.2),
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            isError
-                ? Icons.error_outline_rounded
-                : Icons.check_circle_outline_rounded,
-            size: 24,
-            color: isError ? AppColors.danger : AppColors.success,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            children: [
+              Icon(
+                isError
+                    ? Icons.error_outline_rounded
+                    : Icons.check_circle_outline_rounded,
+                size: 24,
+                color: isError ? AppColors.danger : AppColors.success,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
                   isError ? l10n.shopifyImportFailed : l10n.importComplete,
                   style: AppTypography.labelMedium.copyWith(
                     color: isError ? AppColors.danger : AppColors.success,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 4),
+              ),
+            ],
+          ),
+          if (!isError && status.importTotal > 0) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _ResultStat(
+                  label: 'Imported',
+                  value: fmtNum.format(status.importImported),
+                  color: AppColors.success,
+                ),
+                const SizedBox(width: 16),
+                _ResultStat(
+                  label: 'Skipped',
+                  value: fmtNum.format(status.importSkipped),
+                  color: AppColors.textTertiary,
+                ),
+                if (status.importErrors > 0) ...[
+                  const SizedBox(width: 16),
+                  _ResultStat(
+                    label: 'Errors',
+                    value: fmtNum.format(status.importErrors),
+                    color: AppColors.danger,
+                  ),
+                ],
+              ],
+            ),
+          ],
+          if (isError && status.errorDetail != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              status.errorDetail!,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 12.5,
+              ),
+            ),
+          ],
+        ],
+      ),
+    ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.1);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  LIVE PROGRESS PANEL
+// ═══════════════════════════════════════════════════════════
+
+class _ImportProgressPanel extends StatelessWidget {
+  final SyncStatus status;
+  final DateTime? startedAt;
+
+  const _ImportProgressPanel({required this.status, this.startedAt});
+
+  @override
+  Widget build(BuildContext context) {
+    final total = status.importTotal;
+    final processed = status.importProcessed;
+    final progress = total > 0 ? processed / total : 0.0;
+    final fmtNum = NumberFormat('#,###', 'en');
+
+    // ETA calculation
+    String? eta;
+    if (startedAt != null && processed > 0 && total > processed) {
+      final elapsed = DateTime.now().difference(startedAt!);
+      final msPerOrder = elapsed.inMilliseconds / processed;
+      final remaining = ((total - processed) * msPerOrder / 1000).round();
+      if (remaining > 60) {
+        eta = '~${(remaining / 60).ceil()} min left';
+      } else if (remaining > 0) {
+        eta = '~${remaining}s left';
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Phase label + ETA
+          Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.secondaryBlue,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  status.importPhase ?? 'Working…',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (eta != null)
                 Text(
-                  status.message ?? status.errorDetail ?? '',
+                  eta,
+                  style: AppTypography.captionSmall.copyWith(
+                    color: AppColors.textTertiary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+
+          if (total > 0) ...[
+            const SizedBox(height: 16),
+
+            // Counter: "142 / 1,204 orders"
+            Row(
+              children: [
+                Text(
+                  fmtNum.format(processed),
+                  style: AppTypography.h2.copyWith(
+                    color: AppColors.primaryNavy,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 28,
+                  ),
+                ),
+                Text(
+                  ' / ${fmtNum.format(total)}',
+                  style: AppTypography.h3.copyWith(
+                    color: AppColors.textTertiary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 20,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'orders',
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 12.5,
+                    color: AppColors.textTertiary,
                   ),
                 ),
               ],
             ),
+
+            const SizedBox(height: 12),
+
+            // Progress bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: progress.clamp(0.0, 1.0),
+                minHeight: 8,
+                backgroundColor: AppColors.borderLight.withValues(alpha: 0.5),
+                valueColor:
+                    const AlwaysStoppedAnimation(AppColors.secondaryBlue),
+              ),
+            ),
+
+            const SizedBox(height: 4),
+
+            // Percentage
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                '${(progress * 100).toStringAsFixed(1)}%',
+                style: AppTypography.captionSmall.copyWith(
+                  color: AppColors.textTertiary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            // Breakdown row: Imported | Skipped | Errors
+            Row(
+              children: [
+                _CounterChip(
+                  label: 'Imported',
+                  count: status.importImported,
+                  color: AppColors.success,
+                ),
+                const SizedBox(width: 8),
+                _CounterChip(
+                  label: 'Skipped',
+                  count: status.importSkipped,
+                  color: AppColors.textTertiary,
+                ),
+                const SizedBox(width: 8),
+                if (status.importErrors > 0)
+                  _CounterChip(
+                    label: 'Errors',
+                    count: status.importErrors,
+                    color: AppColors.danger,
+                  ),
+              ],
+            ),
+
+            // Current order
+            if (status.currentOrder != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Current: ${status.currentOrder}',
+                style: AppTypography.captionSmall.copyWith(
+                  color: AppColors.textTertiary,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    ).animate().fadeIn(duration: 300.ms);
+  }
+}
+
+class _CounterChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _CounterChip({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '$count $label',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
           ),
         ],
       ),
-    ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.1);
+    );
+  }
+}
+
+class _ResultStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _ResultStat({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: AppTypography.h3.copyWith(
+            color: color,
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+          ),
+        ),
+        Text(
+          label,
+          style: AppTypography.captionSmall.copyWith(
+            color: AppColors.textTertiary,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
   }
 }

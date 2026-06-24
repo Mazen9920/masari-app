@@ -17,6 +17,9 @@ import '../services/result.dart';
 import '../utils/connectivity_helper.dart';
 import '../../shared/models/balance_sheet_entries.dart';
 import '../../shared/models/conversion_order_model.dart';
+import '../../shared/models/fixed_asset_model.dart';
+import '../../shared/models/loan_model.dart';
+import '../../shared/models/salary_model.dart';
 import 'auth_provider.dart';
 import 'app_settings_provider.dart';
 import 'repository_providers.dart';
@@ -1356,6 +1359,10 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
   bool _isLoadingMore = false;
   int _buildGeneration = 0;
 
+  /// Real-time Firestore listener for the current date-bounded view.
+  /// Automatically picks up Shopify webhook-created sales without manual refresh.
+  StreamSubscription<List<Sale>>? _realtimeSub;
+
   /// Active date bounds for server-side filtering.
   DateTime? _startDate;
   DateTime? _endDate;
@@ -1380,12 +1387,16 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
     // Keep data alive across tab switches so returning is instant.
     ref.keepAlive();
 
+    // Cancel any previous real-time listener before re-building.
+    _cancelRealtimeListener();
+    ref.onDispose(_cancelRealtimeListener);
+
     // Default to "This Month" so the first fetch is date-bounded and
     // subsequent setPeriod("This Month") calls return instantly.
     if (_startDate == null && _endDate == null) {
       final now = DateTime.now();
       _startDate = DateTime(now.year, now.month, 1);
-      _endDate = now;
+      _endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
     }
 
     _lastDocId = null;
@@ -1401,6 +1412,9 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
       );
       if (result.isSuccess && result.data != null) {
         _periodCache[_periodKey(_startDate, _endDate)] = result.data!;
+        // Start real-time listener so Shopify webhook-created sales
+        // (and any other server-side changes) appear instantly.
+        _startRealtimeListener(_startDate!, _endDate!);
         return result.data!;
       }
       throw Exception(result.error ?? 'Failed to load sales');
@@ -1418,6 +1432,41 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
     throw Exception(result.error ?? 'Failed to load sales');
   }
 
+  /// Subscribes to real-time Firestore snapshots for the given date range.
+  /// When [skipFirst] is true (default after initial fetch), skips the first
+  /// event since we already have that data. When false (after refresh), the
+  /// first server event is accepted immediately.
+  void _startRealtimeListener(DateTime start, DateTime end, {bool skipFirst = true}) {
+    _cancelRealtimeListener();
+    final gen = _buildGeneration;
+    final repo = ref.read(saleRepositoryProvider);
+    bool shouldSkip = skipFirst;
+    _realtimeSub = repo
+        .watchSalesInRange(start: start, end: end)
+        .listen((sales) {
+      if (shouldSkip) {
+        shouldSkip = false;
+        return;
+      }
+      // Guard against stale listeners after setPeriod / refresh.
+      if (gen != _buildGeneration) {
+        _cancelRealtimeListener();
+        return;
+      }
+      _periodCache[_periodKey(start, end)] = sales;
+      state = AsyncData(sales);
+    }, onError: (e) {
+      // Don't overwrite valid data with an error — just log it.
+      developer.log('Sales real-time listener error: $e',
+          name: 'SalesNotifier');
+    });
+  }
+
+  void _cancelRealtimeListener() {
+    _realtimeSub?.cancel();
+    _realtimeSub = null;
+  }
+
   /// Sets the active date bounds and re-fetches from server.
   /// Pass null for both to clear the bounds (fetch all).
   Future<void> setPeriod(DateTime? start, DateTime? end) async {
@@ -1431,6 +1480,7 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
     _endDate = end;
     _loadAllCompleter = null;
     _buildGeneration++;
+    _cancelRealtimeListener();
     final gen = _buildGeneration;
 
     // Check in-memory cache — instant period switching.
@@ -1440,6 +1490,10 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
       _hasMore = false;
       _lastDocId = null;
       state = AsyncData(cached);
+      // Re-attach listener for the cached period so new data still streams in.
+      if (start != null && end != null) {
+        _startRealtimeListener(start, end);
+      }
       return;
     }
 
@@ -1458,6 +1512,7 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
           _lastDocId = null;
           _periodCache[key] = result.data!;
           state = AsyncData(result.data!);
+          _startRealtimeListener(start, end);
           return;
         }
       } catch (_) {
@@ -1736,6 +1791,8 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
     _hasMore = false;
     _buildGeneration++;
     _loadAllCompleter = null;
+    _cancelRealtimeListener();
+    _periodCache.clear();
     final gen = _buildGeneration;
     final repo = ref.read(saleRepositoryProvider);
     final key = _periodKey(_startDate, _endDate);
@@ -1745,11 +1802,13 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
         final result = await repo.getSalesInRange(
           start: _startDate!,
           end: _endDate!,
+          forceServer: true,
         );
         if (gen != _buildGeneration) return;
         if (result.isSuccess && result.data != null) {
           _periodCache[key] = result.data!;
           state = AsyncData(result.data!);
+          _startRealtimeListener(_startDate!, _endDate!);
         }
         return;
       }
@@ -1857,6 +1916,37 @@ final saleTxnMigrationProvider = FutureProvider<void>((ref) async {
   }
 
   await prefs.setBool(key, true);
+});
+
+// ═══════════════════════════════════════════════════════════
+// BALANCE SHEET PREFETCH
+// Warms the repository range cache with all-history transactions &
+// sales so the Balance Sheet screen opens instantly on first visit.
+// Runs once per app launch, in the background, after dashboard has
+// loaded its own data. No awaits — fire-and-forget.
+// ═══════════════════════════════════════════════════════════
+
+final balanceSheetPrefetchProvider = FutureProvider<void>((ref) async {
+  final uid = ref.read(authProvider).user?.id;
+  if (uid == null) return;
+
+  // Use the same range the Balance Sheet screen uses (year 2000 → now).
+  final now = DateTime.now();
+  final asOf = DateTime(now.year, now.month, now.day, 23, 59, 59);
+  final start = DateTime(2000);
+
+  final txnRepo = ref.read(transactionRepositoryProvider);
+  final saleRepo = ref.read(saleRepositoryProvider);
+
+  // Fire both in parallel, ignore errors — it's just a cache warm-up.
+  await Future.wait([
+    txnRepo.getTransactionsInRange(start: start, end: asOf).catchError(
+          (_) => Result<List<Transaction>>.failure('prefetch'),
+        ),
+    saleRepo.getSalesInRange(start: start, end: asOf).catchError(
+          (_) => Result<List<Sale>>.failure('prefetch'),
+        ),
+  ]);
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -2021,4 +2111,426 @@ class BalanceSheetEntriesNotifier extends Notifier<BalanceSheetEntries> {
 final balanceSheetEntriesProvider =
     NotifierProvider<BalanceSheetEntriesNotifier, BalanceSheetEntries>(() {
   return BalanceSheetEntriesNotifier();
+});
+
+// ═══════════════════════════════════════════════════════════
+// FIXED ASSETS  — Firestore-persisted fixed-asset records
+// ═══════════════════════════════════════════════════════════
+
+class FixedAssetsNotifier extends Notifier<List<FixedAsset>> {
+  @override
+  List<FixedAsset> build() {
+    _load();
+    return [];
+  }
+
+  Future<void> _load() async {
+    final repo = ref.read(fixedAssetRepositoryProvider);
+    final result = await repo.getAll();
+    if (result.isSuccess && result.data != null) {
+      state = result.data!;
+    }
+  }
+
+  Future<void> refresh() async => _load();
+
+  Future<bool> add(FixedAsset asset) async {
+    final repo = ref.read(fixedAssetRepositoryProvider);
+    final result = await repo.create(asset);
+    if (result.isSuccess && result.data != null) {
+      state = [result.data!, ...state];
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> updateAsset(FixedAsset asset) async {
+    final repo = ref.read(fixedAssetRepositoryProvider);
+    final result = await repo.update(asset);
+    if (result.isSuccess && result.data != null) {
+      state = [
+        for (final a in state)
+          if (a.id == asset.id) result.data! else a,
+      ];
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> remove(String id) async {
+    final asset = state.firstWhere((a) => a.id == id, orElse: () => state.first);
+    final repo = ref.read(fixedAssetRepositoryProvider);
+    final result = await repo.delete(id);
+    if (result.isSuccess) {
+      // Clean up linked transactions
+      final txnNotifier = ref.read(transactionsProvider.notifier);
+      for (final evt in asset.events) {
+        if (evt.transactionId != null) {
+          await txnNotifier.removeTransaction(evt.transactionId!);
+        }
+      }
+      state = state.where((a) => a.id != id).toList();
+      return true;
+    }
+    return false;
+  }
+  Future<bool> sellAsset(
+      String assetId, double salePrice, DateTime saleDate, String? note) async {
+    final asset = state.firstWhere((a) => a.id == assetId);
+    final txnId = const Uuid().v4();
+    final event = AssetEvent(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      type: AssetEventType.sale,
+      amount: salePrice,
+      date: saleDate,
+      note: note,
+      transactionId: txnId,
+    );
+    final updated = asset.copyWith(
+      status: FixedAssetStatus.sold,
+      disposalDate: saleDate,
+      disposalPrice: salePrice,
+      events: [...asset.events, event],
+    );
+    final ok = await updateAsset(updated);
+    if (ok) {
+      final txn = Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Asset Sale – ${asset.name}',
+        amount: salePrice,
+        dateTime: saleDate,
+        categoryId: 'cat_asset_sale',
+        note: note,
+        excludeFromPL: true,
+      );
+      await ref.read(transactionsProvider.notifier).addTransaction(txn);
+    }
+    return ok;
+  }
+
+  /// Dispose / write off an asset (fully damaged, scrapped, etc.).
+  Future<bool> disposeAsset(
+      String assetId, DateTime disposalDate, String? note) async {
+    final asset = state.firstWhere((a) => a.id == assetId);
+    final nbv = asset.netBookValue;
+    final txnId = const Uuid().v4();
+    final event = AssetEvent(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      type: AssetEventType.disposal,
+      amount: nbv,
+      date: disposalDate,
+      note: note,
+      transactionId: nbv > 0 ? txnId : null,
+    );
+    final updated = asset.copyWith(
+      status: FixedAssetStatus.disposed,
+      disposalDate: disposalDate,
+      disposalPrice: 0,
+      events: [...asset.events, event],
+    );
+    final ok = await updateAsset(updated);
+    if (ok && nbv > 0) {
+      final txn = Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Asset Disposal – ${asset.name}',
+        amount: -nbv,
+        dateTime: disposalDate,
+        categoryId: 'cat_asset_disposal',
+        note: note,
+      );
+      await ref.read(transactionsProvider.notifier).addTransaction(txn);
+    }
+    return ok;
+  }
+
+  /// Record impairment / partial damage on an asset.
+  Future<bool> recordImpairment(
+      String assetId, double lossAmount, DateTime date, String? note) async {
+    final asset = state.firstWhere((a) => a.id == assetId);
+    final txnId = const Uuid().v4();
+    final event = AssetEvent(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      type: AssetEventType.partialDamage,
+      amount: lossAmount,
+      date: date,
+      note: note,
+      transactionId: txnId,
+    );
+    final updated = asset.copyWith(
+      impairmentLoss: asset.impairmentLoss + lossAmount,
+      status: FixedAssetStatus.impaired,
+      events: [...asset.events, event],
+    );
+    final ok = await updateAsset(updated);
+    if (ok) {
+      final txn = Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Impairment Loss – ${asset.name}',
+        amount: -lossAmount,
+        dateTime: date,
+        categoryId: 'cat_impairment_loss',
+        note: note,
+      );
+      await ref.read(transactionsProvider.notifier).addTransaction(txn);
+    }
+    return ok;
+  }
+}
+
+final fixedAssetsProvider =
+    NotifierProvider<FixedAssetsNotifier, List<FixedAsset>>(() {
+  return FixedAssetsNotifier();
+});
+
+// ═══════════════════════════════════════════════════════════
+// LOANS  — Firestore-persisted loan records
+// ═══════════════════════════════════════════════════════════
+
+class LoansNotifier extends Notifier<List<Loan>> {
+  @override
+  List<Loan> build() {
+    _load();
+    return [];
+  }
+
+  Future<void> _load() async {
+    final repo = ref.read(loanRepositoryProvider);
+    final result = await repo.getAll();
+    if (result.isSuccess && result.data != null) {
+      state = result.data!;
+    }
+  }
+
+  Future<void> refresh() async => _load();
+
+  Future<bool> add(Loan loan) async {
+    final repo = ref.read(loanRepositoryProvider);
+    final result = await repo.create(loan);
+    if (result.isSuccess && result.data != null) {
+      state = [result.data!, ...state];
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> updateLoan(Loan loan) async {
+    final repo = ref.read(loanRepositoryProvider);
+    final result = await repo.update(loan);
+    if (result.isSuccess && result.data != null) {
+      state = [
+        for (final l in state)
+          if (l.id == loan.id) result.data! else l,
+      ];
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> remove(String id) async {
+    final loan = state.firstWhere((l) => l.id == id, orElse: () => state.first);
+    final repo = ref.read(loanRepositoryProvider);
+    final result = await repo.delete(id);
+    if (result.isSuccess) {
+      // Clean up linked transactions
+      final txnNotifier = ref.read(transactionsProvider.notifier);
+      for (final p in loan.payments) {
+        if (p.transactionId != null) {
+          await txnNotifier.removeTransaction(p.transactionId!);
+        }
+      }
+      for (final d in loan.disbursements) {
+        if (d.transactionId != null) {
+          await txnNotifier.removeTransaction(d.transactionId!);
+        }
+      }
+      state = state.where((l) => l.id != id).toList();
+      return true;
+    }
+    return false;
+  }
+  Future<bool> recordPayment(String loanId, LoanPayment payment) async {
+    final loan = state.firstWhere((l) => l.id == loanId);
+    final txnId = const Uuid().v4();
+    final linkedPayment = payment.copyWith(transactionId: txnId);
+    final updated = loan.copyWith(
+      totalPaid: loan.totalPaid + payment.amount,
+      payments: [...loan.payments, linkedPayment],
+      status: (loan.totalPaid + payment.amount) >= loan.totalAmountDue
+          ? LoanStatus.paidOff
+          : loan.status,
+    );
+    final ok = await updateLoan(updated);
+    if (ok) {
+      final txn = Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Loan Payment – ${loan.name}',
+        amount: -payment.amount,
+        dateTime: payment.date,
+        categoryId: 'cat_loan_repayment',
+        note: payment.note,
+        excludeFromPL: true,
+      );
+      await ref.read(transactionsProvider.notifier).addTransaction(txn);
+    }
+    return ok;
+  }
+
+  /// Record a loan disbursement (money received from lender).
+  Future<bool> recordDisbursement(
+      String loanId, LoanDisbursement disbursement) async {
+    final loan = state.firstWhere((l) => l.id == loanId);
+    final txnId = const Uuid().v4();
+    final linkedDisb = disbursement.copyWith(transactionId: txnId);
+    final updated = loan.copyWith(
+      totalDisbursed: loan.totalDisbursed + disbursement.amount,
+      disbursements: [...loan.disbursements, linkedDisb],
+    );
+    final ok = await updateLoan(updated);
+    if (ok) {
+      final txn = Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Loan Received – ${loan.name}',
+        amount: disbursement.amount,
+        dateTime: disbursement.date,
+        categoryId: 'cat_loan_received',
+        note: disbursement.note,
+        excludeFromPL: true,
+      );
+      await ref.read(transactionsProvider.notifier).addTransaction(txn);
+    }
+    return ok;
+  }
+}
+
+final loansProvider =
+    NotifierProvider<LoansNotifier, List<Loan>>(() {
+  return LoansNotifier();
+});
+
+// ═══════════════════════════════════════════════════════════
+
+class SalariesNotifier extends Notifier<List<Salary>> {
+  @override
+  List<Salary> build() {
+    _load();
+    return [];
+  }
+
+  Future<void> _load() async {
+    final repo = ref.read(salaryRepositoryProvider);
+    final result = await repo.getAll();
+    if (result.isSuccess && result.data != null) {
+      state = result.data!;
+    }
+  }
+
+  Future<void> refresh() async => _load();
+
+  Future<bool> add(Salary salary) async {
+    final repo = ref.read(salaryRepositoryProvider);
+    final result = await repo.create(salary);
+    if (result.isSuccess && result.data != null) {
+      state = [result.data!, ...state];
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> updateSalary(Salary salary) async {
+    final repo = ref.read(salaryRepositoryProvider);
+    final result = await repo.update(salary);
+    if (result.isSuccess && result.data != null) {
+      state = [
+        for (final s in state)
+          if (s.id == salary.id) result.data! else s,
+      ];
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> remove(String id) async {
+    final salary = state.firstWhere((s) => s.id == id, orElse: () => state.first);
+    final repo = ref.read(salaryRepositoryProvider);
+    final result = await repo.delete(id);
+    if (result.isSuccess) {
+      // Clean up linked transactions
+      final txnNotifier = ref.read(transactionsProvider.notifier);
+      for (final p in salary.payments) {
+        if (p.transactionId != null) {
+          await txnNotifier.removeTransaction(p.transactionId!);
+        }
+      }
+      for (final a in salary.accruals) {
+        if (a.transactionId != null) {
+          await txnNotifier.removeTransaction(a.transactionId!);
+        }
+      }
+      state = state.where((s) => s.id != id).toList();
+      return true;
+    }
+    return false;
+  }
+
+  /// Record a payment for an employee.
+  Future<bool> recordPayment(String salaryId, SalaryPayment payment) async {
+    final salary = state.firstWhere((s) => s.id == salaryId);
+    final txnId = const Uuid().v4();
+    final linkedPayment = payment.copyWith(transactionId: txnId);
+    final updated = salary.copyWith(
+      totalPaid: salary.totalPaid + payment.amount,
+      payments: [...salary.payments, linkedPayment],
+    );
+    final ok = await updateSalary(updated);
+    if (ok) {
+      final txn = Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Salary Payment – ${salary.employeeName}',
+        amount: -payment.amount,
+        dateTime: payment.date,
+        categoryId: 'cat_salary_payment',
+        note: payment.note,
+        excludeFromPL: true,
+      );
+      await ref.read(transactionsProvider.notifier).addTransaction(txn);
+    }
+    return ok;
+  }
+
+  /// Record a salary accrual (salary payable entry).
+  Future<bool> recordAccrual(
+      String salaryId, SalaryAccrual accrual) async {
+    final salary = state.firstWhere((s) => s.id == salaryId);
+    final txnId = const Uuid().v4();
+    final linkedAccrual = accrual.copyWith(transactionId: txnId);
+    final updated = salary.copyWith(
+      manualAccrued: salary.manualAccrued + accrual.amount,
+      accruals: [...salary.accruals, linkedAccrual],
+    );
+    final ok = await updateSalary(updated);
+    if (ok) {
+      final txn = Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Salary Expense – ${salary.employeeName}',
+        amount: -accrual.amount,
+        dateTime: accrual.date,
+        categoryId: 'cat_salary_expense',
+        note: accrual.note,
+      );
+      await ref.read(transactionsProvider.notifier).addTransaction(txn);
+    }
+    return ok;
+  }
+}
+
+final salariesProvider =
+    NotifierProvider<SalariesNotifier, List<Salary>>(() {
+  return SalariesNotifier();
 });

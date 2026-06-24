@@ -49,6 +49,34 @@ class ShopifyApiService {
     }
   }
 
+  /// Lightweight audit endpoint: fetches only IDs, order numbers, and status
+  /// fields for orders in a date range. Much cheaper than [fetchOrders].
+  Future<Result<List<Map<String, dynamic>>>> fetchOrderIds({
+    DateTime? since,
+    DateTime? until,
+  }) async {
+    try {
+      final params = <String, dynamic>{};
+      if (since != null) params['since'] = since.toUtc().toIso8601String();
+      if (until != null) params['until'] = until.toUtc().toIso8601String();
+
+      final result = await _proxy.call<Map<String, dynamic>>({
+        'action': 'fetchOrderIds',
+        'params': params,
+      });
+
+      final orders = (result.data['orders'] as List?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          [];
+      return Result.success(orders);
+    } on FirebaseFunctionsException catch (e) {
+      return Result.failure(e.message ?? 'Failed to fetch Shopify order IDs');
+    } catch (e) {
+      return Result.failure('Failed to fetch Shopify order IDs: $e');
+    }
+  }
+
   /// Updates fields on a Shopify order (e.g. note, tags).
   ///
   /// [orderId] is the Shopify numeric order ID.

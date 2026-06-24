@@ -8,6 +8,7 @@ import '../../l10n/app_localizations.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../core/providers/app_providers.dart';
 import '../../shared/models/purchase_model.dart';
 import '../../shared/models/supplier_model.dart';
 import 'record_payment_screen.dart';
@@ -32,7 +33,7 @@ class PurchaseDetailScreen extends ConsumerWidget {
         bottom: false,
         child: Column(
           children: [
-            _buildHeader(context),
+            _buildHeader(context, ref),
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -70,7 +71,7 @@ class PurchaseDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
@@ -119,7 +120,58 @@ class PurchaseDetailScreen extends ConsumerWidget {
             icon: const Icon(Icons.ios_share_rounded),
             color: AppColors.primaryNavy,
           ),
+          IconButton(
+            onPressed: () => _confirmDelete(context, ref),
+            icon: const Icon(Icons.delete_outline_rounded),
+            color: const Color(0xFFDC2626),
+          ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
+    final p = purchase;
+    if (p == null) return;
+    HapticFeedback.lightImpact();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(l10n.deletePurchase),
+        content: Text(l10n.deletePurchaseConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.cancel,
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.deletePurchase,
+                style: const TextStyle(
+                    color: Color(0xFFDC2626), fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    // Reverse the purchase's effect on the supplier's outstanding balance.
+    if (p.outstanding > 0) {
+      ref.read(suppliersProvider.notifier).recordPayment(p.supplierId, p.outstanding);
+    }
+    ref.read(purchasesProvider.notifier).removePurchase(p.id);
+
+    HapticFeedback.mediumImpact();
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.purchaseDeleted),
+        backgroundColor: const Color(0xFFDC2626),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -809,6 +861,7 @@ class _BottomActions extends StatelessWidget {
                   MaterialPageRoute(
                     builder: (_) => RecordPurchaseScreen(
                       preselectedSupplierId: supplier?.id ?? purchase?.supplierId,
+                      purchaseToEdit: purchase,
                     ),
                   ),
                 );

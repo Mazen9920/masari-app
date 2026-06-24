@@ -31,6 +31,12 @@ import '../repositories/firestore/firestore_shopify_product_mapping_repository.d
 import '../repositories/firestore/firestore_shopify_sync_log_repository.dart';
 import '../repositories/conversion_order_repository.dart';
 import '../repositories/firestore/firestore_conversion_order_repository.dart';
+import '../repositories/fixed_asset_repository.dart';
+import '../repositories/firestore/firestore_fixed_asset_repository.dart';
+import '../repositories/loan_repository.dart';
+import '../repositories/firestore/firestore_loan_repository.dart';
+import '../repositories/salary_repository.dart';
+import '../repositories/firestore/firestore_salary_repository.dart';
 import '../../shared/models/conversion_order_model.dart';
 
 /// ─── Repository Providers ─────────────────────────────────
@@ -116,6 +122,27 @@ final shopifySyncLogRepositoryProvider =
 final conversionOrderRepositoryProvider =
     Provider<ConversionOrderRepository>((ref) {
   return FirestoreConversionOrderRepository();
+});
+
+// ─── Fixed Assets ──────────────────────────────────────
+
+final fixedAssetRepositoryProvider =
+    Provider<FixedAssetRepository>((ref) {
+  return FirestoreFixedAssetRepository();
+});
+
+// ─── Loans ─────────────────────────────────────────────
+
+final loanRepositoryProvider =
+    Provider<LoanRepository>((ref) {
+  return FirestoreLoanRepository();
+});
+
+// ─── Salaries ──────────────────────────────────────────
+
+final salaryRepositoryProvider =
+    Provider<SalaryRepository>((ref) {
+  return FirestoreSalaryRepository();
 });
 
 /// Fetches conversion orders for a specific product.

@@ -13,6 +13,31 @@ import '../providers/dashboard_data_provider.dart';
 
 enum _Metric { sales, expenses, profit, orders }
 
+enum _SalesView { graph, breakdown }
+
+/// Series keys for the Shopify-style sales breakdown view.
+enum _BreakdownSeries { grossSales, discounts, returns, netSales }
+
+class _BreakdownData {
+  final List<double> grossSales;
+  final List<double> discounts;
+  final List<double> returns;
+  final List<double> netSales;
+  const _BreakdownData({
+    required this.grossSales,
+    required this.discounts,
+    required this.returns,
+    required this.netSales,
+  });
+
+  static _BreakdownData empty(int n) => _BreakdownData(
+        grossSales: List.filled(n, 0.0),
+        discounts: List.filled(n, 0.0),
+        returns: List.filled(n, 0.0),
+        netSales: List.filled(n, 0.0),
+      );
+}
+
 /// Advanced Shopify-style analytics chart with metric toggling,
 /// period-aware data, touch tooltips, and comparison line.
 class AnalyticsChart extends ConsumerStatefulWidget {
@@ -24,6 +49,7 @@ class AnalyticsChart extends ConsumerStatefulWidget {
 
 class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
   _Metric _selected = _Metric.sales;
+  _SalesView _salesView = _SalesView.graph;
   bool _showComparison = false;
 
   @override
@@ -68,10 +94,25 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
     final prevBuckets =
         _buildBuckets(range.previousStart, range.previousEnd, strategy);
 
-    final curData =
-        _aggregate(buckets, curSales, curTxns, range.start, _selected, strategy);
-    final prevData =
-        _aggregate(prevBuckets, prevSales, prevTxns, range.previousStart, _selected, strategy);
+    // Sales metric supports two views: classic line chart or text breakdown.
+    final isBreakdown =
+        _selected == _Metric.sales && _salesView == _SalesView.breakdown;
+
+    final curBreakdown = isBreakdown
+        ? _aggregateBreakdown(buckets, curSales, curTxns, strategy)
+        : _BreakdownData.empty(buckets.length);
+    final prevBreakdown = isBreakdown
+        ? _aggregateBreakdown(prevBuckets, prevSales, prevTxns, strategy)
+        : _BreakdownData.empty(prevBuckets.length);
+
+    final curData = isBreakdown
+        ? curBreakdown.netSales
+        : _aggregate(
+            buckets, curSales, curTxns, range.start, _selected, strategy);
+    final prevData = isBreakdown
+        ? prevBreakdown.netSales
+        : _aggregate(prevBuckets, prevSales, prevTxns, range.previousStart,
+            _selected, strategy);
 
     // Summary value
     final totalCur = curData.fold<double>(0, (a, b) => a + b);
@@ -105,80 +146,90 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Text(
+                AppLocalizations.of(context)!.analytics,
+                style: AppTypography.h3.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              // Right-side controls: view switcher (sales only) + compare.
+              Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    AppLocalizations.of(context)!.analytics,
-                    style: AppTypography.h3.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w800,
+                  if (_selected == _Metric.sales) ...[
+                    _ViewSwitcher(
+                      salesView: _salesView,
+                      onChanged: (v) => setState(() => _salesView = v),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        fmt.format(totalCur),
-                        style: AppTypography.h1.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 22,
+                    const SizedBox(width: 8),
+                  ],
+                  GestureDetector(
+                    onTap: () =>
+                        setState(() => _showComparison = !_showComparison),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _showComparison
+                            ? AppColors.primaryNavy.withValues(alpha: 0.08)
+                            : AppColors.backgroundLight,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _showComparison
+                              ? AppColors.primaryNavy.withValues(alpha: 0.2)
+                              : AppColors.borderLight,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      _ChangeBadge(changePct: changePct),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.compare_arrows_rounded,
+                            size: 14,
+                            color: _showComparison
+                                ? AppColors.primaryNavy
+                                : AppColors.textTertiary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            AppLocalizations.of(context)!.compareLabel,
+                            style: AppTypography.captionSmall.copyWith(
+                              color: _showComparison
+                                  ? AppColors.primaryNavy
+                                  : AppColors.textTertiary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
-              // Compare toggle
-              GestureDetector(
-                onTap: () => setState(() => _showComparison = !_showComparison),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _showComparison
-                        ? AppColors.primaryNavy.withValues(alpha: 0.08)
-                        : AppColors.backgroundLight,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: _showComparison
-                          ? AppColors.primaryNavy.withValues(alpha: 0.2)
-                          : AppColors.borderLight,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.compare_arrows_rounded,
-                        size: 14,
-                        color: _showComparison
-                            ? AppColors.primaryNavy
-                            : AppColors.textTertiary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        AppLocalizations.of(context)!.compareLabel,
-                        style: AppTypography.captionSmall.copyWith(
-                          color: _showComparison
-                              ? AppColors.primaryNavy
-                              : AppColors.textTertiary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                fmt.format(totalCur),
+                style: AppTypography.h1.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 22,
                 ),
               ),
+              const SizedBox(width: 8),
+              _ChangeBadge(changePct: changePct),
             ],
           ),
           const SizedBox(height: 16),
 
           // ─── Metric Tabs ───
-          Row(
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
             children: _Metric.values.map((m) {
               final sel = m == _selected;
               return Padding(
@@ -210,14 +261,18 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
                 ),
               );
             }).toList(),
+            ),
           ),
           const SizedBox(height: 20),
 
-          // ─── Chart ───
-          SizedBox(
-            height: 200,
-            child: _buildChart(curData, prevData, buckets, strategy),
-          ),
+          // ─── Chart / Breakdown ───
+          if (isBreakdown)
+            _buildBreakdownList(curBreakdown, prevBreakdown, currency)
+          else
+            SizedBox(
+              height: 200,
+              child: _buildChart(curData, prevData, buckets, strategy),
+            ),
         ],
       ),
     );
@@ -412,6 +467,122 @@ class _AnalyticsChartState extends ConsumerState<AnalyticsChart> {
     }
   }
 
+  static Color _seriesColor(_BreakdownSeries s) {
+    switch (s) {
+      case _BreakdownSeries.grossSales:
+        return AppColors.secondaryBlue;
+      case _BreakdownSeries.discounts:
+        return AppColors.accentOrange;
+      case _BreakdownSeries.returns:
+        return AppColors.danger;
+      case _BreakdownSeries.netSales:
+        return AppColors.success;
+    }
+  }
+
+  String _seriesLabel(_BreakdownSeries s) {
+    switch (s) {
+      case _BreakdownSeries.grossSales:
+        return 'Gross sales';
+      case _BreakdownSeries.discounts:
+        return 'Discounts';
+      case _BreakdownSeries.returns:
+        return 'Returns';
+      case _BreakdownSeries.netSales:
+        return 'Net sales';
+    }
+  }
+
+  /// Shopify-style row list: label | amount | change-vs-previous badge.
+  Widget _buildBreakdownList(
+    _BreakdownData cur,
+    _BreakdownData prev,
+    String currency,
+  ) {
+    double sum(List<double> xs) => xs.fold(0.0, (a, b) => a + b);
+
+    final curVals = {
+      _BreakdownSeries.grossSales: sum(cur.grossSales),
+      _BreakdownSeries.discounts: sum(cur.discounts),
+      _BreakdownSeries.returns: sum(cur.returns),
+      _BreakdownSeries.netSales: sum(cur.netSales),
+    };
+    final prevVals = {
+      _BreakdownSeries.grossSales: sum(prev.grossSales),
+      _BreakdownSeries.discounts: sum(prev.discounts),
+      _BreakdownSeries.returns: sum(prev.returns),
+      _BreakdownSeries.netSales: sum(prev.netSales),
+    };
+
+    final money = NumberFormat.currency(symbol: '$currency ', decimalDigits: 2);
+
+    Widget row(_BreakdownSeries s, {required bool zebra, required bool emphasize}) {
+      final label = _seriesLabel(s);
+      final color = _seriesColor(s);
+      final curV = curVals[s]!;
+      final prevV = prevVals[s]!;
+      final isDeduction =
+          s == _BreakdownSeries.discounts || s == _BreakdownSeries.returns;
+      final display = isDeduction ? -curV : curV;
+      final formatted = isDeduction
+          ? '-${money.format(curV)}'
+          : money.format(curV);
+
+      double? changePct;
+      if (prevV.abs() > 0) {
+        changePct = (curV - prevV) / prevV.abs() * 100;
+      } else if (curV.abs() > 0) {
+        changePct = 100.0;
+      }
+
+      // For deductions, growth is "bad" — invert sign for badge color semantics.
+      final badgePct = (changePct == null)
+          ? null
+          : (isDeduction ? -changePct : changePct);
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: zebra ? AppColors.backgroundLight : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.bodySmall.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              formatted,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: emphasize ? FontWeight.w800 : FontWeight.w700,
+              ),
+            ),
+            if (_showComparison && badgePct != null) ...[
+              const SizedBox(width: 8),
+              _ChangeBadge(changePct: badgePct),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        row(_BreakdownSeries.grossSales, zebra: false, emphasize: false),
+        row(_BreakdownSeries.discounts, zebra: true, emphasize: false),
+        row(_BreakdownSeries.returns, zebra: false, emphasize: false),
+        row(_BreakdownSeries.netSales, zebra: true, emphasize: true),
+      ],
+    );
+  }
+
   static String _shortNum(double v) {
     if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
     if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
@@ -500,21 +671,16 @@ List<double> _aggregate(
 
   switch (metric) {
     case _Metric.sales:
-      // Revenue — investments already excluded at the pre-filter stage.
-      // Refund/reversal transactions reduce revenue. COGS reversals are excluded.
+      // Transaction-based Net Sales = Σ signed (cat_sales_revenue + cat_shipping)
+      // txns, bucketed by txn date. Positive = sale/shipping income, negative =
+      // refund or cancellation reversal. This nets out cancelled orders and
+      // matches Shopify "Total sales" exactly (sale[] docs can drift from txns).
       for (final t in txns) {
         final amount = (t as dynamic).amount as double;
         final catId = (t as dynamic).categoryId as String;
-        final idx = bucketIndex((t as dynamic).dateTime as DateTime);
-        if (idx >= 0 && idx < values.length) {
-          if (catId == 'cat_cogs') {
-            // COGS (and reversals) don't affect revenue chart
-            continue;
-          } else if (catId == 'cat_sales_revenue' ||
-              catId == 'cat_shipping') {
-            // Signed: positive = income, negative = refund/reversal
-            values[idx] += amount;
-          } else if (amount > 0) {
+        if (catId == 'cat_sales_revenue' || catId == 'cat_shipping') {
+          final idx = bucketIndex((t as dynamic).dateTime as DateTime);
+          if (idx >= 0 && idx < values.length) {
             values[idx] += amount;
           }
         }
@@ -560,9 +726,9 @@ List<double> _aggregate(
       }
       break;
     case _Metric.orders:
+      // Match Shopify's order count which includes cancelled orders.
       for (final s in sales) {
-        if ((s as Sale).orderStatus == OrderStatus.cancelled) continue;
-        final idx = bucketIndex(s.date);
+        final idx = bucketIndex((s as Sale).date);
         if (idx >= 0 && idx < values.length) {
           values[idx] += 1;
         }
@@ -571,6 +737,84 @@ List<double> _aggregate(
   }
 
   return values;
+}
+
+/// Shopify-style sales breakdown:
+///   Gross Sales  — sum of sale subtotals (line items × price, before discounts)
+///   Discounts    — sum of discount amounts on sales
+///   Returns      — absolute value of negative `cat_sales_revenue` transactions (refunds)
+///   Net Sales    — Gross Sales − Discounts − Returns
+///
+/// Shopify-style sales breakdown. Mirrors Shopify Admin's Sales report:
+///   Gross   = Σ qty × unit_price for every sale (cancelled included)
+///   Discounts = Σ discount_amount for every sale
+///   Returns = Σ |negative cat_sales_revenue txns| (partial refunds + full
+///             cancellation reversals) dated in bucket
+///   Net     = Gross − Discounts − Returns
+_BreakdownData _aggregateBreakdown(
+  List<DateTime> buckets,
+  List<dynamic> sales,
+  List<dynamic> txns,
+  BucketStrategy strategy,
+) {
+  if (buckets.isEmpty) return _BreakdownData.empty(0);
+  final n = buckets.length;
+  final gross = List.filled(n, 0.0);
+  final discounts = List.filled(n, 0.0);
+  final returns = List.filled(n, 0.0);
+  final lastIdx = n - 1;
+
+  int bucketIndex(DateTime d) {
+    int idx;
+    switch (strategy) {
+      case BucketStrategy.hourly:
+        idx = d.difference(buckets.first).inHours;
+      case BucketStrategy.daily:
+        final dDay = DateTime(d.year, d.month, d.day);
+        final startDay = DateTime(
+            buckets.first.year, buckets.first.month, buckets.first.day);
+        idx = dDay.difference(startDay).inDays;
+      case BucketStrategy.monthly:
+        idx = (d.year - buckets.first.year) * 12 +
+            d.month -
+            buckets.first.month;
+    }
+    return idx.clamp(0, lastIdx);
+  }
+
+  for (final s in sales) {
+    final sale = s as Sale;
+    // Include cancelled sales in Gross/Discounts (no shipping).
+    final idx = bucketIndex(sale.date);
+    if (idx >= 0 && idx < n) {
+      gross[idx] += sale.subtotal;
+      discounts[idx] += sale.discountAmount;
+    }
+  }
+
+  // Returns: revenue refund-event txns only (no shipping).
+  // Includes `*_reversal` txns so fully cancelled/voided orders are removed
+  // from Net Sales (otherwise cancelled orders are double-counted in Gross).
+  for (final t in txns) {
+    final amount = (t as dynamic).amount as double;
+    final catId = (t as dynamic).categoryId as String;
+    if (catId != 'cat_sales_revenue') continue;
+    if (amount >= 0) continue;
+    final idx = bucketIndex((t as dynamic).dateTime as DateTime);
+    if (idx >= 0 && idx < n) {
+      returns[idx] += amount.abs();
+    }
+  }
+
+  final net = List<double>.generate(
+      n, (i) => gross[i] - discounts[i] - returns[i]);
+
+  return _BreakdownData(
+    grossSales: gross,
+    discounts: discounts,
+    returns: returns,
+    netSales: net,
+  );
 }
 
 class _ChangeBadge extends StatelessWidget {
@@ -604,6 +848,53 @@ class _ChangeBadge extends StatelessWidget {
               color: color,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Segmented icon toggle between chart view and text breakdown view.
+class _ViewSwitcher extends StatelessWidget {
+  final _SalesView salesView;
+  final ValueChanged<_SalesView> onChanged;
+  const _ViewSwitcher({required this.salesView, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget segment(_SalesView v, IconData icon) {
+      final sel = salesView == v;
+      return GestureDetector(
+        onTap: () => onChanged(v),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: sel
+                ? AppColors.primaryNavy.withValues(alpha: 0.08)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: sel ? AppColors.primaryNavy : AppColors.textTertiary,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLight,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          segment(_SalesView.graph, Icons.show_chart_rounded),
+          segment(_SalesView.breakdown, Icons.format_list_bulleted_rounded),
         ],
       ),
     );

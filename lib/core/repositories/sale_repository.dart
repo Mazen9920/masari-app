@@ -34,6 +34,7 @@ abstract class SaleRepository {
   Future<Result<List<Sale>>> getSalesInRange({
     required DateTime start,
     required DateTime end,
+    bool forceServer = false,
   });
 
   /// Fetches a single sale by ID.
@@ -70,6 +71,14 @@ abstract class SaleRepository {
 
   /// Deletes a sale by ID.
   Future<Result<void>> deleteSale(String id);
+
+  /// Returns a real-time stream of sales whose date falls within [start, end].
+  /// Used by the SalesNotifier to pick up Shopify webhook-created sales
+  /// (or any server-side changes) instantly without manual refresh.
+  Stream<List<Sale>> watchSalesInRange({
+    required DateTime start,
+    required DateTime end,
+  });
 
   /// Clears any in-memory cache for range queries.
   void clearRangeCache() {}

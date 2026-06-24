@@ -10,6 +10,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../core/providers/export_providers.dart';
+import '../../core/providers/repository_providers.dart';
+import '../../core/services/share_service.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/sale_model.dart';
 import 'widgets/transaction_filter_sheet.dart';
@@ -22,17 +25,26 @@ import '../../shared/utils/money_utils.dart';
 import '../../core/services/shopify_sync_service.dart';
 import '../../core/navigation/app_router.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
+import '../../core/providers/bosta_connection_provider.dart';
+import '../sales/widgets/shopify_audit_shield.dart';
+import '../../core/providers/bosta_cashout_transactions_provider.dart';
 
 class TransactionsListScreen extends ConsumerStatefulWidget {
   final bool showBackButton;
   final TransactionFilter? initialFilter;
   final String? pageTitle;
 
+  /// When provided (e.g. from a P&L drill-down), the list opens scoped to this
+  /// exact date range instead of the default "This Month", so the filtered
+  /// transactions match the figure the user tapped.
+  final DateTimeRange? initialDateRange;
+
   const TransactionsListScreen({
     super.key,
     this.showBackButton = false,
     this.initialFilter,
     this.pageTitle,
+    this.initialDateRange,
   });
 
   @override
@@ -264,20 +276,18 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     if (_isRefreshing) return;
     setState(() => _isRefreshing = true);
     try {
-      final futures = <Future>[
-        ref.read(transactionsProvider.notifier).refresh(),
-      ];
-      if (_tabIndex == 1) {
-        futures.add(ref.read(salesProvider.notifier).refresh());
-      }
+      final txNotifier = ref.read(transactionsProvider.notifier);
+      final salesNotifier = _tabIndex == 1 ? ref.read(salesProvider.notifier) : null;
+
+      final futures = <Future>[txNotifier.refresh()];
+      if (salesNotifier != null) futures.add(salesNotifier.refresh());
       await Future.wait(futures);
+
+      if (!mounted) return;
+
       // Load remaining pages so summaries are complete after refresh.
-      final loadFutures = <Future>[
-        ref.read(transactionsProvider.notifier).loadAll(),
-      ];
-      if (_tabIndex == 1) {
-        loadFutures.add(ref.read(salesProvider.notifier).loadAll());
-      }
+      final loadFutures = <Future>[txNotifier.loadAll()];
+      if (salesNotifier != null) loadFutures.add(salesNotifier.loadAll());
       await Future.wait(loadFutures);
     } finally {
       if (mounted) setState(() => _isRefreshing = false);
@@ -289,6 +299,12 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     super.initState();
     if (widget.initialFilter != null) {
       _filter = widget.initialFilter!;
+    }
+    // Scope to the caller's date range (e.g. the P&L period) so the list shows
+    // exactly the transactions behind the tapped figure.
+    if (widget.initialDateRange != null) {
+      _allTabPeriodIndex = 6; // "Custom"
+      _allTabCustomRange = widget.initialDateRange;
     }
     _scrollController.addListener(_onScroll);
     // Set initial period bounds (default: This Month) so queries are
@@ -348,7 +364,20 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     super.dispose();
   }
 
-  List<Transaction> get _allTransactions => ref.watch(transactionsProvider).value ?? [];
+  List<Transaction> get _allTransactions {
+    final txns = ref.watch(transactionsProvider).value ?? [];
+    final isBostaConnected = ref.watch(isBostaConnectedProvider);
+    if (!isBostaConnected) return txns;
+    final cashouts = ref.watch(bostaCashoutTransactionsProvider).value ?? [];
+    if (cashouts.isEmpty) return txns;
+    // Merge and deduplicate by ID.
+    final ids = txns.map((t) => t.id).toSet();
+    final merged = [...txns];
+    for (final c in cashouts) {
+      if (!ids.contains(c.id)) merged.add(c);
+    }
+    return merged;
+  }
 
   /// Returns (from, to) bounds for the selected period pill.
   (DateTime?, DateTime?) get _periodBounds {
@@ -521,11 +550,27 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     return roundMoney(e);
   }
 
-  double get _salesTotalRevenue => roundMoney(
-      _filteredSales.where((s) => s.orderStatus != OrderStatus.cancelled).fold(0.0, (sum, s) => sum + s.netRevenue));
+  double get _salesTotalRevenue {
+    // Gross from all sales (including cancelled) + shipping collected
+    final gross = _filteredSales.fold(
+        0.0, (sum, s) => sum + s.netRevenue + s.shippingCost);
+    // Subtract refund-event txns (revenue + shipping, non-reversal)
+    double refunds = 0;
+    for (final t in _filteredTransactions.where((t) => !t.excludeFromPL)) {
+      if ((t.categoryId == 'cat_sales_revenue' ||
+              t.categoryId == 'cat_shipping') &&
+          t.amount < 0 &&
+          !t.id.endsWith('_reversal')) {
+        refunds += t.amount; // negative
+      }
+    }
+    return roundMoney(gross + refunds);
+  }
 
-  double get _salesTotalCogs => roundMoney(
-      _filteredSales.where((s) => s.orderStatus != OrderStatus.cancelled).fold(0.0, (sum, s) => sum + s.totalCogs));
+  double get _salesTotalCogs {
+    final cogs = _filteredSales.fold(0.0, (sum, s) => sum + s.totalCogs);
+    return roundMoney(cogs);
+  }
 
   // ─── Sales tab: render Sale objects directly ─────────
   List<Sale> get _filteredSales {
@@ -548,6 +593,12 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       return amt >= _salesFilter.amountRange.start &&
           amt <= _salesFilter.amountRange.end;
     }).toList();
+    // Order source filter
+    if (_salesFilter.orderSource == 'shopify') {
+      list = list.where((s) => s.externalSource == 'shopify').toList();
+    } else if (_salesFilter.orderSource == 'manual') {
+      list = list.where((s) => s.externalSource == null || s.externalSource!.isEmpty).toList();
+    }
 
     // Sort by date descending
     list.sort((a, b) => b.date.compareTo(a.date));
@@ -690,10 +741,115 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
   void _onTransactionTap(Transaction tx) {
     HapticFeedback.lightImpact();
 
+    // Bosta cashout → show detail sheet
+    if (tx.categoryId == 'cat_bosta_cashout') {
+      _showCashoutDetail(tx);
+      return;
+    }
+
     // If this transaction is linked to a sale/order, open the order detail
     if (_navigateToSaleIfLinked(tx)) return;
 
     context.pushNamed('TransactionDetailScreen', extra: {'transaction': tx});
+  }
+
+  void _showCashoutDetail(Transaction tx) {
+    final currency = ref.read(appSettingsProvider).currency;
+    final fmtNum = NumberFormat('#,##0.00', 'en');
+    final fmtDate = DateFormat('EEEE, d MMM yyyy');
+
+    // Extract Bosta transaction ID from note field.
+    final bostaId = tx.note?.replaceFirst('Bosta Transaction ID: ', '') ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Icon + title
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_rounded,
+                  color: Color(0xFF10B981),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Bosta Cashout',
+                style: AppTypography.h3.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$currency ${fmtNum.format(tx.amount)}',
+                style: AppTypography.h2.copyWith(
+                  color: const Color(0xFF10B981),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Detail rows
+              _cashoutDetailRow(Icons.calendar_today_rounded, 'Date',
+                  fmtDate.format(tx.dateTime)),
+              _cashoutDetailRow(Icons.receipt_long_rounded, 'Transaction ID',
+                  bostaId),
+              _cashoutDetailRow(Icons.account_balance_rounded, 'Payment Method',
+                  tx.paymentMethod.isEmpty ? 'Bank Transfer' : tx.paymentMethod),
+              _cashoutDetailRow(Icons.info_outline_rounded, 'P&L Impact',
+                  'Excluded (Balance Sheet only)'),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _cashoutDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.textSecondary),
+          const SizedBox(width: 12),
+          Text(label, style: AppTypography.caption),
+          const Spacer(),
+          Flexible(
+            child: Text(
+              value,
+              style: AppTypography.bodySmall.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Returns true if we navigated to a sale detail screen.
@@ -880,82 +1036,71 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           children: [
             // Revenue
             Expanded(
-              child: Column(
-                children: [
-                  Text(
-                    l10n.revenue,
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textTertiary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$currency ${fmtNum.format(revenue)}',
-                    style: AppTypography.h3.copyWith(
-                      color: AppColors.success,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+              child: _summaryColumn(
+                label: l10n.revenue,
+                value: '$currency ${fmtNum.format(revenue)}',
+                color: AppColors.success,
               ),
             ),
             Container(width: 1, height: 36, color: AppColors.borderLight),
             // COGS
             Expanded(
-              child: Column(
-                children: [
-                  Text(
-                    l10n.cogs,
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textTertiary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$currency ${fmtNum.format(cogs)}',
-                    style: AppTypography.h3.copyWith(
-                      color: AppColors.danger,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+              child: _summaryColumn(
+                label: l10n.cogs,
+                value: '$currency ${fmtNum.format(cogs)}',
+                color: AppColors.danger,
               ),
             ),
             Container(width: 1, height: 36, color: AppColors.borderLight),
             // Gross Profit
             Expanded(
-              child: Column(
-                children: [
-                  Text(
-                    l10n.grossProfit,
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textTertiary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$currency ${fmtNum.format(grossProfit)}',
-                    style: AppTypography.h3.copyWith(
-                      color: grossProfit >= 0 ? const Color(0xFF16A34A) : AppColors.danger,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+              child: _summaryColumn(
+                label: l10n.grossProfit,
+                value: '$currency ${fmtNum.format(grossProfit)}',
+                color: grossProfit >= 0 ? const Color(0xFF16A34A) : AppColors.danger,
               ),
             ),
           ],
         ),
       ),
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0);
+  }
+
+  Widget _summaryColumn({
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: AppTypography.h3.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+                fontSize: 14,
+              ),
+              maxLines: 1,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ═══════════════════════════════════════════════════
@@ -1061,7 +1206,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
               color: AppColors.primaryNavy,
             ),
           // Title
-          Expanded(
+          Flexible(
             child: Text(
               widget.pageTitle ?? l10n.transactions,
               style: AppTypography.h1.copyWith(
@@ -1069,21 +1214,24 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           
           // Action buttons
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               // Checklist icon — only visible on the Sales tab
               if (_tabIndex == 1)
                 _headerButton(Icons.checklist_rounded, _enterSelectionMode),
               _isRefreshing
                   ? const Padding(
-                      padding: EdgeInsets.all(10),
+                      padding: EdgeInsets.all(8),
                       child: SizedBox(
-                        width: 24,
-                        height: 24,
+                        width: 22,
+                        height: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: AppColors.primaryNavy,
@@ -1094,9 +1242,10 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
                       HapticFeedback.lightImpact();
                       _refreshTransactions();
                     }),
-              const SizedBox(width: 2),
+              // Shopify audit shield — only visible on the Sales tab
+              if (_tabIndex == 1) const ShopifyAuditShield(),
+              _headerButton(Icons.ios_share_rounded, _showExportSheet),
               _headerButton(Icons.search_rounded, _openSearch),
-              const SizedBox(width: 2),
               Builder(builder: (ctx) {
                 final isActive = _tabIndex == 1
                     ? !_salesFilter.isDefault
@@ -1148,12 +1297,379 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
         onTap: onTap,
         borderRadius: BorderRadius.circular(50),
         child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, color: AppColors.textSecondary, size: 24),
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, color: AppColors.textSecondary, size: 22),
         ),
       ),
     );
   }
+
+  // ═══════════════════════════════════════════════════
+  //  EXPORT TRANSACTIONS (CSV)
+  // ═══════════════════════════════════════════════════
+
+  /// Presents a date-range chooser, then exports all transactions in the
+  /// chosen range as a CSV file and opens the system share sheet.
+  Future<void> _showExportSheet() async {
+    HapticFeedback.lightImpact();
+
+    String? selectedPeriod;
+    TransactionType selectedType = TransactionType.all;
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final now = DateTime.now();
+
+          final periods = [
+            ('today', Icons.today_rounded, l10n.periodToday),
+            ('this_week', Icons.view_week_rounded, l10n.periodThisWeek),
+            ('this_month', Icons.calendar_month_rounded, l10n.periodThisMonth),
+            ('last_month', Icons.calendar_view_month_rounded, l10n.periodLastMonth),
+            ('all', Icons.all_inclusive_rounded, l10n.all),
+            ('custom', Icons.date_range_rounded, l10n.periodDateRange),
+          ];
+
+          final types = [
+            (TransactionType.all, Icons.swap_vert_rounded, l10n.all),
+            (TransactionType.income, Icons.trending_up_rounded, l10n.income),
+            (TransactionType.expense, Icons.trending_down_rounded, l10n.expense),
+          ];
+
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                top: 20,
+                left: 24,
+                right: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Handle
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.borderLight,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    l10n.exportCsv,
+                    style: AppTypography.h3.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── Date range ──────────────────────
+                  Text(
+                    l10n.selectDateRange,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: periods.map((p) {
+                      final isSelected = selectedPeriod == p.$1;
+                      return GestureDetector(
+                        onTap: () async {
+                          if (p.$1 == 'custom') {
+                            final picked = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: now,
+                              initialDateRange: _customRange,
+                              builder: _themedDatePicker,
+                            );
+                            if (picked != null) {
+                              setSheetState(() => selectedPeriod = 'custom');
+                            }
+                          } else {
+                            setSheetState(() => selectedPeriod = p.$1);
+                          }
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.accentOrange
+                                : AppColors.backgroundLight,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppColors.accentOrange
+                                  : AppColors.borderLight,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                p.$2,
+                                size: 15,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                p.$3,
+                                style: AppTypography.labelSmall.copyWith(
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── Type filter ─────────────────────
+                  Text(
+                    'Type',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: types.map((t) {
+                      final isSelected = selectedType == t.$1;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setSheetState(() => selectedType = t.$1),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.accentOrange
+                                  : AppColors.backgroundLight,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.accentOrange
+                                    : AppColors.borderLight,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  t.$2,
+                                  size: 18,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppColors.textSecondary,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  t.$3,
+                                  style: AppTypography.captionSmall.copyWith(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ── Export button ───────────────────
+                  FilledButton.icon(
+                    onPressed: selectedPeriod == null
+                        ? null
+                        : () => Navigator.pop(ctx, true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.accentOrange,
+                      disabledBackgroundColor:
+                          AppColors.borderLight,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.ios_share_rounded, size: 18),
+                    label: Text(
+                      l10n.exportCsv,
+                      style: AppTypography.labelMedium.copyWith(
+                        color: selectedPeriod == null
+                            ? AppColors.textSecondary
+                            : Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final now = DateTime.now();
+    DateTimeRange? range;
+    switch (selectedPeriod) {
+      case 'today':
+        range = DateTimeRange(start: DateTime(now.year, now.month, now.day), end: now);
+        break;
+      case 'this_week':
+        final monday = now.subtract(Duration(days: now.weekday - 1));
+        range = DateTimeRange(
+            start: DateTime(monday.year, monday.month, monday.day), end: now);
+        break;
+      case 'this_month':
+        range = DateTimeRange(start: DateTime(now.year, now.month, 1), end: now);
+        break;
+      case 'last_month':
+        range = DateTimeRange(
+          start: DateTime(now.year, now.month - 1, 1),
+          end: DateTime(now.year, now.month, 0),
+        );
+        break;
+      case 'all':
+        range = DateTimeRange(start: DateTime(2020), end: now);
+        break;
+      case 'custom':
+        if (_customRange == null) return;
+        range = _customRange;
+        break;
+    }
+
+    if (range == null || !mounted) return;
+    await _runExport(range, typeFilter: selectedType);
+  }
+
+  Widget _exportOption(
+      BuildContext ctx, IconData icon, String label, String value) {
+    return ListTile(
+      leading: Icon(icon, color: AppColors.accentOrange),
+      title: Text(label),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onTap: () => Navigator.pop(ctx, value),
+    );
+  }
+
+
+  /// Fetches transactions for [range], optionally filters by [typeFilter],
+  /// and shares them as a CSV file.
+  Future<void> _runExport(DateTimeRange range,
+      {TransactionType typeFilter = TransactionType.all}) async {
+    final start = DateTime(range.start.year, range.start.month, range.start.day);
+    final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59);
+
+    final origin = ShareService.originFrom(context);
+    final repo = ref.read(transactionRepositoryProvider);
+    final reportSvc = ref.read(reportServiceProvider);
+    final shareSvc = ref.read(shareServiceProvider);
+    final currency = ref.read(currencyProvider);
+
+    // Loading indicator while the range is fetched.
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.accentOrange),
+      ),
+    );
+
+    var loaderShown = true;
+    void dismissLoader() {
+      if (loaderShown && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        loaderShown = false;
+      }
+    }
+
+    try {
+      final result = await repo.getTransactionsInRange(start: start, end: end);
+      if (!mounted) return;
+      dismissLoader();
+
+      if (!result.isSuccess || result.data == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.somethingWentWrong),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+        return;
+      }
+
+      var txns = List<Transaction>.from(result.data!);
+      if (typeFilter == TransactionType.income) {
+        txns = txns.where((t) => t.amount > 0).toList();
+      } else if (typeFilter == TransactionType.expense) {
+        txns = txns.where((t) => t.amount < 0).toList();
+      }
+      txns.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+      if (txns.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.noTransactionsInRange)),
+        );
+        return;
+      }
+
+      final csvString = reportSvc.exportTransactionsCsv(txns, currency);
+      final fmt = DateFormat('yyyyMMdd');
+      final typeSuffix = typeFilter == TransactionType.income
+          ? '_Income'
+          : typeFilter == TransactionType.expense
+              ? '_Expense'
+              : '';
+      final fileName =
+          'Transactions${typeSuffix}_${fmt.format(start)}_${fmt.format(end)}.csv';
+      await shareSvc.shareCsv(
+        csvString,
+        fileName,
+        subject: l10n.exportCsv,
+        origin: origin,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      dismissLoader();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.somethingWentWrong),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    }
+  }
+
 
   // ═══════════════════════════════════════════════════
   //  CUSTOM DATE PICKER (single day or range)
@@ -1222,6 +1738,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     if (choice == null) return;
 
     if (choice == 'single') {
+      if (!mounted) return;
       final day = await showDatePicker(
         context: context,
         firstDate: DateTime(2020),
@@ -1237,6 +1754,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
         await _applyPeriodToProviders();
       }
     } else {
+      if (!mounted) return;
       final range = await showDateRangePicker(
         context: context,
         firstDate: DateTime(2020),
@@ -1483,6 +2001,31 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           );
         } else if (isSaleRevenue) {
           // Sale revenue with no children — plain tile
+          items.add(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: _TransactionTile(
+                transaction: tx,
+                categories: categories,
+                currency: currency,
+                onTap: () => _onTransactionTap(tx),
+              ),
+            )
+                .animate()
+                .fadeIn(
+                  duration: 350.ms,
+                  delay: i < 8 ? Duration(milliseconds: 50 * i) : Duration.zero,
+                )
+                .slideX(
+                  begin: 0.05,
+                  end: 0,
+                  duration: 350.ms,
+                  delay: i < 8 ? Duration(milliseconds: 50 * i) : Duration.zero,
+                  curve: Curves.easeOutCubic,
+                ),
+          );
+        } else if (tx.categoryId == 'cat_bosta_cashout') {
+          // Cashout transactions are read-only — no swipe actions.
           items.add(
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),

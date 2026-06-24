@@ -39,6 +39,36 @@ class BostaConnection {
   /// Running average fee per shipment (updated at each settlement batch).
   final double? averageBostaFee;
 
+  // ── Dashboard (Cashout API) fields ─────────────────────
+
+  /// Dashboard connection health.
+  /// "active" — credentials valid
+  /// "auth_failed" — login failed, user must re-enter credentials
+  final String? dashboardStatus;
+
+  /// When dashboard_status was last updated.
+  final DateTime? dashboardStatusUpdatedAt;
+
+  // ── Cash Flow pre-computed summary fields ──────────────
+
+  /// Sum of all Bosta cashout amounts for this user.
+  final double? cfTotalCashouts;
+
+  /// Sum of sale.total for COD orders not yet cashed out.
+  final double? cfPendingAr;
+
+  /// Count of COD orders not yet cashed out.
+  final int? cfPendingArCount;
+
+  /// Most recent cashout transaction_date.
+  final DateTime? cfLastCashoutDate;
+
+  /// When the last cashout sync completed.
+  final DateTime? cfLastCashoutSyncAt;
+
+  /// Orders before this date are excluded from AR calculation.
+  final DateTime? cfArCutoffDate;
+
   const BostaConnection({
     required this.userId,
     this.bostaBusinessId,
@@ -50,6 +80,14 @@ class BostaConnection {
     this.syncProgress,
     this.stats,
     this.averageBostaFee,
+    this.dashboardStatus,
+    this.dashboardStatusUpdatedAt,
+    this.cfTotalCashouts,
+    this.cfPendingAr,
+    this.cfPendingArCount,
+    this.cfLastCashoutDate,
+    this.cfLastCashoutSyncAt,
+    this.cfArCutoffDate,
   });
 
   // ── Computed ─────────────────────────────────────────────
@@ -57,6 +95,11 @@ class BostaConnection {
   bool get isActive => status == 'active';
   bool get isDisconnected => status == 'disconnected';
   bool get hasError => status == 'error';
+
+  /// Whether the dashboard (cashout API) credentials are valid.
+  bool get isDashboardActive => dashboardStatus == 'active';
+  bool get isDashboardAuthFailed => dashboardStatus == 'auth_failed';
+  bool get hasDashboard => dashboardStatus != null;
 
   // ── copyWith ─────────────────────────────────────────────
 
@@ -71,6 +114,14 @@ class BostaConnection {
     BostaSyncProgress? syncProgress,
     BostaStats? stats,
     double? averageBostaFee,
+    String? dashboardStatus,
+    DateTime? dashboardStatusUpdatedAt,
+    double? cfTotalCashouts,
+    double? cfPendingAr,
+    int? cfPendingArCount,
+    DateTime? cfLastCashoutDate,
+    DateTime? cfLastCashoutSyncAt,
+    DateTime? cfArCutoffDate,
   }) {
     return BostaConnection(
       userId: userId ?? this.userId,
@@ -83,6 +134,14 @@ class BostaConnection {
       syncProgress: syncProgress ?? this.syncProgress,
       stats: stats ?? this.stats,
       averageBostaFee: averageBostaFee ?? this.averageBostaFee,
+      dashboardStatus: dashboardStatus ?? this.dashboardStatus,
+      dashboardStatusUpdatedAt: dashboardStatusUpdatedAt ?? this.dashboardStatusUpdatedAt,
+      cfTotalCashouts: cfTotalCashouts ?? this.cfTotalCashouts,
+      cfPendingAr: cfPendingAr ?? this.cfPendingAr,
+      cfPendingArCount: cfPendingArCount ?? this.cfPendingArCount,
+      cfLastCashoutDate: cfLastCashoutDate ?? this.cfLastCashoutDate,
+      cfLastCashoutSyncAt: cfLastCashoutSyncAt ?? this.cfLastCashoutSyncAt,
+      cfArCutoffDate: cfArCutoffDate ?? this.cfArCutoffDate,
     );
   }
 
@@ -99,6 +158,19 @@ class BostaConnection {
         'connected_at': connectedAt.toIso8601String(),
         'status': status,
         if (averageBostaFee != null) 'average_bosta_fee': averageBostaFee,
+        // dashboard_email/password_encrypted intentionally omitted — managed by CFs
+        if (dashboardStatus != null) 'dashboard_status': dashboardStatus,
+        if (dashboardStatusUpdatedAt != null)
+          'dashboard_status_updated_at': dashboardStatusUpdatedAt!.toIso8601String(),
+        if (cfTotalCashouts != null) 'cf_total_cashouts': cfTotalCashouts,
+        if (cfPendingAr != null) 'cf_pending_ar': cfPendingAr,
+        if (cfPendingArCount != null) 'cf_pending_ar_count': cfPendingArCount,
+        if (cfLastCashoutDate != null)
+          'cf_last_cashout_date': cfLastCashoutDate!.toIso8601String(),
+        if (cfLastCashoutSyncAt != null)
+          'cf_last_cashout_sync_at': cfLastCashoutSyncAt!.toIso8601String(),
+        if (cfArCutoffDate != null)
+          'cf_ar_cutoff_date': cfArCutoffDate!.toIso8601String(),
       };
 
   factory BostaConnection.fromJson(Map<String, dynamic> json) {
@@ -122,6 +194,14 @@ class BostaConnection {
           ? BostaStats.fromJson(
               Map<String, dynamic>.from(json['stats'] as Map))
           : null,
+      dashboardStatus: json['dashboard_status'] as String?,
+      dashboardStatusUpdatedAt: _parseDateTime(json['dashboard_status_updated_at']),
+      cfTotalCashouts: (json['cf_total_cashouts'] as num?)?.toDouble(),
+      cfPendingAr: (json['cf_pending_ar'] as num?)?.toDouble(),
+      cfPendingArCount: (json['cf_pending_ar_count'] as num?)?.toInt(),
+      cfLastCashoutDate: _parseDateTime(json['cf_last_cashout_date']),
+      cfLastCashoutSyncAt: _parseDateTime(json['cf_last_cashout_sync_at']),
+      cfArCutoffDate: _parseDateTime(json['cf_ar_cutoff_date']),
     );
   }
 

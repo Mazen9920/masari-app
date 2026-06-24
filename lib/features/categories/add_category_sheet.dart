@@ -135,7 +135,7 @@ class _AddCategorySheetState extends ConsumerState<_AddCategorySheet> {
 
     final color = _colors[_selectedColorIndex];
     final category = CategoryData(
-      id: 'cat_${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
+      id: 'cat_${DateTime.now().millisecondsSinceEpoch}',
       userId: '',
       name: name,
       iconName: CategoryDataUIExt.iconNameFromData(_icons[_selectedIconIndex]),

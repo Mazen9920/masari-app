@@ -265,6 +265,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "deposited_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bosta_shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
         { "fieldPath": "expense_recorded", "order": "ASCENDING" },
         { "fieldPath": "deposited_at", "order": "DESCENDING" }
       ]
@@ -321,6 +329,31 @@
         { "fieldPath": "user_id", "order": "ASCENDING" },
         { "fieldPath": "is_reconciliation", "order": "ASCENDING" },
         { "fieldPath": "payment_method", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bosta_shipments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "cashout_status", "order": "ASCENDING" },
+        { "fieldPath": "deposited_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bosta_cashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "transaction_date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bosta_cashouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "transaction_date", "order": "DESCENDING" }
       ]
     }
   ],

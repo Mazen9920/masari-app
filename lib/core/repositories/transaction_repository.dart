@@ -29,9 +29,11 @@ abstract class TransactionRepository {
 
   /// Fetches all transactions whose date_time falls within [start, end].
   /// Uses server-side date filtering (no pagination needed for bounded ranges).
+  /// When [forceServer] is true, bypasses all caches and fetches from server.
   Future<Result<List<Transaction>>> getTransactionsInRange({
     required DateTime start,
     required DateTime end,
+    bool forceServer = false,
   });
 
   /// Reassigns all transactions with [oldCategoryId] to [newCategoryId].

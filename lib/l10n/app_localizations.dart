@@ -1658,6 +1658,24 @@ abstract class AppLocalizations {
   /// **'Receive Goods'**
   String get receiveGoods;
 
+  /// No description provided for @receiveAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive All'**
+  String get receiveAll;
+
+  /// No description provided for @remainingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Remaining'**
+  String get remainingLabel;
+
+  /// No description provided for @remainingQty.
+  ///
+  /// In en, this message translates to:
+  /// **'{qty} remaining'**
+  String remainingQty(String qty);
+
   /// No description provided for @receivedGoods.
   ///
   /// In en, this message translates to:
@@ -4577,6 +4595,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tax Payable'**
   String get catTaxPayable;
+
+  /// No description provided for @catEmployeeAdvance.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee Advance'**
+  String get catEmployeeAdvance;
 
   /// No description provided for @profileTitle.
   ///
@@ -10182,6 +10206,12 @@ abstract class AppLocalizations {
   /// **'Payee Name (Optional)'**
   String get payeeNameOptional;
 
+  /// No description provided for @transactionNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Transaction name'**
+  String get transactionNameLabel;
+
   /// No description provided for @addCustomCategory.
   ///
   /// In en, this message translates to:
@@ -10536,6 +10566,12 @@ abstract class AppLocalizations {
   /// **'TOTAL DUE'**
   String get totalDue;
 
+  /// No description provided for @supplierCreditLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'CREDIT (ADVANCE)'**
+  String get supplierCreditLabel;
+
   /// No description provided for @callAction.
   ///
   /// In en, this message translates to:
@@ -10812,6 +10848,12 @@ abstract class AppLocalizations {
   /// **'Select Category'**
   String get selectCategory;
 
+  /// No description provided for @searchCategoriesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search or create a category…'**
+  String get searchCategoriesHint;
+
   /// No description provided for @selectLabel.
   ///
   /// In en, this message translates to:
@@ -11010,6 +11052,12 @@ abstract class AppLocalizations {
   /// **'PAYMENT STATUS'**
   String get paymentStatusSection;
 
+  /// No description provided for @orderSourceSection.
+  ///
+  /// In en, this message translates to:
+  /// **'ORDER SOURCE'**
+  String get orderSourceSection;
+
   /// No description provided for @fullyPaid.
   ///
   /// In en, this message translates to:
@@ -11147,6 +11195,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Edit Purchase'**
   String get editPurchase;
+
+  /// No description provided for @purchaseUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase updated'**
+  String get purchaseUpdated;
+
+  /// No description provided for @saveChangesAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Changes'**
+  String get saveChangesAction;
+
+  /// No description provided for @deletePurchase.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Purchase'**
+  String get deletePurchase;
+
+  /// No description provided for @deletePurchaseConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete this purchase? This will reverse its effect on the supplier balance and cannot be undone.'**
+  String get deletePurchaseConfirm;
+
+  /// No description provided for @purchaseDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase deleted'**
+  String get purchaseDeleted;
+
+  /// No description provided for @outstandingPayables.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding Payables'**
+  String get outstandingPayables;
 
   /// No description provided for @paymentExceedsOutstanding.
   ///
@@ -13075,6 +13159,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tax Payable'**
   String get categoryTaxPayable;
+
+  /// No description provided for @categoryEmployeeAdvance.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee Advance'**
+  String get categoryEmployeeAdvance;
 
   /// No description provided for @preparingReport.
   ///

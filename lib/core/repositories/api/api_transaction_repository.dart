@@ -158,6 +158,7 @@ class ApiTransactionRepository implements TransactionRepository {
   Future<Result<List<Transaction>>> getTransactionsInRange({
     required DateTime start,
     required DateTime end,
+    bool forceServer = false,
   }) async {
     // Not implemented – Firestore repo is used in production.
     return Result.success([]);

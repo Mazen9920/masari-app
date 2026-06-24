@@ -842,6 +842,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get receiveGoods => 'Receive Goods';
 
   @override
+  String get receiveAll => 'Receive All';
+
+  @override
+  String get remainingLabel => 'Remaining';
+
+  @override
+  String remainingQty(String qty) {
+    return '$qty remaining';
+  }
+
+  @override
   String get receivedGoods => 'Received Goods';
 
   @override
@@ -2480,6 +2491,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get catTaxPayable => 'Tax Payable';
+
+  @override
+  String get catEmployeeAdvance => 'Employee Advance';
 
   @override
   String get profileTitle => 'Profile';
@@ -5714,6 +5728,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get payeeNameOptional => 'Payee Name (Optional)';
 
   @override
+  String get transactionNameLabel => 'Transaction name';
+
+  @override
   String get addCustomCategory => '+ Add Custom Category';
 
   @override
@@ -5910,6 +5927,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get totalDue => 'TOTAL DUE';
 
   @override
+  String get supplierCreditLabel => 'CREDIT (ADVANCE)';
+
+  @override
   String get callAction => 'Call';
 
   @override
@@ -6066,6 +6086,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectCategory => 'Select Category';
 
   @override
+  String get searchCategoriesHint => 'Search or create a category…';
+
+  @override
   String get selectLabel => 'Select';
 
   @override
@@ -6165,6 +6188,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get paymentStatusSection => 'PAYMENT STATUS';
 
   @override
+  String get orderSourceSection => 'ORDER SOURCE';
+
+  @override
   String get fullyPaid => 'Fully Paid';
 
   @override
@@ -6234,6 +6260,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editPurchase => 'Edit Purchase';
+
+  @override
+  String get purchaseUpdated => 'Purchase updated';
+
+  @override
+  String get saveChangesAction => 'Save Changes';
+
+  @override
+  String get deletePurchase => 'Delete Purchase';
+
+  @override
+  String get deletePurchaseConfirm =>
+      'Are you sure you want to delete this purchase? This will reverse its effect on the supplier balance and cannot be undone.';
+
+  @override
+  String get purchaseDeleted => 'Purchase deleted';
+
+  @override
+  String get outstandingPayables => 'Outstanding Payables';
 
   @override
   String get paymentExceedsOutstanding => 'Payment Exceeds Outstanding';
@@ -7357,6 +7402,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get categoryTaxPayable => 'Tax Payable';
+
+  @override
+  String get categoryEmployeeAdvance => 'Employee Advance';
 
   @override
   String get preparingReport => 'Preparing report…';

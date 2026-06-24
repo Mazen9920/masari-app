@@ -9,6 +9,8 @@ const plExcludedCats = <String>{
   'cat_loan_repayment',
   'cat_equity_injection',
   'cat_owner_withdrawal',
+  'cat_salary_payment',
+  'cat_asset_sale',
 };
 
 /// Sale-linked transaction categories (accrual entries).

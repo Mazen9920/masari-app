@@ -12,6 +12,7 @@ import '../../shared/models/supplier_model.dart';
 import '../../shared/models/product_model.dart';
 import 'package:uuid/uuid.dart';
 import '../../shared/models/purchase_model.dart';
+import '../../shared/models/goods_receipt_model.dart';
 import '../../features/suppliers/widgets/item_selection_sheet.dart';
 import 'add_supplier_screen.dart';
 
@@ -50,6 +51,10 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
 
   final List<_PurchaseItem> _items = [];
 
+  /// Non-null when editing an existing purchase.
+  Purchase? _editingPurchase;
+  bool get _isEditing => _editingPurchase != null;
+
   double get _subtotal =>
       _items.fold<double>(0, (s, item) => s + item.total);
 
@@ -63,7 +68,75 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedSupplierId = widget.preselectedSupplierId;
+    final edit = widget.purchaseToEdit;
+    if (edit is Purchase) {
+      _editingPurchase = edit;
+      _selectedSupplierId = edit.supplierId;
+      _purchaseDate = edit.date;
+      _refCtrl.text = edit.referenceNo;
+      if (edit.tax > 0) {
+        _taxCtrl.text = _trimTrailingZeros(edit.tax);
+      }
+      _paymentStatus = edit.paymentStatus;
+      _dueDate = edit.dueDate;
+      if (edit.paymentStatus == 1 && edit.amountPaid > 0) {
+        _paidAmountCtrl.text = _trimTrailingZeros(edit.amountPaid);
+      }
+      for (final it in edit.items) {
+        _items.add(_PurchaseItem(
+          name: it.name,
+          category: it.category,
+          itemType: _inferItemType(it.category),
+          qty: it.qty,
+          unitPrice: it.unitPrice,
+          productId: it.productId,
+          variantId: it.variantId,
+          variantName: it.variantName,
+        ));
+      }
+    } else {
+      _selectedSupplierId = widget.preselectedSupplierId;
+    }
+  }
+
+  static String _trimTrailingZeros(double v) {
+    if (v == v.roundToDouble()) return v.toStringAsFixed(0);
+    return v.toString();
+  }
+
+  _ItemType _inferItemType(String category) {
+    final c = category.toLowerCase();
+    if (c == 'raw material') return _ItemType.rawMaterial;
+    if (c == 'manufacturing fee') return _ItemType.manufacturingFee;
+    return _ItemType.product;
+  }
+
+  /// Recomputes how many units of [item] have been physically received by
+  /// summing across all GoodsReceipt documents for the purchase being edited.
+  /// Matches by productId+variantId first; falls back to name matching for
+  /// items without a linked inventory product.
+  int _recomputeReceivedQty(
+      _PurchaseItem item, List<GoodsReceipt> receipts) {
+    double total = 0;
+    for (final receipt in receipts) {
+      for (final ri in receipt.items) {
+        final bool matches;
+        if (item.productId != null && ri.productId != null) {
+          // Precise match: same product, and same variant if variant-level
+          matches = ri.productId == item.productId &&
+              (item.variantId == null ||
+                  ri.variantId == null ||
+                  ri.variantId == item.variantId);
+        } else {
+          // Fallback: name-based match for custom/manual items
+          matches =
+              ri.productName.toLowerCase().trim() ==
+              item.name.toLowerCase().trim();
+        }
+        if (matches) total += ri.receivedQty;
+      }
+    }
+    return total.round();
   }
 
   @override
@@ -90,26 +163,59 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
         ?.name ?? '';
     if (supplierId.isEmpty) return;
 
+    final totalAmount = _subtotal + _tax;
+    final amountPaid = _paymentStatus == 2
+        ? totalAmount
+        : (double.tryParse(_paidAmountCtrl.text) ?? 0)
+            .clamp(0, totalAmount)
+            .toDouble();
+
+    final editing = _editingPurchase;
+
+    if (editing != null) {
+      // Build line items recomputing receivedQty from actual GoodsReceipt docs.
+      final receiptsForPurchase = ref
+          .read(goodsReceiptsProvider)
+          .where((r) => r.purchaseId == editing.id)
+          .toList();
+      final newItems = validItems.map((item) {
+        final received = _recomputeReceivedQty(item, receiptsForPurchase);
+        return PurchaseItem(
+          name: item.name,
+          category: item.category,
+          qty: item.qty,
+          unitPrice: item.unitPrice,
+          receivedQty: received.clamp(0, item.qty),
+          productId: item.productId,
+          variantId: item.variantId,
+          variantName: item.variantName,
+        );
+      }).toList();
+      _saveEdit(editing, supplierId, supplierName, newItems);
+      return;
+    }
+
+    // New purchase — no received goods yet.
+    final newItems = validItems.map((item) => PurchaseItem(
+      name: item.name,
+      category: item.category,
+      qty: item.qty,
+      unitPrice: item.unitPrice,
+      productId: item.productId,
+      variantId: item.variantId,
+      variantName: item.variantName,
+    )).toList();
+
     final purchase = Purchase(
       id: const Uuid().v4(),
       supplierId: supplierId,
       supplierName: supplierName,
       date: _purchaseDate,
       referenceNo: _refCtrl.text.trim(),
-      items: validItems.map((item) => PurchaseItem(
-        name: item.name,
-        category: item.category,
-        qty: item.qty,
-        unitPrice: item.unitPrice,
-        productId: item.productId,
-        variantId: item.variantId,
-        variantName: item.variantName,
-      )).toList(),
+      items: newItems,
       tax: _tax,
       paymentStatus: _paymentStatus,
-      amountPaid: _paymentStatus == 2
-          ? (_subtotal + _tax)
-          : (double.tryParse(_paidAmountCtrl.text) ?? 0).clamp(0, _subtotal + _tax).toDouble(),
+      amountPaid: amountPaid,
       dueDate: _dueDate,
       createdAt: DateTime.now(),
     );
@@ -131,6 +237,65 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(l10n.purchaseRecorded),
+        backgroundColor: AppColors.primaryNavy,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _saveEdit(
+    Purchase editing,
+    String supplierId,
+    String supplierName,
+    List<PurchaseItem> newItems,
+  ) {
+    final totalAmount = _subtotal + _tax;
+    final amountPaid = _paymentStatus == 2
+        ? totalAmount
+        : (double.tryParse(_paidAmountCtrl.text) ?? 0)
+            .clamp(0, totalAmount)
+            .toDouble();
+
+    final updated = editing.copyWith(
+      supplierId: supplierId,
+      supplierName: supplierName,
+      date: _purchaseDate,
+      referenceNo: _refCtrl.text.trim(),
+      items: newItems,
+      tax: _tax,
+      paymentStatus: _paymentStatus,
+      amountPaid: amountPaid,
+      dueDate: _dueDate,
+    );
+
+    ref.read(purchasesProvider.notifier).updatePurchase(updated);
+
+    // Reconcile the supplier accounts-payable balance.
+    final notifier = ref.read(suppliersProvider.notifier);
+    if (editing.supplierId == supplierId) {
+      // Same supplier — adjust by the change in outstanding only.
+      final delta = updated.outstanding - editing.outstanding;
+      if (delta > 0) {
+        notifier.recordPurchase(supplierId, delta, dueDate: _dueDate);
+      } else if (delta < 0) {
+        notifier.recordPayment(supplierId, -delta);
+      }
+    } else {
+      // Supplier changed — reverse old supplier, apply to new supplier.
+      if (editing.outstanding > 0) {
+        notifier.recordPayment(editing.supplierId, editing.outstanding);
+      }
+      if (updated.outstanding > 0) {
+        notifier.recordPurchase(supplierId, updated.outstanding, dueDate: _dueDate);
+      }
+    }
+
+    HapticFeedback.mediumImpact();
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.purchaseUpdated),
         backgroundColor: AppColors.primaryNavy,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -218,7 +383,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  l10n.confirmPurchase,
+                  _isEditing ? l10n.saveChangesAction : l10n.confirmPurchase,
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -260,7 +425,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
           Expanded(
             child: Center(
               child: Text(
-                l10n.recordPurchaseTitle,
+                _isEditing ? l10n.editPurchase : l10n.recordPurchaseTitle,
                 style: AppTypography.h2.copyWith(
                   color: AppColors.primaryNavy,
                   fontWeight: FontWeight.w700,
@@ -680,24 +845,28 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                       )
                     : null,
               ),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.itemLabel,
-                          style: TextStyle(
-                            color: AppColors.textTertiary,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        GestureDetector(
+                  // Row 1: item selector + optional remove button
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              l10n.itemLabel,
+                              style: TextStyle(
+                                color: AppColors.textTertiary,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            GestureDetector(
                           onTap: () async {
                             if (item.itemType == _ItemType.manufacturingFee) {
                               // For mfg fees, just let them edit inline (name field)
@@ -838,23 +1007,46 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                       ],
                     ),
                   ),
-                  // Qty
-                  Column(
-                    children: [
-                      Text(
-                        l10n.qtyLabel,
-                        style: TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
+                  if (_items.length > 1) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => setState(() => _items.removeAt(i)),
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 16),
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.dangerLight,
+                          borderRadius: BorderRadius.circular(6),
                         ),
+                        child: Icon(Icons.remove_rounded,
+                            size: 16, color: AppColors.danger),
                       ),
-                      const SizedBox(height: 2),
-                      SizedBox(
-                        width: 50,
-                        height: 32,
-                        child: TextField(
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Row 2: Qty + Unit Price — full width, Expanded
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Qty
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.qtyLabel,
+                          style: TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        TextField(
                           controller: TextEditingController(
                               text: '${item.qty}'),
                           keyboardType: TextInputType.number,
@@ -872,57 +1064,60 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                             filled: true,
                             fillColor: AppColors.surfaceSubtle,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
-                                color: AppColors.borderLight
-                                    .withValues(alpha: 0.5),
+                                color: AppColors.borderLight.withValues(alpha: 0.5),
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
-                                color: AppColors.borderLight
-                                    .withValues(alpha: 0.5),
+                                color: AppColors.borderLight.withValues(alpha: 0.5),
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(
-                                  color: AppColors.primaryNavy),
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: AppColors.primaryNavy),
                             ),
-                            contentPadding: EdgeInsets.zero,
+                            contentPadding: const EdgeInsets.symmetric(
+                                vertical: 14),
                           ),
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 13,
+                          style: const TextStyle(
+                            fontSize: 15,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  // Unit price
-                  Column(
-                    children: [
-                      Text(
-                        l10n.unitPriceLabel,
-                        style: TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
+                  const SizedBox(width: 10),
+                  // Unit Price
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.unitPriceLabel,
+                          style: TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      SizedBox(
-                        width: 72,
-                        height: 32,
-                        child: TextField(
+                        const SizedBox(height: 4),
+                        TextField(
                           controller: TextEditingController(
-                              text: '${item.unitPrice.toInt()}'),
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                              text: item.unitPrice == 0
+                                  ? ''
+                                  : (item.unitPrice % 1 == 0
+                                      ? '${item.unitPrice.toInt()}'
+                                      : '${item.unitPrice}')),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                          ],
                           textAlign: TextAlign.right,
                           onChanged: (v) {
                             final parsed = double.tryParse(v);
@@ -933,39 +1128,60 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                             }
                           },
                           decoration: InputDecoration(
+                            hintText: '0.00',
+                            hintStyle: TextStyle(
+                                color: AppColors.textTertiary, fontSize: 14),
+                            prefixText: '$currency ',
+                            prefixStyle: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500),
                             filled: true,
                             fillColor: AppColors.surfaceSubtle,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
-                                color: AppColors.borderLight
-                                    .withValues(alpha: 0.5),
+                                color: AppColors.borderLight.withValues(alpha: 0.5),
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
-                                color: AppColors.borderLight
-                                    .withValues(alpha: 0.5),
+                                color: AppColors.borderLight.withValues(alpha: 0.5),
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(
-                                  color: AppColors.primaryNavy),
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: AppColors.primaryNavy),
                             ),
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 6),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 14),
                           ),
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 13,
+                          style: const TextStyle(
+                            fontSize: 15,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                ],
+              ),
+              // Line total
+              if (item.qty > 0 && item.unitPrice > 0) ...[
+                const SizedBox(height: 6),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Text(
+                    '${l10n.subtotalLabel}: $currency ${fmt.format(item.total)}',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
                 ],
               ),
             ),

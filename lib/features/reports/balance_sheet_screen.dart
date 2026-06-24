@@ -5,21 +5,34 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import '../../core/navigation/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/providers/bosta_connection_provider.dart';
+import '../../core/services/bosta_api_service.dart';
 import '../../core/services/share_service.dart';
 import '../../core/providers/export_providers.dart';
 import '../../core/providers/repository_providers.dart';
+import '../../shared/models/bosta_connection_model.dart';
 import '../../shared/models/sale_model.dart';
+import '../../shared/models/fixed_asset_model.dart';
+import '../../shared/models/loan_model.dart';
+import '../../shared/models/salary_model.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/utils/money_utils.dart';
 import '../../shared/utils/report_constants.dart';
+import '../../shared/utils/cf_engine.dart';
 import '../../l10n/app_localizations.dart';
 import 'widgets/report_card.dart';
 import 'widgets/chart_toggle.dart';
 import 'widgets/financial_period_sheet.dart';
+
+/// User ID for which CF-driven balance sheet is enabled.
+const _cfUserId = 'EGYQnP7ughdUtTbn04UwUET534i1';
 
 class _BSData {
   final double bankBalance;
@@ -27,6 +40,9 @@ class _BSData {
   final double suppliersOwing;
   final double supplierAdvancePayments;
   final double accountsReceivable;
+  final double fixedAssetsNetValue;
+  final double loansOutstanding;
+  final double unpaidSalaries;
   final double retainedEarnings;
   final double currentPeriodNetIncome;
   final double totalAssets;
@@ -42,6 +58,9 @@ class _BSData {
     required this.suppliersOwing,
     required this.supplierAdvancePayments,
     required this.accountsReceivable,
+    required this.fixedAssetsNetValue,
+    required this.loansOutstanding,
+    required this.unpaidSalaries,
     required this.retainedEarnings,
     required this.currentPeriodNetIncome,
     required this.totalAssets,
@@ -80,10 +99,43 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
   // Local data fetched via direct repo queries (no loadAll on shared provider)
   List<Transaction> _transactions = [];
   List<Sale> _sales = [];
-  bool _isReportLoading = true;
+  // True only until the very first fetch completes. After that, we keep the
+  // previous period's data on-screen while a new period is fetching, so
+  // re-opening the screen or switching periods feels instant.
+  bool _isFirstLoad = true;
+  bool _isRefreshing = false;
+
+  // ── CF User state ────────────────────────────────────────
+  bool _isCfUser = false;
+  bool _cfSyncing = false;
+  final bool _sanityCheckDismissed = false;
+  int _rtoCount = 0;
+  /// Live-computed pending AR for current period (null = not yet loaded).
+  double? _liveAr;
+  /// Historical cashout total when asOf < today, null means use pre-computed.
+  double? _historicalCashoutTotal;
+  /// Historical pending AR when asOf < today.
+  double? _historicalPendingAr;
 
   @override
   bool get wantKeepAlive => true;
+
+  /// Compute sale total from raw Firestore data (mirrors Sale.total getter).
+  /// total = Σ(item.quantity * item.unit_price) + tax - discount + shipping
+  static double _computeSaleTotalFromFirestore(Map<String, dynamic> data) {
+    final items = data['items'] as List<dynamic>? ?? [];
+    double subtotal = 0;
+    for (final item in items) {
+      if (item is Map) {
+        subtotal += ((item['quantity'] as num?)?.toDouble() ?? 0) *
+            ((item['unit_price'] as num?)?.toDouble() ?? 0);
+      }
+    }
+    final tax = (data['tax_amount'] as num?)?.toDouble() ?? 0;
+    final discount = (data['discount_amount'] as num?)?.toDouble() ?? 0;
+    final shipping = (data['shipping_cost'] as num?)?.toDouble() ?? 0;
+    return roundMoney(subtotal + tax - discount + shipping);
+  }
 
   Future<void> _openDatePicker() async {
     final result = await showFinancialPeriodSheet(context, current: _period);
@@ -98,30 +150,368 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
     Future.microtask(() {
       // Inventory & purchases still use their own providers (no bounds issue).
       ref.read(inventoryProvider.notifier).loadAll();
-      // Transactions & sales: fetch directly from repos.
+      // Detect CF user early so _loadData can use it.
+      final userId = ref.read(authProvider).user?.id;
+      if (userId == _cfUserId) {
+        _isCfUser = true;
+      }
+      // Load all data (txns, sales, live AR, cashout sync) in parallel.
+      // _loadData awaits live AR before revealing content.
       _loadData();
     });
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isReportLoading = true);
+  Future<void> _loadData({bool forceServer = false}) async {
+    // Only show the full-screen spinner on the very first load. On period
+    // changes / refreshes we keep the previous data rendered and just mark
+    // "refreshing" so the header can optionally show a small indicator.
+    if (mounted) {
+      setState(() {
+        _isRefreshing = true;
+      });
+    }
     try {
       final txnRepo = ref.read(transactionRepositoryProvider);
       final saleRepo = ref.read(saleRepositoryProvider);
       final asOf = _period.range.end;
+
+      // Kick off ALL independent network work in parallel — including the
+      // CF-user-specific queries. Previously the CF queries waited for
+      // txn/sale fetch to finish, doubling the perceived load time.
+      final futures = <Future<dynamic>>[
+        txnRepo.getTransactionsInRange(
+            start: DateTime(2000), end: asOf, forceServer: forceServer),
+        saleRepo.getSalesInRange(
+            start: DateTime(2000), end: asOf, forceServer: forceServer),
+      ];
+      if (_isCfUser) {
+        futures.add(_loadHistoricalCashouts());
+        futures.add(_triggerCashoutSync());
+      }
+      final results = await Future.wait(futures);
+
+      if (mounted) {
+        _transactions = (results[0].data as List<Transaction>?) ?? [];
+        _sales = (results[1].data as List<Sale>?) ?? [];
+      }
+    } catch (_) {
+      // Fall through — show whatever we have.
+    }
+
+    if (mounted) {
+      setState(() {
+        _isFirstLoad = false;
+        _isRefreshing = false;
+      });
+    }
+  }
+
+  /// Triggers an on-demand cashout sync (Phase 4.6).
+  /// Fires and forgets — updates come via bostaConnectionProvider refresh.
+  Future<void> _triggerCashoutSync() async {
+    if (!_isCfUser || _cfSyncing) return;
+    setState(() => _cfSyncing = true);
+    try {
+      final api = BostaApiService();
+      await api.syncCashouts();
+      // Refresh the connection provider to pick up updated summary.
+      if (mounted) {
+        ref.invalidate(bostaConnectionProvider);
+      }
+    } catch (_) {
+      // Sync failure is non-fatal — use cached data.
+    }
+    if (mounted) setState(() => _cfSyncing = false);
+  }
+
+  /// For historical periods, query bosta_cashouts directly.
+  Future<void> _loadHistoricalCashouts() async {
+    final asOf = _period.range.end;
+    final now = DateTime.now();
+    final isCurrentPeriod = asOf.year == now.year &&
+        asOf.month == now.month &&
+        asOf.day == now.day;
+
+    if (isCurrentPeriod) {
+      // Compute live AR + count RTO shipments.
+      try {
+        // Run both Firestore queries in parallel for speed.
+        final results = await Future.wait([
+          FirebaseFirestore.instance
+              .collection('bosta_shipments')
+              .where('user_id', isEqualTo: _cfUserId)
+              .get(),
+          FirebaseFirestore.instance
+              .collection('sales')
+              .where('user_id', isEqualTo: _cfUserId)
+              .where('payment_method', isEqualTo: 'Cash on Delivery (COD)')
+              .get(),
+        ]);
+        final shipmentsSnap = results[0];
+        final codSalesSnap = results[1];
+
+        // Build shipment lookup: saleId → { hasPaid, allRto }
+        // Also collect RTO shipments that need re-ship checking.
+        // Secondary: trackingNumber → { hasPaid, allRto } for unmatched.
+        final saleShipmentMap = <String, ({bool hasPaid, bool allRto})>{};
+        final trackingShipmentMap = <String, ({bool hasPaid, bool allRto})>{};
+        final rtoCheckEntries = <({String saleId, String bostaTracking})>[];
+
+        for (final doc in shipmentsSnap.docs) {
+          final data = doc.data();
+          final saleId = data['sale_id'] as String?;
+          final state = (data['state'] as num?)?.toInt() ?? 0;
+          final isRtoOrReturned = state == 60 || state == 46;
+          final isPaid = data['cashout_status'] == 'paid';
+          final tracking = data['tracking_number']?.toString() ?? '';
+
+          // Collect RTOs for batch re-ship check
+          if (isRtoOrReturned && data['matched'] == true && saleId != null) {
+            if (tracking.isNotEmpty) {
+              rtoCheckEntries.add((saleId: saleId, bostaTracking: tracking));
+            }
+          }
+
+          // Primary lookup: by sale_id
+          if (saleId != null) {
+            final prev = saleShipmentMap[saleId];
+            saleShipmentMap[saleId] = (
+              hasPaid: (prev?.hasPaid ?? false) || isPaid,
+              allRto: (prev?.allRto ?? true) && isRtoOrReturned,
+            );
+          }
+
+          // Secondary lookup: by tracking_number
+          if (tracking.isNotEmpty) {
+            final prev = trackingShipmentMap[tracking];
+            trackingShipmentMap[tracking] = (
+              hasPaid: (prev?.hasPaid ?? false) || isPaid,
+              allRto: (prev?.allRto ?? true) && isRtoOrReturned,
+            );
+          }
+        }
+
+        // Batch re-ship check: use the COD sales we already fetched to
+        // compare tracking numbers (avoids N individual reads).
+        final codSaleMap = <String, String>{};
+        for (final doc in codSalesSnap.docs) {
+          final tracking = doc.data()['tracking_number']?.toString() ?? '';
+          if (tracking.isNotEmpty) codSaleMap[doc.id] = tracking;
+        }
+        int rtoCount = 0;
+        for (final entry in rtoCheckEntries) {
+          final saleTracking = codSaleMap[entry.saleId] ?? '';
+          final isReshipped =
+              saleTracking.isNotEmpty && saleTracking != entry.bostaTracking;
+          if (!isReshipped) rtoCount++;
+        }
+
+        // Compute live AR from COD sales
+        final conn = ref.read(bostaConnectionProvider).value;
+        final arCutoff = conn?.cfArCutoffDate;
+        double pendingAr = 0;
+
+        for (final saleDoc in codSalesSnap.docs) {
+          final saleData = saleDoc.data();
+          final orderStatus = (saleData['order_status'] as num?)?.toInt() ?? 0;
+          if (orderStatus == 4) continue;
+
+          if (arCutoff != null) {
+            final saleDateTs = saleData['date'];
+            DateTime? saleDate;
+            if (saleDateTs is Timestamp) {
+              saleDate = saleDateTs.toDate();
+            } else if (saleDateTs is String) {
+              saleDate = DateTime.tryParse(saleDateTs);
+            }
+            if (saleDate != null && saleDate.isBefore(arCutoff)) continue;
+          }
+
+          final saleTotal = _computeSaleTotalFromFirestore(saleData);
+          if (saleTotal <= 0) continue;
+
+          // Primary: by sale_id. Fallback: by tracking_number.
+          var shipInfo = saleShipmentMap[saleDoc.id];
+          if (shipInfo == null) {
+            final saleTracking = saleData['tracking_number']?.toString() ?? '';
+            if (saleTracking.isNotEmpty) {
+              shipInfo = trackingShipmentMap[saleTracking];
+            }
+          }
+          if (shipInfo != null) {
+            if (shipInfo.hasPaid) continue;
+            if (shipInfo.allRto) continue;
+          }
+
+          pendingAr += saleTotal;
+        }
+
+        if (mounted) {
+          setState(() {
+            _historicalCashoutTotal = null;
+            _historicalPendingAr = null;
+            _liveAr = roundMoney(pendingAr);
+            _rtoCount = rtoCount;
+          });
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _historicalCashoutTotal = null;
+            _historicalPendingAr = null;
+            _liveAr = null;
+          });
+        }
+      }
+      return;
+    }
+
+    // Historical: query all bosta data in parallel to avoid sequential reads.
+    final asOfStr = asOf.toIso8601String().substring(0, 10);
+    try {
       final results = await Future.wait([
-        txnRepo.getTransactionsInRange(start: DateTime(2000), end: asOf),
-        saleRepo.getSalesInRange(start: DateTime(2000), end: asOf),
+        FirebaseFirestore.instance
+            .collection('bosta_cashouts')
+            .where('user_id', isEqualTo: _cfUserId)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('bosta_shipments')
+            .where('user_id', isEqualTo: _cfUserId)
+            .get(),
+        FirebaseFirestore.instance
+            .collection('sales')
+            .where('user_id', isEqualTo: _cfUserId)
+            .where('payment_method', isEqualTo: 'Cash on Delivery (COD)')
+            .get(),
       ]);
+      final cashoutsSnap = results[0];
+      final shipmentsSnap = results[1];
+      final codSalesSnap = results[2];
+
+      // Build cashout map: id → transactionDate, and compute total <= asOf.
+      final cashoutDateMap = <String, String>{};
+      double total = 0;
+      for (final doc in cashoutsSnap.docs) {
+        final data = doc.data();
+        final dateStr = data['transaction_date'] as String? ?? '';
+        cashoutDateMap[doc.id] = dateStr;
+        if (dateStr.compareTo(asOfStr) <= 0) {
+          total += (data['amount'] as num?)?.toDouble() ?? 0;
+        }
+      }
+
+      // Build sale tracking map from COD sales for re-ship detection.
+      final codSaleMap = <String, String>{};
+      for (final doc in codSalesSnap.docs) {
+        final tracking = doc.data()['tracking_number']?.toString() ?? '';
+        if (tracking.isNotEmpty) codSaleMap[doc.id] = tracking;
+      }
+
+      // Process shipments (no individual reads needed).
+      int rtoCount = 0;
+      final saleShipmentMap = <String, ({bool hasPaid, bool allRto})>{};
+      final rtoCheckEntries = <({String saleId, String bostaTracking})>[];
+
+      for (final doc in shipmentsSnap.docs) {
+        final data = doc.data();
+        final saleId = data['sale_id'] as String?;
+        if (saleId == null) continue;
+
+        final state = (data['state'] as num?)?.toInt() ?? 0;
+        final isRtoOrReturned = state == 60 || state == 46;
+
+        if (isRtoOrReturned && data['matched'] == true) {
+          final bostaTracking = data['tracking_number']?.toString() ?? '';
+          if (bostaTracking.isNotEmpty) {
+            rtoCheckEntries
+                .add((saleId: saleId, bostaTracking: bostaTracking));
+          }
+        }
+
+        final isPaid = data['cashout_status'] == 'paid';
+        bool cashoutAfterAsOf = false;
+        if (isPaid) {
+          final cashoutId = data['cashout_id'] as String?;
+          if (cashoutId != null) {
+            final cashoutDate = cashoutDateMap[cashoutId] ?? '';
+            if (cashoutDate.isNotEmpty && cashoutDate.compareTo(asOfStr) > 0) {
+              cashoutAfterAsOf = true;
+            }
+          }
+        }
+
+        final prev = saleShipmentMap[saleId];
+        final effectivelyPaid =
+            ((prev?.hasPaid ?? false) || isPaid) && !cashoutAfterAsOf;
+        final allRto = (prev?.allRto ?? true) && isRtoOrReturned;
+        saleShipmentMap[saleId] =
+            (hasPaid: effectivelyPaid, allRto: allRto);
+      }
+
+      // Batch RTO re-ship check using COD sales map.
+      for (final entry in rtoCheckEntries) {
+        final saleTracking = codSaleMap[entry.saleId] ?? '';
+        final isReshipped =
+            saleTracking.isNotEmpty && saleTracking != entry.bostaTracking;
+        if (!isReshipped) rtoCount++;
+      }
+
+      // Compute pending AR from COD sales.
+      final conn = ref.read(bostaConnectionProvider).value;
+      final arCutoff = conn?.cfArCutoffDate;
+      double pendingAr = 0;
+
+      for (final saleDoc in codSalesSnap.docs) {
+        final saleData = saleDoc.data();
+        final orderStatus = (saleData['order_status'] as num?)?.toInt() ?? 0;
+        if (orderStatus == 4) continue;
+
+        if (arCutoff != null) {
+          final saleDateTs = saleData['date'];
+          DateTime? saleDate;
+          if (saleDateTs is Timestamp) {
+            saleDate = saleDateTs.toDate();
+          } else if (saleDateTs is String) {
+            saleDate = DateTime.tryParse(saleDateTs);
+          }
+          if (saleDate != null && saleDate.isBefore(arCutoff)) continue;
+        }
+
+        final saleDateTs = saleData['date'];
+        DateTime? saleDate;
+        if (saleDateTs is Timestamp) {
+          saleDate = saleDateTs.toDate();
+        } else if (saleDateTs is String) {
+          saleDate = DateTime.tryParse(saleDateTs);
+        }
+        if (saleDate != null && saleDate.isAfter(asOf)) continue;
+
+        final saleTotal = _computeSaleTotalFromFirestore(saleData);
+        if (saleTotal <= 0) continue;
+
+        final shipInfo = saleShipmentMap[saleDoc.id];
+        if (shipInfo != null) {
+          if (shipInfo.hasPaid) continue;
+          if (shipInfo.allRto) continue;
+        }
+
+        pendingAr += saleTotal;
+      }
+
       if (mounted) {
         setState(() {
-          _transactions = (results[0].data as List<Transaction>?) ?? [];
-          _sales = (results[1].data as List<Sale>?) ?? [];
-          _isReportLoading = false;
+          _historicalCashoutTotal = roundMoney(total);
+          _historicalPendingAr = roundMoney(pendingAr);
+          _rtoCount = rtoCount;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _isReportLoading = false);
+      if (mounted) {
+        setState(() {
+          _historicalCashoutTotal = null;
+          _historicalPendingAr = null;
+        });
+      }
     }
   }
 
@@ -132,6 +522,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
     required List<dynamic> allTransactions,
     required dynamic bs,
     required double openingCash,
+    BostaConnection? bostaConnection,
   }) {
     final key = Object.hashAll([
       identityHashCode(inventoryProducts),
@@ -142,6 +533,14 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
       openingCash,
       _period.range.start,
       _period.range.end,
+      _isCfUser,
+      _historicalCashoutTotal,
+      _historicalPendingAr,
+      _liveAr,
+      bostaConnection?.cfTotalCashouts,
+      bostaConnection?.cfPendingAr,
+      _isCfUser ? identityHashCode(ref.read(loansProvider)) : 0,
+      _isCfUser ? identityHashCode(ref.read(salariesProvider)) : 0,
     ]);
 
     if (_cachedData != null && _lastDataKey == key) return _cachedData!;
@@ -149,51 +548,68 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
     final asOf = _period.range.end;
     final periodStart = _period.range.start;
 
-    // Bank balance = actual cash movements only (not accrual entries).
-    // Sale-generated accrual categories are excluded; real cash from
-    // customers comes via sale.amountPaid instead.
-    final double txnCashFlow = allTransactions
-        .where((t) => !t.dateTime.isAfter(asOf))
-        .where((t) {
-          // Exclude POSITIVE sale-linked accrual entries (the original revenue/cogs/shipping
-          // bookings) — real cash comes via sale.amountPaid instead.
-          // Allow NEGATIVE ones (refund reversals) through — they represent real cash out.
-          if (t.saleId != null && saleTxnCats.contains(t.categoryId) && t.amount >= 0) {
-            return false;
-          }
-          if (t.categoryId == 'cat_supplier_payment') return true;
-          return !t.excludeFromPL;
-        })
-        .fold<double>(
-      0.0,
-      (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
-    );
-    final double cashFromSales = sales
-        .where((s) => s.orderStatus != OrderStatus.cancelled)
-        .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOf))
-        .fold<double>(0.0, (sum, s) => sum + s.amountPaid);
-    final double bankBalance = roundMoney(openingCash + txnCashFlow + cashFromSales);
+    // ── Cash & Bank = CF closing balance (single source of truth) ──
+    // Uses the shared CF engine so Balance Sheet and Cash Flow Statement
+    // always agree on the closing cash figure.
+    double bankBalance;
+    double accountsReceivable;
 
-    final double inventoryValue = roundMoney(inventoryProducts.fold<double>(0.0, (sum, p) => sum + p.totalCostValue));
+    if (_isCfUser) {
+      final double totalCashouts = _historicalCashoutTotal ??
+          bostaConnection?.cfTotalCashouts ??
+          0;
+
+      bankBalance = computeClosingCash(
+        openingCash: openingCash,
+        transactions: allTransactions.cast<Transaction>(),
+        asOf: asOf,
+        isCfUser: true,
+        totalCashouts: totalCashouts,
+      );
+
+      // ── CF-driven AR (Phase 4.3) ─────────────────────────
+      // Prefer live-computed AR (same query as AR dashboard),
+      // then historical, then pre-computed cloud function value.
+      final double bostaPendingAr = _liveAr ??
+          _historicalPendingAr ??
+          bostaConnection?.cfPendingAr ??
+          0;
+      accountsReceivable = roundMoney(bostaPendingAr);
+    } else {
+      final double cashFromSales = sales
+          .where((s) => s.orderStatus != OrderStatus.cancelled)
+          .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOf))
+          .fold<double>(0.0, (acc, s) => acc + s.amountPaid);
+
+      bankBalance = computeClosingCash(
+        openingCash: openingCash,
+        transactions: allTransactions.cast<Transaction>(),
+        asOf: asOf,
+        isCfUser: false,
+        cashFromSales: cashFromSales,
+      );
+
+      accountsReceivable = roundMoney(sales
+          .where((s) => s.orderStatus != OrderStatus.cancelled)
+          .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOf))
+          .fold<double>(0.0, (acc, s) => acc + s.outstanding));
+    }
+
+    final double inventoryValue = roundMoney(inventoryProducts.fold<double>(0.0, (acc, p) => acc + p.totalCostValue));
 
     final periodPurchases = purchases.where((p) => !p.date.isAfter(asOf)).toList();
 
-    final double suppliersOwing = roundMoney(periodPurchases.fold<double>(0.0, (sum, p) {
+    final double suppliersOwing = roundMoney(periodPurchases.fold<double>(0.0, (acc, p) {
       final receivedValue = p.totalReceivedValue;
       final paid = p.amountPaid;
-      return sum + (receivedValue - paid).clamp(0.0, double.maxFinite);
+      return acc + (receivedValue - paid).clamp(0.0, double.maxFinite);
     }));
 
-    final double supplierAdvancePayments = roundMoney(periodPurchases.fold<double>(0.0, (sum, p) {
+    final double supplierAdvancePayments = roundMoney(periodPurchases.fold<double>(0.0, (acc, p) {
       final receivedValue = p.totalReceivedValue;
       final paid = p.amountPaid;
-      return sum + (paid - receivedValue).clamp(0.0, double.maxFinite);
+      return acc + (paid - receivedValue).clamp(0.0, double.maxFinite);
     }));
-
-    final double accountsReceivable = roundMoney(sales
-        .where((s) => s.orderStatus != OrderStatus.cancelled)
-        .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOf))
-        .fold<double>(0.0, (sum, s) => sum + s.outstanding));
 
     final plEligible = allTransactions
         .where((t) => !t.dateTime.isAfter(asOf))
@@ -201,14 +617,36 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
 
     final double retainedEarnings = roundMoney(plEligible
         .where((t) => t.dateTime.isBefore(periodStart))
-        .fold<double>(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
+        .fold<double>(0.0, (acc, t) => acc + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
 
     final double currentPeriodNetIncome = roundMoney(plEligible
         .where((t) => !t.dateTime.isBefore(periodStart))
-        .fold<double>(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
+        .fold<double>(0.0, (acc, t) => acc + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
 
-    final double totalAssets = roundMoney(bankBalance + bs.cashOnHand + bs.unpaidInvoices + inventoryValue + accountsReceivable + supplierAdvancePayments);
-    final double totalLiabilities = roundMoney(suppliersOwing + bs.loans + bs.unpaidSalaries);
+    // Fixed assets — net book values for active assets
+    final fixedAssets = ref.read(fixedAssetsProvider);
+    final double fixedAssetsNetValue = roundMoney(fixedAssets
+        .where((a) => a.status == FixedAssetStatus.active)
+        .fold(0.0, (acc, a) => acc + a.netBookValue));
+
+    // Loans — for CF user, compute from loan records; otherwise use manual entry
+    final loanRecords = ref.read(loansProvider);
+    final double loansOutstanding = _isCfUser
+        ? roundMoney(loanRecords
+            .where((l) => l.status == LoanStatus.active)
+            .fold(0.0, (s, l) => s + l.outstandingBalance))
+        : bs.loans;
+
+    // Salaries — for CF user, compute from salary records; otherwise use manual entry
+    final salaryRecords = ref.read(salariesProvider);
+    final double unpaidSalaries = _isCfUser
+        ? roundMoney(salaryRecords
+            .where((s) => s.status == SalaryStatus.active)
+            .fold(0.0, (acc, s) => acc + s.unpaidAmount))
+        : bs.unpaidSalaries;
+
+    final double totalAssets = roundMoney(bankBalance + bs.cashOnHand + bs.unpaidInvoices + inventoryValue + accountsReceivable + supplierAdvancePayments + fixedAssetsNetValue);
+    final double totalLiabilities = roundMoney(suppliersOwing + loansOutstanding + unpaidSalaries);
     final double netEquity = roundMoney(totalAssets - totalLiabilities);
 
     final bool hasManualCapital = bs.hasSetCapital;
@@ -223,6 +661,9 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
       suppliersOwing: suppliersOwing,
       supplierAdvancePayments: supplierAdvancePayments,
       accountsReceivable: accountsReceivable,
+      fixedAssetsNetValue: fixedAssetsNetValue,
+      loansOutstanding: loansOutstanding,
+      unpaidSalaries: unpaidSalaries,
       retainedEarnings: retainedEarnings,
       currentPeriodNetIncome: currentPeriodNetIncome,
       totalAssets: totalAssets,
@@ -246,9 +687,15 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
     // Watch providers to trigger rebuilds when data changes
     final inventoryProducts = ref.watch(filteredInventoryProvider).value ?? [];
     final purchases = ref.watch(purchasesProvider).value ?? [];
-    final sales = _isReportLoading ? <Sale>[] : _sales;
-    final allTransactions = _isReportLoading ? <Transaction>[] : _transactions;
+    final sales = _sales;
+    final allTransactions = _transactions;
     final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
+    ref.watch(fixedAssetsProvider); // trigger rebuild when assets change
+    if (_isCfUser) ref.watch(loansProvider); // trigger rebuild when loans change
+    if (_isCfUser) ref.watch(salariesProvider); // trigger rebuild when salaries change
+
+    // CF user: watch bosta connection for pre-computed summary + dashboard status.
+    final bostaConn = _isCfUser ? ref.watch(bostaConnectionProvider).value : null;
 
     // Compute (cached — skips math when inputs haven't changed)
     final d = _computeData(
@@ -258,15 +705,29 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
       allTransactions: allTransactions,
       bs: bs,
       openingCash: openingCash,
+      bostaConnection: bostaConn,
     );
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
-      body: RefreshIndicator(
+      body: _isFirstLoad
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+            children: [
+              // Thin refresh indicator when silently refreshing in background
+              // (period change, CF sync, etc.) so users know data is updating.
+              SizedBox(
+                height: 2,
+                child: _isRefreshing
+                    ? const LinearProgressIndicator(minHeight: 2)
+                    : null,
+              ),
+              Expanded(
+                child: RefreshIndicator(
             onRefresh: () async {
               await Future.wait([
                 ref.read(inventoryProvider.notifier).refreshAll(),
-                _loadData(),
+                _loadData(forceServer: true),
               ]);
               ref.invalidate(purchasesProvider);
             },
@@ -281,6 +742,43 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
                 const SizedBox(height: 12),
                 _buildPeriodSelector(),
                 const SizedBox(height: 16),
+
+                // ── CF User: Auth failure banner (Phase 4.4) ───
+                if (_isCfUser && bostaConn?.isDashboardAuthFailed == true)
+                  _buildAuthFailureBanner(),
+
+                // ── CF User: Staleness indicator (Phase 4.5) ───
+                if (_isCfUser) _buildStalenessIndicator(bostaConn),
+
+                // ── CF User: Sanity check banner (Phase 6.1) ───
+                if (_isCfUser && !_isFirstLoad && !_sanityCheckDismissed && d.bankBalance != 0)
+                  _buildSanityCheckBanner(fmt, d.bankBalance),
+
+                // ── CF User: RTO warning (Phase 6.3) ───────────
+                if (_isCfUser && _rtoCount > 0)
+                  _buildRtoWarning(),
+
+                // ── CF User: Sync in progress ──────────────────
+                if (_isCfUser && _cfSyncing)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(
+                          width: 14, height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Syncing cashouts…',
+                          style: AppTypography.labelMedium.copyWith(
+                            color: AppColors.textTertiary, fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
                 // Net Equity / Trend Section
                  AnimatedCrossFade(
@@ -305,6 +803,8 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
                       amount: d.bankBalance,
                       icon: Icons.account_balance_rounded,
                       pct: (d.totalAssets > 0) ? d.bankBalance / d.totalAssets : 0,
+                      onTap: _isCfUser ? () => context.push(AppRoutes.cashBankDashboard) : null,
+                      showChevron: _isCfUser,
                     ),
                     _SheetItem(
                       label: AppLocalizations.of(context)!.cashOnHand,
@@ -339,7 +839,7 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
                       amount: d.accountsReceivable,
                       icon: Icons.request_quote_rounded,
                       pct: (d.totalAssets > 0) ? d.accountsReceivable / d.totalAssets : 0,
-                      onTap: () => context.push('/sales'),
+                      onTap: _isCfUser ? () => context.push(AppRoutes.arDashboard) : () => context.push('/sales'),
                       showChevron: true,
                     ),
                     _SheetItem(
@@ -348,6 +848,14 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
                       icon: Icons.schedule_send_rounded,
                       pct: (d.totalAssets > 0) ? d.supplierAdvancePayments / d.totalAssets : 0,
                       onTap: () => context.push('/manage/suppliers'),
+                      showChevron: true,
+                    ),
+                    _SheetItem(
+                      label: 'Fixed Assets (Net)',
+                      amount: d.fixedAssetsNetValue,
+                      icon: Icons.business_center_rounded,
+                      pct: (d.totalAssets > 0) ? d.fixedAssetsNetValue / d.totalAssets : 0,
+                      onTap: () => context.push(AppRoutes.fixedAssetsDashboard),
                       showChevron: true,
                     ),
                   ],
@@ -375,23 +883,29 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
                     ),
                     _SheetItem(
                       label: AppLocalizations.of(context)!.loans,
-                      amount: bs.loans,
+                      amount: d.loansOutstanding,
                       icon: Icons.credit_card_rounded,
-                      pct: (d.totalLiabilities > 0) ? bs.loans / d.totalLiabilities : 0,
-                       onTap: () => _showEditDialog(AppLocalizations.of(context)!.loans, bs.loans, (v) {
-                        ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(loans: v));
-                       }),
-                       isEditable: true,
+                      pct: (d.totalLiabilities > 0) ? d.loansOutstanding / d.totalLiabilities : 0,
+                       onTap: _isCfUser
+                           ? () => context.push(AppRoutes.loansDashboard)
+                           : () => _showEditDialog(AppLocalizations.of(context)!.loans, bs.loans, (v) {
+                               ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(loans: v));
+                             }),
+                       showChevron: _isCfUser,
+                       isEditable: !_isCfUser,
                     ),
                     _SheetItem(
                       label: AppLocalizations.of(context)!.unpaidSalaries,
-                      amount: bs.unpaidSalaries,
+                      amount: d.unpaidSalaries,
                       icon: Icons.people_rounded,
-                      pct: (d.totalLiabilities > 0) ? bs.unpaidSalaries / d.totalLiabilities : 0,
-                      onTap: () => _showEditDialog(AppLocalizations.of(context)!.unpaidSalaries, bs.unpaidSalaries, (v) {
-                        ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(unpaidSalaries: v));
-                      }),
-                      isEditable: true,
+                      pct: (d.totalLiabilities > 0) ? d.unpaidSalaries / d.totalLiabilities : 0,
+                      onTap: _isCfUser
+                          ? () => context.push(AppRoutes.salariesDashboard)
+                          : () => _showEditDialog(AppLocalizations.of(context)!.unpaidSalaries, bs.unpaidSalaries, (v) {
+                              ref.read(balanceSheetEntriesProvider.notifier).update(bs.copyWith(unpaidSalaries: v));
+                            }),
+                      showChevron: _isCfUser,
+                      isEditable: !_isCfUser,
                     ),
                   ],
                   fmt: fmt,
@@ -516,6 +1030,9 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
             ),
           ),
           ),
+              ),
+            ],
+          ),
     );
   }
 
@@ -527,6 +1044,13 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
+        if (_isCfUser)
+          IconButton(
+            icon: const Icon(Icons.verified_user_outlined, size: 20),
+            tooltip: 'Data Audit',
+            color: AppColors.textTertiary,
+            onPressed: () => context.pushNamed('DataAuditScreen'),
+          ),
         ChartToggle(
           showChart: _showTrend,
           onToggle: () => setState(() => _showTrend = !_showTrend),
@@ -577,54 +1101,234 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
     );
   }
 
+  // ── CF User: Auth failure banner (Phase 4.4) ─────────────
+  Widget _buildAuthFailureBanner() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GestureDetector(
+        onTap: () => context.push('/manage/bosta'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.chartRedLight,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.chartRed.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, size: 20, color: AppColors.chartRed),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Bosta connection lost — tap to reconnect',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.chartRed, fontSize: 13, fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.chartRed),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── CF User: Staleness indicator (Phase 4.5) ────────────
+  Widget _buildStalenessIndicator(BostaConnection? conn) {
+    if (conn == null) return const SizedBox.shrink();
+    final lastSync = conn.cfLastCashoutSyncAt;
+    if (lastSync == null) return const SizedBox.shrink();
+
+    final age = DateTime.now().difference(lastSync);
+    if (age.inHours < 24) return const SizedBox.shrink();
+
+    final agoText = age.inDays > 0
+        ? '${age.inDays}d ago'
+        : '${age.inHours}h ago';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.accentOrange.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.accentOrange.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.access_time_rounded, size: 14, color: AppColors.accentOrange.withValues(alpha: 0.8)),
+            const SizedBox(width: 6),
+            Text(
+              'Last synced: $agoText',
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.accentOrange, fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── CF User: Sanity check banner (Phase 6.1) ─────────────
+  Widget _buildSanityCheckBanner(NumberFormat fmt, double bankBalance) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GestureDetector(
+        onTap: () => context.push(AppRoutes.cashBankDashboard),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.chartBlueLight,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.chartBlue.withValues(alpha: 0.25)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.fact_check_rounded, size: 18, color: AppColors.chartBlue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Calculated Cash & Bank = EGP ${fmt.format(bankBalance)}',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.chartBlue,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.chartBlue),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Tap to see full breakdown · Does this match your real bank balance?',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.chartBlue.withValues(alpha: 0.8),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── CF User: RTO warning (Phase 6.3) ─────────────────────
+  Widget _buildRtoWarning() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GestureDetector(
+        onTap: () => context.pushNamed('RtoOrdersScreen'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.accentOrange.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.accentOrange.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.accentOrange.withValues(alpha: 0.9)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$_rtoCount RTO/returned shipment${_rtoCount == 1 ? '' : 's'} excluded from AR — tap to review',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.accentOrange, fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.accentOrange.withValues(alpha: 0.7)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTrendChart(NumberFormat fmt) {
     // Calculate historical Net Equity Trend based on transactions
-    final transactions = _isReportLoading ? <Transaction>[] : _transactions;
+    final transactions = _transactions;
     final bs = ref.watch(balanceSheetEntriesProvider);
 
-    // Compute bank balance consistently with _computeData():
-    // exclude positive sale-linked accrual txns, add cashFromSales,
-    // allow refund txns (negative) through.
+    // Compute bank balance using CF engine (single source of truth).
     final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
-    final double txnCashFlow = transactions
-        .where((t) {
-          if (t.saleId != null && saleTxnCats.contains(t.categoryId) && t.amount >= 0) {
-            return false;
-          }
-          if (t.categoryId == 'cat_supplier_payment') return true;
-          return !t.excludeFromPL;
-        })
-        .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()));
+    final sales = _sales;
+    final double bankBalance;
 
-    final sales = _isReportLoading ? <Sale>[] : _sales;
-    final double cashFromSales = sales
-        .where((s) => s.orderStatus != OrderStatus.cancelled)
-        .where((s) => s.createdAt != null)
-        .fold<double>(0.0, (sum, s) => sum + s.amountPaid);
-    final double bankBalance = roundMoney(openingCash + txnCashFlow + cashFromSales);
+    if (_isCfUser) {
+      final conn = ref.watch(bostaConnectionProvider).value;
+      final totalCashouts = _historicalCashoutTotal ?? conn?.cfTotalCashouts ?? 0;
+      bankBalance = computeClosingCash(
+        openingCash: openingCash,
+        transactions: transactions,
+        asOf: DateTime.now(),
+        isCfUser: true,
+        totalCashouts: totalCashouts,
+      );
+    } else {
+      final double cashFromSales = sales
+          .where((s) => s.orderStatus != OrderStatus.cancelled)
+          .where((s) => s.createdAt != null)
+          .fold<double>(0.0, (acc, s) => acc + s.amountPaid);
+      bankBalance = computeClosingCash(
+        openingCash: openingCash,
+        transactions: transactions,
+        asOf: DateTime.now(),
+        isCfUser: false,
+        cashFromSales: cashFromSales,
+      );
+    }
 
     // Get inventory, AR, supplier balances
     final inventoryProducts = ref.watch(filteredInventoryProvider).value ?? [];
     final purchases = ref.watch(purchasesProvider).value ?? [];
 
-    final double inventoryValue = inventoryProducts.fold(0.0, (sum, p) => sum + p.totalCostValue);
-    final double suppliersOwing = purchases.fold(0.0, (sum, p) {
+    final double inventoryValue = inventoryProducts.fold(0.0, (acc, p) => acc + p.totalCostValue);
+    final double suppliersOwing = purchases.fold(0.0, (acc, p) {
       final receivedValue = p.totalReceivedValue;
       final paid = p.amountPaid;
-      return sum + (receivedValue - paid).clamp(0.0, double.maxFinite);
+      return acc + (receivedValue - paid).clamp(0.0, double.maxFinite);
     });
-    final double supplierAdvancePayments = purchases.fold(0.0, (sum, p) {
+    final double supplierAdvancePayments = purchases.fold(0.0, (acc, p) {
       final receivedValue = p.totalReceivedValue;
       final paid = p.amountPaid;
-      return sum + (paid - receivedValue).clamp(0.0, double.maxFinite);
+      return acc + (paid - receivedValue).clamp(0.0, double.maxFinite);
     });
-    final double accountsReceivable = sales
-        .where((s) => s.orderStatus != OrderStatus.cancelled)
-        .fold(0.0, (sum, s) => sum + s.outstanding);
+    final double accountsReceivable = _isCfUser
+        ? (_historicalPendingAr ?? _liveAr ?? ref.watch(bostaConnectionProvider).value?.cfPendingAr ?? 0)
+        : sales
+            .where((s) => s.orderStatus != OrderStatus.cancelled)
+            .fold(0.0, (acc, s) => acc + s.outstanding);
+
+    final faAssets = ref.read(fixedAssetsProvider);
+    final fixedAssetsNBV = faAssets
+        .where((a) => a.status == FixedAssetStatus.active)
+        .fold(0.0, (s, a) => s + a.netBookValue);
 
     final totalAssets = bankBalance + bs.cashOnHand + bs.unpaidInvoices +
-        inventoryValue + accountsReceivable + supplierAdvancePayments;
-    final totalLiabilities = bs.loans + bs.unpaidSalaries + suppliersOwing;
+        inventoryValue + accountsReceivable + supplierAdvancePayments +
+        fixedAssetsNBV;
+    final cfLoansOutstanding = _isCfUser
+        ? ref.read(loansProvider)
+            .where((l) => l.status == LoanStatus.active)
+            .fold(0.0, (s, l) => s + l.outstandingBalance)
+        : bs.loans;
+    final cfUnpaidSalaries = _isCfUser
+        ? ref.read(salariesProvider)
+            .where((s) => s.status == SalaryStatus.active)
+            .fold(0.0, (acc, s) => acc + s.unpaidAmount)
+        : bs.unpaidSalaries;
+    final totalLiabilities = cfLoansOutstanding + cfUnpaidSalaries + suppliersOwing;
     final currentNetEquity = totalAssets - totalLiabilities;
 
     // Build 6-month backward trend by deducting monthly P&L flows
@@ -1293,38 +1997,48 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
           final purchases = ref.read(purchasesProvider).value ?? [];
           final sales = _sales;
 
-          // Compute bank balance from opening cash + transactions up to now (consistent with screen)
+          // Compute bank balance using CF engine (single source of truth)
           final asOfDate = _period.range.end;
-          // Mirror screen: exclude sale-linked accrual txns, add cashFromSales
-          final pdfTxnCashFlow = allTxns
-              .where((t) => !t.dateTime.isAfter(asOfDate))
-              .where((t) {
-                if (t.saleId != null && saleTxnCats.contains(t.categoryId) && t.amount >= 0) {
-                  return false;
-                }
-                if (t.categoryId == 'cat_supplier_payment') return true;
-                return !t.excludeFromPL;
-              })
-              .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()));
-          final pdfCashFromSales = sales
-              .where((s) => s.orderStatus != OrderStatus.cancelled)
-              .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOfDate))
-              .fold<double>(0.0, (sum, s) => sum + s.amountPaid);
-          final computedBank = roundMoney(settings.openingCashBalance + pdfTxnCashFlow + pdfCashFromSales);
+          final double computedBank;
+          if (_isCfUser) {
+            final conn = ref.read(bostaConnectionProvider).value;
+            final totalCashouts = _historicalCashoutTotal ?? conn?.cfTotalCashouts ?? 0;
+            computedBank = computeClosingCash(
+              openingCash: settings.openingCashBalance,
+              transactions: allTxns,
+              asOf: asOfDate,
+              isCfUser: true,
+              totalCashouts: totalCashouts,
+            );
+          } else {
+            final pdfCashFromSales = sales
+                .where((s) => s.orderStatus != OrderStatus.cancelled)
+                .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOfDate))
+                .fold<double>(0.0, (acc, s) => acc + s.amountPaid);
+            computedBank = computeClosingCash(
+              openingCash: settings.openingCashBalance,
+              transactions: allTxns,
+              asOf: asOfDate,
+              isCfUser: false,
+              cashFromSales: pdfCashFromSales,
+            );
+          }
 
-          final inventoryValue = products.fold<double>(0, (s, p) => s + p.totalCostValue);
-          final accountsReceivable = sales
-              .where((s) => s.orderStatus != OrderStatus.cancelled)
-              .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOfDate))
-              .fold<double>(0, (sum, s) => sum + s.outstanding);
+          final inventoryValue = products.fold<double>(0, (acc, p) => acc + p.totalCostValue);
+          final accountsReceivable = _isCfUser
+              ? (_historicalPendingAr ?? ref.read(bostaConnectionProvider).value?.cfPendingAr ?? 0)
+              : sales
+                  .where((s) => s.orderStatus != OrderStatus.cancelled)
+                  .where((s) => s.createdAt != null && !s.createdAt!.isAfter(asOfDate))
+                  .fold<double>(0, (acc, s) => acc + s.outstanding);
           final pdfPurchases = purchases.where((p) => !p.date.isAfter(asOfDate)).toList();
-          final suppliersOwing = pdfPurchases.fold<double>(0.0, (sum, p) {
+          final suppliersOwing = pdfPurchases.fold<double>(0.0, (acc, p) {
             final received = p.totalReceivedValue;
-            return sum + (received - p.amountPaid).clamp(0.0, double.maxFinite);
+            return acc + (received - p.amountPaid).clamp(0.0, double.maxFinite);
           });
-          final supplierPrepayments = pdfPurchases.fold<double>(0.0, (sum, p) {
+          final supplierPrepayments = pdfPurchases.fold<double>(0.0, (acc, p) {
             final received = p.totalReceivedValue;
-            return sum + (p.amountPaid - received).clamp(0.0, double.maxFinite);
+            return acc + (p.amountPaid - received).clamp(0.0, double.maxFinite);
           });
           // Compute equity components for PDF (same logic as the screen)
           final pdfRetained = roundMoney(allTxns
@@ -1337,9 +2051,22 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
               .fold(0.0, (s, t) => s + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
 
           // Auto-derive opening capital (mirrors screen logic)
+          final pdfFixedAssetsNBV = ref.read(fixedAssetsProvider)
+              .where((a) => a.status == FixedAssetStatus.active)
+              .fold(0.0, (s, a) => s + a.netBookValue);
           final pdfTotalAssets = roundMoney(computedBank + bsManual.cashOnHand + bsManual.unpaidInvoices +
-              inventoryValue + accountsReceivable + supplierPrepayments);
-          final pdfTotalLiabilities = roundMoney(suppliersOwing + bsManual.loans + bsManual.unpaidSalaries);
+              inventoryValue + accountsReceivable + supplierPrepayments + pdfFixedAssetsNBV);
+          final pdfLoansAmt = _isCfUser
+              ? ref.read(loansProvider)
+                  .where((l) => l.status == LoanStatus.active)
+                  .fold(0.0, (s, l) => s + l.outstandingBalance)
+              : bsManual.loans;
+          final pdfSalariesAmt = _isCfUser
+              ? ref.read(salariesProvider)
+                  .where((s) => s.status == SalaryStatus.active)
+                  .fold(0.0, (acc, s) => acc + s.unpaidAmount)
+              : bsManual.unpaidSalaries;
+          final pdfTotalLiabilities = roundMoney(suppliersOwing + pdfLoansAmt + pdfSalariesAmt);
           final pdfNetEquity = roundMoney(pdfTotalAssets - pdfTotalLiabilities);
           final pdfHasManual = bsManual.openingCapital != 0;
           final pdfAutoCapital = roundMoney(pdfNetEquity - pdfRetained - pdfCurrentNet);

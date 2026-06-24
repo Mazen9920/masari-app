@@ -86,8 +86,8 @@ export const shopifyProxy = onCall(
   {
     secrets: [tokenEncryptionKey],
     region: "us-central1",
-    // Allow up to 120 s for large paginated fetches
-    timeoutSeconds: 120,
+    // Allow up to 540 s for large paginated fetches (25K+ orders)
+    timeoutSeconds: 540,
   },
   async (request) => {
     // ── 1. Auth check ──────────────────────────────────────
@@ -158,6 +158,10 @@ export const shopifyProxy = onCall(
     switch (action) {
     case "fetchOrders":
       return await fetchOrders(
+        shopDomain, accessToken, params, uid
+      );
+    case "fetchOrderIds":
+      return await fetchOrderIds(
         shopDomain, accessToken, params, uid
       );
     case "updateOrder":
@@ -413,7 +417,7 @@ async function fetchOrders(
 ): Promise<ApiResult> {
   const qs = new URLSearchParams({
     status: "any",
-    limit: "50",
+    limit: "250",
   });
   if (params.since) {
     qs.set("created_at_min", String(params.since));
@@ -426,8 +430,52 @@ async function fetchOrders(
   let url: string | null =
     `${apiBase(shop)}/orders.json?${qs.toString()}`;
 
-  // Paginate up to 10 pages (500 orders max — safety limit)
-  for (let page = 0; page < 10 && url; page++) {
+  // Paginate up to 100 pages (25 000 orders max)
+  for (let page = 0; page < 100 && url; page++) {
+    const {data, nextUrl} = await shopifyFetchPaginated(
+      url,
+      {method: "GET", headers: headers(token)},
+      uid,
+    );
+    const orders = (data as { orders?: ApiResult[] }).orders ?? [];
+    allOrders = allOrders.concat(orders);
+    url = nextUrl;
+  }
+
+  return {orders: allOrders, count: allOrders.length};
+}
+
+// ── fetchOrderIds ──────────────────────────────────────────
+
+/**
+ * Lightweight audit endpoint: fetches only `id` and `order_number` fields
+ * for orders in a date range. Uses Shopify `fields` param to minimise
+ * payload. Returns list of {id, order_number} objects.
+ */
+async function fetchOrderIds(
+  shop: string,
+  token: string,
+  params: Record<string, unknown>,
+  uid: string,
+): Promise<ApiResult> {
+  const qs = new URLSearchParams({
+    status: "any",
+    limit: "250",
+    fields: "id,order_number,created_at,financial_status,fulfillment_status,cancelled_at",
+  });
+  if (params.since) {
+    qs.set("created_at_min", String(params.since));
+  }
+  if (params.until) {
+    qs.set("created_at_max", String(params.until));
+  }
+
+  let allOrders: ApiResult[] = [];
+  let url: string | null =
+    `${apiBase(shop)}/orders.json?${qs.toString()}`;
+
+  // Paginate up to 20 pages (5000 orders max)
+  for (let page = 0; page < 20 && url; page++) {
     const {data, nextUrl} = await shopifyFetchPaginated(
       url,
       {method: "GET", headers: headers(token)},

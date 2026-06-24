@@ -19,28 +19,57 @@ class SyncStatus {
   final double progress; // 0.0 – 1.0
   final String? errorDetail;
 
+  // Import-specific live counters
+  final int importTotal;
+  final int importImported;
+  final int importSkipped;
+  final int importErrors;
+  final String? currentOrder;
+  final String? importPhase;
+
   const SyncStatus({
     this.phase = SyncPhase.idle,
     this.message,
     this.progress = 0,
     this.errorDetail,
+    this.importTotal = 0,
+    this.importImported = 0,
+    this.importSkipped = 0,
+    this.importErrors = 0,
+    this.currentOrder,
+    this.importPhase,
   });
 
   bool get isSyncing => phase == SyncPhase.syncing;
   bool get isIdle => phase == SyncPhase.idle;
   bool get hasError => phase == SyncPhase.error;
 
+  /// How many orders have been processed (imported + skipped + errors).
+  int get importProcessed => importImported + importSkipped + importErrors;
+
   SyncStatus copyWith({
     SyncPhase? phase,
     String? message,
     double? progress,
     String? errorDetail,
+    int? importTotal,
+    int? importImported,
+    int? importSkipped,
+    int? importErrors,
+    String? currentOrder,
+    String? importPhase,
   }) {
     return SyncStatus(
       phase: phase ?? this.phase,
       message: message ?? this.message,
       progress: progress ?? this.progress,
       errorDetail: errorDetail,
+      importTotal: importTotal ?? this.importTotal,
+      importImported: importImported ?? this.importImported,
+      importSkipped: importSkipped ?? this.importSkipped,
+      importErrors: importErrors ?? this.importErrors,
+      currentOrder: currentOrder ?? this.currentOrder,
+      importPhase: importPhase ?? this.importPhase,
     );
   }
 }
@@ -101,6 +130,10 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
       // Always refresh inventory to pick up webhook-created products
       // and any Firestore-side changes not yet reflected locally.
       ref.read(inventoryProvider.notifier).refresh();
+
+      // Also refresh sales so Shopify webhook-created orders appear
+      // even if the real-time listener missed them (e.g. app was backgrounded).
+      ref.read(salesProvider.notifier).refresh();
     } catch (e) {
       developer.log('Startup sync error: $e', name: 'ShopifySyncNotifier');
     } finally {
@@ -173,6 +206,9 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
       // Always refresh inventory to pick up webhook-created products
       // and any Firestore-side changes not yet reflected locally.
       ref.read(inventoryProvider.notifier).refresh();
+
+      // Refresh sales so Shopify webhook-created orders appear quickly.
+      ref.read(salesProvider.notifier).refresh();
     } catch (e) {
       developer.log( 'Background sync error: $e', name: 'ShopifySyncNotifier');
     } finally {
@@ -568,30 +604,58 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
   }
 
   /// Imports Shopify orders from [from] to [to] into Revvo.
-  /// Max 3 months enforced by the sync service.
+  /// Streams live progress to state so the UI can show a countdown.
   Future<void> importHistorical({
     required DateTime from,
     required DateTime to,
   }) async {
     state = const SyncStatus(
       phase: SyncPhase.syncing,
-      message:  'Importing Shopify orders…',
-      progress: 0.1,
+      message: 'Importing Shopify orders…',
+      progress: 0,
+      importPhase: 'Starting…',
     );
 
     final result = await _syncService.importOrders(
       from: from,
       to: to,
+      onProgress: ({
+        required int imported,
+        required int skipped,
+        required int errors,
+        required int total,
+        String? currentOrder,
+        String? phase,
+      }) {
+        final processed = imported + skipped + errors;
+        final progress = total > 0 ? processed / total : 0.0;
+        state = SyncStatus(
+          phase: SyncPhase.syncing,
+          message: 'Importing Shopify orders…',
+          progress: progress.clamp(0.0, 1.0),
+          importTotal: total,
+          importImported: imported,
+          importSkipped: skipped,
+          importErrors: errors,
+          currentOrder: currentOrder,
+          importPhase: phase,
+        );
+      },
     );
 
     if (result.isSuccess) {
       final data = result.data!;
       state = SyncStatus(
         phase: SyncPhase.success,
-        message:  'Imported ${data.imported} order(s), '
+        message: 'Imported ${data.imported} order(s), '
             'skipped ${data.skipped}, '
             '${data.errors} error(s)',
         progress: 1,
+        importTotal: data.total,
+        importImported: data.imported,
+        importSkipped: data.skipped,
+        importErrors: data.errors,
+        importPhase: 'Complete',
       );
       // Refresh sales list and sync history so UI shows new data
       ref.read(salesProvider.notifier).refresh();
@@ -599,13 +663,11 @@ class ShopifySyncNotifier extends Notifier<SyncStatus> {
     } else {
       state = SyncStatus(
         phase: SyncPhase.error,
-        message:  'Order import failed',
+        message: 'Order import failed',
         errorDetail: result.error,
       );
       _checkTokenRevoked(result.error);
     }
-
-    _autoClearAfterDelay();
   }
 
   /// Resets status to idle immediately.

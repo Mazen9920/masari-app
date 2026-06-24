@@ -14,6 +14,7 @@ import '../../shared/models/category_data.dart';
 import '../../shared/widgets/discard_changes_dialog.dart';
 import '../auth/widgets/form_components.dart';
 import '../../shared/utils/safe_pop.dart';
+import 'widgets/smart_category_picker.dart';
 
 class AddTransactionScreen extends ConsumerStatefulWidget {
   final bool initialIsExpense;
@@ -42,6 +43,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   String? _selectedCategoryId;
   String? _selectedSupplierId;
   final _payeeController = TextEditingController();
+  final _titleController = TextEditingController();
 
   final List<_PaymentMethod> _paymentMethods = const [
     _PaymentMethod('Cash', Icons.payments_rounded),
@@ -94,6 +96,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     _noteController.dispose();
     _payeeController.dispose();
     _customCategoryController.dispose();
+    _titleController.dispose();
     super.dispose();
   }
 
@@ -160,12 +163,22 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final customCatText = _customCategoryController.text.trim();
     
     String finalCategoryId = _selectedCategoryId ?? '';
+    CategoryData? resolvedCategory;
     if (customCatText.isNotEmpty) {
-      // Auto-create a custom category from the typed text
-      final catId = 'cat_${customCatText.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
-      final existing = CategoryData.findById(catId);
-      if (existing.id == 'cat_other') {
-        // Category doesn't exist yet — create it
+      // Auto-create a custom category from the typed text.
+      // Deduplicate by name (case-insensitive) so re-typing the same name
+      // reuses the existing category regardless of language/script.
+      final allCats = <CategoryData>[
+        ...CategoryData.all,
+        ...CategoryData.customCategories,
+      ];
+      final existing = allCats
+          .where((c) => c.name.toLowerCase() == customCatText.toLowerCase())
+          .firstOrNull;
+      if (existing == null) {
+        // Category doesn't exist yet — create it with a timestamp ID so
+        // non-ASCII names (Arabic, etc.) produce a valid unique identifier.
+        final catId = 'cat_${DateTime.now().millisecondsSinceEpoch}';
         final newCat = CategoryData(
           id: catId,
           userId: '',
@@ -177,16 +190,24 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         );
         await ref.read(categoriesProvider.notifier).addCategory(newCat);
         finalCategoryId = catId;
+        // Use the object we just created directly — do NOT re-lookup,
+        // since findById() falls back to cat_other when the lookup cache
+        // hasn't picked up the newly-added custom category yet.
+        resolvedCategory = newCat;
       } else {
-        finalCategoryId = catId;
+        finalCategoryId = existing.id;
+        resolvedCategory = existing;
       }
     }
 
-    final category = CategoryData.findById(finalCategoryId);
+    final category = resolvedCategory ?? CategoryData.findById(finalCategoryId);
     
-    // Title order of precedence: Custom Payee > Selected Supplier > Custom Category > Category Name
+    // Title order of precedence: Explicit Name > Custom Payee > Selected Supplier > Custom Category > Category Name
     String finalTitle = category.name;
-    if (customPayee.isNotEmpty) {
+    final typedName = _titleController.text.trim();
+    if (typedName.isNotEmpty) {
+      finalTitle = typedName;
+    } else if (customPayee.isNotEmpty) {
       finalTitle = customPayee;
     } else if (supplierName != null) {
       finalTitle = supplierName;
@@ -211,8 +232,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       paymentMethod: paymentMethodName,
     );
     
-    // Save to provider
-    await ref.read(transactionsProvider.notifier).addTransaction(transaction);
+    // Save to provider. The optimistic insert runs synchronously inside the
+    // notifier, so we don't await the server round-trip — navigation stays
+    // instant and the write persists in the background (with rollback on
+    // failure handled by the notifier).
+    ref.read(transactionsProvider.notifier).addTransaction(transaction);
     return true;
   }
 
@@ -236,6 +260,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     _noteController.clear();
     _payeeController.clear();
     _customCategoryController.clear();
+    _titleController.clear();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(l10n.savedReadyForNext)),
@@ -665,8 +690,15 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ─── Transaction Name ───
+          _sectionHeader(l10n.transactionNameLabel),
+          const SizedBox(height: 10),
+          _buildNameField(),
+
+          const SizedBox(height: 20),
+
           // ─── Category Grid ───
-          _sectionHeader(l10n.category, showSeeAll: false),
+          _sectionHeader(l10n.category, showSeeAll: true, onSeeAll: _openCategoryPicker),
           const SizedBox(height: 12),
           _buildCategorySection(),
 
@@ -700,7 +732,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     );
   }
 
-  Widget _sectionHeader(String title, {bool showSeeAll = false}) {
+  Widget _sectionHeader(String title, {bool showSeeAll = false, VoidCallback? onSeeAll}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -713,9 +745,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         ),
         if (showSeeAll)
           GestureDetector(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.allCategoriesComingSoon)));
-            },
+            onTap: onSeeAll ??
+                () {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(l10n.allCategoriesComingSoon)));
+                },
             child: Text(
               l10n.seeAllLabel,
               style: AppTypography.captionSmall.copyWith(
@@ -726,6 +760,75 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           ),
       ],
     );
+  }
+
+  Widget _buildNameField() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xFFF1F5F9),
+            ),
+            child: const Icon(Icons.edit_note_rounded,
+                size: 20, color: AppColors.textSecondary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: _titleController,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: l10n.transactionNameLabel,
+                hintStyle: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textTertiary,
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          if (_titleController.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.close_rounded,
+                  size: 18, color: AppColors.textTertiary),
+              onPressed: () => setState(() => _titleController.clear()),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openCategoryPicker() async {
+    HapticFeedback.lightImpact();
+    final picked = await showSmartCategoryPicker(
+      context: context,
+      isExpense: _isExpense,
+      selectedId: _selectedCategoryId,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _selectedCategoryId = picked;
+      _isCustomCategory = false;
+      _customCategoryController.clear();
+    });
   }
 
   Widget _buildCategoryGrid() {
@@ -746,7 +849,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
            return GestureDetector(
              onTap: () {
                 HapticFeedback.lightImpact();
-                setState(() => _isCategoryExpanded = true);
+                _openCategoryPicker();
              },
              child: Column(
                mainAxisAlignment: MainAxisAlignment.center,

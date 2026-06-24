@@ -134,6 +134,15 @@ class ProfileScreen extends ConsumerWidget {
                         subtitle: isBostaConnected ? l10n.profileBostaConnected : l10n.profileBostaNotConnected,
                         onTap: () => context.push(AppRoutes.bosta),
                       ),
+                    if (hasShopifyAccess && isBostaConnected)
+                      _SettingItem(
+                        icon: Icons.dashboard_rounded,
+                        iconBg: const Color(0xFFFFF1F2),
+                        iconColor: const Color(0xFFE2342D),
+                        title: 'Bosta Dashboard',
+                        subtitle: 'Cashouts, transactions & audit',
+                        onTap: () => context.push(AppRoutes.bostaDashboard),
+                      ),
                     _SettingItem(
                       icon: Icons.lock_outline_rounded,
                       iconBg: const Color(0xFFF5F3FF),

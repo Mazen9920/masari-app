@@ -13,6 +13,7 @@ import '../../shared/models/payment_model.dart';
 import '../auth/widgets/form_components.dart';
 import '../../shared/utils/safe_pop.dart';
 import '../../shared/widgets/discard_changes_dialog.dart';
+import 'widgets/smart_category_picker.dart';
 
 class EditTransactionScreen extends ConsumerStatefulWidget {
   final Transaction transaction;
@@ -44,6 +45,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   bool _isCategoryExpanded = false;
   String? _selectedSupplierId;
   final _payeeController = TextEditingController();
+  final _titleController = TextEditingController();
 
   @override
   void initState() {
@@ -75,6 +77,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     if (t.supplierId == null && t.title != category.name && t.title != 'Uncategorized') {
       _payeeController.text = t.title;
     }
+
+    // Prefill the editable transaction name with the current title.
+    _titleController.text = t.title;
   }
 
   List<CategoryData> get _displayCategories {
@@ -104,6 +109,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   void dispose() {
     _noteController.dispose();
     _payeeController.dispose();
+    _titleController.dispose();
     super.dispose();
   }
 
@@ -167,12 +173,25 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final supplierName = suppliers.where((s) => s.id == _selectedSupplierId).firstOrNull?.name;
     final customPayee = _payeeController.text.trim();
     
-    String finalCategoryId = _selectedCategoryId ?? '';
-    final category = CategoryData.findById(finalCategoryId);
-    
-    // Title order of precedence: Custom Payee > Selected Supplier > Category Name
-    String finalTitle = category.name;
-    if (customPayee.isNotEmpty) {
+    final String finalCategoryId =
+        (_selectedCategoryId?.isNotEmpty == true)
+            ? _selectedCategoryId!
+            : 'cat_uncategorized';
+
+    // Look up display name from the live categories list first (covers
+    // user-created categories), then fall back to the static system lookup.
+    final liveCategories = ref.read(categoriesProvider).value ?? [];
+    final liveCategory = liveCategories.cast<CategoryData?>().firstWhere(
+      (c) => c?.id == finalCategoryId,
+      orElse: () => null,
+    ) ?? CategoryData.findById(finalCategoryId);
+
+    // Title order of precedence: Explicit Name > Custom Payee > Selected Supplier > Category Name
+    String finalTitle = liveCategory.name;
+    final typedName = _titleController.text.trim();
+    if (typedName.isNotEmpty) {
+      finalTitle = typedName;
+    } else if (customPayee.isNotEmpty) {
       finalTitle = customPayee;
     } else if (supplierName != null) {
       finalTitle = supplierName;
@@ -190,7 +209,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       userId: widget.transaction.userId,
       title: finalTitle,
       amount: _isExpense ? -amount : amount,
-      categoryId: category.id,
+      categoryId: finalCategoryId,
       dateTime: _selectedDate,
       note: noteText.isNotEmpty ? noteText : null,
       paymentMethod: paymentMethodName,
@@ -204,8 +223,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     final transNotifier = ref.read(transactionsProvider.notifier);
     final messenger = ScaffoldMessenger.of(context);
 
-    // Optimistic update — state changes immediately before Firestore write
-    await transNotifier.updateTransaction(updatedTransaction);
+    // Optimistic update — the list state changes synchronously inside the
+    // notifier before the Firestore write. We deliberately do NOT await the
+    // server round-trip here so navigation is instant; the write persists in
+    // the background and the notifier rolls back on failure.
+    transNotifier.updateTransaction(updatedTransaction);
 
     // ── Sync supplier payment if this is a supplier-payment transaction ──
     if (widget.transaction.categoryId == 'cat_supplier_payment' &&
@@ -383,9 +405,47 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(width: 48), // balance spacer
+          IconButton(
+            onPressed: _onDelete,
+            icon: const Icon(Icons.delete_outline_rounded,
+                color: AppColors.danger),
+            tooltip: l10n.delete,
+          ),
         ],
       ),
+    );
+  }
+
+  Future<void> _onDelete() async {
+    HapticFeedback.mediumImpact();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.deleteTransaction),
+        content: Text(l10n.deleteTransactionConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    // Optimistic delete — list updates synchronously; persistence happens in
+    // the background so navigation is instant.
+    ref.read(transactionsProvider.notifier).removeTransaction(widget.transaction.id);
+    if (!mounted) return;
+    context.safePop();
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.transactionDeleted)),
     );
   }
 
@@ -617,8 +677,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ─── Transaction Name ───
+          _sectionHeader(l10n.transactionNameLabel),
+          const SizedBox(height: 10),
+          _buildNameField(),
+
+          const SizedBox(height: 20),
+
           // ─── Category Grid ───
-          _sectionHeader(l10n.category, showSeeAll: true),
+          _sectionHeader(l10n.category, showSeeAll: true, onSeeAll: _openCategoryPicker),
           const SizedBox(height: 12),
           _buildCategoryGrid(),
 
@@ -654,7 +721,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     );
   }
 
-  Widget _sectionHeader(String title, {bool showSeeAll = false}) {
+  Widget _sectionHeader(String title, {bool showSeeAll = false, VoidCallback? onSeeAll}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -667,9 +734,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         ),
         if (showSeeAll)
           GestureDetector(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.allCategoriesComingSoon)));
-            },
+            onTap: onSeeAll ??
+                () {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(l10n.allCategoriesComingSoon)));
+                },
             child: Text(
               l10n.seeAllLabel,
               style: AppTypography.captionSmall.copyWith(
@@ -680,6 +749,78 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           ),
       ],
     );
+  }
+
+  Widget _buildNameField() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xFFF1F5F9),
+            ),
+            child: const Icon(Icons.edit_note_rounded,
+                size: 20, color: AppColors.textSecondary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: _titleController,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: l10n.transactionNameLabel,
+                hintStyle: AppTypography.labelMedium.copyWith(
+                  color: AppColors.textTertiary,
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          if (_titleController.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.close_rounded,
+                  size: 18, color: AppColors.textTertiary),
+              onPressed: () => setState(() => _titleController.clear()),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openCategoryPicker() async {
+    HapticFeedback.lightImpact();
+    final picked = await showSmartCategoryPicker(
+      context: context,
+      isExpense: _isExpense,
+      selectedId: _selectedCategoryId,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _selectedCategoryId = picked;
+      if (_isExpense) {
+        _expenseCategoryId = picked;
+      } else {
+        _incomeCategoryId = picked;
+      }
+    });
   }
 
   Widget _buildCategoryGrid() {
@@ -702,7 +843,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           return GestureDetector(
             onTap: () {
               HapticFeedback.lightImpact();
-              setState(() => _isCategoryExpanded = true);
+              _openCategoryPicker();
             },
             child: Container(
               decoration: BoxDecoration(
@@ -1030,6 +1171,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       child: TextField(
         controller: _noteController,
         style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+        keyboardType: TextInputType.multiline,
+        textInputAction: TextInputAction.newline,
+        minLines: 1,
+        maxLines: 6,
         decoration: InputDecoration(
           icon: const Icon(Icons.edit_note_rounded,
               size: 22, color: AppColors.textTertiary),

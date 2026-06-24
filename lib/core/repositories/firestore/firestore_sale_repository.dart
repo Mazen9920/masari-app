@@ -105,29 +105,44 @@ class FirestoreSaleRepository implements SaleRepository {
   Future<Result<List<Sale>>> getSalesInRange({
     required DateTime start,
     required DateTime end,
+    bool forceServer = false,
   }) {
     final key = '${start.millisecondsSinceEpoch}_${end.millisecondsSinceEpoch}';
+    if (forceServer) _rangeCache.remove(key);
     final cached = _rangeCache[key];
     if (cached != null) return cached;
 
-    final future = _doGetSalesInRange(start, end);
+    final future = _doGetSalesInRange(start, end, forceServer: forceServer);
     _rangeCache[key] = future;
     future.then((r) { if (!r.isSuccess) _rangeCache.remove(key); });
     return future;
   }
 
   Future<Result<List<Sale>>> _doGetSalesInRange(
-      DateTime start, DateTime end) async {
+      DateTime start, DateTime end, {bool forceServer = false}) async {
     try {
       final startTs = Timestamp.fromDate(start);
       final endTs = Timestamp.fromDate(end);
 
-      final snapshot = await _collection
+      final query = _collection
           .where('user_id', isEqualTo: _uid)
           .where('date', isGreaterThanOrEqualTo: startTs)
           .where('date', isLessThanOrEqualTo: endTs)
-          .orderBy('date', descending: true)
-          .get();
+          .orderBy('date', descending: true);
+
+      // Try disk cache first for instant startup,
+      // then update from server in the background.
+      QuerySnapshot<Map<String, dynamic>> snapshot;
+      if (forceServer) {
+        snapshot = await query.get(const GetOptions(source: Source.server));
+      } else {
+        try {
+          snapshot = await query.get(const GetOptions(source: Source.cache));
+        } catch (_) {
+          // Cache miss — fall through to server.
+          snapshot = await query.get();
+        }
+      }
 
       final sales = <Sale>[];
       for (final doc in snapshot.docs) {
@@ -141,10 +156,49 @@ class FirestoreSaleRepository implements SaleRepository {
           }
         }
       }
+
+      // If we got data from cache, kick off a background server fetch
+      // so the Firestore disk cache stays fresh for next time.
+      if (snapshot.metadata.isFromCache && sales.isNotEmpty) {
+        query.get(const GetOptions(source: Source.server)).then((_) {},
+            onError: (_) {});
+      }
+
       return Result.success(sales);
     } catch (e) {
       return Result.failure('Failed to fetch sales in range: $e');
     }
+  }
+
+  @override
+  Stream<List<Sale>> watchSalesInRange({
+    required DateTime start,
+    required DateTime end,
+  }) {
+    final startTs = Timestamp.fromDate(start);
+    final endTs = Timestamp.fromDate(end);
+
+    return _collection
+        .where('user_id', isEqualTo: _uid)
+        .where('date', isGreaterThanOrEqualTo: startTs)
+        .where('date', isLessThanOrEqualTo: endTs)
+        .orderBy('date', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      final sales = <Sale>[];
+      for (final doc in snapshot.docs) {
+        try {
+          final data = doc.data();
+          data['id'] = doc.id;
+          sales.add(Sale.fromJson(data));
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('[SaleRepo] Failed to parse sale ${doc.id}: $e');
+          }
+        }
+      }
+      return sales;
+    });
   }
 
   @override

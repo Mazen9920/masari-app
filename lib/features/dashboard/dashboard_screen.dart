@@ -72,6 +72,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ref.watch(saleTxnMigrationProvider);
     // Trigger one-time product variant schema migration
     ref.watch(variantMigrationProvider);
+    // Warm Firestore cache so Balance Sheet opens instantly
+    ref.watch(balanceSheetPrefetchProvider);
 
     final profile = ref.watch(userProfileProvider);
     return Scaffold(

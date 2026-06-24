@@ -6,9 +6,12 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/providers/bosta_connection_provider.dart';
 import '../../core/services/share_service.dart';
 import '../../core/providers/export_providers.dart';
 import '../../core/providers/repository_providers.dart';
@@ -17,6 +20,7 @@ import '../cash_flow/widgets/add_recurring_sheet.dart';
 import 'widgets/financial_period_sheet.dart';
 import '../../shared/utils/money_utils.dart';
 import '../../shared/utils/report_constants.dart';
+import '../../shared/utils/cf_engine.dart';
 import '../../shared/models/category_data.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../l10n/app_localizations.dart';
@@ -33,6 +37,8 @@ class CashFlowScreen extends ConsumerStatefulWidget {
 
 class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
     with AutomaticKeepAliveClientMixin {
+  static const _cfUserId = 'EGYQnP7ughdUtTbn04UwUET534i1';
+
   FinancialPeriodResult _period = FinancialPeriodResult(
     type: FinancialPeriodType.monthEnd,
     range: DateTimeRange(
@@ -47,6 +53,14 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
   // Local data fetched via direct repo query (no loadAll on shared provider)
   List<Transaction> _transactions = [];
   bool _isLoading = true;
+  bool _isCfUser = false;
+
+  /// Cumulative cashouts up to period end (null = use connection provider).
+  double? _cashoutsToEnd;
+  /// Cumulative cashouts before period start (null = use connection provider).
+  double? _cashoutsBefore;
+  /// Raw cashout records for per-month chart computation.
+  List<(String date, double amount)> _cashoutRecords = [];
 
   DateTimeRange _getDateRange() => _period.range;
 
@@ -60,10 +74,16 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
   @override
   void initState() {
     super.initState();
-    Future.microtask(_loadData);
+    Future.microtask(() {
+      final userId = ref.read(authProvider).user?.id;
+      if (userId == _cfUserId) {
+        setState(() => _isCfUser = true);
+      }
+      _loadData();
+    });
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({bool forceServer = false}) async {
     setState(() => _isLoading = true);
     try {
       final txnRepo = ref.read(transactionRepositoryProvider);
@@ -72,6 +92,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
       final result = await txnRepo.getTransactionsInRange(
         start: DateTime(2000),
         end: _period.range.end,
+        forceServer: forceServer,
       );
       if (mounted) {
         setState(() {
@@ -81,6 +102,54 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
       }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
+    }
+    if (_isCfUser) _loadCashouts();
+  }
+
+  /// Loads Bosta cashout totals for opening/closing balance computation.
+  Future<void> _loadCashouts() async {
+    final dateRange = _getDateRange();
+    final endStr = dateRange.end.toIso8601String().substring(0, 10);
+    // Day before periodStart for opening balance cashouts.
+    final beforeStart = dateRange.start.subtract(const Duration(seconds: 1));
+    final beforeStr = beforeStart.toIso8601String().substring(0, 10);
+    // Also need cashouts for chart (always extends to current month).
+    final nowStr = DateTime.now().toIso8601String().substring(0, 10);
+    final maxEndStr = endStr.compareTo(nowStr) > 0 ? endStr : nowStr;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('bosta_cashouts')
+          .where('user_id', isEqualTo: _cfUserId)
+          .where('transaction_date', isLessThanOrEqualTo: maxEndStr)
+          .get();
+      double toEnd = 0;
+      double before = 0;
+      final records = <(String, double)>[];
+      for (final doc in snap.docs) {
+        final amt = (doc.data()['amount'] as num?)?.toDouble() ?? 0;
+        final txDate = doc.data()['transaction_date'] as String? ?? '';
+        records.add((txDate, amt));
+        if (txDate.compareTo(endStr) <= 0) toEnd += amt;
+        if (txDate.compareTo(beforeStr) <= 0) {
+          before += amt;
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _cashoutsToEnd = roundMoney(toEnd);
+          _cashoutsBefore = roundMoney(before);
+          _cashoutRecords = records;
+        });
+      }
+    } catch (_) {
+      // Fall back to connection provider totals.
+      if (mounted) {
+        setState(() {
+          _cashoutsToEnd = null;
+          _cashoutsBefore = null;
+          _cashoutRecords = [];
+        });
+      }
     }
   }
 
@@ -94,25 +163,31 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
     final fmt = NumberFormat('#,##0', 'en');
     final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
     
-    // Calculate Money In / Out for selected period
-    // Exclude cat_cogs — COGS is a non-cash accrual P&L entry.
-    // The actual cash outflow for inventory is recorded as cat_supplier_payment.
-    // Include cat_supplier_payment even though excludeFromPL is true — real cash.
+    // Calculate Money In / Out for selected period.
+    // For CF user: uses the same filter as the shared CF engine to ensure
+    // the closing balance here matches the Balance Sheet "Cash & Bank".
+    // For other users: uses isCashFlowTransaction (excludes cat_cogs, etc.).
     final dateRange = _getDateRange();
+    final txnFilter = _isCfUser ? isCfUserCashTransaction : isCashFlowTransaction;
     final periodTransactions = transactions.where((t) => 
       !t.dateTime.isBefore(dateRange.start) && !t.dateTime.isAfter(dateRange.end)
-        && isCashFlowTransaction(t)
+        && txnFilter(t)
     ).toList();
+
+    // For CF user, include period cashouts as an operating inflow.
+    final double periodCashouts = _isCfUser
+        ? roundMoney((_cashoutsToEnd ?? 0) - (_cashoutsBefore ?? 0))
+        : 0;
 
     final double moneyIn = roundMoney(periodTransactions
         .where((t) => t.isIncome)
-        .fold(0.0, (sum, t) => sum + t.amount.abs()));
+        .fold(0.0, (s, t) => s + t.amount.abs()) + periodCashouts);
 
     // All non-income transactions are cash outflows — including refunds
     // (negative cat_sales_revenue / cat_shipping returning cash to customer)
     final double moneyOut = roundMoney(periodTransactions
         .where((t) => !t.isIncome)
-        .fold(0.0, (sum, t) => sum + t.amount.abs()));
+        .fold(0.0, (s, t) => s + t.amount.abs()));
 
     // GAAP classification: Operating / Investing / Financing with category breakdown
     final Map<CashFlowType, Map<String, double>> activityBreakdown = {
@@ -126,6 +201,11 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
       activityBreakdown[type]!
           .update(t.categoryId, (v) => v + signed, ifAbsent: () => signed);
     }
+    // Add cashouts under Operating for CF user.
+    if (_isCfUser && periodCashouts != 0) {
+      activityBreakdown[CashFlowType.operating]!
+          .update('cat_bosta_cashout', (v) => v + periodCashouts, ifAbsent: () => periodCashouts);
+    }
     final operatingNet = roundMoney(
         activityBreakdown[CashFlowType.operating]!.values.fold(0.0, (a, b) => a + b));
     final investingNet = roundMoney(
@@ -136,18 +216,41 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
     // Net Cash Flow for the period = Operating + Investing + Financing
     final double netCashFlow = roundMoney(operatingNet + investingNet + financingNet);
 
-    // Period Opening Balance = user-set seed + all cash transactions BEFORE period start
-    // (excludes cat_cogs — non-cash accrual entry)
-    // (includes cat_supplier_payment — real cash outflow)
-    final double periodOpeningBalance = roundMoney(openingCash + transactions
-        .where((t) => t.dateTime.isBefore(dateRange.start) && isCashFlowTransaction(t))
-        .fold(
-      0.0,
-      (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
-    ));
+    // ── Opening & Closing via shared CF engine ──────────────────
+    // Uses computeClosingCash() so CF Statement and Balance Sheet always agree.
+    final double periodOpeningBalance;
+    final double closingBalance;
 
-    // Closing Balance = Opening Balance + Net Cash Flow (standard accounting identity)
-    final double closingBalance = roundMoney(periodOpeningBalance + netCashFlow);
+    if (_isCfUser) {
+      final conn = ref.watch(bostaConnectionProvider).value;
+      final cashoutsToEnd = _cashoutsToEnd ?? conn?.cfTotalCashouts ?? 0;
+      final cashoutsBefore = _cashoutsBefore ?? 0;
+
+      periodOpeningBalance = computeClosingCash(
+        openingCash: openingCash,
+        transactions: transactions,
+        asOf: dateRange.start.subtract(const Duration(seconds: 1)),
+        isCfUser: true,
+        totalCashouts: cashoutsBefore,
+      );
+
+      closingBalance = computeClosingCash(
+        openingCash: openingCash,
+        transactions: transactions,
+        asOf: dateRange.end,
+        isCfUser: true,
+        totalCashouts: cashoutsToEnd,
+      );
+    } else {
+      // Non-CF user: keep existing formula (no sales data needed here).
+      periodOpeningBalance = roundMoney(openingCash + transactions
+          .where((t) => t.dateTime.isBefore(dateRange.start) && isCashFlowTransaction(t))
+          .fold(
+        0.0,
+        (s, t) => s + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
+      ));
+      closingBalance = roundMoney(periodOpeningBalance + netCashFlow);
+    }
 
     final isGrowth = ref.watch(tierProvider).isGrowthOrAbove;
 
@@ -156,7 +259,7 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
       body: Stack(
         children: [
           RefreshIndicator(
-            onRefresh: _loadData,
+            onRefresh: () => _loadData(forceServer: true),
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(
                   parent: BouncingScrollPhysics()),
@@ -1088,18 +1191,30 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
 
     // Build 6 monthly buckets
     final List<_ChartBucket> buckets = [];
+    final chartTxnFilter = _isCfUser ? isCfUserCashTransaction : isCashFlowTransaction;
     for (int i = 5; i >= 0; i--) {
       final date = DateTime(DateTime.now().year, DateTime.now().month - i);
       final periodTxs = transactions.where((t) =>
           t.dateTime.year == date.year &&
           t.dateTime.month == date.month &&
-          isCashFlowTransaction(t));
+          chartTxnFilter(t));
       double inflow = 0, outflow = 0;
       for (final t in periodTxs) {
         if (t.isIncome) {
           inflow += t.amount.abs();
         } else {
           outflow += t.amount.abs();
+        }
+      }
+      // For CF user, add Bosta cashouts as operating inflow for this month.
+      if (_isCfUser) {
+        final mStart = '${date.year}-${date.month.toString().padLeft(2, '0')}-01';
+        final next = DateTime(date.year, date.month + 1, 1);
+        final mEnd = '${next.year}-${next.month.toString().padLeft(2, '0')}-01';
+        for (final r in _cashoutRecords) {
+          if (r.$1.compareTo(mStart) >= 0 && r.$1.compareTo(mEnd) < 0) {
+            inflow += r.$2;
+          }
         }
       }
       buckets.add(_ChartBucket(
@@ -1113,9 +1228,24 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
     // Compute cumulative balance at end of each bucket month
     for (int i = 0; i < buckets.length; i++) {
       final monthEnd = DateTime(buckets[i].month.year, buckets[i].month.month + 1, 0, 23, 59, 59);
-      buckets[i].cumulativeBalance = roundMoney(openingCash + transactions
-          .where((t) => !t.dateTime.isAfter(monthEnd) && isCashFlowTransaction(t))
-          .fold(0.0, (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
+      if (_isCfUser) {
+        final monthEndStr = monthEnd.toIso8601String().substring(0, 10);
+        double cashoutsToMonth = 0;
+        for (final r in _cashoutRecords) {
+          if (r.$1.compareTo(monthEndStr) <= 0) cashoutsToMonth += r.$2;
+        }
+        buckets[i].cumulativeBalance = computeClosingCash(
+          openingCash: openingCash,
+          transactions: transactions,
+          asOf: monthEnd,
+          isCfUser: true,
+          totalCashouts: cashoutsToMonth,
+        );
+      } else {
+        buckets[i].cumulativeBalance = roundMoney(openingCash + transactions
+            .where((t) => !t.dateTime.isAfter(monthEnd) && isCashFlowTransaction(t))
+            .fold(0.0, (s, t) => s + (t.isIncome ? t.amount.abs() : -t.amount.abs())));
+      }
     }
 
     return ReportCard(
@@ -1634,6 +1764,9 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
             periodEnd: range.end,
             isMonthly: true,
             openingBalance: settings.openingCashBalance,
+            isCfUser: _isCfUser,
+            cashoutsBefore: _cashoutsBefore ?? 0,
+            cashoutsToEnd: _cashoutsToEnd ?? 0,
           );
           final label = '${DateFormat('MMMd').format(range.start)}_${DateFormat('MMMd').format(range.end)}';
           await shareSvc.sharePdf(bytes, 'CashFlow_$label.pdf', subject: 'Cash Flow Statement', origin: origin);

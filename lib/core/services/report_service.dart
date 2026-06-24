@@ -7,6 +7,8 @@ import '../../l10n/app_localizations.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/sale_model.dart';
 import '../../shared/utils/report_constants.dart';
+import '../../shared/utils/cf_engine.dart';
+import '../../shared/utils/money_utils.dart';
 import '../../shared/models/product_model.dart';
 import '../../shared/models/balance_sheet_entries.dart';
 import '../../shared/models/category_data.dart';
@@ -311,6 +313,11 @@ class ReportService {
     required bool isMonthly,
     required double openingBalance,
     String? businessName,
+    /// CF-user awareness: when true, uses isCfUserCashTransaction filter
+    /// and includes cashouts as operating inflow.
+    bool isCfUser = false,
+    double cashoutsBefore = 0,
+    double cashoutsToEnd = 0,
   }) async {
     final theme = await _loadTheme(isArabic: l10n.localeName == 'ar');
     final pdf = pw.Document(
@@ -323,17 +330,30 @@ class ReportService {
         ? DateFormat( 'MMMM yyyy').format(periodStart)
         :  l10n.yearPeriod(periodStart.year);
 
-    // Compute the period's opening balance from seed + all pre-period cash transactions
-    // (uses canonical cash-flow filter: excludes COGS, respects excludeFromPL,
-    //  keeps cat_supplier_payment).
-    final double periodOpening = openingBalance + transactions
-        .where((tx) => tx.dateTime.isBefore(periodStart) && isCashFlowTransaction(tx))
-        .fold(0.0, (sum, tx) => sum + (tx.isIncome ? tx.amount.abs() : -tx.amount.abs()));
+    // Compute opening balance using CF engine (single source of truth).
+    final txnFilter = isCfUser ? isCfUserCashTransaction : isCashFlowTransaction;
+    final double periodOpening;
+    if (isCfUser) {
+      periodOpening = computeClosingCash(
+        openingCash: openingBalance,
+        transactions: transactions,
+        asOf: periodStart.subtract(const Duration(seconds: 1)),
+        isCfUser: true,
+        totalCashouts: cashoutsBefore,
+      );
+    } else {
+      periodOpening = openingBalance + transactions
+          .where((tx) => tx.dateTime.isBefore(periodStart) && isCashFlowTransaction(tx))
+          .fold(0.0, (sum, tx) => sum + (tx.isIncome ? tx.amount.abs() : -tx.amount.abs()));
+    }
 
-    // Filter to period using same canonical cash-flow filter.
+    // Period cashouts for CF user.
+    final double periodCashouts = isCfUser ? roundMoney(cashoutsToEnd - cashoutsBefore) : 0;
+
+    // Filter to period using correct filter.
     final filtered = transactions.where((tx) =>
       !tx.dateTime.isBefore(periodStart) && !tx.dateTime.isAfter(periodEnd)
-        && isCashFlowTransaction(tx)
+        && txnFilter(tx)
     ).toList()
       ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
@@ -372,6 +392,15 @@ class ReportService {
           financingByCat[tx.categoryId] =
               (financingByCat[tx.categoryId] ?? 0) + signed;
       }
+    }
+    // Add cashouts as operating inflow for CF user.
+    if (isCfUser && periodCashouts > 0) {
+      totalInflow += periodCashouts;
+      inflowByCat['cat_bosta_cashout'] =
+          (inflowByCat['cat_bosta_cashout'] ?? 0) + periodCashouts;
+      operatingNet += periodCashouts;
+      operatingByCat['cat_bosta_cashout'] =
+          (operatingByCat['cat_bosta_cashout'] ?? 0) + periodCashouts;
     }
     final netCashFlow = totalInflow - totalOutflow;
     final closingBalance = periodOpening + netCashFlow;

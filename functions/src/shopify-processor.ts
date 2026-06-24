@@ -15,7 +15,7 @@
  */
 
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
-import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {onCall, onRequest, HttpsError} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {defineSecret} from "firebase-functions/params";
 import {
@@ -423,6 +423,15 @@ export const processShopifyWebhook = onDocumentCreated(
           userId, payload as ShopifyOrder
         );
         break;
+      case "returns/request":
+      case "returns/approve":
+      case "returns/cancel":
+      case "returns/decline":
+      case "returns/reopen":
+      case "returns/close":
+      case "returns/update":
+        await handleReturnEvent(userId, payload);
+        break;
       case "products/update":
       case "products/create":
         await handleProductUpdate(
@@ -626,8 +635,10 @@ async function handleOrderCreate(
     )
   );
   const productDiscount = round2(discountAmount - shippingDiscount);
+  // Store product-only discount in sale doc (matches Dart model's format).
+  // total = subtotal + tax - productDiscount + shippingCost
   const total = round2(
-    subtotal + taxAmount - discountAmount + shippingCost + shippingDiscount
+    subtotal + taxAmount - productDiscount + shippingCost
   );
 
   const paymentStatus = mapPaymentStatus(
@@ -670,7 +681,7 @@ async function handleOrderCreate(
     date: saleDate,
     items: saleItems,
     tax_amount: taxAmount,
-    discount_amount: discountAmount,
+    discount_amount: productDiscount,
     payment_method: (order.payment_gateway_names ?? [
     ])[0] || "Shopify",
     payment_status: paymentStatus,
@@ -889,16 +900,19 @@ async function handleOrderUpdated(
 
   const saleDoc = snap.docs[0];
   const saleData = saleDoc.data();
-  const saleId = saleData.id as string;
+  const saleId = saleDoc.id;
 
   // ── Self-heal: if Revvo says cancelled but Shopify says not ──
   const cancelReason = order.cancel_reason as string | null;
   const shopifyCancelledAt = order.cancelled_at as string | null;
   const isShopifyCancelled = !!(cancelReason || shopifyCancelledAt);
 
-  if (saleData.order_status === 4 && !isShopifyCancelled) {
-    // Data corruption — Revvo was incorrectly cancelled.
-    // Shopify is truth: un-cancel and continue processing updates.
+  // ── Self-heal: if Revvo says cancelled but Shopify says not ──
+  // This can happen from duplicate/stale webhooks. Shopify is truth.
+  const wasIncorrectlyCancelled =
+    saleData.order_status === 4 && !isShopifyCancelled;
+
+  if (wasIncorrectlyCancelled) {
     logger.warn("Self-healing: order incorrectly cancelled in Revvo, " +
       "Shopify says active. Un-cancelling.", {shopifyOrderId});
   }
@@ -939,15 +953,14 @@ async function handleOrderUpdated(
     return; // handleOrderCancelled handles everything
   }
 
-  // ── ALREADY CANCELLED — only update payment_status ─────
-  // When an order is already cancelled in Revvo, we ONLY update
-  // payment_status (e.g., "refunded"). We MUST NOT create refund
-  // transactions, adjust stock, or modify line items — the cancel
-  // handler already zeroed everything with exclude_from_pl reversals.
-  // NOTE: We rely on Revvo's order_status (source of truth), NOT on
-  // Shopify's cancelled_at/cancel_reason which may be absent in
-  // refund-triggered orders/updated webhooks.
-  if (saleData.order_status === 4) {
+  // ── ALREADY CANCELLED — update payment_status + any new refunds ─
+  // When an order is already cancelled in Revvo AND Shopify agrees,
+  // we skip line-item / financial re-calc (cancellation reversals
+  // already zeroed it out), but we DO still process any new refund
+  // webhooks so post-cancellation refunds land in the correct period
+  // in Sales → Returns. Skip if self-healing an incorrectly-cancelled
+  // order (must continue to full processing).
+  if (saleData.order_status === 4 && !wasIncorrectlyCancelled) {
     if (Object.keys(updates).length > 0) {
       updates.updated_at = now;
       await saleDoc.ref.update(updates);
@@ -956,7 +969,15 @@ async function handleOrderUpdated(
         newPaymentStatus,
         financialStatus: order.financial_status,
       });
-    } else {
+    }
+
+    // Process any new refunds that arrived AFTER cancellation.
+    // This creates per-refund txns at refund.created_at and reduces
+    // the cancellation reversal by the same amount (net zero P&L).
+    const createdCount = await processRefundsOnCancelledOrder(
+      userId, saleId, saleData, order,
+    );
+    if (createdCount === 0 && Object.keys(updates).length === 0) {
       logger.info("Cancelled order: no changes needed", {
         shopifyOrderId,
       });
@@ -964,7 +985,36 @@ async function handleOrderUpdated(
     return;
   }
 
-  if (saleData.order_status !== newOrderStatus) {
+  // If un-cancelling, force the order_status update and remove
+  // cancellation reversals that should not exist.
+  if (wasIncorrectlyCancelled) {
+    updates.order_status = newOrderStatus;
+
+    // Delete cancellation reversal txns (they were created in error)
+    const reversalSuffixes = ["_reversal", "_correction"];
+    const reversalPrefixes = [
+      `sale_rev_${saleId}`,
+      `sale_cogs_${saleId}`,
+      `sale_ship_${saleId}`,
+    ];
+    const txnCol = db.collection("transactions");
+    for (const prefix of reversalPrefixes) {
+      for (const suffix of reversalSuffixes) {
+        const docId = `${prefix}${suffix}`;
+        const docRef = txnCol.doc(docId);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+          await docRef.delete();
+          logger.info("Deleted erroneous reversal txn", {
+            docId, saleId, shopifyOrderId,
+          });
+        }
+      }
+    }
+  }
+
+  if (saleData.order_status !== newOrderStatus &&
+      !wasIncorrectlyCancelled) {
     updates.order_status = newOrderStatus;
   }
 
@@ -1149,13 +1199,24 @@ async function handleOrderUpdated(
     )
   );
   const newTaxAmount = Number(order.total_tax) || 0;
-  const newDiscountAmount = Number(order.total_discounts) || 0;
+  const newTotalDiscounts = Number(order.total_discounts) || 0;
   // Use discounted_price (net of shipping discounts)
   const newShippingCost = round2(
     ((order.shipping_lines ?? []) as Array<Record<string, unknown>>).reduce(
       (s, sl) => s + (Number(sl.discounted_price ?? sl.price) || 0), 0,
     )
   );
+  // Compute product-only discount (matches Dart model format)
+  const newShippingDiscount = round2(
+    ((order.shipping_lines ?? []) as Array<Record<string, unknown>>).reduce(
+      (s, sl) => {
+        const g = Number(sl.price) || 0;
+        const n = Number(sl.discounted_price ?? sl.price) || 0;
+        return s + (g - n);
+      }, 0,
+    )
+  );
+  const newDiscountAmount = round2(newTotalDiscounts - newShippingDiscount);
   const newTotal = round2(
     newSubtotal + newTaxAmount - newDiscountAmount + newShippingCost
   );
@@ -1225,20 +1286,9 @@ async function handleOrderUpdated(
     if (revTxnSnap.exists) {
       const revData = revTxnSnap.data()!;
       const oldRevAmount = Number(revData.amount) || 0;
-      // Only update if not already cancelled/reversed.
-      // Exclude shipping discounts from product revenue deduction.
-      const newShippingDiscount = round2(
-        ((order.shipping_lines ?? []) as Array<Record<string, unknown>>)
-          .reduce((s, sl) => {
-            const gross = Number(sl.price) || 0;
-            const net = Number(sl.discounted_price ?? sl.price) || 0;
-            return s + (gross - net);
-          }, 0)
-      );
-      const newProductDiscount = round2(
-        newDiscountAmount - newShippingDiscount
-      );
-      const newNetRevenue = round2(newSubtotal - newProductDiscount);
+      // newDiscountAmount is already product-only (excludes shipping
+      // discounts), so use it directly for revenue calculation.
+      const newNetRevenue = round2(newSubtotal - newDiscountAmount);
       if (!revData.exclude_from_pl && oldRevAmount !== newNetRevenue) {
         await db.collection("transactions").doc(revTxnId).update({
           amount: newNetRevenue,
@@ -1377,6 +1427,7 @@ async function handleOrderUpdated(
       if (restoreItems.length > 0 || deductItems.length > 0) {
         // Atomic: re-read sale → check fingerprint → claim → adjust stock
         await db.runTransaction(async (txn) => {
+          // ── ALL READS FIRST (Firestore requirement) ──
           const freshSnap = await txn.get(saleDoc.ref);
           if (!freshSnap.exists) return;
           const currentFingerprint =
@@ -1390,9 +1441,6 @@ async function handleOrderUpdated(
             );
             return;
           }
-
-          // Claim the fingerprint atomically
-          txn.update(saleDoc.ref, {_item_fingerprint: newItemKeys});
 
           // Read all product docs needed for stock adjustments
           const allStockItems = [...restoreItems, ...deductItems];
@@ -1411,6 +1459,10 @@ async function handleOrderUpdated(
               await txn.get(db.collection("products").doc(pid)),
             );
           }
+
+          // ── ALL WRITES AFTER READS ──
+          // Claim the fingerprint atomically
+          txn.update(saleDoc.ref, {_item_fingerprint: newItemKeys});
 
           if (restoreItems.length > 0) {
             applyStockInTransaction(
@@ -1435,6 +1487,45 @@ async function handleOrderUpdated(
     } else if (itemsChanged) {
       // Inventory sync disabled but items changed — still claim fingerprint
       await saleDoc.ref.update({_item_fingerprint: newItemKeys});
+    }
+  }
+
+  // ── Revenue consistency check (runs unconditionally) ───
+  // Older webhook versions wrote revenue = subtotal (without
+  // deducting discounts). Fix any stale txns even when the sale
+  // doc's items/financials haven't changed.
+  {
+    const revTxnId = `sale_rev_${saleId}`;
+    const revSnap = await db.collection("transactions").doc(revTxnId).get();
+    if (revSnap.exists) {
+      const revData = revSnap.data()!;
+      const curAmount = Number(revData.amount) || 0;
+      // Compute expected: subtotal from items − product-only discount.
+      // Use the effective discount_amount (from updates if just changed,
+      // else from the persisted sale).  discount_amount is product-only
+      // (shipping discounts are excluded in both Dart and CF code).
+      const curSubtotal = round2(
+        (saleData.items as Array<Record<string, unknown>> || []).reduce(
+          (s: number, i: Record<string, unknown>) =>
+            s + (Number(i.quantity) * Number(i.unit_price)),
+          0,
+        )
+      );
+      const effectiveDiscount = updates.discount_amount !== undefined
+        ? Number(updates.discount_amount)
+        : (Number(saleData.discount_amount) || 0);
+      const expectedRev = round2(curSubtotal - effectiveDiscount);
+      if (!revData.exclude_from_pl && Math.abs(curAmount - expectedRev) > 0.005) {
+        await db.collection("transactions").doc(revTxnId).update({
+          amount: expectedRev,
+          updated_at: Timestamp.now(),
+        });
+        logger.info("Revenue txn self-healed (discount mismatch)", {
+          revTxnId,
+          oldAmount: curAmount,
+          newAmount: expectedRev,
+        });
+      }
     }
   }
 
@@ -1473,15 +1564,14 @@ async function handleOrderUpdated(
   //  - Double-counting when multiple refund webhooks arrive
   //  - Collisions between partial refund #1 and #2
   //  - Duplicate stock restores
-  const financialStatus = order.financial_status as string | null;
-  const wasRefunded =
-    financialStatus === "refunded" ||
-    financialStatus === "partially_refunded";
+  // NOTE: We check order.refunds[] directly, NOT financial_status.
+  // Shopify can have refunds on orders with financial_status = "paid"
+  // or "pending" (e.g. partial refund re-charged, manual adjustments).
+  const refunds: Record<string, unknown>[] =
+    (order.refunds as Record<string, unknown>[]) ?? [];
   let refundsCreated = 0;
 
-  if (wasRefunded) {
-    const refunds: Record<string, unknown>[] =
-      (order.refunds as Record<string, unknown>[]) ?? [];
+  if (refunds.length > 0) {
 
     // Use the connection check that was already loaded above
     // (connDoc exists from line-item edit section)
@@ -1510,61 +1600,106 @@ async function handleOrderUpdated(
       if (existingRefund.exists) continue;
 
       // Sum this individual refund's monetary amount.
-      // Primary source: refund_line_items (subtotal + total_tax)
-      // plus order_adjustments (e.g. shipping refunds).
-      // Fallback: refund.transactions (may be empty in webhooks).
+      // Product refund = refund_line_items subtotal only (no tax —
+      // tax is excluded from revenue, so refund shouldn't deduct it).
+      // Shipping refund = order_adjustments where kind=shipping_refund.
       const refundLineItems = (
         refund.refund_line_items as Record<string, unknown>[]
       ) ?? [];
-      let refundAmount = 0;
+      let productRefundAmount = 0;
       let refundedQty = 0;
       for (const ri of refundLineItems) {
-        refundAmount += Number(ri.subtotal) || 0;
-        refundAmount += Number(ri.total_tax) || 0;
+        productRefundAmount += Number(ri.subtotal) || 0;
         refundedQty += Number(ri.quantity) || 0;
       }
-      // Add order adjustments (shipping refunds, etc.)
+
+      // Separate shipping refund from other adjustments
       const orderAdjs = (
         refund.order_adjustments as Record<string, unknown>[]
       ) ?? [];
+      let shippingRefundAmount = 0;
       for (const adj of orderAdjs) {
-        refundAmount += Math.abs(Number(adj.amount) || 0);
-      }
-      // Fallback to refund.transactions if line items gave 0
-      if (refundAmount <= 0) {
-        const txns = (
-          refund.transactions as Record<string, unknown>[]
-        ) ?? [];
-        for (const tx of txns) {
-          refundAmount += Number(tx.amount) || 0;
+        if (adj.kind === "shipping_refund") {
+          shippingRefundAmount += Math.abs(Number(adj.amount) || 0);
         }
+        // Other adjustments (refund_discrepancy, etc.) are NOT returns.
+        // Shopify's "Returns" metric counts only refund_line_items, so we
+        // must ignore refund_discrepancy to keep Net sales matching.
       }
-      refundAmount = round2(refundAmount);
-      if (refundAmount <= 0) continue;
+
+      // NOTE: We deliberately do NOT fall back to refund.transactions[].
+      // Shopify's "Returns" metric only counts refund_line_items.subtotal
+      // (+ shipping_refund adjustments). A money-only refund (e.g. the
+      // settlement leg of a split refund, or a goodwill cash refund) has
+      // no line items and must contribute 0, otherwise we double-count
+      // (e.g. order #21554: line-item refund 4439 + money refund 4344).
+      productRefundAmount = round2(productRefundAmount);
+      shippingRefundAmount = round2(shippingRefundAmount);
+
+      if (productRefundAmount <= 0 && shippingRefundAmount <= 0) continue;
 
       // Determine note
-      const isFullRefund = financialStatus === "refunded";
+      const isFullRefund =
+        (order.financial_status as string | null) === "refunded";
       const refundNote = isFullRefund ?
         "Full refund from Shopify" :
         `Partial refund (${refundedQty} items)`;
 
-      // Create the refund transaction
-      await db.collection("transactions").doc(refundTxnId).set({
-        id: refundTxnId,
-        user_id: userId,
-        title: `Refund — #${
-          order.order_number || order.name || ""
-        } — Shopify`,
-        amount: -refundAmount,
-        date_time: toTs(refund.created_at as string | null),
-        category_id: "cat_sales_revenue",
-        note: refundNote,
-        payment_method: "shopify",
-        sale_id: saleId,
-        shopify_refund_id: shopifyRefundId,
-        exclude_from_pl: false,
-        created_at: now,
-      });
+      // Create the product/revenue refund transaction
+      // Dated at refund.created_at so Revvo's monthly Returns match
+      // Shopify's Sales report (which reports refunds on refund date).
+      if (productRefundAmount > 0) {
+        await db.collection("transactions").doc(refundTxnId).set({
+          id: refundTxnId,
+          user_id: userId,
+          title: `Refund — #${
+            order.order_number || order.name || ""
+          } — Shopify`,
+          amount: -productRefundAmount,
+          date_time: toTs(
+            (refund.created_at as string | null) ||
+            (order.created_at as string | null)
+          ),
+          category_id: "cat_sales_revenue",
+          note: refundNote,
+          payment_method: "shopify",
+          sale_id: saleId,
+          shopify_refund_id: shopifyRefundId,
+          exclude_from_pl: false,
+          created_at: now,
+        });
+      }
+
+      // Create separate shipping refund transaction
+      if (shippingRefundAmount > 0) {
+        const shipRefundId =
+          `sale_ship_refund_${saleId}_${shopifyRefundId}`;
+        const existingShipRefund = await db
+          .collection("transactions")
+          .doc(shipRefundId)
+          .get();
+        if (!existingShipRefund.exists) {
+          await db.collection("transactions").doc(shipRefundId).set({
+            id: shipRefundId,
+            user_id: userId,
+            title: `Shipping Refund — #${
+              order.order_number || order.name || ""
+            } — Shopify`,
+            amount: -shippingRefundAmount,
+            date_time: toTs(
+              (refund.created_at as string | null) ||
+              (order.created_at as string | null)
+            ),
+            category_id: "cat_shipping",
+            note: refundNote,
+            payment_method: "shopify",
+            sale_id: saleId,
+            shopify_refund_id: shopifyRefundId,
+            exclude_from_pl: false,
+            created_at: now,
+          });
+        }
+      }
       refundsCreated++;
 
       // Restore stock for this refund's items
@@ -1594,7 +1729,8 @@ async function handleOrderUpdated(
         saleId,
         shopifyRefundId,
         refundTxnId,
-        refundAmount,
+        productRefundAmount,
+        shippingRefundAmount,
         refundedQty,
       });
     }
@@ -1622,6 +1758,236 @@ async function handleOrderUpdated(
     shopifyOrderId,
     changed: Object.keys(updates),
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Refunds arriving AFTER cancellation
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Processes Shopify refund events that arrive after an order has
+ * already been cancelled in Revvo.
+ *
+ * Why this exists: cancellation creates reversal txns for the full
+ * order amount dated at the cancellation date. When a refund is
+ * subsequently issued in Shopify (or a refund webhook arrives late),
+ * the user expects that refund to show up in the Sales → Returns
+ * column for the refund's month, just like Shopify's Sales report.
+ *
+ * Approach: for every refund that doesn't yet have a
+ * `sale_refund_{saleId}_{refundId}` txn, create it at refund.created_at
+ * AND reduce the existing cancellation reversal by the same amount.
+ * Net P&L impact is zero (the reversal already covered it), but the
+ * refund now lands in the correct accounting period.
+ *
+ * @param {string} userId Revvo user ID.
+ * @param {string} saleId Revvo sale ID.
+ * @param {Record<string, unknown>} saleData The sale document data.
+ * @param {ShopifyOrder} order Shopify order payload.
+ * @return {Promise<number>} Number of refund txns newly created.
+ */
+async function processRefundsOnCancelledOrder(
+  userId: string,
+  saleId: string,
+  saleData: Record<string, unknown>,
+  order: ShopifyOrder,
+): Promise<number> {
+  const db = getDb();
+  const refunds: Record<string, unknown>[] =
+    (order.refunds as Record<string, unknown>[]) ?? [];
+  if (refunds.length === 0) return 0;
+
+  const now = Timestamp.now();
+  const txnCol = db.collection("transactions");
+  const currentItems = (saleData.items as
+    Record<string, unknown>[]) ?? [];
+
+  let created = 0;
+  let totalNewProductRefund = 0;
+  let totalNewShippingRefund = 0;
+
+  for (const refund of refunds) {
+    const shopifyRefundId = String(
+      (refund as Record<string, unknown>).id || ""
+    );
+    if (!shopifyRefundId) continue;
+
+    const refundTxnId = `sale_refund_${saleId}_${shopifyRefundId}`;
+    const shipRefundId = `sale_ship_refund_${saleId}_${shopifyRefundId}`;
+
+    const existingProductRefund = await txnCol.doc(refundTxnId).get();
+    const existingShippingRefund = await txnCol.doc(shipRefundId).get();
+    if (existingProductRefund.exists && existingShippingRefund.exists) {
+      continue;
+    }
+
+    // Compute refund amounts
+    const refundLineItems = (
+      refund.refund_line_items as Record<string, unknown>[]
+    ) ?? [];
+    let productRefundAmount = 0;
+    let refundedQty = 0;
+    for (const ri of refundLineItems) {
+      productRefundAmount += Number(ri.subtotal) || 0;
+      refundedQty += Number(ri.quantity) || 0;
+    }
+    const orderAdjs = (
+      refund.order_adjustments as Record<string, unknown>[]
+    ) ?? [];
+    let shippingRefundAmount = 0;
+    for (const adj of orderAdjs) {
+      if (adj.kind === "shipping_refund") {
+        shippingRefundAmount += Math.abs(Number(adj.amount) || 0);
+      }
+      // Other adjustments (refund_discrepancy, etc.) are NOT returns and
+      // are intentionally ignored to match Shopify's "Returns" metric.
+    }
+    // NOTE: No fallback to refund.transactions[] — Shopify "Returns"
+    // counts only refund_line_items.subtotal (+ shipping_refund adj),
+    // so a money-only refund must contribute 0 to avoid double-counting.
+    productRefundAmount = round2(productRefundAmount);
+    shippingRefundAmount = round2(shippingRefundAmount);
+    if (productRefundAmount <= 0 && shippingRefundAmount <= 0) continue;
+
+    const refundDate = toTs(
+      (refund.created_at as string | null) ||
+      (order.created_at as string | null)
+    );
+    const refundNote =
+      `Refund issued after cancellation (${refundedQty} items)`;
+
+    if (productRefundAmount > 0 && !existingProductRefund.exists) {
+      await txnCol.doc(refundTxnId).set({
+        id: refundTxnId,
+        user_id: userId,
+        title: `Refund — #${
+          order.order_number || order.name || ""
+        } — Shopify`,
+        amount: -productRefundAmount,
+        date_time: refundDate,
+        category_id: "cat_sales_revenue",
+        note: refundNote,
+        payment_method: "shopify",
+        sale_id: saleId,
+        shopify_refund_id: shopifyRefundId,
+        exclude_from_pl: false,
+        created_at: now,
+      });
+      totalNewProductRefund += productRefundAmount;
+      created++;
+    }
+
+    if (shippingRefundAmount > 0 && !existingShippingRefund.exists) {
+      await txnCol.doc(shipRefundId).set({
+        id: shipRefundId,
+        user_id: userId,
+        title: `Shipping Refund — #${
+          order.order_number || order.name || ""
+        } — Shopify`,
+        amount: -shippingRefundAmount,
+        date_time: refundDate,
+        category_id: "cat_shipping",
+        note: refundNote,
+        payment_method: "shopify",
+        sale_id: saleId,
+        shopify_refund_id: shopifyRefundId,
+        exclude_from_pl: false,
+        created_at: now,
+      });
+      totalNewShippingRefund += shippingRefundAmount;
+      created++;
+    }
+  }
+
+  // Idempotently recompute the revenue & shipping cancellation
+  // reversals from the FULL set of refund txns. A cancelled order's
+  // net revenue must equal (original − total refunded); the reversal
+  // absorbs only the un-refunded remainder. Recomputing from scratch
+  // (rather than incrementally adding only NEW refunds) self-heals
+  // historical double-counts where a refund txn was created by a
+  // different path without reducing the reversal.
+  const allRevSnap = await txnCol
+    .where("sale_id", "==", saleId)
+    .where("category_id", "==", "cat_sales_revenue")
+    .get();
+  let origRev = 0;
+  let refundedRev = 0;
+  for (const d of allRevSnap.docs) {
+    const amt = Number(d.data().amount) || 0;
+    if (d.id === `sale_rev_${saleId}`) {
+      origRev = Math.abs(amt);
+    } else if (d.id.startsWith(`sale_refund_${saleId}_`) &&
+      !d.data().exclude_from_pl) {
+      refundedRev += Math.abs(amt);
+    }
+  }
+  if (origRev > 0) {
+    const revReversalRef = txnCol.doc(`sale_rev_${saleId}_reversal`);
+    const revReversalSnap = await revReversalRef.get();
+    if (revReversalSnap.exists) {
+      const target = round2(Math.max(0, origRev - refundedRev));
+      const newAmount = target > 0 ? -target : 0;
+      if (Number(revReversalSnap.data()!.amount) !== newAmount) {
+        await revReversalRef.update({
+          amount: newAmount,
+          note: refundedRev > 0
+            ? "Auto-reversal — Shopify order cancelled " +
+              "(adjusted for post-cancellation refunds)"
+            : "Auto-reversal — Shopify order cancelled",
+          updated_at: now,
+        });
+      }
+    }
+  }
+
+  const allShipSnap = await txnCol
+    .where("sale_id", "==", saleId)
+    .where("category_id", "==", "cat_shipping")
+    .get();
+  let origShip = 0;
+  let refundedShip = 0;
+  for (const d of allShipSnap.docs) {
+    const amt = Number(d.data().amount) || 0;
+    if (d.id === `sale_ship_${saleId}`) {
+      origShip = Math.abs(amt);
+    } else if (d.id.startsWith(`sale_ship_refund_${saleId}_`) &&
+      !d.data().exclude_from_pl) {
+      refundedShip += Math.abs(amt);
+    }
+  }
+  if (origShip > 0) {
+    const shipReversalRef = txnCol.doc(`sale_ship_${saleId}_reversal`);
+    const shipReversalSnap = await shipReversalRef.get();
+    if (shipReversalSnap.exists) {
+      const target = round2(Math.max(0, origShip - refundedShip));
+      const newAmount = target > 0 ? -target : 0;
+      if (Number(shipReversalSnap.data()!.amount) !== newAmount) {
+        await shipReversalRef.update({
+          amount: newAmount,
+          note: refundedShip > 0
+            ? "Auto-reversal — Shopify order cancelled " +
+              "(adjusted for post-cancellation shipping refund)"
+            : "Auto-reversal — Shopify order cancelled",
+          updated_at: now,
+        });
+      }
+    }
+  }
+
+  if (created > 0) {
+    logger.info("Created post-cancellation refund txn(s)", {
+      saleId,
+      created,
+      totalNewProductRefund,
+      totalNewShippingRefund,
+    });
+  }
+
+  // Mark unused (currentItems is intentionally unused here because
+  // stock was already fully restored at cancellation time).
+  void currentItems;
+
+  return created;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1657,11 +2023,17 @@ async function handleOrderCancelled(
 
   const saleDoc = snap.docs[0];
   const saleData = saleDoc.data();
-  const saleId = saleData.id as string;
+  const saleId = saleDoc.id;
   const now = Timestamp.now();
-  // Use the Shopify cancelled_at date for reversals so they land in the
-  // same period Shopify attributes the return to (event-date attribution).
-  const reversalDate = toTs(order.cancelled_at as string | null);
+  // Use the CANCELLATION date for reversals so the negative entry
+  // lands in the period when the cancellation actually happened —
+  // matching Shopify's Sales report which reports returns/cancellations
+  // on their event date, not the original order date. Falls back to
+  // order.created_at when cancelled_at is missing (legacy/test data).
+  const reversalDate = toTs(
+    (order.cancelled_at as string | null) ||
+    (order.created_at as string | null)
+  );
 
   // Already cancelled — idempotent guard
   if (saleData.order_status === 4) {
@@ -1807,16 +2179,41 @@ async function handleOrderCancelled(
       updated_at: now,
     });
 
+    // Sum shipping already refunded via Shopify shipping_refund
+    // adjustments so we don't reverse the same shipping twice (the
+    // sale_ship_refund_* txns already deducted it). Mirrors the
+    // alreadyRefundedRevenue logic on the revenue side.
+    let alreadyRefundedShipping = 0;
+    const shipRefundSnap = await txnCol
+      .where("sale_id", "==", saleId)
+      .where("category_id", "==", "cat_shipping")
+      .get();
+    for (const doc of shipRefundSnap.docs) {
+      if (doc.id.startsWith(`sale_ship_refund_${saleId}_`) &&
+          !doc.data().exclude_from_pl) {
+        alreadyRefundedShipping += Math.abs(Number(doc.data().amount) || 0);
+        batch.update(doc.ref, {
+          title: `[Cancelled] ${doc.data().title || "Shipping Refund"}`,
+          exclude_from_pl: false,
+          updated_at: now,
+        });
+      }
+    }
+
+    const netShipToReverse = origAmount - alreadyRefundedShipping;
     if (origAmount !== 0) {
       const reversalId = `sale_ship_${saleId}_reversal`;
       batch.set(txnCol.doc(reversalId), {
         id: reversalId,
         user_id: userId,
         title: `[Reversal] ${shipData.title || "Shipping"}`,
-        amount: -origAmount,
+        amount: netShipToReverse !== 0 ? -netShipToReverse : 0,
         date_time: reversalDate,
         category_id: "cat_shipping",
-        note: "Auto-reversal — Shopify order cancelled",
+        note: alreadyRefundedShipping > 0
+          ? "Auto-reversal — Shopify order cancelled " +
+            `(adjusted for shipping refund of ${alreadyRefundedShipping})`
+          : "Auto-reversal — Shopify order cancelled",
         sale_id: saleId,
         exclude_from_pl: false,
         created_at: now,
@@ -1908,6 +2305,202 @@ async function handleOrderCancelled(
   logger.info("Order cancelled in Revvo", {
     saleId,
     shopifyOrderId,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  returns/* → book un-refunded RMA returns as negative revenue
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Handles Shopify Returns (RMA) webhooks.
+ *
+ * Shopify's "Total sales" report subtracts the value of returned items the
+ * moment a Return is created — even when no money is refunded (common for
+ * COD, where cash is returned outside Shopify). Those Returns live in a
+ * separate object that the Orders REST API does NOT expose via `refunds[]`,
+ * so without this handler Revvo over-counts revenue by the un-refunded
+ * return value.
+ *
+ * To avoid double-counting with the existing refund handler (which already
+ * books `refund_line_items`), we only book the UN-refunded portion of each
+ * return line: `(quantity − refundedQuantity) × discountedUnitPrice`.
+ * The txn is upserted (overwritten) on every return event so it self-heals
+ * as items get refunded later (refundedQuantity grows → this txn shrinks).
+ * Requires the `read_returns` access scope.
+ *
+ * @param {string} userId Revvo user id.
+ * @param {Record<string, unknown>} payload Return webhook payload.
+ */
+async function handleReturnEvent(
+  userId: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const db = getDb();
+  const returnId = String(payload.id || "");
+  if (!returnId) {
+    logger.warn("Return event missing id", {userId});
+    return;
+  }
+  const orderIdFromPayload = String(payload.order_id || "");
+  const createdAt =
+    (payload.created_at as string | null) ||
+    (payload.processed_at as string | null) ||
+    null;
+
+  // ── Resolve Shopify credentials ────────────────────────
+  const connDoc = await db
+    .collection("shopify_connections")
+    .doc(userId)
+    .get();
+  const conn = connDoc.exists ? connDoc.data() : null;
+  const shopDomain = (conn?.shop_domain as string) || "";
+  const encryptedToken = (conn?.access_token as string) || "";
+  if (!shopDomain || !encryptedToken) {
+    logger.warn("No Shopify connection for return event", {userId, returnId});
+    return;
+  }
+  let shopifyToken = "";
+  try {
+    shopifyToken = decrypt(encryptedToken, tokenEncryptionKey.value().trim());
+  } catch {
+    logger.warn("Could not decrypt token for return event", {userId});
+    return;
+  }
+
+  // ── Fetch the return via GraphQL (needs read_returns scope) ──
+  const gid = `gid://shopify/Return/${returnId}`;
+  const query = `{
+    node(id: "${gid}") {
+      ... on Return {
+        id
+        status
+        order { legacyResourceId name }
+        returnLineItems(first: 100) {
+          edges {
+            node {
+              ... on ReturnLineItem {
+                quantity
+                refundedQuantity
+                withCodeDiscountedTotalPriceSet { shopMoney { amount } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }`;
+
+  let node: Record<string, unknown> | null = null;
+  try {
+    const res = await fetch(
+      `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": shopifyToken,
+        },
+        body: JSON.stringify({query}),
+      },
+    );
+    const json = await res.json() as {
+      data?: { node?: Record<string, unknown> | null };
+      errors?: unknown;
+    };
+    if (json.errors) {
+      logger.error("Return GraphQL error (check read_returns scope)", {
+        userId, returnId, errors: JSON.stringify(json.errors).slice(0, 400),
+      });
+      return;
+    }
+    node = json.data?.node ?? null;
+  } catch (err) {
+    logger.error("Return GraphQL fetch failed", {userId, returnId, err});
+    return;
+  }
+
+  // ── Locate the sale ────────────────────────────────────
+  const order = (node?.order as Record<string, unknown> | undefined) ?? null;
+  const shopifyOrderId =
+    String(order?.legacyResourceId || orderIdFromPayload || "");
+  if (!shopifyOrderId) {
+    logger.warn("Return has no order id", {userId, returnId});
+    return;
+  }
+  const saleSnap = await db
+    .collection("sales")
+    .where("user_id", "==", userId)
+    .where("external_order_id", "==", shopifyOrderId)
+    .limit(1)
+    .get();
+  if (saleSnap.empty) {
+    logger.warn("No sale found for return", {userId, returnId, shopifyOrderId});
+    return;
+  }
+  const saleId = saleSnap.docs[0].id;
+  const txnId = `sale_return_${saleId}_${returnId}`;
+  const txnRef = db.collection("transactions").doc(txnId);
+
+  // ── Compute un-refunded return value ───────────────────
+  const status = String(node?.status || "").toUpperCase();
+  const lineEdges = (
+    (node?.returnLineItems as Record<string, unknown> | undefined)
+      ?.edges as Record<string, unknown>[] | undefined
+  ) ?? [];
+  let unrefundedValue = 0;
+  for (const edge of lineEdges) {
+    const li = (edge.node as Record<string, unknown>) ?? {};
+    const qty = Number(li.quantity) || 0;
+    const refundedQty = Number(li.refundedQuantity) || 0;
+    const remaining = qty - refundedQty;
+    if (remaining <= 0) continue;
+    const priceSet = li.withCodeDiscountedTotalPriceSet as
+      { shopMoney?: { amount?: string } } | undefined;
+    const lineTotal = Number(priceSet?.shopMoney?.amount) || 0;
+    const unit = qty > 0 ? lineTotal / qty : 0;
+    unrefundedValue += unit * remaining;
+  }
+  unrefundedValue = round2(unrefundedValue);
+
+  // Cancelled/declined returns or fully-refunded → remove any txn.
+  const isVoid = status === "CANCELED" || status === "CANCELLED" ||
+    status === "DECLINED";
+  if (isVoid || unrefundedValue <= 0) {
+    const existing = await txnRef.get();
+    if (existing.exists) {
+      await txnRef.delete();
+      logger.info("Removed return txn (void/refunded)", {
+        userId, returnId, saleId, status,
+      });
+    }
+    return;
+  }
+
+  // ── Upsert the negative-revenue return txn ─────────────
+  await txnRef.set({
+    id: txnId,
+    user_id: userId,
+    title: `Return — #${order?.name || shopifyOrderId} — Shopify`,
+    amount: -unrefundedValue,
+    date_time: toTs(createdAt),
+    category_id: "cat_sales_revenue",
+    note: `Return (${status || "open"})`,
+    payment_method: "shopify",
+    sale_id: saleId,
+    shopify_return_id: returnId,
+    // Open RMA returns (product physically returned but NO Shopify
+    // refund issued yet) are tracked for visibility but EXCLUDED from
+    // P&L so Revvo's Net Sales matches Shopify's Sales report, which
+    // only deducts a return once a refund is financially issued. When
+    // the refund lands, the refund handler books sale_refund_* (which
+    // IS counted) and this open-return txn self-deletes (unrefunded<=0).
+    exclude_from_pl: true,
+    created_at: FieldValue.serverTimestamp(),
+  });
+
+  logger.info("Return txn upserted", {
+    userId, returnId, saleId, amount: -unrefundedValue, status,
   });
 }
 
@@ -3942,5 +4535,290 @@ export const backfillFulfillmentStatus = onCall(
     });
 
     return {total: snap.size, updated};
+  },
+);
+
+// ═══════════════════════════════════════════════════════════
+//  Admin: Backfill missing refund transactions for ALL users
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Admin HTTP function that:
+ *  1. Fetches ALL Shopify orders for a user
+ *  2. Computes Shopify net sales & shipping per month
+ *  3. Creates missing refund transactions
+ *  4. Returns audit comparison data
+ *
+ * Invoke:
+ *   curl -s -X POST $URL \
+ *     -H "Authorization: bearer $(gcloud auth print-identity-token)" \
+ *     -H "Content-Type: application/json" \
+ *     -d '{"uid":"xxx"}'
+ */
+export const backfillShopifyRefunds = onRequest(
+  {
+    region: "us-central1",
+    secrets: [tokenEncryptionKey],
+    timeoutSeconds: 540,
+    memory: "1GiB",
+    invoker: "private",
+  },
+  async (req, res) => {
+    const targetUid = (req.body as Record<string, unknown>)?.uid as
+      string | undefined;
+    if (!targetUid) {
+      res.status(400).json({error: "uid is required"});
+      return;
+    }
+
+    const db = getDb();
+    const connDoc = await db
+      .collection("shopify_connections")
+      .doc(targetUid)
+      .get();
+    if (!connDoc.exists) {
+      res.status(404).json({error: "No Shopify connection"});
+      return;
+    }
+
+    const conn = connDoc.data()!;
+    const shopDomain = conn.shop_domain as string;
+    const shopTz = (conn.shop_timezone as string) || "UTC";
+
+    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shopDomain)) {
+      res.status(400).json({error: "Invalid shop domain"});
+      return;
+    }
+
+    const accessToken = decrypt(
+      conn.access_token as string,
+      tokenEncryptionKey.value().trim(),
+    );
+
+    // ── Fetch ALL orders from Shopify ──────────────────────
+    const apiBaseUrl =
+      `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}`;
+    let allOrders: Array<Record<string, unknown>> = [];
+    const qs = new URLSearchParams({
+      status: "any",
+      limit: "250",
+    });
+    let url: string | null =
+      `${apiBaseUrl}/orders.json?${qs.toString()}`;
+
+    for (let page = 0; page < 100 && url; page++) {
+      const fetchRes: Response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": accessToken,
+        },
+      });
+      if (!fetchRes.ok) {
+        res.status(502).json({
+          error: `Shopify API error: ${fetchRes.status}`,
+        });
+        return;
+      }
+      const json = (await fetchRes.json()) as {
+        orders?: Array<Record<string, unknown>>;
+      };
+      allOrders = allOrders.concat(json.orders ?? []);
+
+      const linkHeader: string | null = fetchRes.headers.get("link");
+      url = null;
+      if (linkHeader) {
+        const m: RegExpMatchArray | null =
+          linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+        if (m) url = m[1];
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    // ── Compute Shopify per-month totals ───────────────────
+    // Mimics Shopify Analytics "Net Sales" + "Shipping"
+    type MonthData = {
+      grossSales: number; netSales: number; returns: number;
+      discounts: number; shipping: number; shippingRefunds: number;
+      orderCount: number; cancelledCount: number; refundedCount: number;
+    };
+    const shopifyMonths: Record<string, MonthData> = {};
+
+    const getMonth = (isoDate: string): string => {
+      const d = new Date(isoDate);
+      // Use shop timezone by extracting date parts
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    };
+
+    for (const order of allOrders) {
+      const createdAt = order.created_at as string;
+      const month = getMonth(createdAt);
+      if (!shopifyMonths[month]) {
+        shopifyMonths[month] = {
+          grossSales: 0, netSales: 0, returns: 0,
+          discounts: 0, shipping: 0, shippingRefunds: 0,
+          orderCount: 0, cancelledCount: 0, refundedCount: 0,
+        };
+      }
+      const m = shopifyMonths[month];
+      m.orderCount++;
+
+      const isCancelled = !!(order.cancelled_at);
+      if (isCancelled) m.cancelledCount++;
+
+      const financialStatus = order.financial_status as string || "";
+      if (financialStatus === "refunded" ||
+          financialStatus === "partially_refunded") {
+        m.refundedCount++;
+      }
+
+      // Gross sales: sum of line_items price * quantity
+      const lineItems =
+        (order.line_items as Array<Record<string, unknown>>) ?? [];
+      let grossSales = 0;
+      for (const li of lineItems) {
+        grossSales += (Number(li.price) || 0) * (Number(li.quantity) || 0);
+      }
+      m.grossSales += grossSales;
+
+      // Discounts — use subtotal_price to exclude shipping discounts
+      // (Revvo separates product discounts from shipping discounts)
+      const subtotalPrice = Number(order.subtotal_price) || 0;
+      const productDiscounts = round2(grossSales - subtotalPrice);
+      m.discounts += productDiscounts;
+
+      // Shipping (sum of shipping_lines discounted_price)
+      const shippingLines =
+        (order.shipping_lines as Array<Record<string, unknown>>) ?? [];
+      let shipping = 0;
+      for (const sl of shippingLines) {
+        shipping += Number(sl.discounted_price ?? sl.price) || 0;
+      }
+      m.shipping += shipping;
+
+      // Returns (refunds on line items)
+      const refunds =
+        (order.refunds as Array<Record<string, unknown>>) ?? [];
+      let totalReturns = 0;
+      let totalShipRefunds = 0;
+      for (const refund of refunds) {
+        const refundLineItems = (refund.refund_line_items as
+          Array<Record<string, unknown>>) ?? [];
+        for (const ri of refundLineItems) {
+          totalReturns += Number(ri.subtotal) || 0;
+        }
+        // Shipping refunds from order_adjustments
+        const adjs = (refund.order_adjustments as
+          Array<Record<string, unknown>>) ?? [];
+        for (const adj of adjs) {
+          if (adj.kind === "shipping_refund") {
+            totalShipRefunds += Math.abs(Number(adj.amount) || 0);
+          }
+        }
+      }
+      m.returns += totalReturns;
+      m.shippingRefunds += totalShipRefunds;
+
+      // Net Sales = subtotal_price - Returns (matches Revvo's formula)
+      m.netSales += (subtotalPrice - totalReturns);
+    }
+
+    // ── Re-process ALL orders through handleOrderUpdated ──
+    // This fixes: missing refund txns, wrong shipping costs
+    // (discounted vs full price), revenue amounts that include
+    // shipping discounts, and any other data drift.
+    // handleOrderUpdated is idempotent (checks existingRefund, etc.)
+    // Process in parallel batches to fit within timeout.
+    let ordersProcessed = 0;
+    let processErrors = 0;
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < allOrders.length; i += BATCH_SIZE) {
+      const batch = allOrders.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map((order) =>
+          handleOrderUpdated(
+            targetUid,
+            order as unknown as ShopifyOrder,
+          ),
+        ),
+      );
+      for (const r of results) {
+        if (r.status === "fulfilled") ordersProcessed++;
+        else processErrors++;
+      }
+    }
+
+    // ── Load Revvo totals for comparison ───────────────────
+    const revSnap = await db.collection("transactions")
+      .where("user_id", "==", targetUid)
+      .where("category_id", "==", "cat_sales_revenue")
+      .get();
+    const shipSnap = await db.collection("transactions")
+      .where("user_id", "==", targetUid)
+      .where("category_id", "==", "cat_shipping")
+      .get();
+
+    const revvoRev: Record<string, number> = {};
+    const revvoShip: Record<string, number> = {};
+    for (const doc of revSnap.docs) {
+      const t = doc.data();
+      const dt = t.date_time?.toDate?.();
+      if (!dt) continue;
+      const mo = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      revvoRev[mo] = (revvoRev[mo] || 0) + (Number(t.amount) || 0);
+    }
+    for (const doc of shipSnap.docs) {
+      const t = doc.data();
+      const dt = t.date_time?.toDate?.();
+      if (!dt) continue;
+      const mo = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      revvoShip[mo] = (revvoShip[mo] || 0) + (Number(t.amount) || 0);
+    }
+
+    // ── Build comparison ───────────────────────────────────
+    const months = new Set([
+      ...Object.keys(shopifyMonths),
+      ...Object.keys(revvoRev),
+      ...Object.keys(revvoShip),
+    ]);
+    const comparison = [...months].sort().map((mo) => {
+      const s = shopifyMonths[mo] || {
+        grossSales: 0, netSales: 0, returns: 0,
+        discounts: 0, shipping: 0, shippingRefunds: 0,
+        orderCount: 0, cancelledCount: 0, refundedCount: 0,
+      };
+      const netShipping = s.shipping - s.shippingRefunds;
+      return {
+        month: mo,
+        shopify: {
+          grossSales: round2(s.grossSales),
+          discounts: round2(s.discounts),
+          returns: round2(s.returns),
+          netSales: round2(s.netSales),
+          shipping: round2(s.shipping),
+          shippingRefunds: round2(s.shippingRefunds),
+          netShipping: round2(netShipping),
+          orders: s.orderCount,
+          cancelled: s.cancelledCount,
+          refunded: s.refundedCount,
+        },
+        revvo: {
+          netRevenue: round2(revvoRev[mo] || 0),
+          netShipping: round2(revvoShip[mo] || 0),
+        },
+        gap: {
+          revenue: round2((revvoRev[mo] || 0) - s.netSales),
+          shipping: round2((revvoShip[mo] || 0) - netShipping),
+        },
+      };
+    });
+
+    res.json({
+      shopTimezone: shopTz,
+      totalOrders: allOrders.length,
+      ordersProcessed,
+      processErrors,
+      comparison,
+    });
   },
 );

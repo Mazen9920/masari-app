@@ -73,7 +73,7 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
     // Refund transactions (negative cat_sales_revenue) reduce revenue, not add to expenses.
     // Revenue: signed sales_rev + signed shipping + other income.
     // Exclude cat_cogs (it's a cost, not revenue).
-    double _revenue(List<dynamic> txns) {
+    double calcRevenue(List<dynamic> txns) {
       double r = 0;
       for (final t in txns) {
         if (t.categoryId == 'cat_cogs') continue;
@@ -86,7 +86,7 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
       return r;
     }
     // Expenses: exclude sales/shipping reversals (reduce revenue) and handle COGS reversals.
-    double _expenses(List<dynamic> txns) {
+    double calcExpenses(List<dynamic> txns) {
       double e = 0;
       for (final t in txns) {
         if (t.categoryId == 'cat_cogs') {
@@ -99,10 +99,10 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
       }
       return e;
     }
-    final curRevenue = _revenue(curTxns);
-    final prevRevenue = _revenue(prevTxns);
-    final curExpenses = _expenses(curTxns);
-    final prevExpenses = _expenses(prevTxns);
+    final curRevenue = calcRevenue(curTxns);
+    final prevRevenue = calcRevenue(prevTxns);
+    final curExpenses = calcExpenses(curTxns);
+    final prevExpenses = calcExpenses(prevTxns);
 
     final vsLabel = ds.period.localizedVsLabel(l10n);
 

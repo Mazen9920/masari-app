@@ -260,12 +260,14 @@ class FirestoreTransactionRepository implements TransactionRepository {
   Future<Result<List<Transaction>>> getTransactionsInRange({
     required DateTime start,
     required DateTime end,
+    bool forceServer = false,
   }) {
     final key = '${start.millisecondsSinceEpoch}_${end.millisecondsSinceEpoch}';
+    if (forceServer) _rangeCache.remove(key);
     final cached = _rangeCache[key];
     if (cached != null) return cached;
 
-    final future = _doGetTransactionsInRange(start, end);
+    final future = _doGetTransactionsInRange(start, end, forceServer: forceServer);
     _rangeCache[key] = future;
     // Evict on failure so the next call retries
     future.then((r) { if (!r.isSuccess) _rangeCache.remove(key); });
@@ -273,7 +275,7 @@ class FirestoreTransactionRepository implements TransactionRepository {
   }
 
   Future<Result<List<Transaction>>> _doGetTransactionsInRange(
-      DateTime start, DateTime end) async {
+      DateTime start, DateTime end, {bool forceServer = false}) async {
     try {
       final startTs = Timestamp.fromDate(start);
       final endTs = Timestamp.fromDate(end);
@@ -287,11 +289,15 @@ class FirestoreTransactionRepository implements TransactionRepository {
       // Try disk cache first for instant startup / period switching,
       // then update from server in the background.
       QuerySnapshot<Map<String, dynamic>> snapshot;
-      try {
-        snapshot = await query.get(const GetOptions(source: Source.cache));
-      } catch (_) {
-        // Cache miss — fall through to server.
-        snapshot = await query.get();
+      if (forceServer) {
+        snapshot = await query.get(const GetOptions(source: Source.server));
+      } else {
+        try {
+          snapshot = await query.get(const GetOptions(source: Source.cache));
+        } catch (_) {
+          // Cache miss — fall through to server.
+          snapshot = await query.get();
+        }
       }
 
       final transactions = _parseSnapshots(snapshot);

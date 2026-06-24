@@ -33,6 +33,7 @@ const tokenEncryptionKey = defineSecret("SHOPIFY_TOKEN_ENCRYPTION_KEY");
 // ── Constants ──────────────────────────────────────────────
 
 const BOSTA_API_BASE = "https://app.bosta.co/api/v2";
+const BOSTA_LOGIN_URL = "https://app.bosta.co/api/v0/users/login";
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 const SEARCH_PAGE_LIMIT = 50;
@@ -139,6 +140,8 @@ interface SettlementData {
   estimatedFee: number;
   /** YYYY-MM-DD of the Bosta createdAt (fulfillment date), for estimate grouping. */
   fulfillmentDateKey: string;
+  /** Next cashout date from wallet.cashCycle (ISO string or null). */
+  nextCashoutDate: string | null;
 }
 
 /** Info collected during Phase 1 catalog for writing estimate transactions. */
@@ -153,6 +156,49 @@ interface EstimateEntry {
 interface SalesLookup {
   byOrderNumber: Map<string, string>; // shopify_order_number → sale_id
   byNotes: Map<string, string>;       // notes → sale_id
+}
+
+/**
+ * Extracts a sale_id from a businessReference using the salesLookup.
+ * Centralizes the 3-strategy matching logic used in Phase 1, Phase 2,
+ * and the AR summary computation.
+ *
+ * Returns { saleId, orderLabel } or null if no match.
+ */
+function matchSaleFromBusinessReference(
+  businessReference: string | null | undefined,
+  salesLookup: SalesLookup,
+): {saleId: string; orderLabel: string} | null {
+  if (!businessReference) return null;
+
+  let rawRef = businessReference.trim();
+  const colonHashIdx = rawRef.indexOf(":#");
+  if (colonHashIdx >= 0) {
+    rawRef = rawRef.substring(colonHashIdx + 2);
+  } else {
+    rawRef = rawRef.replace(/^#/, "");
+  }
+  if (!rawRef) return null;
+
+  // Strategy 1: exact match on full reference
+  let saleId = salesLookup.byOrderNumber.get(rawRef) ?? null;
+  if (saleId) return {saleId, orderLabel: `#${rawRef}`};
+
+  // Strategy 2: strip 1-4 digit prefix
+  if (rawRef.length > 4) {
+    for (let prefixLen = 1; prefixLen <= 4; prefixLen++) {
+      const stripped = rawRef.substring(prefixLen);
+      if (stripped.length < 3) break;
+      saleId = salesLookup.byOrderNumber.get(stripped) ?? null;
+      if (saleId) return {saleId, orderLabel: `#${stripped}`};
+    }
+  }
+
+  // Strategy 3: fallback — match by notes field
+  saleId = salesLookup.byNotes.get(`#${rawRef} — Shopify`) ?? null;
+  if (saleId) return {saleId, orderLabel: `#${rawRef}`};
+
+  return null;
 }
 
 // ── Pre-load helpers (eliminates per-delivery Firestore queries) ──
@@ -267,6 +313,538 @@ function bostaHeaders(apiKey: string): Record<string, string> {
  */
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Compute sale total from Firestore data (mirrors Dart Sale.total getter).
+ * total = Σ(item.quantity * item.unit_price) + tax - discount + shipping
+ * The 'total' field is NOT stored in Firestore — it's a Dart computed getter.
+ */
+function computeSaleTotal(
+  saleData: FirebaseFirestore.DocumentData,
+): number {
+  const items = saleData.items as Array<{quantity?: number; unit_price?: number}> | undefined;
+  if (!items || !Array.isArray(items)) return 0;
+  const subtotal = items.reduce(
+    (s, item) => s + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
+    0,
+  );
+  const tax = Number(saleData.tax_amount) || 0;
+  const discount = Number(saleData.discount_amount) || 0;
+  const shipping = Number(saleData.shipping_cost) || 0;
+  return round2(subtotal + tax - discount + shipping);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Bosta Dashboard Token Management
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Logs in to the Bosta Dashboard API using encrypted credentials
+ * stored in the user's `bosta_connections` document.
+ *
+ * Returns the JWT token (Bearer-prefixed, 14-day expiry).
+ * On auth failure, sets `dashboard_status: "auth_failed"` on the
+ * connection doc and throws.
+ *
+ * @param {string} userId Firestore user ID.
+ * @param {string} encKey Encryption key for AES-256-GCM.
+ * @return {Promise<string>} The Bosta dashboard JWT token.
+ */
+export async function getBostaDashboardToken(
+  userId: string,
+  encKey: string,
+): Promise<string> {
+  const db = getDb();
+  const connRef = db.collection("bosta_connections").doc(userId);
+  const connDoc = await connRef.get();
+
+  if (!connDoc.exists) {
+    throw new Error("No Bosta connection found for user");
+  }
+
+  const conn = connDoc.data()!;
+  const emailEnc = conn.dashboard_email_encrypted as string | undefined;
+  const passEnc = conn.dashboard_password_encrypted as string | undefined;
+
+  if (!emailEnc || !passEnc) {
+    throw new Error("No dashboard credentials stored for user");
+  }
+
+  const email = decrypt(emailEnc, encKey);
+  const password = decrypt(passEnc, encKey);
+
+  // Call Bosta login API
+  const res = await fetch(BOSTA_LOGIN_URL, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({email, password}),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    logger.error("Bosta dashboard login failed", {
+      userId, status: res.status, body: body.substring(0, 200),
+    });
+
+    // Mark auth failure so Flutter can show a warning banner
+    await connRef.update({
+      dashboard_status: "auth_failed",
+      dashboard_status_updated_at: FieldValue.serverTimestamp(),
+    });
+
+    throw new Error(
+      `Bosta dashboard login failed (${res.status}): ${body.substring(0, 100)}`
+    );
+  }
+
+  const json = await res.json() as {
+    data?: {token?: string; refreshToken?: string};
+    token?: string;
+  };
+
+  // Bosta wraps response differently — handle both shapes
+  const token = json.data?.token ?? json.token;
+  if (!token || typeof token !== "string") {
+    throw new Error("Bosta login succeeded but no token in response");
+  }
+
+  // Mark dashboard as active on successful login
+  await connRef.update({
+    dashboard_status: "active",
+    dashboard_status_updated_at: FieldValue.serverTimestamp(),
+  });
+
+  logger.info("Bosta dashboard login successful", {userId});
+  return token;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Cashout Sync Engine — fetch, store, match, summarize
+// ═══════════════════════════════════════════════════════════
+
+/** Minimum time between cashout syncs (ms). */
+const CASHOUT_SYNC_THROTTLE_MS = 5 * 60 * 1000; // 5 minutes
+
+/** Bosta Dashboard API base (v2 for wallet endpoints). */
+const BOSTA_DASHBOARD_API = "https://app.bosta.co/api/v2";
+
+/** Shape of a single cashout from the Bosta /wallet/cashouts API. */
+interface BostaCashout {
+  transaction_id: string;
+  amount: number;
+  transaction_date: string; // ISO-8601 or YYYY-MM-DD
+}
+
+/** Result returned by syncCashoutsForUser. */
+interface CashoutSyncResult {
+  cashoutsFetched: number;
+  cashoutsStored: number;
+  shipmentsMatched: number;
+  cfTotalCashouts: number;
+  cfPendingAr: number;
+  cfPendingArCount: number;
+  cfLastCashoutDate: string | null;
+}
+
+/**
+ * Fetches cashouts from the Bosta Dashboard API, stores them in
+ * `bosta_cashouts/{transaction_id}`, matches pending shipments,
+ * and updates the pre-computed summary on `bosta_connections`.
+ *
+ * @param userId - Firestore user ID.
+ * @param dashboardToken - Bosta Dashboard JWT token (Bearer-prefixed).
+ * @param sinceDate - ISO date string to fetch from (inclusive).
+ *   If null, fetches from 2025-01-01.
+ * @return Summary of what was synced.
+ */
+async function syncCashoutsForUser(
+  userId: string,
+  dashboardToken: string,
+  sinceDate: string | null,
+): Promise<CashoutSyncResult> {
+  const db = getDb();
+  const startDate = sinceDate || "2025-01-01";
+  const endDate = new Date().toISOString().slice(0, 10);
+
+  // ── Step 1: Fetch ALL cashouts (paginated) from Bosta Dashboard API ──
+
+  const allCashouts: BostaCashout[] = [];
+  let page = 1;
+  let totalPages = 1; // Will be updated from first response.
+
+  while (page <= totalPages) {
+    const url =
+      `${BOSTA_DASHBOARD_API}/wallet/cashouts?start_date=${startDate}&end_date=${endDate}&page=${page}`;
+
+    const cashoutRes = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": dashboardToken,
+      },
+    });
+
+    if (!cashoutRes.ok) {
+      const body = await cashoutRes.text().catch(() => "");
+      throw new Error(
+        `Cashout fetch failed (${cashoutRes.status}): ${body.substring(0, 200)}`
+      );
+    }
+
+    const cashoutJson = await cashoutRes.json() as ApiResult;
+
+    // Extract the list of cashouts from the response.
+    let pageCashouts: BostaCashout[] = [];
+    if (cashoutJson.data && Array.isArray((cashoutJson.data as Record<string, unknown>).list)) {
+      const dataObj = cashoutJson.data as Record<string, unknown>;
+      pageCashouts = dataObj.list as unknown as BostaCashout[];
+      // Update total pages from response metadata.
+      if (typeof dataObj.pages === "number") {
+        totalPages = dataObj.pages;
+      }
+    } else if (Array.isArray(cashoutJson)) {
+      pageCashouts = cashoutJson as unknown as BostaCashout[];
+      totalPages = page; // No pagination metadata — stop after this.
+    } else if (Array.isArray(cashoutJson.data)) {
+      pageCashouts = cashoutJson.data as unknown as BostaCashout[];
+      totalPages = page;
+    } else if (cashoutJson.cashouts && Array.isArray(cashoutJson.cashouts)) {
+      pageCashouts = cashoutJson.cashouts as unknown as BostaCashout[];
+      totalPages = page;
+    } else {
+      logger.warn("Unexpected cashout response shape", {
+        userId, keys: Object.keys(cashoutJson), page,
+      });
+      break;
+    }
+
+    allCashouts.push(...pageCashouts);
+
+    // If this page returned no items, stop.
+    if (pageCashouts.length === 0) break;
+    page++;
+  }
+
+  logger.info("Fetched cashouts from Bosta", {
+    userId, count: allCashouts.length, pages: page - 1, startDate, endDate,
+  });
+
+  // ── Step 2: Store cashouts (idempotent — doc ID = transaction_id) ──
+
+  let stored = 0;
+  // Firestore batch limit is 500 ops; chunk if needed.
+  const BATCH_LIMIT = 499;
+  let batch = db.batch();
+  let batchOps = 0;
+
+  for (const c of allCashouts) {
+    if (!c.transaction_id) continue;
+
+    const docRef = db.collection("bosta_cashouts").doc(c.transaction_id);
+    batch.set(docRef, {
+      user_id: userId,
+      transaction_id: c.transaction_id,
+      amount: Number(c.amount) || 0,
+      transaction_date: c.transaction_date || null,
+      synced_at: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    stored++;
+    batchOps++;
+
+    if (batchOps >= BATCH_LIMIT) {
+      await batch.commit();
+      batch = db.batch();
+      batchOps = 0;
+    }
+  }
+
+  if (batchOps > 0) {
+    await batch.commit();
+  }
+
+  logger.info("Stored cashouts", {userId, stored});
+
+  // ── Step 3: Match shipments to cashouts ──────────────────
+
+  const shipmentsMatched = await matchShipmentsToCashouts(db, userId);
+
+  // ── Step 4: Compute and save summary ─────────────────────
+
+  const summary = await computeAndSaveCashoutSummary(db, userId);
+
+  return {
+    cashoutsFetched: allCashouts.length,
+    cashoutsStored: stored,
+    shipmentsMatched,
+    ...summary,
+  };
+}
+
+/**
+ * Matches pending shipments to cashouts by date range.
+ *
+ * For shipments with deposited_at set (settlement done in cashCycle)
+ * and cashout_status not yet "paid": find the first cashout whose
+ * transaction_date >= deposited_at. Mark as paid.
+ *
+ * This uses range matching (Case 4): deposited_at indicates Bosta
+ * internally settled the order, and the next cashout after that date
+ * is when the money actually hit the bank.
+ */
+async function matchShipmentsToCashouts(
+  db: FirebaseFirestore.Firestore,
+  userId: string,
+): Promise<number> {
+  // Load all user's cashouts ordered by date
+  const cashoutsSnap = await db.collection("bosta_cashouts")
+    .where("user_id", "==", userId)
+    .orderBy("transaction_date", "asc")
+    .get();
+
+  if (cashoutsSnap.empty) return 0;
+
+  const cashouts = cashoutsSnap.docs.map((d) => ({
+    id: d.id,
+    date: d.data().transaction_date as string,
+  }));
+
+  // Find shipments that are settled but not yet assigned to a cashout
+  const pendingSnap = await db.collection("bosta_shipments")
+    .where("user_id", "==", userId)
+    .where("deposited_at", "!=", null)
+    .get();
+
+  let matched = 0;
+  let batch = db.batch();
+  let batchOps = 0;
+
+  for (const shipDoc of pendingSnap.docs) {
+    const data = shipDoc.data();
+
+    // Skip if already paid
+    if (data.cashout_status === "paid") continue;
+
+    const depositedAt = data.deposited_at?.toDate?.()
+      ? (data.deposited_at.toDate() as Date)
+      : null;
+    if (!depositedAt) continue;
+
+    const depositDateStr = depositedAt.toISOString().slice(0, 10);
+
+    // Find earliest cashout on or after the deposit date
+    const matchingCashout = cashouts.find((c) => c.date >= depositDateStr);
+
+    if (matchingCashout) {
+      batch.update(shipDoc.ref, {
+        cashout_status: "paid",
+        cashout_id: matchingCashout.id,
+      });
+      matched++;
+      batchOps++;
+
+      if (batchOps >= 490) {
+        await batch.commit();
+        batch = db.batch();
+        batchOps = 0;
+      }
+    }
+  }
+
+  if (batchOps > 0) {
+    await batch.commit();
+  }
+
+  logger.info("Matched shipments to cashouts", {userId, matched});
+  return matched;
+}
+
+/**
+ * Computes the pre-computed summary fields and atomically
+ * updates `bosta_connections/{userId}`.
+ *
+ * Summary fields:
+ *   cf_total_cashouts — sum of ALL cashout amounts
+ *   cf_pending_ar — sum of sale.total for COD orders not yet cashed out
+ *   cf_pending_ar_count — count of such orders
+ *   cf_last_cashout_date — most recent cashout date
+ */
+async function computeAndSaveCashoutSummary(
+  db: FirebaseFirestore.Firestore,
+  userId: string,
+): Promise<{
+  cfTotalCashouts: number;
+  cfPendingAr: number;
+  cfPendingArCount: number;
+  cfLastCashoutDate: string | null;
+}> {
+  // ── Total cashouts ───────────────────────────────────────
+
+  const cashoutsSnap = await db.collection("bosta_cashouts")
+    .where("user_id", "==", userId)
+    .get();
+
+  let cfTotalCashouts = 0;
+  let cfLastCashoutDate: string | null = null;
+
+  for (const doc of cashoutsSnap.docs) {
+    const data = doc.data();
+    cfTotalCashouts += Number(data.amount) || 0;
+    const txnDate = data.transaction_date as string | null;
+    if (txnDate && (!cfLastCashoutDate || txnDate > cfLastCashoutDate)) {
+      cfLastCashoutDate = txnDate;
+    }
+  }
+
+  cfTotalCashouts = round2(cfTotalCashouts);
+
+  // ── Pending AR: COD sales not yet cashed out ──────────────
+  //
+  // Approach: start from SALES (the correct direction).
+  // 1. Get all COD sales for this user (payment_method == "Cash on Delivery (COD)")
+  // 2. Filter: non-cancelled, after cutoff, total > 0
+  // 3. For each, check if it has a "paid" bosta_shipment → NOT AR
+  // 4. Check if it has an RTO/returned shipment → NOT AR
+  // 5. Everything else → AR
+
+  // ── Read AR cutoff date from connection doc ────────────
+  const connSnap = await db.collection("bosta_connections").doc(userId).get();
+  const connData = connSnap.data();
+  const arCutoffDate: Date | null = connData?.cf_ar_cutoff_date
+    ? (connData.cf_ar_cutoff_date.toDate
+      ? connData.cf_ar_cutoff_date.toDate() as Date
+      : new Date(String(connData.cf_ar_cutoff_date)))
+    : null;
+
+  // ── Build shipment lookup: saleId → best status ──────────
+  const allShipmentsSnap = await db.collection("bosta_shipments")
+    .where("user_id", "==", userId)
+    .get();
+
+  // Map saleId → { hasPaid: bool, allRto: bool }
+  // Also collect RTO shipment tracking numbers for re-ship detection.
+  // Secondary: trackingNumber → shipment info (for unmatched shipments).
+  const saleShipmentMap: Record<string, {hasPaid: boolean; allRto: boolean}> = {};
+  const rtoTrackingBySale: Record<string, string[]> = {};
+  const trackingShipmentMap: Record<string, {hasPaid: boolean; allRto: boolean; state: number}> = {};
+
+  for (const doc of allShipmentsSnap.docs) {
+    const data = doc.data();
+    const state = Number(data.state) || 0;
+    const isRtoOrReturned = state === 60 || state === 46;
+    const isPaid = data.cashout_status === "paid";
+    const tracking = (data.tracking_number ?? "").toString();
+
+    // Primary lookup: by sale_id
+    const saleId = data.sale_id as string | undefined;
+    if (saleId) {
+      if (!saleShipmentMap[saleId]) {
+        saleShipmentMap[saleId] = {hasPaid: false, allRto: true};
+      }
+      if (isPaid) saleShipmentMap[saleId].hasPaid = true;
+      if (!isRtoOrReturned) saleShipmentMap[saleId].allRto = false;
+
+      // Collect tracking numbers of RTO/returned shipments for re-ship check
+      if (isRtoOrReturned && tracking) {
+        if (!rtoTrackingBySale[saleId]) rtoTrackingBySale[saleId] = [];
+        rtoTrackingBySale[saleId].push(tracking);
+      }
+    }
+
+    // Secondary lookup: by tracking_number (for unmatched shipments)
+    if (tracking) {
+      const prev = trackingShipmentMap[tracking];
+      if (!prev) {
+        trackingShipmentMap[tracking] = {hasPaid: isPaid, allRto: isRtoOrReturned, state};
+      } else {
+        trackingShipmentMap[tracking] = {
+          hasPaid: prev.hasPaid || isPaid,
+          allRto: prev.allRto && isRtoOrReturned,
+          state: isRtoOrReturned ? prev.state : state,
+        };
+      }
+    }
+  }
+
+  // ── Query COD sales ──────────────────────────────────────
+  const codSalesSnap = await db.collection("sales")
+    .where("user_id", "==", userId)
+    .where("payment_method", "==", "Cash on Delivery (COD)")
+    .get();
+
+  let cfPendingAr = 0;
+  let cfPendingArCount = 0;
+
+  for (const saleDoc of codSalesSnap.docs) {
+    const data = saleDoc.data();
+
+    // order_status is numeric: 4 = cancelled
+    const orderStatus = Number(data.order_status) || 0;
+    if (orderStatus === 4) continue; // cancelled
+
+    // AR cutoff: exclude sales before cutoff date
+    if (arCutoffDate) {
+      const saleDate: Date | null = data.date
+        ? (data.date.toDate ? data.date.toDate() as Date : new Date(String(data.date)))
+        : null;
+      if (saleDate && saleDate < arCutoffDate) continue;
+    }
+
+    // Compute total from items (not stored in Firestore)
+    const saleTotal = computeSaleTotal(data);
+    if (saleTotal <= 0) continue; // Case 17
+
+    // Check shipment status for this sale (primary: by sale_id)
+    let shipInfo = saleShipmentMap[saleDoc.id] ?? null;
+
+    // Fallback: if no shipment matched by sale_id, check by tracking_number
+    if (!shipInfo) {
+      const saleTracking = (data.tracking_number ?? "").toString();
+      if (saleTracking) {
+        const trackInfo = trackingShipmentMap[saleTracking];
+        if (trackInfo) {
+          shipInfo = {hasPaid: trackInfo.hasPaid, allRto: trackInfo.allRto};
+        }
+      }
+    }
+
+    if (shipInfo) {
+      if (shipInfo.hasPaid) continue; // Cashout received → NOT AR
+      if (shipInfo.allRto) {
+        // Re-ship check: if the sale has a different tracking number than
+        // all its RTO shipments, it was re-shipped and is still AR.
+        const saleTracking = (data.tracking_number ?? "").toString();
+        const rtoTrackings = rtoTrackingBySale[saleDoc.id] ?? [];
+        const isReshipped = saleTracking !== "" &&
+          rtoTrackings.length > 0 &&
+          rtoTrackings.every((rt) => rt !== saleTracking);
+        if (!isReshipped) continue; // Genuinely RTO → NOT AR
+      }
+    }
+    // No shipment at all → AR (Case 1: no shipment = AR by default)
+
+    cfPendingAr += saleTotal;
+    cfPendingArCount++;
+  }
+
+  cfPendingAr = round2(cfPendingAr);
+
+  // ── Write summary to connection doc ──────────────────────
+
+  const connRef = db.collection("bosta_connections").doc(userId);
+  await connRef.update({
+    cf_total_cashouts: cfTotalCashouts,
+    cf_pending_ar: cfPendingAr,
+    cf_pending_ar_count: cfPendingArCount,
+    cf_last_cashout_date: cfLastCashoutDate,
+    cf_last_cashout_sync_at: FieldValue.serverTimestamp(),
+  });
+
+  logger.info("Cashout summary updated", {
+    userId, cfTotalCashouts, cfPendingAr, cfPendingArCount, cfLastCashoutDate,
+  });
+
+  return {cfTotalCashouts, cfPendingAr, cfPendingArCount, cfLastCashoutDate};
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -552,6 +1130,12 @@ async function syncForUser(
       const fulfillmentDate = entry.createdAt
         ? new Date(entry.createdAt).toISOString().slice(0, 10)
         : new Date().toISOString().slice(0, 10);
+
+      // Try to match sale at catalog time (Phase 1 early matching)
+      const earlyMatch = matchSaleFromBusinessReference(
+        entry.businessReference, salesLookup,
+      );
+
       batch.set(docRefs[docIds.indexOf(docId)], {
         user_id: userId,
         bosta_delivery_id: entry.bostaDeliveryId,
@@ -567,14 +1151,17 @@ async function syncForUser(
         cod: entry.cod,
         expense_recorded: false,
         expense_transaction_id: null,
-        matched: false,
-        sale_id: null,
+        matched: earlyMatch !== null,
+        sale_id: earlyMatch?.saleId ?? null,
         estimated_fee: estimatedFeePerShipment,
         bosta_created_at: entry.createdAt
           ? Timestamp.fromDate(new Date(entry.createdAt))
           : FieldValue.serverTimestamp(),
         estimate_recorded: false,
         estimate_transaction_id: null,
+        cashout_status: "pending",
+        cashout_id: null,
+        next_cashout_date: null,
         synced_at: FieldValue.serverTimestamp(),
       }, {merge: true});
 
@@ -886,6 +1473,10 @@ async function fetchDeliverySettlement(
 
   if (!cashCycle || bostaFees <= 0) {
     // No settlement yet — update with latest state info + mark check time
+    // Still try to match sale so AR dashboard can show correct shipment status
+    const noSettleMatch = matchSaleFromBusinessReference(
+      businessReference, salesLookup,
+    );
     await shipmentRef.set({
       user_id: userId,
       bosta_delivery_id: detailId,
@@ -901,8 +1492,11 @@ async function fetchDeliverySettlement(
       cod: cod,
       expense_recorded: false,
       expense_transaction_id: null,
-      matched: false,
-      sale_id: null,
+      matched: noSettleMatch !== null,
+      sale_id: noSettleMatch?.saleId ?? null,
+      cashout_status: "pending",
+      cashout_id: null,
+      next_cashout_date: null,
       last_settlement_check: FieldValue.serverTimestamp(),
       synced_at: FieldValue.serverTimestamp(),
     }, {merge: true});
@@ -922,45 +1516,19 @@ async function fetchDeliverySettlement(
     ? new Date(cashCycle.deposited_at as string)
     : new Date();
   const depositedAt = Timestamp.fromDate(depositDate);
+
+  // Extract next_cashout_date if available from cashCycle
+  const nextCashoutDate = cashCycle.next_cashout_date
+    ? String(cashCycle.next_cashout_date)
+    : null;
   const depositDateKey = depositDate.toISOString().slice(0, 10); // YYYY-MM-DD
 
   // ── Try to match to Revvo sale (in-memory lookup) ────
-  let saleId: string | null = null;
-  let orderLabel = "";
-
-  if (businessReference) {
-    let rawRef = businessReference.trim();
-    const colonHashIdx = rawRef.indexOf(":#");
-    if (colonHashIdx >= 0) {
-      rawRef = rawRef.substring(colonHashIdx + 2);
-    } else {
-      rawRef = rawRef.replace(/^#/, "");
-    }
-
-    // Strategy 1: exact match on full reference
-    saleId = salesLookup.byOrderNumber.get(rawRef) ?? null;
-    if (saleId) orderLabel = `#${rawRef}`;
-
-    // Strategy 2: strip 1-4 digit prefix
-    if (!saleId && rawRef.length > 4) {
-      for (let prefixLen = 1; prefixLen <= 4; prefixLen++) {
-        const stripped = rawRef.substring(prefixLen);
-        if (stripped.length < 3) break;
-        saleId = salesLookup.byOrderNumber.get(stripped) ?? null;
-        if (saleId) {
-          orderLabel = `#${stripped}`;
-          break;
-        }
-      }
-    }
-
-    // Strategy 3: fallback — match by notes field
-    if (!saleId) {
-      saleId = salesLookup.byNotes.get(`#${rawRef} — Shopify`) ?? null;
-      if (saleId) orderLabel = `#${rawRef}`;
-    }
-  }
-
+  const saleMatch = matchSaleFromBusinessReference(
+    businessReference, salesLookup,
+  );
+  const saleId = saleMatch?.saleId ?? null;
+  const orderLabel = saleMatch?.orderLabel ?? "";
   const matched = saleId !== null;
 
   // ── Read accrual estimate from shipment doc ──────────
@@ -1001,6 +1569,7 @@ async function fetchDeliverySettlement(
     orderLabel,
     estimatedFee,
     fulfillmentDateKey,
+    nextCashoutDate,
   };
 }
 
@@ -1231,6 +1800,9 @@ async function writeDailyReconciliationTransactions(
         reconciled: true,
         matched: s.matched,
         sale_id: s.saleId,
+        cashout_status: "pending",
+        cashout_id: null,
+        next_cashout_date: s.nextCashoutDate || null,
         synced_at: FieldValue.serverTimestamp(),
       }, {merge: true});
       batchOps++;
@@ -1476,6 +2048,37 @@ export const scheduledBostaSyncDaily = onSchedule(
         });
 
         logger.info("Scheduled Bosta sync completed", {userId, result});
+
+        // ── Cashout sync (after delivery sync) ─────────────
+        // Only for users with dashboard credentials configured.
+        if (conn.dashboard_email_encrypted && conn.dashboard_password_encrypted) {
+          try {
+            const encKey = tokenEncryptionKey.value().trim();
+            const dashToken = await getBostaDashboardToken(userId, encKey);
+
+            // Fetch since last cashout sync or last 30 days
+            const lastSync = conn.cf_last_cashout_sync_at?.toDate?.()
+              ? (conn.cf_last_cashout_sync_at.toDate() as Date)
+              : null;
+            const sinceDate = lastSync
+              ? new Date(lastSync.getTime() - 7 * 24 * 60 * 60 * 1000)
+                  .toISOString().slice(0, 10) // overlap 7 days for safety
+              : null; // null → fetches from 2025-01-01
+
+            const cashoutResult = await syncCashoutsForUser(
+              userId, dashToken, sinceDate,
+            );
+
+            logger.info("Scheduled cashout sync completed", {
+              userId, cashoutResult,
+            });
+          } catch (cashoutErr) {
+            // Cashout sync failure should NOT fail the whole sync
+            logger.error("Scheduled cashout sync failed", {
+              userId, error: String(cashoutErr),
+            });
+          }
+        }
       } catch (err) {
         logger.error("Scheduled Bosta sync failed", {
           userId, error: String(err),
@@ -1562,6 +2165,196 @@ export const connectBosta = onCall(
     logger.info("Bosta connection saved", {uid});
 
     return {success: true};
+  },
+);
+
+// ═══════════════════════════════════════════════════════════
+//  connectBostaDashboard — onCall (save dashboard credentials)
+// ═══════════════════════════════════════════════════════════
+
+export const connectBostaDashboard = onCall(
+  {
+    secrets: [tokenEncryptionKey],
+    region: "us-central1",
+    timeoutSeconds: 30,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in");
+    }
+    const uid = request.auth.uid;
+
+    const {email, password} = request.data as {
+      email?: string;
+      password?: string;
+    };
+
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      throw new HttpsError("invalid-argument", "Invalid email");
+    }
+    if (!password || typeof password !== "string" || password.length < 4) {
+      throw new HttpsError("invalid-argument", "Invalid password");
+    }
+
+    // Verify credentials by attempting a login
+    const loginRes = await fetch(BOSTA_LOGIN_URL, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({email, password}),
+    });
+
+    if (!loginRes.ok) {
+      const body = await loginRes.text().catch(() => "");
+      throw new HttpsError(
+        "invalid-argument",
+        `Bosta dashboard login failed (${loginRes.status}): ${body.substring(0, 100)}`
+      );
+    }
+
+    const loginJson = await loginRes.json() as {
+      data?: {token?: string};
+      token?: string;
+    };
+
+    const token = loginJson.data?.token ?? loginJson.token;
+    if (!token) {
+      throw new HttpsError(
+        "internal",
+        "Bosta login succeeded but no token returned"
+      );
+    }
+
+    // Encrypt credentials
+    const encKey = tokenEncryptionKey.value().trim();
+    const encryptedEmail = encrypt(email, encKey);
+    const encryptedPassword = encrypt(password, encKey);
+
+    // Ensure bosta_connections doc exists
+    const db = getDb();
+    const connRef = db.collection("bosta_connections").doc(uid);
+    const connDoc = await connRef.get();
+
+    if (!connDoc.exists) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Connect Bosta API key first before adding dashboard credentials"
+      );
+    }
+
+    // Store encrypted dashboard credentials
+    await connRef.update({
+      dashboard_email_encrypted: encryptedEmail,
+      dashboard_password_encrypted: encryptedPassword,
+      dashboard_status: "active",
+      dashboard_status_updated_at: FieldValue.serverTimestamp(),
+    });
+
+    logger.info("Bosta dashboard credentials saved", {uid});
+
+    return {success: true};
+  },
+);
+
+// ═══════════════════════════════════════════════════════════
+//  syncBostaCashouts — onCall (on-demand cashout sync)
+// ═══════════════════════════════════════════════════════════
+
+export const syncBostaCashouts = onCall(
+  {
+    secrets: [tokenEncryptionKey],
+    region: "us-central1",
+    timeoutSeconds: 120,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in");
+    }
+    const uid = request.auth.uid;
+    const db = getDb();
+
+    // Optional: caller can supply a custom date range.
+    const {startDate: reqStart} = (request.data ?? {}) as {
+      startDate?: string;
+    };
+    const hasCustomRange = typeof reqStart === "string" && reqStart.length >= 10;
+
+    // Load connection
+    const connDoc = await db
+      .collection("bosta_connections")
+      .doc(uid)
+      .get();
+
+    if (!connDoc.exists || connDoc.data()?.status !== "active") {
+      throw new HttpsError(
+        "failed-precondition",
+        "No active Bosta connection"
+      );
+    }
+
+    const conn = connDoc.data()!;
+
+    if (!conn.dashboard_email_encrypted || !conn.dashboard_password_encrypted) {
+      throw new HttpsError(
+        "failed-precondition",
+        "No dashboard credentials configured"
+      );
+    }
+
+    // Throttle: skip if synced < 5 minutes ago (bypass for custom range).
+    const lastSync = conn.cf_last_cashout_sync_at?.toDate?.()
+      ? (conn.cf_last_cashout_sync_at.toDate() as Date)
+      : null;
+
+    if (!hasCustomRange && lastSync && (Date.now() - lastSync.getTime()) < CASHOUT_SYNC_THROTTLE_MS) {
+      logger.info("Cashout sync throttled — returning cached", {uid});
+      return {
+        throttled: true,
+        cfTotalCashouts: conn.cf_total_cashouts ?? 0,
+        cfPendingAr: conn.cf_pending_ar ?? 0,
+        cfPendingArCount: conn.cf_pending_ar_count ?? 0,
+        cfLastCashoutDate: conn.cf_last_cashout_date ?? null,
+      };
+    }
+
+    // Login to dashboard
+    const encKey = tokenEncryptionKey.value().trim();
+    let dashToken: string;
+    try {
+      dashToken = await getBostaDashboardToken(uid, encKey);
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error("Dashboard login failed in syncBostaCashouts", {uid, error: msg});
+      throw new HttpsError(
+        "unavailable",
+        msg.includes("login failed") ? "Dashboard login failed — please re-authenticate" : msg,
+      );
+    }
+
+    // Determine date range.
+    let sinceDate: string | null;
+    if (hasCustomRange) {
+      sinceDate = reqStart!.slice(0, 10); // YYYY-MM-DD
+    } else if (lastSync) {
+      sinceDate = new Date(lastSync.getTime() - 7 * 24 * 60 * 60 * 1000)
+        .toISOString().slice(0, 10);
+    } else {
+      sinceDate = null; // Falls back to 2025-01-01 inside syncCashoutsForUser.
+    }
+
+    let result: CashoutSyncResult;
+    try {
+      result = await syncCashoutsForUser(uid, dashToken, sinceDate);
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error("syncCashoutsForUser failed", {uid, error: msg});
+      throw new HttpsError("internal", `Cashout sync failed: ${msg}`);
+    }
+
+    logger.info("On-demand cashout sync completed", {uid, result});
+
+    return result;
   },
 );
 

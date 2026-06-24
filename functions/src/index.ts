@@ -27,14 +27,14 @@ import {notifyUser} from "./notify.js";
 export {shopifyAuthStart} from "./shopify-auth.js";
 export {storeAuthCallback} from "./shopify-auth.js";
 export {storeWebhook} from "./shopify-webhooks.js";
-export {processShopifyWebhook, backfillFulfillmentStatus, refreshShopifyOrder, refreshAllShopifyOrders, reconcileShopifyOrders} from "./shopify-processor.js";
+export {processShopifyWebhook, backfillFulfillmentStatus, refreshShopifyOrder, refreshAllShopifyOrders, reconcileShopifyOrders, backfillShopifyRefunds} from "./shopify-processor.js";
 export {shopifyProxy} from "./shopify-proxy.js";
 export {shopifyHealthCheck} from "./shopify-health.js";
 export {shopifyDisconnect} from "./shopify-disconnect.js";
 
 // ── Bosta (Shipping Expense Integration) ───────────────────
 export {bostaProxy} from "./bosta-proxy.js";
-export {syncBostaShipments, scheduledBostaSyncDaily, connectBosta, disconnectBosta, migrateBostaToDaily} from "./bosta-sync.js";
+export {syncBostaShipments, scheduledBostaSyncDaily, connectBosta, disconnectBosta, migrateBostaToDaily, connectBostaDashboard, syncBostaCashouts} from "./bosta-sync.js";
 
 // ── Account Management ─────────────────────────────────────
 export {deleteUserData} from "./delete-user-data.js";

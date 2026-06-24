@@ -13,22 +13,26 @@ class SaleFilter {
   final PaymentStatus? paymentStatus;
   final FulfillmentStatus? fulfillmentStatus;
   final RangeValues amountRange; // 0..infinity = no cap
+  final String? orderSource; // null=all, 'shopify', 'manual'
 
   const SaleFilter({
     this.paymentStatus,
     this.fulfillmentStatus,
     this.amountRange = const RangeValues(0, double.infinity),
+    this.orderSource,
   });
 
   SaleFilter copyWith({
     PaymentStatus? Function()? paymentStatus,
     FulfillmentStatus? Function()? fulfillmentStatus,
     RangeValues? amountRange,
+    String? Function()? orderSource,
   }) {
     return SaleFilter(
       paymentStatus: paymentStatus != null ? paymentStatus() : this.paymentStatus,
       fulfillmentStatus: fulfillmentStatus != null ? fulfillmentStatus() : this.fulfillmentStatus,
       amountRange: amountRange ?? this.amountRange,
+      orderSource: orderSource != null ? orderSource() : this.orderSource,
     );
   }
 
@@ -37,13 +41,15 @@ class SaleFilter {
     if (paymentStatus != null) count++;
     if (fulfillmentStatus != null) count++;
     if (amountRange != const RangeValues(0, double.infinity)) count++;
+    if (orderSource != null) count++;
     return count;
   }
 
   bool get isDefault =>
       paymentStatus == null &&
       fulfillmentStatus == null &&
-      amountRange == const RangeValues(0, double.infinity);
+      amountRange == const RangeValues(0, double.infinity) &&
+      orderSource == null;
 
   static const SaleFilter empty = SaleFilter();
 }
@@ -66,12 +72,14 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
   PaymentStatus? _paymentStatus;
   FulfillmentStatus? _fulfillmentStatus;
   late RangeValues _amountRange;
+  String? _orderSource;
 
   @override
   void initState() {
     super.initState();
     _paymentStatus = widget.initialFilter.paymentStatus;
     _fulfillmentStatus = widget.initialFilter.fulfillmentStatus;
+    _orderSource = widget.initialFilter.orderSource;
     final end = widget.initialFilter.amountRange.end;
     _amountRange = RangeValues(
       widget.initialFilter.amountRange.start,
@@ -85,6 +93,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
       _paymentStatus = null;
       _fulfillmentStatus = null;
       _amountRange = const RangeValues(0, 10000);
+      _orderSource = null;
     });
   }
 
@@ -97,6 +106,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
         paymentStatus: _paymentStatus,
         fulfillmentStatus: _fulfillmentStatus,
         amountRange: RangeValues(_amountRange.start, effectiveEnd),
+        orderSource: _orderSource,
       ),
     );
   }
@@ -106,6 +116,7 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
     if (_paymentStatus != null) count++;
     if (_fulfillmentStatus != null) count++;
     if (_amountRange.start > 0 || _amountRange.end < 10000) count++;
+    if (_orderSource != null) count++;
     return count;
   }
 
@@ -176,6 +187,8 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
                 _buildPaymentStatusSelector(),
                 const SizedBox(height: 28),
                 _buildOrderStatusSelector(),
+                const SizedBox(height: 28),
+                _buildOrderSourceSelector(),
                 const SizedBox(height: 28),
                 _buildAmountRange(),
               ],
@@ -361,6 +374,66 @@ class _SaleFilterSheetState extends State<SaleFilterSheet> {
                     color: isSelected
                         ? AppColors.primaryNavy
                         : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  ORDER SOURCE
+  // ═══════════════════════════════════════════════════
+  Widget _buildOrderSourceSelector() {
+    final l10n = AppLocalizations.of(context)!;
+    final sources = <String?>[null, 'shopify', 'manual'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel(l10n.orderSourceSection),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: sources.map((source) {
+            final isSelected = _orderSource == source;
+            final label = switch (source) {
+              null => l10n.all,
+              'shopify' => 'Shopify',
+              'manual' => l10n.manualSource,
+              _ => '',
+            };
+            final color = switch (source) {
+              null => AppColors.textPrimary,
+              'shopify' => const Color(0xFF96BF48),
+              'manual' => AppColors.primaryNavy,
+              _ => AppColors.textPrimary,
+            };
+            return GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                setState(() => _orderSource = source);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected ? color.withValues(alpha: 0.1) : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isSelected ? color : AppColors.borderLight,
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? color : AppColors.textSecondary,
                   ),
                 ),
               ),

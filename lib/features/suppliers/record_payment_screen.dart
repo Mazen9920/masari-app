@@ -8,11 +8,15 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
+import '../../core/providers/auth_provider.dart';
 import '../../shared/models/supplier_model.dart';
 import '../../shared/models/payment_model.dart';
 import '../../shared/models/purchase_model.dart';
 import '../../shared/models/transaction_model.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/services/image_upload_service.dart';
 import 'add_supplier_screen.dart';
 
 /// Record Payment form — supplier info, amount, method, invoice allocation, notes.
@@ -45,6 +49,8 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
   DateTime _paymentDate = DateTime.now();
   int _methodIdx = 0; // 0=Cash, 1=Bank, 2=InstaPay, 3=VodafoneCash
   final Set<String> _selectedPurchaseIds = {};
+  File? _receiptFile;
+  String? _receiptUrl;
 
   final _methods = [
     _PaymentMethod(Icons.payments_rounded, 'Cash'),
@@ -167,7 +173,40 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
     );
   }
 
-  void _performSave() {
+  Future<void> _pickReceipt() async {
+    HapticFeedback.lightImpact();
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded),
+              title: const Text('Camera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('Gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final xFile = await ImageUploadService.pickImage(source: source);
+    if (xFile == null || !mounted) return;
+
+    setState(() => _receiptFile = File(xFile.path));
+  }
+
+  Future<void> _performSave() async {
     final suppliers = ref.read(suppliersProvider).value ?? [];
     final supplierId = _selectedSupplierId!;
     final supplierName = suppliers
@@ -178,8 +217,20 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
     final settings = ref.read(appSettingsProvider);
     final txId = const Uuid().v4();
 
+    final paymentId = const Uuid().v4();
+
+    // Upload receipt if picked
+    String? receiptUrl = _receiptUrl;
+    if (_receiptFile != null && receiptUrl == null) {
+      final uid = ref.read(authProvider).user?.id ?? '';
+      receiptUrl = await ImageUploadService.uploadFile(
+        file: _receiptFile!,
+        storagePath: 'supplier_receipts/$uid/$paymentId.jpg',
+      );
+    }
+
     final payment = Payment(
-      id: const Uuid().v4(),
+      id: paymentId,
       supplierId: supplierId,
       supplierName: supplierName,
       amount: _payAmount,
@@ -187,6 +238,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
       method: _methods[_methodIdx].label,
       notes: _notesCtrl.text.trim(),
       appliedToPurchaseIds: _selectedPurchaseIds.toList(),
+      receiptUrl: receiptUrl,
       transactionId: settings.autoCreateTransactionOnSupplierPayment ? txId : null,
       createdAt: DateTime.now(),
     );
@@ -263,7 +315,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
         Transaction(
           id: txId,
           userId: '',
-          title: l10n.supplierPaymentTitle(supplierName),
+          title: 'Supplier Payment — $supplierName',
           amount: -_payAmount,
           dateTime: _paymentDate,
           categoryId: 'cat_supplier_payment',
@@ -277,6 +329,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
       );
     }
 
+    if (!mounted) return;
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1083,37 +1136,70 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
           style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
         ),
         const SizedBox(height: 14),
-        // Upload receipt button (dashed border)
-        GestureDetector(
-          onTap: () => HapticFeedback.lightImpact(),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.borderLight,
-                style: BorderStyle.solid,
+        // Upload receipt button
+        if (_receiptFile != null)
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(
+                  _receiptFile!,
+                  width: double.infinity,
+                  height: 140,
+                  fit: BoxFit.cover,
+                ),
               ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.camera_alt_rounded,
-                    color: AppColors.textSecondary, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.uploadReceipt,
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+              Positioned(
+                top: 6,
+                right: 6,
+                child: GestureDetector(
+                  onTap: () => setState(() {
+                    _receiptFile = null;
+                    _receiptUrl = null;
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(Icons.close, color: Colors.white, size: 16),
                   ),
                 ),
-              ],
+              ),
+            ],
+          )
+        else
+          GestureDetector(
+            onTap: _pickReceipt,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.borderLight,
+                  style: BorderStyle.solid,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.camera_alt_rounded,
+                      color: AppColors.textSecondary, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.uploadReceipt,
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }

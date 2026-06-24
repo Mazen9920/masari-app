@@ -63,6 +63,16 @@ class BostaShipmentDetailScreen extends StatelessWidget {
                     _buildExpenseCard(l10n)
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 180.ms),
+                    if (shipment.isCashoutPaid ||
+                        shipment.cashoutId != null ||
+                        shipment.nextCashoutDate != null) ...[
+                      const SizedBox(height: 20),
+                      _sectionLabel('CASHOUT STATUS'),
+                      const SizedBox(height: 10),
+                      _buildCashoutCard(l10n)
+                          .animate()
+                          .fadeIn(duration: 250.ms, delay: 210.ms),
+                    ],
                     if (shipment.hasEstimate) ...[
                       const SizedBox(height: 20),
                       _sectionLabel(l10n.bostaAccrualInfo),
@@ -300,22 +310,93 @@ class BostaShipmentDetailScreen extends StatelessWidget {
       ]);
     }
 
-    return _CardContainer(
-      children: [
-        for (final entry in nonZero)
-          _DetailRow(
-            label: feeLabels[entry.key] ?? entry.key,
-            value: 'EGP ${feeFmt.format(entry.value)}',
-            icon: Icons.receipt_rounded,
+    final total = shipment.totalFees ?? 1;
+    final barColors = [
+      const Color(0xFFE2342D),
+      const Color(0xFF3B82F6),
+      const Color(0xFFF59E0B),
+      const Color(0xFF10B981),
+      const Color(0xFF8B5CF6),
+      const Color(0xFFEC4899),
+      const Color(0xFF6366F1),
+      const Color(0xFF14B8A6),
+      const Color(0xFFF97316),
+      const Color(0xFF64748B),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        _DetailRow(
-          label: l10n.bostaTotalFees,
-          value: 'EGP ${feeFmt.format(shipment.totalFees ?? 0)}',
-          icon: Icons.summarize_rounded,
-          valueColor: AppColors.danger,
-          isBold: true,
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Stacked proportion bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: SizedBox(
+                height: 8,
+                child: Row(
+                  children: [
+                    for (int i = 0; i < nonZero.length; i++)
+                      Expanded(
+                        flex: (nonZero[i].value / total * 100).round().clamp(1, 100),
+                        child: Container(color: barColors[i % barColors.length]),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            // Fee items
+            for (int i = 0; i < nonZero.length; i++) ...[
+              _FeeRow(
+                label: feeLabels[nonZero[i].key] ?? nonZero[i].key,
+                value: 'EGP ${feeFmt.format(nonZero[i].value)}',
+                pct: '${(nonZero[i].value / total * 100).toStringAsFixed(0)}%',
+                color: barColors[i % barColors.length],
+              ),
+              if (i < nonZero.length - 1) const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 10),
+            Divider(
+              height: 1,
+              color: AppColors.borderLight.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  l10n.bostaTotalFees,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  'EGP ${feeFmt.format(shipment.totalFees ?? 0)}',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -393,6 +474,76 @@ class BostaShipmentDetailScreen extends StatelessWidget {
   }
 
   // ── Accrual Timeline Card ─────────────────────────────
+
+  Widget _buildCashoutCard(AppLocalizations l10n) {
+    final dateFmt = DateFormat('MMM dd, yyyy');
+    final paid = shipment.isCashoutPaid;
+    final color = paid ? AppColors.success : const Color(0xFF3B82F6);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              paid
+                  ? Icons.account_balance_wallet_rounded
+                  : Icons.schedule_send_rounded,
+              color: color,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  paid ? 'Cashout Received' : 'Cashout Pending',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (shipment.nextCashoutDate != null && !paid) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Expected: ${dateFmt.format(shipment.nextCashoutDate!)}',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+                if (shipment.cashoutId != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    shipment.cashoutId!,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildAccrualCard(AppLocalizations l10n) {
     final feeFmt = NumberFormat('#,##0.00');
@@ -682,7 +833,6 @@ class _DetailRow extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color? valueColor;
-  final bool isBold;
   final VoidCallback? onTap;
   final IconData? trailingIcon;
 
@@ -691,7 +841,6 @@ class _DetailRow extends StatelessWidget {
     required this.value,
     required this.icon,
     this.valueColor,
-    this.isBold = false,
     this.onTap,
     this.trailingIcon,
   });
@@ -719,7 +868,7 @@ class _DetailRow extends StatelessWidget {
                 value,
                 style: AppTypography.labelSmall.copyWith(
                   color: valueColor ?? AppColors.textPrimary,
-                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
+                  fontWeight: FontWeight.w600,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -734,6 +883,61 @@ class _DetailRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _FeeRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final String pct;
+  final Color color;
+
+  const _FeeRow({
+    required this.label,
+    required this.value,
+    required this.pct,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        Text(
+          pct,
+          style: AppTypography.captionSmall.copyWith(
+            color: AppColors.textTertiary,
+            fontWeight: FontWeight.w600,
+            fontSize: 10,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: AppTypography.labelSmall.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

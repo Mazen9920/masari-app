@@ -71,6 +71,15 @@ class BostaShipment {
   /// Whether an estimate transaction has been written for this shipment.
   final bool estimateRecorded;
 
+  /// Cashout status: 'pending' or 'paid'.
+  final String? cashoutStatus;
+
+  /// ID of the matched bosta_cashouts document.
+  final String? cashoutId;
+
+  /// Next cashout date from Bosta wallet.cashCycle.
+  final DateTime? nextCashoutDate;
+
   const BostaShipment({
     required this.bostaDeliveryId,
     required this.userId,
@@ -92,6 +101,9 @@ class BostaShipment {
     this.estimatedFee,
     this.bostaCreatedAt,
     this.estimateRecorded = false,
+    this.cashoutStatus,
+    this.cashoutId,
+    this.nextCashoutDate,
   });
 
   // ── Computed ─────────────────────────────────────────────
@@ -113,6 +125,9 @@ class BostaShipment {
 
   /// Whether this shipment has been fully reconciled.
   bool get isReconciled => totalFees != null && estimateRecorded;
+
+  /// Whether the cashout has been paid for this shipment.
+  bool get isCashoutPaid => cashoutStatus == 'paid';
 
   // ── copyWith ─────────────────────────────────────────────
 
@@ -137,6 +152,9 @@ class BostaShipment {
     double? estimatedFee,
     DateTime? bostaCreatedAt,
     bool? estimateRecorded,
+    String? cashoutStatus,
+    String? cashoutId,
+    DateTime? nextCashoutDate,
   }) {
     return BostaShipment(
       bostaDeliveryId: bostaDeliveryId ?? this.bostaDeliveryId,
@@ -159,6 +177,9 @@ class BostaShipment {
       estimatedFee: estimatedFee ?? this.estimatedFee,
       bostaCreatedAt: bostaCreatedAt ?? this.bostaCreatedAt,
       estimateRecorded: estimateRecorded ?? this.estimateRecorded,
+      cashoutStatus: cashoutStatus ?? this.cashoutStatus,
+      cashoutId: cashoutId ?? this.cashoutId,
+      nextCashoutDate: nextCashoutDate ?? this.nextCashoutDate,
     );
   }
 
@@ -185,6 +206,9 @@ class BostaShipment {
         if (estimatedFee != null) 'estimated_fee': estimatedFee,
         if (bostaCreatedAt != null) 'bosta_created_at': bostaCreatedAt!.toIso8601String(),
         'estimate_recorded': estimateRecorded,
+        if (cashoutStatus != null) 'cashout_status': cashoutStatus,
+        if (cashoutId != null) 'cashout_id': cashoutId,
+        if (nextCashoutDate != null) 'next_cashout_date': nextCashoutDate!.toIso8601String(),
       };
 
   factory BostaShipment.fromJson(Map<String, dynamic> json) {
@@ -209,6 +233,9 @@ class BostaShipment {
       estimatedFee: (json['estimated_fee'] as num?)?.toDouble(),
       bostaCreatedAt: _parseDateTime(json['bosta_created_at']),
       estimateRecorded: json['estimate_recorded'] as bool? ?? false,
+      cashoutStatus: json['cashout_status'] as String?,
+      cashoutId: json['cashout_id'] as String?,
+      nextCashoutDate: _parseDateTime(json['next_cashout_date']),
     );
   }
 

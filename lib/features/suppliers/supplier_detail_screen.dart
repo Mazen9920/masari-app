@@ -310,13 +310,16 @@ class _BalanceCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final purchases = ref.watch(purchasesProvider).value ?? [];
-    final payments = ref.watch(paymentsProvider).value ?? [];
-    final supplierPurchases = purchases.where((p) => p.supplierId == supplier.id);
-    final supplierPayments = payments.where((p) => p.supplierId == supplier.id);
-    final totalPurchased = supplierPurchases.fold<double>(0, (s, p) => s + p.total);
-    final totalPaid = supplierPayments.fold<double>(0, (s, p) => s + p.amount);
-    final outstanding = (totalPurchased - totalPaid).clamp(0.0, double.infinity);
+    // Use the supplier's canonical balance — the same source of truth the
+    // rest of the app (overview list, payment flows) relies on. This balance
+    // is maintained atomically as opening balance + Σ(purchase outstanding)
+    // − Σ(payments), so it stays in sync everywhere. A negative balance means
+    // the supplier holds a credit/advance for us.
+    final balance = supplier.balance;
+    final isCredit = balance < 0;
+    final displayAmount = balance.abs();
+    final accentColor =
+        isCredit ? const Color(0xFF16A34A) : AppColors.accentOrange;
 
     return GestureDetector(
       onTap: () {
@@ -352,13 +355,15 @@ class _BalanceCard extends ConsumerWidget {
               child: Icon(
                 Icons.account_balance_wallet_rounded,
                 size: 56,
-                color: AppColors.accentOrange.withValues(alpha: 0.06),
+                color: accentColor.withValues(alpha: 0.06),
               ),
             ),
             Column(
               children: [
                 Text(
-                  AppLocalizations.of(context)!.totalDue,
+                  isCredit
+                      ? AppLocalizations.of(context)!.supplierCreditLabel
+                      : AppLocalizations.of(context)!.totalDue,
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 11,
@@ -368,9 +373,9 @@ class _BalanceCard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '$currency ${fmt.format(outstanding)}',
-                  style: const TextStyle(
-                    color: AppColors.accentOrange,
+                  '$currency ${fmt.format(displayAmount)}',
+                  style: TextStyle(
+                    color: accentColor,
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
                   ),

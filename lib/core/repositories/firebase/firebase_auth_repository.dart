@@ -156,7 +156,17 @@ class FirebaseAuthRepository implements AuthRepository {
     if (user != null) {
       // Force a token refresh so deleted / revoked users are detected
       // immediately instead of waiting up to 1 hour for expiry.
-      await user.getIdToken(true);
+      // If we're offline (or the refresh otherwise fails with a network
+      // error) keep the cached user — logging them out would force the
+      // login screen even though Firebase has a valid local session.
+      try {
+        await user.getIdToken(true);
+      } on firebase.FirebaseAuthException catch (e) {
+        if (e.code != 'network-request-failed') rethrow;
+      } catch (_) {
+        // Ignore any other transient refresh errors — the cached user
+        // is still valid locally and will be re-validated when online.
+      }
       return _mapFirebaseUser(user);
     }
     return null;

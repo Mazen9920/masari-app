@@ -15,12 +15,27 @@ import '../../../shared/utils/safe_pop.dart';
 /// Bosta shipments list screen.
 ///
 /// Shows all synced Bosta deliveries with filters for
-/// settled/pending and matched/unlinked.
-class BostaShipmentsScreen extends ConsumerWidget {
+/// settled/pending and matched/unlinked. Supports search by tracking number.
+class BostaShipmentsScreen extends ConsumerStatefulWidget {
   const BostaShipmentsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BostaShipmentsScreen> createState() =>
+      _BostaShipmentsScreenState();
+}
+
+class _BostaShipmentsScreenState extends ConsumerState<BostaShipmentsScreen> {
+  final _searchCtrl = TextEditingController();
+  bool _showSearch = false;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final asyncShipments = ref.watch(bostaShipmentsProvider);
     final stats = ref.watch(bostaShipmentStatsProvider);
@@ -33,6 +48,7 @@ class BostaShipmentsScreen extends ConsumerWidget {
         child: Column(
           children: [
             _buildHeader(context, l10n),
+            if (_showSearch) _buildSearchBar(),
             _buildStatsBar(context, l10n, stats),
             _buildFilterChips(context, l10n, ref, filter),
             Expanded(
@@ -47,8 +63,18 @@ class BostaShipmentsScreen extends ConsumerWidget {
                   ),
                 ),
                 data: (shipments) {
-                  if (shipments.isEmpty) {
-                    return _buildEmptyState(l10n);
+                  // Client-side search filter
+                  final query = _searchCtrl.text.trim().toLowerCase();
+                  final filtered = query.isEmpty
+                      ? shipments
+                      : shipments
+                          .where((s) =>
+                              s.trackingNumber.toLowerCase().contains(query) ||
+                              (s.businessReference?.toLowerCase().contains(query) ?? false))
+                          .toList();
+
+                  if (filtered.isEmpty) {
+                    return _buildEmptyState(l10n, isSearch: query.isNotEmpty);
                   }
                   final notifier = ref.read(bostaShipmentsProvider.notifier);
                   return RefreshIndicator(
@@ -69,9 +95,9 @@ class BostaShipmentsScreen extends ConsumerWidget {
                           parent: BouncingScrollPhysics(),
                         ),
                         padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-                        itemCount: shipments.length + (notifier.hasMore ? 1 : 0),
+                        itemCount: filtered.length + (notifier.hasMore && query.isEmpty ? 1 : 0),
                         itemBuilder: (ctx, i) {
-                          if (i >= shipments.length) {
+                          if (i >= filtered.length) {
                             return const Padding(
                               padding: EdgeInsets.all(16),
                               child: Center(
@@ -86,10 +112,11 @@ class BostaShipmentsScreen extends ConsumerWidget {
                             );
                           }
                           return _ShipmentTile(
-                            shipment: shipments[i],
+                            shipment: filtered[i],
+                            searchQuery: query,
                             onTap: () => context.push(
                               AppRoutes.bostaShipmentDetail,
-                              extra: {'shipment': shipments[i]},
+                              extra: {'shipment': filtered[i]},
                             ),
                           )
                               .animate()
@@ -139,6 +166,19 @@ class BostaShipmentsScreen extends ConsumerWidget {
           ),
           const Spacer(),
           IconButton(
+            onPressed: () => setState(() {
+              _showSearch = !_showSearch;
+              if (!_showSearch) {
+                _searchCtrl.clear();
+              }
+            }),
+            icon: Icon(
+              _showSearch ? Icons.search_off_rounded : Icons.search_rounded,
+              size: 22,
+            ),
+            color: _showSearch ? _bostaRed : AppColors.primaryNavy,
+          ),
+          IconButton(
             onPressed: () => context.push(AppRoutes.bostaAudit),
             icon: const Icon(Icons.fact_check_rounded, size: 22),
             color: AppColors.primaryNavy,
@@ -149,52 +189,121 @@ class BostaShipmentsScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      color: Colors.white,
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(
+          hintText: 'Search tracking # or order ref…',
+          hintStyle: AppTypography.bodySmall.copyWith(
+            color: AppColors.textTertiary,
+          ),
+          prefixIcon: const Icon(Icons.search_rounded, size: 20),
+          suffixIcon: _searchCtrl.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear_rounded, size: 18),
+                  onPressed: () => setState(() => _searchCtrl.clear()),
+                )
+              : null,
+          filled: true,
+          fillColor: AppColors.backgroundLight,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+        ),
+        style: AppTypography.bodySmall.copyWith(fontSize: 13),
+      ),
+    );
+  }
+
   Widget _buildStatsBar(
     BuildContext context,
     AppLocalizations l10n,
     BostaShipmentStats stats,
   ) {
-    final currency = 'EGP'; // Bosta is Egypt-only
+    const currency = 'EGP';
     final fmt = NumberFormat('#,##0.00');
+    final matchPct = stats.total > 0
+        ? (stats.matchedCount / stats.total * 100).toStringAsFixed(0)
+        : '0';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       color: Colors.white,
-      child: Row(
+      child: Column(
         children: [
-          _StatChip(
-            label: l10n.bostaStatsTotal,
-            value: '${stats.total}',
-            color: AppColors.primaryNavy,
-          ),
-          const SizedBox(width: 12),
-          _StatChip(
-            label: l10n.bostaStatsMatched,
-            value: '${stats.matchedCount}',
-            color: AppColors.success,
-          ),
-          const SizedBox(width: 12),
-          _StatChip(
-            label: l10n.bostaStatsUnlinked,
-            value: '${stats.unlinkedCount}',
-            color: AppColors.warning,
-          ),
-          const Spacer(),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
             children: [
-              Text(
-                l10n.bostaStatsTotalFees,
-                style: AppTypography.captionSmall.copyWith(
-                  color: AppColors.textTertiary,
-                  fontSize: 10,
+              _StatChip(
+                label: l10n.bostaStatsTotal,
+                value: '${stats.total}',
+                color: AppColors.primaryNavy,
+              ),
+              const SizedBox(width: 12),
+              _StatChip(
+                label: l10n.bostaStatsMatched,
+                value: '${stats.matchedCount}',
+                color: AppColors.success,
+              ),
+              const SizedBox(width: 12),
+              _StatChip(
+                label: l10n.bostaStatsUnlinked,
+                value: '${stats.unlinkedCount}',
+                color: AppColors.warning,
+              ),
+              const Spacer(),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    l10n.bostaStatsTotalFees,
+                    style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.textTertiary,
+                      fontSize: 10,
+                    ),
+                  ),
+                  Text(
+                    '$currency ${fmt.format(stats.totalFees)}',
+                    style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Match rate progress bar
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: stats.total > 0
+                        ? stats.matchedCount / stats.total
+                        : 0,
+                    minHeight: 4,
+                    backgroundColor: AppColors.borderLight,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppColors.success),
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
-                '$currency ${fmt.format(stats.totalFees)}',
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w700,
+                '$matchPct% matched',
+                style: AppTypography.captionSmall.copyWith(
+                  color: AppColors.textTertiary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 10,
                 ),
               ),
             ],
@@ -269,19 +378,19 @@ class BostaShipmentsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyState(AppLocalizations l10n) {
+  Widget _buildEmptyState(AppLocalizations l10n, {bool isSearch = false}) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.local_shipping_outlined,
+            isSearch ? Icons.search_off_rounded : Icons.local_shipping_outlined,
             size: 64,
             color: AppColors.textTertiary.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
           Text(
-            l10n.bostaShipmentsEmpty,
+            isSearch ? 'No matching shipments' : l10n.bostaShipmentsEmpty,
             style: AppTypography.h3.copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w700,
@@ -289,7 +398,9 @@ class BostaShipmentsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            l10n.bostaShipmentsEmptyDesc,
+            isSearch
+                ? 'Try a different tracking # or order reference'
+                : l10n.bostaShipmentsEmptyDesc,
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textTertiary,
             ),
@@ -380,8 +491,13 @@ class _FilterChip extends StatelessWidget {
 class _ShipmentTile extends StatelessWidget {
   final BostaShipment shipment;
   final VoidCallback onTap;
+  final String searchQuery;
 
-  const _ShipmentTile({required this.shipment, required this.onTap});
+  const _ShipmentTile({
+    required this.shipment,
+    required this.onTap,
+    this.searchQuery = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -430,14 +546,13 @@ class _ShipmentTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      _highlightText(
                         shipment.trackingNumber,
-                        style: AppTypography.labelMedium.copyWith(
+                        searchQuery,
+                        AppTypography.labelMedium.copyWith(
                           fontWeight: FontWeight.w600,
                           color: AppColors.textPrimary,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 3),
                       Wrap(
@@ -510,6 +625,34 @@ class _ShipmentTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _highlightText(String text, String query, TextStyle style) {
+    if (query.isEmpty) {
+      return Text(text, style: style, maxLines: 1, overflow: TextOverflow.ellipsis);
+    }
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    final idx = lowerText.indexOf(lowerQuery);
+    if (idx < 0) {
+      return Text(text, style: style, maxLines: 1, overflow: TextOverflow.ellipsis);
+    }
+    return Text.rich(
+      TextSpan(children: [
+        if (idx > 0) TextSpan(text: text.substring(0, idx), style: style),
+        TextSpan(
+          text: text.substring(idx, idx + query.length),
+          style: style.copyWith(
+            backgroundColor: _bostaRed.withValues(alpha: 0.15),
+            color: _bostaRed,
+          ),
+        ),
+        if (idx + query.length < text.length)
+          TextSpan(text: text.substring(idx + query.length), style: style),
+      ]),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 

@@ -16,6 +16,7 @@ import '../../shared/widgets/async_value_widget.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
 import '../shopify/widgets/shopify_reconnect_banner.dart';
 import '../../shared/utils/safe_pop.dart';
+import 'widgets/shopify_audit_shield.dart';
 
 /// Sales list screen (Growth tier).
 class SalesListScreen extends ConsumerStatefulWidget {
@@ -489,6 +490,8 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
                       HapticFeedback.lightImpact();
                       _refreshSales();
                     }),
+              // Shopify audit shield
+              const ShopifyAuditShield(),
               const SizedBox(width: 2),
               // Add sale button
               GestureDetector(
