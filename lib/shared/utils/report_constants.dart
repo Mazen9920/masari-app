@@ -36,4 +36,8 @@ bool isPlTransaction(Transaction t) =>
 /// outflow even though it's excluded from P&L.
 bool isCashFlowTransaction(Transaction t) =>
     t.categoryId != 'cat_cogs' &&
-    (t.categoryId == 'cat_supplier_payment' || !t.excludeFromPL);
+    (t.categoryId == 'cat_supplier_payment' ||
+        // Capitalized manufacturing labor: excluded from P&L (it flows to COGS
+        // when the finished good is sold) but is a real cash outflow now.
+        t.categoryId == 'cat_manufacturing_cost' ||
+        !t.excludeFromPL);

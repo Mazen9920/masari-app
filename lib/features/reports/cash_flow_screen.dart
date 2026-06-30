@@ -21,6 +21,7 @@ import 'widgets/financial_period_sheet.dart';
 import '../../shared/utils/money_utils.dart';
 import '../../shared/utils/report_constants.dart';
 import '../../shared/utils/cf_engine.dart';
+import '../../shared/utils/books_cutover.dart';
 import '../../shared/models/category_data.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../l10n/app_localizations.dart';
@@ -54,6 +55,9 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
   List<Transaction> _transactions = [];
   bool _isLoading = true;
   bool _isCfUser = false;
+
+  /// Firestore-persisted opening cash (0 = fall back to device-local setting).
+  double _openingCashDoc = 0;
 
   /// Cumulative cashouts up to period end (null = use connection provider).
   double? _cashoutsToEnd;
@@ -115,30 +119,47 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
     final beforeStr = beforeStart.toIso8601String().substring(0, 10);
     // Also need cashouts for chart (always extends to current month).
     final nowStr = DateTime.now().toIso8601String().substring(0, 10);
-    final maxEndStr = endStr.compareTo(nowStr) > 0 ? endStr : nowStr;
+    // Include the whole as-of day so a same-day (timestamped) cashout counts.
+    final maxEndStr =
+        '${endStr.compareTo(nowStr) > 0 ? endStr : nowStr}T23:59:59.999Z';
     try {
+      // Books-start cutover + persisted opening, read directly from Firestore.
+      String? booksStart;
+      double openingFromDoc = 0;
+      try {
+        final bsDoc = await FirebaseFirestore.instance
+            .collection('balance_sheet')
+            .doc(_cfUserId)
+            .get();
+        final data = bsDoc.data();
+        openingFromDoc = (data?['opening_cash_balance'] as num?)?.toDouble() ?? 0;
+        final raw = data?['books_start_date'] as String?;
+        if (raw != null && raw.isNotEmpty) booksStart = raw.substring(0, 10);
+      } catch (_) {}
+
       final snap = await FirebaseFirestore.instance
           .collection('bosta_cashouts')
           .where('user_id', isEqualTo: _cfUserId)
           .where('transaction_date', isLessThanOrEqualTo: maxEndStr)
           .get();
-      double toEnd = 0;
-      double before = 0;
       final records = <(String, double)>[];
       for (final doc in snap.docs) {
         final amt = (doc.data()['amount'] as num?)?.toDouble() ?? 0;
         final txDate = doc.data()['transaction_date'] as String? ?? '';
+        // Exclude pre-cutover (pre-tracking) cashouts.
+        if (!cashoutOnOrAfterStart(txDate, booksStart)) continue;
         records.add((txDate, amt));
-        if (txDate.compareTo(endStr) <= 0) toEnd += amt;
-        if (txDate.compareTo(beforeStr) <= 0) {
-          before += amt;
-        }
       }
+      // Shared windowing (same as Balance Sheet / dashboard).
+      final windowed = records.map((rec) => (amount: rec.$2, date: rec.$1));
+      final toEnd = windowedCashoutTotal(windowed, asOfKey: endStr);
+      final before = windowedCashoutTotal(windowed, asOfKey: beforeStr);
       if (mounted) {
         setState(() {
           _cashoutsToEnd = roundMoney(toEnd);
           _cashoutsBefore = roundMoney(before);
           _cashoutRecords = records;
+          _openingCashDoc = openingFromDoc;
         });
       }
     } catch (_) {
@@ -161,7 +182,9 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
     super.build(context);
     final transactions = _isLoading ? <Transaction>[] : _transactions;
     final fmt = NumberFormat('#,##0', 'en');
-    final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
+    final openingCash = _openingCashDoc != 0
+        ? _openingCashDoc
+        : ref.watch(appSettingsProvider).openingCashBalance;
     
     // Calculate Money In / Out for selected period.
     // For CF user: uses the same filter as the shared CF engine to ensure
@@ -1185,7 +1208,9 @@ class _CashFlowScreenState extends ConsumerState<CashFlowScreen>
 
   Widget _buildChartSection() {
     final transactions = _isLoading ? <Transaction>[] : _transactions;
-    final openingCash = ref.watch(appSettingsProvider).openingCashBalance;
+    final openingCash = _openingCashDoc != 0
+        ? _openingCashDoc
+        : ref.watch(appSettingsProvider).openingCashBalance;
     final l10n = AppLocalizations.of(context)!;
     final currency = ref.watch(appSettingsProvider).currency;
 

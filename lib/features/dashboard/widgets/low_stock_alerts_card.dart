@@ -35,7 +35,7 @@ class LowStockAlertsCard extends ConsumerWidget {
             variantName: variant.optionValues.isNotEmpty
                 ? variant.optionValues.values.join(' / ')
                 : null,
-            currentStock: variant.currentStock,
+            currentStock: variant.currentStock.round(),
             reorderPoint: variant.reorderPoint,
             isOutOfStock: variant.status == StockStatus.outOfStock,
           ));

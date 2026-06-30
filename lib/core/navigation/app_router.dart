@@ -65,7 +65,9 @@ import '../../features/sales/sale_detail_screen.dart';
 import '../../features/sales/record_sale_screen.dart';
 import '../../features/inventory/receive_goods_screen.dart';
 import '../../features/inventory/missing_cost_screen.dart';
+import '../../features/reports/cogs_dashboard_screen.dart';
 import '../../features/inventory/breakdown_screen.dart';
+import '../../features/manufacturing/manufacturing_hub_screen.dart';
 import '../../features/suppliers/receipt_detail_screen.dart';
 import '../../features/suppliers/edit_receipt_screen.dart';
 import '../../features/shopify/screens/shopify_connect_screen.dart';
@@ -92,6 +94,12 @@ import '../../features/reports/add_edit_salary_screen.dart';
 import '../../shared/models/fixed_asset_model.dart' show FixedAsset;
 import '../../shared/models/loan_model.dart' show Loan;
 import '../../shared/models/salary_model.dart' show Salary;
+import '../../shared/models/gateway_receivable_model.dart' show GatewayReceivable;
+import '../../features/reports/gateway_receivables_dashboard_screen.dart';
+import '../../features/reports/add_edit_gateway_receivable_screen.dart';
+import '../../shared/models/accrued_expense_model.dart' show AccruedExpense;
+import '../../features/reports/accrued_expenses_dashboard_screen.dart';
+import '../../features/reports/add_edit_accrued_expense_screen.dart';
 import '../../features/bosta/screens/bosta_shipment_detail_screen.dart';
 import '../../shared/models/bosta_shipment_model.dart';
 import '../../shared/models/sale_model.dart';
@@ -128,12 +136,14 @@ abstract class AppRoutes {
   static const inventory = '/manage/inventory';
   static const suppliers = '/manage/suppliers';
   static const categories = '/manage/categories';
+  static const manufacturing = '/manage/manufacturing';
 
   // Detail & Action screens
   static const transactionDetail = '/transactions/detail';
   static const productDetail = '/inventory/detail';
   static const breakdown = '/inventory/breakdown';
   static const missingCosts = '/inventory/missing-costs';
+  static const cogsDashboard = '/reports/cogs';
   static const supplierDetail = '/suppliers/detail';
   static const categoryDetail = '/categories/detail';
   static const scheduledTransactions = '/reports/scheduled_transactions';
@@ -166,6 +176,12 @@ abstract class AppRoutes {
   static const salariesDashboard = '/reports/salaries';
   static const addSalary = '/reports/salaries/add';
   static const editSalary = '/reports/salaries/edit';
+  static const gatewayReceivablesDashboard = '/reports/gateway-receivables';
+  static const addGatewayReceivable = '/reports/gateway-receivables/add';
+  static const editGatewayReceivable = '/reports/gateway-receivables/edit';
+  static const accruedExpensesDashboard = '/reports/accrued-expenses';
+  static const addAccruedExpense = '/reports/accrued-expenses/add';
+  static const editAccruedExpense = '/reports/accrued-expenses/edit';
 }
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -345,6 +361,15 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         ),
       ),
       GoRoute(
+        path: AppRoutes.manufacturing,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => FeatureGateScreen(
+          feature: GrowthFeature.manufacturingMode,
+          appBarTitle: AppLocalizations.of(context)!.manufacturingTitle,
+          child: const ManufacturingHubScreen(),
+        ),
+      ),
+      GoRoute(
         name: 'TransactionDetailScreen',
         path: AppRoutes.transactionDetail,
         parentNavigatorKey: rootNavigatorKey,
@@ -410,6 +435,12 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
         path: AppRoutes.missingCosts,
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const MissingCostScreen(),
+      ),
+      GoRoute(
+        name: 'CogsDashboardScreen',
+        path: AppRoutes.cogsDashboard,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const CogsDashboardScreen(),
       ),
       GoRoute(
         name: 'BreakdownScreen',
@@ -1093,6 +1124,52 @@ GoRouter createAppRouter(Ref ref, RouterNotifier notifier) {
             requiredTier: SubscriptionTier.pro,
             child: AddEditSalaryScreen(salary: salary),
           );
+        },
+      ),
+      GoRoute(
+        name: 'GatewayReceivablesDashboard',
+        path: AppRoutes.gatewayReceivablesDashboard,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) =>
+            const GatewayReceivablesDashboardScreen(),
+      ),
+      GoRoute(
+        name: 'AddGatewayReceivable',
+        path: AppRoutes.addGatewayReceivable,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) =>
+            const AddEditGatewayReceivableScreen(),
+      ),
+      GoRoute(
+        name: 'EditGatewayReceivable',
+        path: AppRoutes.editGatewayReceivable,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final receivable = extra?['receivable'] as GatewayReceivable?;
+          return AddEditGatewayReceivableScreen(receivable: receivable);
+        },
+      ),
+      GoRoute(
+        name: 'AccruedExpensesDashboard',
+        path: AppRoutes.accruedExpensesDashboard,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const AccruedExpensesDashboardScreen(),
+      ),
+      GoRoute(
+        name: 'AddAccruedExpense',
+        path: AppRoutes.addAccruedExpense,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const AddEditAccruedExpenseScreen(),
+      ),
+      GoRoute(
+        name: 'EditAccruedExpense',
+        path: AppRoutes.editAccruedExpense,
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final expense = extra?['expense'] as AccruedExpense?;
+          return AddEditAccruedExpenseScreen(expense: expense);
         },
       ),
     ],

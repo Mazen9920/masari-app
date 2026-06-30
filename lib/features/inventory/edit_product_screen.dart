@@ -129,7 +129,7 @@ class _EditProductScreenState extends ConsumerState<EditProductScreen> {
         costCtrl: TextEditingController(text: v.costPrice.toStringAsFixed(2)),
         priceCtrl: TextEditingController(text: v.sellingPrice.toStringAsFixed(2)),
         reorderCtrl: TextEditingController(text: v.reorderPoint.toString()),
-        currentStock: v.currentStock,
+        currentStock: v.currentStock.round(),
         optionValues: v.optionValues,
       )).toList();
     }

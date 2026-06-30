@@ -596,7 +596,7 @@ class _ShopifyProductMappingScreenState
         sku: sku,
         costPrice: 0, // Shopify doesn't expose cost in products API
         sellingPrice: price,
-        currentStock: stock > 0 ? stock : 0,
+        currentStock: stock > 0 ? stock.toDouble() : 0.0,
         reorderPoint: 10,
         shopifyVariantId: shopifyVariantId,
         shopifyInventoryItemId: shopifyInvItemId,

@@ -67,7 +67,7 @@ class LocalProductRepository implements ProductRepository {
 
   @override
   Future<Result<Product>> adjustStock(
-      String id, String variantId, int delta, String reason,
+      String id, String variantId, double delta, String reason,
       {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
     final index = _products.indexWhere((p) => p.id == id);
     if (index == -1) return Result.failure('Product not found');
@@ -77,7 +77,7 @@ class LocalProductRepository implements ProductRepository {
     if (variantIndex == -1) return Result.failure('Variant not found: $variantId');
 
     final variant = product.variants[variantIndex];
-    final newStock = (variant.currentStock + delta).clamp(0, 999999);
+    final newStock = (variant.currentStock + delta).clamp(0.0, 999999.0);
 
     var layers = (clearLegacyLayers && variant.costLayers.isEmpty)
         ? <CostLayer>[]
@@ -117,7 +117,7 @@ class LocalProductRepository implements ProductRepository {
     }
 
     // Recalculate WAC from remaining layers (skip for manufactured products)
-    final totalLayerStock = layers.fold<int>(0, (s, l) => s + l.remainingQty);
+    final totalLayerStock = layers.fold<double>(0.0, (s, l) => s + l.remainingQty);
     double newCostPrice;
     if (skipCostLayer && delta > 0) {
       newCostPrice = variant.costPrice; // preserve existing cost
@@ -176,7 +176,7 @@ class LocalProductRepository implements ProductRepository {
     variants[srcIdx] = srcVariant.copyWith(
       currentStock: srcVariant.currentStock - qty,
       movements: [
-        StockMovement(type: 'Breakdown', quantity: -qty, dateTime: DateTime.now(), variantId: sourceVariantId, unitCost: srcVariant.costPrice),
+        StockMovement(type: 'Breakdown', quantity: -qty.toDouble(), dateTime: DateTime.now(), variantId: sourceVariantId, unitCost: srcVariant.costPrice),
         ...srcVariant.movements,
       ],
     );
@@ -189,7 +189,7 @@ class LocalProductRepository implements ProductRepository {
       variants[outIdx] = outVariant.copyWith(
         currentStock: outVariant.currentStock + entry.value.quantity,
         movements: [
-          StockMovement(type: 'Breakdown', quantity: entry.value.quantity, dateTime: DateTime.now(), variantId: entry.key, unitCost: entry.value.unitCost),
+          StockMovement(type: 'Breakdown', quantity: entry.value.quantity.toDouble(), dateTime: DateTime.now(), variantId: entry.key, unitCost: entry.value.unitCost),
           ...outVariant.movements,
         ],
       );
@@ -203,5 +203,60 @@ class LocalProductRepository implements ProductRepository {
   @override
   Future<Result<void>> markInventoryPushed(String id, String variantId, int stock) async {
     return Result.success(null);
+  }
+
+  @override
+  Future<Result<List<({String productId, String variantId, String name, double quantity, double unitCost, double totalCost})>>>
+      consumeMaterialsForProduction({
+    required List<({String productId, String variantId, String name, double quantity})> materials,
+    required String valuationMethod,
+  }) async {
+    final consumed = <({String productId, String variantId, String name, double quantity, double unitCost, double totalCost})>[];
+    for (final m in materials) {
+      if (m.quantity <= 0) continue;
+      final index = _products.indexWhere((p) => p.id == m.productId);
+      if (index == -1) return Result.failure('Material product not found');
+      final product = _products[index];
+      final variant = product.variantById(m.variantId);
+      if (variant == null) return Result.failure('Material variant not found');
+      if (variant.currentStock < m.quantity) {
+        return Result.failure('Insufficient material: ${product.name}');
+      }
+      final unitCost = variant.cogsPerUnit(m.quantity, valuationMethod);
+      final res = await adjustStock(
+        m.productId,
+        m.variantId,
+        -m.quantity,
+        'Production – consume',
+        valuationMethod: valuationMethod,
+      );
+      if (!res.isSuccess) return Result.failure(res.error ?? 'Consume failed');
+      consumed.add((
+        productId: m.productId,
+        variantId: m.variantId,
+        name: m.name,
+        quantity: m.quantity,
+        unitCost: unitCost,
+        totalCost: (unitCost * m.quantity * 100).roundToDouble() / 100,
+      ));
+    }
+    return Result.success(consumed);
+  }
+
+  @override
+  Future<Result<Product>> addProductionOutput({
+    required String productId,
+    required String variantId,
+    required double qty,
+    required double unitCost,
+  }) async {
+    return adjustStock(
+      productId,
+      variantId,
+      qty,
+      'Production – finished',
+      unitCost: unitCost,
+      valuationMethod: 'fifo',
+    );
   }
 }

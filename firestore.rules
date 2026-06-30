@@ -177,6 +177,17 @@ service cloud.firestore {
         && d.user_id is string && d.user_id.size() <= 128;
     }
 
+    // ─── Helper: validate required production order fields ──────────
+    function validProductionOrderFields() {
+      let d = request.resource.data;
+      return d.product_id is string && d.product_id.size() > 0 && d.product_id.size() <= 128
+        && d.variant_id is string && d.variant_id.size() <= 128
+        && d.quantity is number && d.quantity > 0
+        && d.status is int && d.status >= 0 && d.status <= 2
+        && d.inputs is list && d.inputs.size() <= 200
+        && d.user_id is string && d.user_id.size() <= 128;
+    }
+
     // Transactions
     match /transactions/{docId} {
       allow read, delete: if request.auth != null
@@ -370,6 +381,19 @@ service cloud.firestore {
         && validConversionOrderFields();
     }
 
+    // Production Orders (manufacturing / BOM audit trail)
+    match /production_orders/{docId} {
+      allow read, delete: if request.auth != null
+        && resource.data.user_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.user_id == request.auth.uid
+        && request.resource.data.user_id == resource.data.user_id
+        && validProductionOrderFields();
+      allow create: if request.auth != null
+        && request.resource.data.user_id == request.auth.uid
+        && validProductionOrderFields();
+    }
+
     // Bosta Connections (API key managed by CF, client reads + updates sync settings)
     match /bosta_connections/{docId} {
       allow read: if request.auth != null
@@ -427,6 +451,20 @@ service cloud.firestore {
     // ─── Salaries: owner-scoped subcollection ─────────────────────────
     // Path: salaries/{userId}/items/{salaryId}
     match /salaries/{userId}/items/{salaryId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    // ─── Payment-gateway receivables: owner-scoped subcollection ──────
+    // Path: gateway_receivables/{userId}/items/{id}
+    match /gateway_receivables/{userId}/items/{id} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    // ─── Accrued expenses: owner-scoped subcollection ─────────────────
+    // Path: accrued_expenses/{userId}/items/{id}
+    match /accrued_expenses/{userId}/items/{id} {
       allow read, write: if request.auth != null
         && request.auth.uid == userId;
     }

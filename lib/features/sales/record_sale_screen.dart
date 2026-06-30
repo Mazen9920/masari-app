@@ -680,7 +680,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           if (product != null) ...[
             const SizedBox(width: 12),
             Text(
-              l10n.stockLabel(product.currentStock),
+              l10n.stockLabel(product.currentStock.round()),
               style: TextStyle(
                 color: product.currentStock > 0
                     ? AppColors.textSecondary
@@ -893,8 +893,8 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                                 ),
                                 subtitle: Text(
                                   isMultiVariant
-                                      ? l10n.variantsStockInfo(product.variants.length, product.currentStock)
-                                      : l10n.productPriceInfo(currency, fmt.format(product.sellingPrice), currency, fmt.format(product.costPrice), product.currentStock),
+                                      ? l10n.variantsStockInfo(product.variants.length, product.currentStock.round())
+                                      : l10n.productPriceInfo(currency, fmt.format(product.sellingPrice), currency, fmt.format(product.costPrice), product.currentStock.round()),
                                   style: TextStyle(
                                     color: AppColors.textTertiary,
                                     fontSize: 11,
@@ -991,7 +991,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
                       ),
                     ),
                     subtitle: Text(
-                      l10n.variantPriceStock(currency, v.sellingPrice.toStringAsFixed(2), v.currentStock),
+                      l10n.variantPriceStock(currency, v.sellingPrice.toStringAsFixed(2), v.currentStock.round()),
                       style: AppTypography.captionSmall.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -1612,7 +1612,7 @@ class _RecordSaleScreenState extends ConsumerState<RecordSaleScreen> {
           ref.read(inventoryProvider.notifier).adjustStock(
                 productMap[key]!,
                 variantMap[key]!,
-                delta.round(),
+                delta,
                 'Sale edit adjustment',
                 unitCost: delta > 0 ? oldCostMap[key] : null,
                 valuationMethod: valMethod,

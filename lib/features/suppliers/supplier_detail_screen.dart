@@ -59,6 +59,11 @@ class SupplierDetailScreen extends ConsumerWidget {
                         .animate()
                         .fadeIn(duration: 250.ms, delay: 60.ms),
                     const SizedBox(height: 16),
+                    // Accrual breakdown (payable / prepaid / on order)
+                    _AccrualBreakdownCard(
+                            supplierId: live.id, currency: currency)
+                        .animate()
+                        .fadeIn(duration: 250.ms, delay: 90.ms),
                     // Contact action buttons
                     _ContactActions(supplier: live)
                         .animate()
@@ -310,12 +315,10 @@ class _BalanceCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Use the supplier's canonical balance — the same source of truth the
-    // rest of the app (overview list, payment flows) relies on. This balance
-    // is maintained atomically as opening balance + Σ(purchase outstanding)
-    // − Σ(payments), so it stays in sync everywhere. A negative balance means
-    // the supplier holds a credit/advance for us.
-    final balance = supplier.balance;
+    // Computed live from purchases − payments (the drift-free source of truth),
+    // not the incrementally-maintained stored balance which could fall out of
+    // sync. A negative balance means the supplier holds a credit/advance.
+    final balance = ref.watch(supplierAmountDueProvider(supplier.id));
     final isCredit = balance < 0;
     final displayAmount = balance.abs();
     final accentColor =
@@ -1312,7 +1315,7 @@ class _RecentActivity extends ConsumerWidget {
                     ref.read(inventoryProvider.notifier).adjustStock(
                           pid,
                           item.variantId ?? '${pid}_v0',
-                          -item.receivedQty.toInt(),
+                          -item.receivedQty,
                           'Receipt deleted \u2013 reversal',
                           valuationMethod: ref.read(appSettingsProvider).valuationMethod,
                         );
@@ -1399,4 +1402,163 @@ class _ActivityItem {
     this.payment,
     this.receipt,
   });
+}
+
+/// Per-supplier accrual position: what you owe for goods received, deposits
+/// prepaid on undelivered goods, and value still on order — plus the underlying
+/// billed / received / paid totals. Reconciles with the balance sheet.
+class _AccrualBreakdownCard extends ConsumerWidget {
+  final String supplierId;
+  final String currency;
+  const _AccrualBreakdownCard(
+      {required this.supplierId, required this.currency});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final a = ref.watch(supplierAccrualProvider(supplierId));
+    final fmt = NumberFormat('#,##0', 'en');
+    if (a.billed <= 0) return const SizedBox.shrink();
+
+    String money(double v) => '$currency ${fmt.format(v)}';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border:
+              Border.all(color: AppColors.borderLight.withValues(alpha: 0.4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.account_balance_wallet_rounded,
+                    size: 16, color: AppColors.primaryNavy),
+                const SizedBox(width: 8),
+                Text(l10n.supPayablesPosition,
+                    style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 14),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _tile(l10n.supPayable, l10n.supReceivedUnpaid,
+                        money(a.payable), AppColors.danger),
+                  ),
+                  _vDivider(),
+                  Expanded(
+                    child: _tile(l10n.supPrepaid, l10n.supDepositsPaid,
+                        money(a.prepaid), const Color(0xFF16A34A)),
+                  ),
+                  _vDivider(),
+                  Expanded(
+                    child: _tile(l10n.supOnOrder, l10n.supBilledNotReceived,
+                        money(a.onOrder), AppColors.accentOrange),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Divider(
+                height: 1, color: AppColors.borderLight.withValues(alpha: 0.6)),
+            const SizedBox(height: 10),
+            _row(l10n.supTotalBilled, money(a.billed)),
+            const SizedBox(height: 6),
+            _row(l10n.supReceivedValue, money(a.received)),
+            const SizedBox(height: 6),
+            _row(l10n.supCashPaid, money(a.paid)),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.backgroundLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 14, color: AppColors.textTertiary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(l10n.supAccrualHint,
+                        style: AppTypography.captionSmall.copyWith(
+                            color: AppColors.textTertiary, height: 1.35)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _vDivider() => Container(
+        width: 1,
+        margin: const EdgeInsets.symmetric(horizontal: 10),
+        color: AppColors.borderLight.withValues(alpha: 0.6),
+      );
+
+  Widget _tile(String label, String sub, String amount, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(label,
+                  style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(amount,
+              style: AppTypography.labelMedium
+                  .copyWith(color: color, fontWeight: FontWeight.w800)),
+        ),
+        const SizedBox(height: 2),
+        Text(sub,
+            style: AppTypography.captionSmall
+                .copyWith(color: AppColors.textTertiary, fontSize: 10),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis),
+      ],
+    );
+  }
+
+  Widget _row(String label, String value) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: AppTypography.bodySmall
+                  .copyWith(color: AppColors.textSecondary)),
+          Text(value,
+              style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+        ],
+      );
 }

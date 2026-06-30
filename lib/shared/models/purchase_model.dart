@@ -39,8 +39,9 @@ class Purchase {
 
   double get outstanding {
     if (paymentStatus == 2) return 0;
-    if (paymentStatus == 1) return roundMoney((total - amountPaid).clamp(0, double.maxFinite));
-    return total;
+    // For both Unpaid (0) and Partial (1): owed = total − amountPaid. Using
+    // `total` for Unpaid ignored any amount already paid and overstated dues.
+    return roundMoney((total - amountPaid).clamp(0, double.maxFinite));
   }
 
   /// Whether every item has been fully received via goods receipts.
@@ -50,6 +51,28 @@ class Purchase {
   /// Value of goods received so far (receivedQty * unitPrice per item).
   double get totalReceivedValue =>
       roundMoney(items.fold<double>(0, (s, i) => s + (i.receivedQty * i.unitPrice)));
+
+  // ── Accrual-basis position (matches the balance sheet) ──
+  // You only owe for goods you've actually RECEIVED; cash paid ahead of receipt
+  // is a prepayment (asset), and value billed-but-not-received is just an open
+  // commitment. So a 100k bill for 50kg:
+  //   • received 50kg, paid 20k → payable 80k
+  //   • received 0,    paid 0   → payable 0, on-order 100k
+  //   • received 0,    paid 20k → prepaid 20k, on-order 100k
+
+  /// What you owe for goods ALREADY RECEIVED but not yet paid (accrued payable).
+  double get accruedPayable =>
+      roundMoney((totalReceivedValue - amountPaid).clamp(0.0, double.maxFinite));
+
+  /// Cash paid beyond the value of goods received — a deposit on undelivered
+  /// goods. A current ASSET (supplier prepayment), not a payable.
+  double get supplierPrepayment =>
+      roundMoney((amountPaid - totalReceivedValue).clamp(0.0, double.maxFinite));
+
+  /// Value billed/ordered but NOT yet received — an open commitment, neither a
+  /// liability nor an asset until the goods arrive.
+  double get notYetReceivedValue =>
+      roundMoney((total - totalReceivedValue).clamp(0.0, double.maxFinite));
 
   String get statusLabel {
     switch (paymentStatus) {

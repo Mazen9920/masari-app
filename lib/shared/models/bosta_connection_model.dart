@@ -69,6 +69,11 @@ class BostaConnection {
   /// Orders before this date are excluded from AR calculation.
   final DateTime? cfArCutoffDate;
 
+  /// Current Bosta wallet balance — net cash Bosta holds for the business
+  /// (collected COD minus fees, not yet paid out). This is the authoritative
+  /// "Delivered · Awaiting Cashout" figure.
+  final double? cfWalletBalance;
+
   const BostaConnection({
     required this.userId,
     this.bostaBusinessId,
@@ -88,6 +93,7 @@ class BostaConnection {
     this.cfLastCashoutDate,
     this.cfLastCashoutSyncAt,
     this.cfArCutoffDate,
+    this.cfWalletBalance,
   });
 
   // ── Computed ─────────────────────────────────────────────
@@ -122,6 +128,7 @@ class BostaConnection {
     DateTime? cfLastCashoutDate,
     DateTime? cfLastCashoutSyncAt,
     DateTime? cfArCutoffDate,
+    double? cfWalletBalance,
   }) {
     return BostaConnection(
       userId: userId ?? this.userId,
@@ -142,6 +149,7 @@ class BostaConnection {
       cfLastCashoutDate: cfLastCashoutDate ?? this.cfLastCashoutDate,
       cfLastCashoutSyncAt: cfLastCashoutSyncAt ?? this.cfLastCashoutSyncAt,
       cfArCutoffDate: cfArCutoffDate ?? this.cfArCutoffDate,
+      cfWalletBalance: cfWalletBalance ?? this.cfWalletBalance,
     );
   }
 
@@ -171,6 +179,7 @@ class BostaConnection {
           'cf_last_cashout_sync_at': cfLastCashoutSyncAt!.toIso8601String(),
         if (cfArCutoffDate != null)
           'cf_ar_cutoff_date': cfArCutoffDate!.toIso8601String(),
+        if (cfWalletBalance != null) 'cf_wallet_balance': cfWalletBalance,
       };
 
   factory BostaConnection.fromJson(Map<String, dynamic> json) {
@@ -202,6 +211,7 @@ class BostaConnection {
       cfLastCashoutDate: _parseDateTime(json['cf_last_cashout_date']),
       cfLastCashoutSyncAt: _parseDateTime(json['cf_last_cashout_sync_at']),
       cfArCutoffDate: _parseDateTime(json['cf_ar_cutoff_date']),
+      cfWalletBalance: (json['cf_wallet_balance'] as num?)?.toDouble(),
     );
   }
 

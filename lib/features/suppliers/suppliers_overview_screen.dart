@@ -64,10 +64,29 @@ class _SuppliersOverviewScreenState
         purchases.fold<double>(0, (sum, p) => sum + p.total);
     final totalPayments =
         payments.fold<double>(0, (sum, p) => sum + p.amount);
-    final totalOutstanding =
-        suppliers.fold<double>(0, (sum, s) => sum + (s.balance > 0 ? s.balance : 0));
+    // Computed from source (purchases − unapplied payments) per supplier, then
+    // only positive dues summed — accurate regardless of stored-balance drift.
+    double dueFor(String sid) {
+      final owed = purchases
+          .where((p) => p.supplierId == sid)
+          .fold<double>(0, (a, p) => a + p.outstanding);
+      final credits = payments
+          .where((p) => p.supplierId == sid && p.appliedToPurchaseIds.isEmpty)
+          .fold<double>(0, (a, p) => a + p.amount);
+      return owed - credits;
+    }
+    final totalOutstanding = suppliers.fold<double>(
+        0, (sum, s) => sum + (dueFor(s.id) > 0 ? dueFor(s.id) : 0));
     final totalReceived =
         receipts.fold<double>(0, (sum, r) => sum + r.totalCost);
+
+    // Accrual position across all suppliers (mirrors the balance sheet).
+    double accPayable = 0, accPrepaid = 0, accOnOrder = 0;
+    for (final p in purchases) {
+      accPayable += p.accruedPayable;
+      accPrepaid += p.supplierPrepayment;
+      accOnOrder += p.notYetReceivedValue;
+    }
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -90,6 +109,14 @@ class _SuppliersOverviewScreenState
                       overdueCount: overdueCount,
                       currency: currency,
                     ).animate().fadeIn(duration: 250.ms),
+
+                    // Accrual position (payable / prepaid / on order)
+                    _buildAccrualDashboard(
+                      currency,
+                      accPayable,
+                      accPrepaid,
+                      accOnOrder,
+                    ).animate().fadeIn(duration: 250.ms, delay: 30.ms),
 
                     // Summary Cards
                     _buildSummaryCards(
@@ -778,6 +805,177 @@ class _SuppliersOverviewScreenState
     return '$currency ${NumberFormat('#,##0').format(amount)}';
   }
 
+  /// Accrual-basis position across all suppliers: what you actually owe
+  /// (goods received & unpaid), deposits prepaid on undelivered goods, and the
+  /// value still on order. Reconciles with the balance sheet's supplier
+  /// payable / prepayment lines.
+  Widget _buildAccrualDashboard(
+    String currency,
+    double payable,
+    double prepaid,
+    double onOrder,
+  ) {
+    if (payable <= 0 && prepaid <= 0 && onOrder <= 0) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.4)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryNavy.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.account_balance_wallet_rounded,
+                      size: 18, color: AppColors.primaryNavy),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  l10n.supPayablesPosition,
+                  style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.textPrimary, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _accrualTile(
+                      label: l10n.supPayable,
+                      sub: l10n.supReceivedUnpaid,
+                      amount: payable,
+                      color: AppColors.danger,
+                      currency: currency,
+                    ),
+                  ),
+                  _accrualDivider(),
+                  Expanded(
+                    child: _accrualTile(
+                      label: l10n.supPrepaid,
+                      sub: l10n.supDepositsPaid,
+                      amount: prepaid,
+                      color: const Color(0xFF16A34A),
+                      currency: currency,
+                    ),
+                  ),
+                  _accrualDivider(),
+                  Expanded(
+                    child: _accrualTile(
+                      label: l10n.supOnOrder,
+                      sub: l10n.supBilledNotReceived,
+                      amount: onOrder,
+                      color: AppColors.accentOrange,
+                      currency: currency,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.backgroundLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 14, color: AppColors.textTertiary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      l10n.supAccrualHint,
+                      style: AppTypography.captionSmall.copyWith(
+                          color: AppColors.textTertiary, height: 1.35),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _accrualDivider() => Container(
+        width: 1,
+        margin: const EdgeInsets.symmetric(horizontal: 10),
+        color: AppColors.borderLight.withValues(alpha: 0.6),
+      );
+
+  Widget _accrualTile({
+    required String label,
+    required String sub,
+    required double amount,
+    required Color color,
+    required String currency,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(label,
+                  style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _compactAmount(currency, amount),
+            style: AppTypography.labelMedium.copyWith(
+                color: color, fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(sub,
+            style: AppTypography.captionSmall
+                .copyWith(color: AppColors.textTertiary, fontSize: 10),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis),
+      ],
+    );
+  }
+
   Widget _buildSummaryCards(
     String currency,
     double totalPayments,
@@ -1199,16 +1397,26 @@ class _SummaryStrip extends StatelessWidget {
 // ═══════════════════════════════════════════════════════
 //  SUPPLIER CARD
 // ═══════════════════════════════════════════════════════
-class _SupplierCard extends StatelessWidget {
+class _SupplierCard extends ConsumerWidget {
   final Supplier supplier;
   final String currency;
 
   const _SupplierCard({required this.supplier, required this.currency});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final dateFormatter = DateFormat('MMM dd');
+    // Accurate amount due (purchases − payments), not the drift-prone balance.
+    final due = ref.watch(supplierAmountDueProvider(supplier.id));
+    final isSettled = due <= 0;
+    // Accrual position — surfaces deposits prepaid / value still on order.
+    final acc = ref.watch(supplierAccrualProvider(supplier.id));
+    String compact(double v) {
+      if (v >= 1000000) return '$currency ${(v / 1000000).toStringAsFixed(1)}M';
+      if (v >= 1000) return '$currency ${(v / 1000).toStringAsFixed(1)}k';
+      return '$currency ${NumberFormat('#,##0').format(v)}';
+    }
 
     return Material(
       color: Colors.white,
@@ -1318,17 +1526,17 @@ class _SupplierCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: supplier.isPaid
+                      color: isSettled
                           ? const Color(0xFFF1F5F9)
                           : const Color(0xFFFEF3C7),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      supplier.isPaid
+                      isSettled
                           ? l10n.paidLabel
-                          : l10n.amountDue('$currency ${NumberFormat('#,##0').format(supplier.balance)}'),
+                          : l10n.amountDue('$currency ${NumberFormat('#,##0').format(due)}'),
                       style: TextStyle(
-                        color: supplier.isPaid
+                        color: isSettled
                             ? AppColors.textTertiary
                             : const Color(0xFF92400E),
                         fontSize: 11,
@@ -1347,11 +1555,55 @@ class _SupplierCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                  // Accrual sub-badge: prepaid deposit (you're ahead) takes
+                  // priority, else value still on order (billed, not received).
+                  if (acc.prepaid > 0) ...[
+                    const SizedBox(height: 4),
+                    _accrualMiniBadge(
+                      const Color(0xFF16A34A),
+                      '${l10n.supPrepaid} ${compact(acc.prepaid)}',
+                    ),
+                  ] else if (acc.onOrder > 0) ...[
+                    const SizedBox(height: 4),
+                    _accrualMiniBadge(
+                      AppColors.accentOrange,
+                      '${l10n.supOnOrder} ${compact(acc.onOrder)}',
+                    ),
+                  ],
                 ],
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _accrualMiniBadge(Color color, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

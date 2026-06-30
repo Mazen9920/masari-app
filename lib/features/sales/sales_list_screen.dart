@@ -181,7 +181,7 @@ class _SalesListScreenState extends ConsumerState<SalesListScreen> {
           await inventoryNotifier.adjustStock(
             item.productId!,
             item.variantId ?? '${item.productId}_v0',
-            item.quantity.toInt(),
+            item.quantity.toDouble(),
             'Order cancelled',
             valuationMethod: valMethod,
           );

@@ -624,7 +624,7 @@ class ReceiptDetailScreen extends ConsumerWidget {
                     ref.read(inventoryProvider.notifier).adjustStock(
                           pid,
                           item.variantId ?? '${pid}_v0',
-                          -item.receivedQty.toInt(),
+                          -item.receivedQty,
                           l10n.receiptDeletedReversal,
                           valuationMethod: ref.read(appSettingsProvider).valuationMethod,
                         );

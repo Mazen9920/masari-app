@@ -4,6 +4,10 @@
 *.pyc
 *.swp
 .DS_Store
+
+# Local-only: one-off DB fix scripts + financial backups, and Claude config
+scripts/
+.claude/
 .atom/
 .build/
 .buildlog/

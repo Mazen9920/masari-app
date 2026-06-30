@@ -137,7 +137,7 @@ class FirestoreProductRepository implements ProductRepository {
 
   @override
   Future<Result<Product>> adjustStock(
-      String id, String variantId, int delta, String reason,
+      String id, String variantId, double delta, String reason,
       {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
     final online = await hasConnectivity();
     if (online) {
@@ -170,7 +170,7 @@ class FirestoreProductRepository implements ProductRepository {
 
   /// Batch-based stock adjustment that works offline.
   Future<Result<Product>> _adjustStockBatch(
-      String id, String variantId, int delta, String reason,
+      String id, String variantId, double delta, String reason,
       {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
     try {
       final docRef = _collection.doc(id);
@@ -234,7 +234,7 @@ class FirestoreProductRepository implements ProductRepository {
 
   /// Transaction-based stock adjustment (original implementation).
   Future<Result<Product>> _adjustStockTransaction(
-      String id, String variantId, int delta, String reason,
+      String id, String variantId, double delta, String reason,
       {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
     try {
       final result = await _firestore.runTransaction<Product>((txn) async {
@@ -332,18 +332,18 @@ class FirestoreProductRepository implements ProductRepository {
         if (valuationMethod == 'average' || srcLayers.isEmpty) {
           movementUnitCost = srcVariant.costPrice;
           if (srcLayers.isNotEmpty) {
-            var remaining = qty;
-            final totalLayerQty = srcLayers.fold<int>(0, (s, l) => s + l.remainingQty);
+            var remaining = qty.toDouble();
+            final totalLayerQty = srcLayers.fold<double>(0.0, (s, l) => s + l.remainingQty);
             if (totalLayerQty > 0) {
               final updated = <CostLayer>[];
               for (final layer in srcLayers) {
-                final take = (layer.remainingQty * qty / totalLayerQty).floor().clamp(0, layer.remainingQty);
+                final take = (layer.remainingQty * qty / totalLayerQty).clamp(0.0, layer.remainingQty);
                 final newQty = layer.remainingQty - take;
                 remaining -= take;
                 if (newQty > 0) updated.add(layer.copyWith(remainingQty: newQty));
               }
               for (var i = 0; i < updated.length && remaining > 0; i++) {
-                final take = remaining.clamp(0, updated[i].remainingQty);
+                final take = remaining.clamp(0.0, updated[i].remainingQty);
                 final newQty = updated[i].remainingQty - take;
                 remaining -= take;
                 if (newQty > 0) {
@@ -362,7 +362,7 @@ class FirestoreProductRepository implements ProductRepository {
           } else {
             srcLayers.sort((a, b) => a.date.compareTo(b.date));
           }
-          var remaining = qty;
+          var remaining = qty.toDouble();
           var totalCost = 0.0;
           final updated = <CostLayer>[];
           for (final layer in srcLayers) {
@@ -378,7 +378,7 @@ class FirestoreProductRepository implements ProductRepository {
         }
 
         // Recalculate source WAC
-        final srcTotalLayerStock = srcLayers.fold<int>(0, (s, l) => s + l.remainingQty);
+        final srcTotalLayerStock = srcLayers.fold<double>(0.0, (s, l) => s + l.remainingQty);
         double srcNewCost;
         if (srcTotalLayerStock > 0) {
           final totalValue = srcLayers.fold<double>(0, (s, l) => s + l.remainingQty * l.unitCost);
@@ -389,7 +389,7 @@ class FirestoreProductRepository implements ProductRepository {
 
         final srcMovement = StockMovement(
           type: 'Breakdown',
-          quantity: -qty,
+          quantity: -qty.toDouble(),
           dateTime: DateTime.now(),
           variantId: sourceVariantId,
           unitCost: movementUnitCost,
@@ -423,11 +423,11 @@ class FirestoreProductRepository implements ProductRepository {
           outLayers.add(CostLayer(
             date: DateTime.now(),
             unitCost: outUnitCost,
-            remainingQty: outQty,
+            remainingQty: outQty.toDouble(),
           ));
 
           // Recalculate WAC for output
-          final outTotalStock = outLayers.fold<int>(0, (s, l) => s + l.remainingQty);
+          final outTotalStock = outLayers.fold<double>(0.0, (s, l) => s + l.remainingQty);
           double outNewCost;
           if (outTotalStock > 0) {
             final outTotalValue = outLayers.fold<double>(0, (s, l) => s + l.remainingQty * l.unitCost);
@@ -438,7 +438,7 @@ class FirestoreProductRepository implements ProductRepository {
 
           final outMovement = StockMovement(
             type: 'Breakdown',
-            quantity: outQty,
+            quantity: outQty.toDouble(),
             dateTime: DateTime.now(),
             variantId: outVarId,
             unitCost: outUnitCost,
@@ -471,5 +471,113 @@ class FirestoreProductRepository implements ProductRepository {
     } catch (e) {
       return Result.failure('Failed to breakdown stock: $e');
     }
+  }
+
+  @override
+  Future<Result<List<({String productId, String variantId, String name, double quantity, double unitCost, double totalCost})>>>
+      consumeMaterialsForProduction({
+    required List<({String productId, String variantId, String name, double quantity})> materials,
+    required String valuationMethod,
+  }) async {
+    if (materials.isEmpty) {
+      return Result.success(const []);
+    }
+    try {
+      final result = await _firestore.runTransaction<
+          List<({String productId, String variantId, String name, double quantity, double unitCost, double totalCost})>>((txn) async {
+        // Group requested consumptions by product doc so we read each once.
+        final byProduct = <String, List<({String variantId, String name, double quantity})>>{};
+        for (final m in materials) {
+          byProduct.putIfAbsent(m.productId, () => []).add(
+                (variantId: m.variantId, name: m.name, quantity: m.quantity),
+              );
+        }
+
+        // Firestore requires all reads before any writes.
+        final snapshots = <String, DocumentSnapshot<Map<String, dynamic>>>{};
+        for (final productId in byProduct.keys) {
+          final docRef = _collection.doc(productId);
+          snapshots[productId] = await txn.get(docRef);
+        }
+
+        final consumed = <({String productId, String variantId, String name, double quantity, double unitCost, double totalCost})>[];
+
+        for (final entry in byProduct.entries) {
+          final productId = entry.key;
+          final snapshot = snapshots[productId]!;
+          if (!snapshot.exists) {
+            throw Exception('Material product not found: $productId');
+          }
+          final data = snapshot.data()!;
+          data['id'] = snapshot.id;
+          var product = Product.fromJson(data);
+
+          // Apply each variant consumption, threading the updated product so
+          // multiple components from the same doc compound correctly.
+          for (final req in entry.value) {
+            if (req.quantity <= 0) continue;
+            final variant = product.variantById(req.variantId);
+            if (variant == null) {
+              throw Exception('Material variant not found: ${req.variantId}');
+            }
+            if (variant.currentStock < req.quantity) {
+              throw Exception(
+                'Insufficient material: ${product.name} / ${variant.displayName} '
+                'has ${variant.currentStock}, need ${req.quantity}',
+              );
+            }
+            final change = computeStockChange(
+              product: product,
+              variantId: req.variantId,
+              delta: -req.quantity,
+              valuationMethod: valuationMethod,
+              reason: 'Production – consume',
+            );
+            product = change.updatedProduct;
+            final unitCost = change.movementUnitCost;
+            consumed.add((
+              productId: productId,
+              variantId: req.variantId,
+              name: req.name,
+              quantity: req.quantity,
+              unitCost: unitCost,
+              totalCost: (unitCost * req.quantity * 100).roundToDouble() / 100,
+            ));
+          }
+
+          final json = product.toJson();
+          json.remove('id');
+          json['updated_at'] = DateTime.now().toIso8601String();
+          json['_last_modified_by'] = 'masari';
+          txn.update(_collection.doc(productId), json);
+        }
+
+        return consumed;
+      });
+
+      return Result.success(result);
+    } catch (e) {
+      return Result.failure('Failed to consume materials: $e');
+    }
+  }
+
+  @override
+  Future<Result<Product>> addProductionOutput({
+    required String productId,
+    required String variantId,
+    required double qty,
+    required double unitCost,
+  }) async {
+    // Finished goods are added as a fresh cost layer at the production unit
+    // cost. `valuationMethod` is irrelevant for a positive delta with an
+    // explicit unitCost; pass 'fifo' as the layer-append path.
+    return adjustStock(
+      productId,
+      variantId,
+      qty,
+      'Production – finished',
+      unitCost: unitCost,
+      valuationMethod: 'fifo',
+    );
   }
 }

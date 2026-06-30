@@ -145,7 +145,7 @@ class ApiProductRepository implements ProductRepository {
   }
 
   @override
-  Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
+  Future<Result<Product>> adjustStock(String id, String variantId, double delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false}) async {
     try {
       final body = <String, dynamic>{'delta': delta, 'reason': reason, 'variant_id': variantId};
       if (unitCost != null) body['unitCost'] = unitCost;
@@ -184,5 +184,24 @@ class ApiProductRepository implements ProductRepository {
   @override
   Future<Result<void>> markInventoryPushed(String id, String variantId, int stock) async {
     return Result.failure('markInventoryPushed is not supported via the API repository');
+  }
+
+  @override
+  Future<Result<List<({String productId, String variantId, String name, double quantity, double unitCost, double totalCost})>>>
+      consumeMaterialsForProduction({
+    required List<({String productId, String variantId, String name, double quantity})> materials,
+    required String valuationMethod,
+  }) async {
+    return Result.failure('consumeMaterialsForProduction is not supported via the API repository');
+  }
+
+  @override
+  Future<Result<Product>> addProductionOutput({
+    required String productId,
+    required String variantId,
+    required double qty,
+    required double unitCost,
+  }) async {
+    return Result.failure('addProductionOutput is not supported via the API repository');
   }
 }

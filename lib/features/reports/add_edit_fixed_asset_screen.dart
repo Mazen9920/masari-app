@@ -40,6 +40,9 @@ class _AddEditFixedAssetScreenState
   DateTime? _disposalDate;
 
   bool _saving = false;
+  // New cash purchases default to deducting cash; turn off for a non-cash
+  // (owner-contributed) asset.
+  bool _cashPurchase = true;
 
   @override
   void initState() {
@@ -103,7 +106,7 @@ class _AddEditFixedAssetScreenState
     final notifier = ref.read(fixedAssetsProvider.notifier);
     final ok = _isEdit
         ? await notifier.updateAsset(asset)
-        : await notifier.add(asset);
+        : await notifier.add(asset, postCashOutflow: _cashPurchase);
 
     if (!mounted) return;
     setState(() => _saving = false);
@@ -203,6 +206,25 @@ class _AddEditFixedAssetScreenState
                 },
               ),
             ),
+
+            // ── Cash purchase toggle (new assets only) ──
+            if (!_isEdit)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _cashPurchase,
+                onChanged: (v) => setState(() => _cashPurchase = v),
+                title: const Text(
+                  'Paid in cash',
+                  style:
+                      TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  _cashPurchase
+                      ? 'Deducts the price from cash and records the purchase (no P&L hit).'
+                      : 'No cash deducted — use for an owner-contributed (non-cash) asset.',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
 
             // ── Purchase Date ──
             _field(

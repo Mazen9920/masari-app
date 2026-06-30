@@ -440,7 +440,7 @@ class ShopifySyncService {
           (v) => v.id == mapping.revvoVariantId,
           orElse: () => product.variants.first,
         );
-        revvoStock = variant.currentStock;
+        revvoStock = variant.currentStock.round();
         if (product.variants.length > 1) {
           variantName = variant.optionValues.values.join(' / ');
         }
@@ -573,7 +573,7 @@ class ShopifySyncService {
           (v) => v.id == mapping.revvoVariantId,
           orElse: () => product.variants.first,
         );
-        revvoStock = variant.currentStock;
+        revvoStock = variant.currentStock.round();
         if (product.variants.length > 1) {
           variantName = variant.optionValues.values.join(' / ');
         }
@@ -1261,7 +1261,7 @@ class ShopifySyncService {
       await _productRepo.adjustStock(
         item.revvoProductId,
         item.revvoVariantId,
-        item.delta,
+        item.delta.toDouble(),
         'Shopify inventory sync',
         unitCost: unitCost,
         valuationMethod: valuationMethod,

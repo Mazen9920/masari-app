@@ -573,7 +573,7 @@ class _EditReceiptScreenState extends ConsumerState<EditReceiptScreen> {
             await ref.read(inventoryProvider.notifier).adjustStock(
                   pid,
                   variantId,
-                  delta,
+                  delta.toDouble(),
                   delta > 0
                       ? l10n.receiptEditAdded
                       :  l10n.receiptEditReduced,

@@ -569,6 +569,41 @@ async function syncCashoutsForUser(
 
   const shipmentsMatched = await matchShipmentsToCashouts(db, userId);
 
+  // ── Step 3.5: Current wallet balance = "awaiting cashout" ──
+  // The wallet's running balance is the authoritative net cash Bosta holds for
+  // the business (collected COD minus fees, not yet paid out). The AR dashboard
+  // uses this for the "Delivered · Awaiting Cashout" bucket instead of summing
+  // (stale) delivered-shipment COD.
+  try {
+    const wRes = await fetch(
+      `${BOSTA_DASHBOARD_API}/wallet/transactions?limit=1&page=1`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": dashboardToken,
+        },
+      },
+    );
+    if (wRes.ok) {
+      const wJson = await wRes.json() as ApiResult;
+      const list = (wJson.data as Record<string, unknown> | undefined)
+        ?.list as ApiResult[] | undefined;
+      if (list && list.length > 0) {
+        const balance = round2(Number(list[0].balance) || 0);
+        await db.collection("bosta_connections").doc(userId).update({
+          cf_wallet_balance: balance,
+          cf_wallet_balance_at: FieldValue.serverTimestamp(),
+        });
+        logger.info("Wallet balance updated", {userId, balance});
+      }
+    } else {
+      logger.warn("Wallet balance fetch non-OK", {userId, status: wRes.status});
+    }
+  } catch (err) {
+    logger.warn("Wallet balance fetch failed", {userId, error: String(err)});
+  }
+
   // ── Step 4: Compute and save summary ─────────────────────
 
   const summary = await computeAndSaveCashoutSummary(db, userId);
@@ -1362,16 +1397,25 @@ async function recheckAwaitingSettlement(
   if (awaitingSnap.empty) return;
 
   const now = Date.now();
-  // Only recheck terminal-state deliveries + skip recently checked
+  // Recheck ALL awaiting shipments not checked within the throttle window —
+  // terminal ones to capture settlement, NON-terminal (in-transit) ones to
+  // refresh their state. Without this, a shipment first seen as "Created"/
+  // in-transit keeps that stale state forever even after Bosta delivers it, so
+  // delivered-awaiting-cashout orders wrongly show as "In Transit" and the
+  // "Awaiting Cashout" bucket reads 0. Oldest-checked first, capped per run to
+  // bound API load.
+  const recheckCap = 300;
   const entries: CatalogEntry[] = awaitingSnap.docs
     .filter((doc) => {
-      const d = doc.data();
-      const state = Number(d.state) || 0;
-      if (!isTerminalState(state)) return false;
-      // Skip if checked within recheck window
-      const lastCheck = d.last_settlement_check?.toMillis?.() ?? 0;
+      const lastCheck = doc.data().last_settlement_check?.toMillis?.() ?? 0;
       return (now - lastCheck) > SETTLEMENT_RECHECK_MS;
     })
+    .sort((a, b) => {
+      const la = a.data().last_settlement_check?.toMillis?.() ?? 0;
+      const lb = b.data().last_settlement_check?.toMillis?.() ?? 0;
+      return la - lb;
+    })
+    .slice(0, recheckCap)
     .map((doc) => {
       const d = doc.data();
       return {
@@ -1387,7 +1431,7 @@ async function recheckAwaitingSettlement(
     })
     .filter((e) => e.trackingNumber);
 
-  logger.info("Re-checking awaiting settlement (terminal, not recently checked)", {
+  logger.info("Re-checking awaiting shipments (refresh state + settle)", {
     userId, total: awaitingSnap.size, eligible: entries.length,
   });
 

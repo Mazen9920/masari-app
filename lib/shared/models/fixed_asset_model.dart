@@ -83,6 +83,42 @@ class FixedAsset {
     }
   }
 
+  /// Full months elapsed between purchase and [asOf] (capped at useful life,
+  /// and at the disposal date if disposed before [asOf]).
+  int monthsDepreciatedAsOf(DateTime asOf) {
+    final end = (disposalDate != null && disposalDate!.isBefore(asOf))
+        ? disposalDate!
+        : asOf;
+    final months =
+        (end.year - purchaseDate.year) * 12 + (end.month - purchaseDate.month);
+    return months.clamp(0, usefulLifeMonths);
+  }
+
+  /// Accumulated depreciation as of an arbitrary [asOf] date (so callers can
+  /// split depreciation expense into prior-period vs current-period). Mirrors
+  /// [accumulatedDepreciation] but anchored to [asOf] instead of `now`.
+  double accumulatedDepreciationAsOf(DateTime asOf) {
+    final m = monthsDepreciatedAsOf(asOf);
+    switch (depreciationMethod) {
+      case DepreciationMethod.straightLine:
+        return (monthlyDepreciation * m).clamp(0, depreciableAmount);
+      case DepreciationMethod.decliningBalance:
+        final rate = 2.0 / usefulLifeMonths;
+        double remaining = purchasePrice;
+        double totalDep = 0;
+        for (int i = 0; i < m; i++) {
+          final dep = remaining * rate;
+          if (remaining - dep < salvageValue) {
+            totalDep += remaining - salvageValue;
+            break;
+          }
+          totalDep += dep;
+          remaining -= dep;
+        }
+        return totalDep.clamp(0, depreciableAmount);
+    }
+  }
+
   /// Current net book value (accounts for impairment).
   double get netBookValue => (purchasePrice - accumulatedDepreciation - impairmentLoss)
       .clamp(0, purchasePrice);
@@ -257,6 +293,7 @@ class AssetEvent {
 }
 
 enum AssetEventType {
+  acquisition,
   sale,
   disposal,
   impairment,
@@ -264,6 +301,8 @@ enum AssetEventType {
 
   String get label {
     switch (this) {
+      case acquisition:
+        return 'Acquisition';
       case sale:
         return 'Sale';
       case disposal:
@@ -277,6 +316,8 @@ enum AssetEventType {
 
   String get icon {
     switch (this) {
+      case acquisition:
+        return '🧾';
       case sale:
         return '💰';
       case disposal:

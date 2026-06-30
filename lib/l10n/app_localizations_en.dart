@@ -1189,6 +1189,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openingCapital => 'Opening Capital';
 
   @override
+  String get ownersCapital => 'Owner\'s Capital';
+
+  @override
+  String get openingRetainedEarnings => 'Opening Retained Earnings';
+
+  @override
   String get retainedEarnings => 'Retained Earnings';
 
   @override
@@ -1200,6 +1206,123 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reconAdjustment => 'Reconciliation Adjustment';
+
+  @override
+  String get unexplainedDifference => 'Unexplained difference';
+
+  @override
+  String get ownerContributions => 'Owner contributions';
+
+  @override
+  String get ownerWithdrawals => 'Owner withdrawals';
+
+  @override
+  String get depreciationExpense => 'Depreciation';
+
+  @override
+  String get bsDataChecks => 'Data checks';
+
+  @override
+  String get bsWarnReceivablesOverlap =>
+      'Both manual \"Other receivables\" and computed \"Sales receivables\" are set — verify they don\'t double-count the same invoices.';
+
+  @override
+  String get bsWarnOrphanSalary =>
+      'Salary payments exceed the tracked unpaid-salary liability — the excess bypasses the P&L. It may be miscategorized (use \"Salary expense\") or you\'re missing a salary liability record.';
+
+  @override
+  String get cogsAnalysisTitle => 'COGS Analysis';
+
+  @override
+  String get cogsAnalyze => 'Analyze';
+
+  @override
+  String get cogsIntegrityChecks => 'Integrity checks';
+
+  @override
+  String get cogsPriceChanges => 'Cost price changes';
+
+  @override
+  String get cogsByProduct => 'By product';
+
+  @override
+  String get cogsTransactions => 'COGS transactions';
+
+  @override
+  String get cogsAllRecorded => 'COGS is fully recorded — no issues found.';
+
+  @override
+  String cogsIssuesFound(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count COGS issues need attention',
+      one: '1 COGS issue needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cogsTotal => 'Total COGS';
+
+  @override
+  String get cogsGrossMargin => 'Gross margin';
+
+  @override
+  String get cogsOfRevenue => '% of revenue';
+
+  @override
+  String get cogsGrossProfit => 'Gross profit';
+
+  @override
+  String get cogsOrdersMissing => 'Orders missing COGS';
+
+  @override
+  String get cogsNoneFound => 'None';
+
+  @override
+  String get cogsItems => 'items';
+
+  @override
+  String get cogsFix => 'Fix';
+
+  @override
+  String cogsAndMore(int count) {
+    return '+$count more';
+  }
+
+  @override
+  String get cogsItemsMissingCost => 'Items missing cost';
+
+  @override
+  String cogsItemsMissingCostHint(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count products have variants with no cost price. Tap to set them.',
+      one: '1 product has variants with no cost price. Tap to set them.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cogsReconciliation => 'Sales vs ledger';
+
+  @override
+  String get cogsMatched => 'Matched';
+
+  @override
+  String get cogsFromSales => 'COGS implied by sales';
+
+  @override
+  String get cogsRecordedLedger => 'Recorded in ledger';
+
+  @override
+  String get cogsUnits => 'units';
+
+  @override
+  String get cogsNoTransactions => 'No COGS transactions this period';
 
   @override
   String get capitalAutoHint =>
@@ -2479,6 +2602,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get catShippingFees => 'Shipping Fees';
+
+  @override
+  String get catManufacturingCost => 'Manufacturing Cost';
 
   @override
   String get catCapitalInjection => 'Capital Injection';
@@ -6452,7 +6578,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get receiptDetailsTitle => 'Receipt Details';
 
   @override
-  String get totalCostLabel => 'Total Cost';
+  String get totalCostLabel => 'Total cost';
 
   @override
   String get fulfilmentLabel => 'Fulfilment';
@@ -7381,6 +7507,559 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get categoryShippingExpense => 'Shipping Expense';
+
+  @override
+  String get categoryManufacturingCost => 'Manufacturing Cost';
+
+  @override
+  String get manufacturingTitle => 'Manufacturing';
+
+  @override
+  String get manufacturingSubtitle => 'Bills of materials & production runs';
+
+  @override
+  String get manufacturingRecipesTab => 'Recipes';
+
+  @override
+  String get manufacturingProductionTab => 'Production';
+
+  @override
+  String get billOfMaterials => 'Bill of Materials';
+
+  @override
+  String get editBillOfMaterials => 'Edit Bill of Materials';
+
+  @override
+  String get bomMaterials => 'Materials';
+
+  @override
+  String get bomAddMaterial => 'Add Material';
+
+  @override
+  String get bomNoMaterials => 'No materials added yet';
+
+  @override
+  String get bomQtyPerUnit => 'Qty per unit';
+
+  @override
+  String get bomUnit => 'Unit';
+
+  @override
+  String get bomMatchColor => 'Match color';
+
+  @override
+  String get bomMatchColorHint =>
+      'Use the material variant matching the finished product\'s color';
+
+  @override
+  String get bomApplyScrap => 'Apply scrap %';
+
+  @override
+  String get bomLaborCost => 'Labor / finishing cost per unit';
+
+  @override
+  String get bomFinishingSupplier => 'Finishing supplier';
+
+  @override
+  String get bomOptional => 'Optional';
+
+  @override
+  String get bomSaved => 'Bill of materials saved';
+
+  @override
+  String get bomProductsEmpty => 'No products have a bill of materials yet';
+
+  @override
+  String get defineBom => 'Define BOM';
+
+  @override
+  String get productionPlanner => 'Production Planner';
+
+  @override
+  String get productionPlannerSubtitle =>
+      'Estimate materials, cost & shortfalls';
+
+  @override
+  String get finishedProduct => 'Finished product';
+
+  @override
+  String get variantLabel => 'Variant';
+
+  @override
+  String get quantityToProduce => 'Quantity to produce';
+
+  @override
+  String get materialRequirements => 'Material Requirements';
+
+  @override
+  String get requiredQty => 'Required';
+
+  @override
+  String get availableQty => 'Available';
+
+  @override
+  String get shortfallQty => 'Shortfall';
+
+  @override
+  String get materialsCostLabel => 'Materials cost';
+
+  @override
+  String get laborCostLabel => 'Labor cost';
+
+  @override
+  String get unitCostLabel => 'Unit cost';
+
+  @override
+  String get startProduction => 'Start Production';
+
+  @override
+  String get createPurchaseOrders => 'Create POs for shortfalls';
+
+  @override
+  String get shortfallWarning =>
+      'Not enough raw materials in stock for this run';
+
+  @override
+  String get productionOrders => 'Production Orders';
+
+  @override
+  String get productionOrderTitle => 'Production Order';
+
+  @override
+  String get statusInProgress => 'In Progress';
+
+  @override
+  String get statusCompleted => 'Completed';
+
+  @override
+  String get statusCancelled => 'Cancelled';
+
+  @override
+  String get workInProgress => 'Work in Progress';
+
+  @override
+  String get completeRun => 'Complete';
+
+  @override
+  String get cancelRun => 'Cancel Run';
+
+  @override
+  String get payFinishingNow => 'Pay finishing cost now (cash)';
+
+  @override
+  String get addFinishingToPayable => 'Add finishing cost to supplier payable';
+
+  @override
+  String get materialsConsumed => 'Materials consumed';
+
+  @override
+  String get noProductionOrders => 'No production runs yet';
+
+  @override
+  String get productionStartedMsg => 'Production started';
+
+  @override
+  String get productionCompletedMsg => 'Production completed';
+
+  @override
+  String get productionCancelledMsg => 'Production cancelled';
+
+  @override
+  String get selectBomProduct => 'Select a product';
+
+  @override
+  String get completeProductionConfirm => 'Add the finished units to stock?';
+
+  @override
+  String get cancelProductionConfirm =>
+      'Cancel this run and restock materials?';
+
+  @override
+  String get mfgCostAndMargin => 'Cost & margin';
+
+  @override
+  String get mfgMargin => 'Margin';
+
+  @override
+  String get mfgSellingPrice => 'Selling price';
+
+  @override
+  String get mfgMaterialsPerUnit => 'Materials / unit';
+
+  @override
+  String get mfgLaborPerUnit => 'Finishing / unit';
+
+  @override
+  String get mfgUnitCostShort => 'Unit cost';
+
+  @override
+  String get mfgMaxFromStock => 'Max from stock';
+
+  @override
+  String get mfgUnits => 'units';
+
+  @override
+  String get mfgInStock => 'in stock';
+
+  @override
+  String get mfgLineCost => 'Line cost';
+
+  @override
+  String get mfgBomEmptyHint =>
+      'Add materials below to see live unit cost and margin.';
+
+  @override
+  String get mfgBelowCost => 'Below cost';
+
+  @override
+  String get mfgSearchProducts => 'Search products';
+
+  @override
+  String get mfgRecipes => 'recipes';
+
+  @override
+  String get mfgAvgMargin => 'avg margin';
+
+  @override
+  String get mfgFilterAll => 'All';
+
+  @override
+  String get mfgDoneThisMonth => 'Done this month';
+
+  @override
+  String get mfgRunNotesOptional => 'Notes (optional)';
+
+  @override
+  String get mfgUseMax => 'Max';
+
+  @override
+  String get mfgMaterialsWord => 'materials';
+
+  @override
+  String get mfgProducedWord => 'produced';
+
+  @override
+  String get mfgMarginAtSale => 'Margin at sale';
+
+  @override
+  String get mfgViewProduct => 'View product';
+
+  @override
+  String get mfgNotesLabel => 'Notes';
+
+  @override
+  String get mfgSelectMaterial => 'Select a material';
+
+  @override
+  String get mfgNoMargin => 'Set a selling price to see margin';
+
+  @override
+  String get mfgNoStockForRun => 'Not enough stock to produce any units';
+
+  @override
+  String get mfgRunsCount => 'runs';
+
+  @override
+  String get mfgProgress => 'Progress';
+
+  @override
+  String get mfgSortMargin => 'Margin';
+
+  @override
+  String get mfgSortCost => 'Cost';
+
+  @override
+  String get mfgSortName => 'Name';
+
+  @override
+  String get mfgSortNewest => 'Newest';
+
+  @override
+  String get mfgSortOldest => 'Oldest';
+
+  @override
+  String get mfgFilterBelowCost => 'Below cost';
+
+  @override
+  String get mfgFilterNeedsRecipe => 'Needs recipe';
+
+  @override
+  String get mfgFilterHasRecipe => 'Has recipe';
+
+  @override
+  String get mfgFinishingWord => 'Finishing';
+
+  @override
+  String get mfgMaterialsLabel => 'Materials';
+
+  @override
+  String get mfgCostBreakdown => 'Cost breakdown';
+
+  @override
+  String get mfgSort => 'Sort';
+
+  @override
+  String get mfgHealthyMargin => 'Healthy';
+
+  @override
+  String get mfgThinMargin => 'Thin';
+
+  @override
+  String get mfgNoResults => 'No products match these filters';
+
+  @override
+  String get mfgSearchMaterials => 'Search materials';
+
+  @override
+  String get mfgManufacturingInvoice => 'Manufacturing invoice';
+
+  @override
+  String get mfgManufacturingPayable => 'Manufacturing payable';
+
+  @override
+  String get wipCapitalTiedUp => 'Capital tied up';
+
+  @override
+  String get wipMaterialsValue => 'Materials value';
+
+  @override
+  String get supPayablesPosition => 'Payables position';
+
+  @override
+  String get supPayable => 'Payable';
+
+  @override
+  String get supPrepaid => 'Prepaid';
+
+  @override
+  String get supOnOrder => 'On order';
+
+  @override
+  String get supReceivedUnpaid => 'Received · unpaid';
+
+  @override
+  String get supDepositsPaid => 'Deposits paid';
+
+  @override
+  String get supBilledNotReceived => 'Billed · not received';
+
+  @override
+  String get supAccrualHint =>
+      'You owe only for goods received. Deposits on undelivered goods are prepayments, not payables.';
+
+  @override
+  String get supTotalBilled => 'Total billed';
+
+  @override
+  String get supReceivedValue => 'Received value';
+
+  @override
+  String get supCashPaid => 'Cash paid';
+
+  @override
+  String get supNetPosition => 'Net position';
+
+  @override
+  String get wipFinishingOwed => 'Finishing on completion';
+
+  @override
+  String get wipUnitsInProduction => 'Units in production';
+
+  @override
+  String get wipAvgProgress => 'Avg. progress';
+
+  @override
+  String get wipByProduct => 'By product';
+
+  @override
+  String get wipActiveRuns => 'Active runs';
+
+  @override
+  String get wipOverview => 'WIP overview';
+
+  @override
+  String wipDaysRunning(int days) {
+    return '${days}d running';
+  }
+
+  @override
+  String get wipStartedToday => 'Started today';
+
+  @override
+  String get mfgProductionOverview => 'Production overview';
+
+  @override
+  String get mfgThisMonth => 'This month';
+
+  @override
+  String get mfgCompletedUnits => 'Completed units';
+
+  @override
+  String get mfgAvgUnitCost => 'Avg. unit cost';
+
+  @override
+  String get mfgTotalRuns => 'Total runs';
+
+  @override
+  String get mfgCostBuildUp => 'Cost build-up';
+
+  @override
+  String get mfgTimeline => 'Timeline';
+
+  @override
+  String get mfgStarted => 'Started';
+
+  @override
+  String get mfgPending => 'Pending';
+
+  @override
+  String get mfgUnitsProduced => 'Units produced';
+
+  @override
+  String get mfgLast6Months => 'Last 6 months';
+
+  @override
+  String get mfgManufacturer => 'Manufacturer';
+
+  @override
+  String get mfgFinishingPhase => 'Finishing phase';
+
+  @override
+  String get mfgInHouse => 'Made in-house — no finishing supplier';
+
+  @override
+  String get mfgPerUnit => 'unit';
+
+  @override
+  String get mfgDeleteOrderConfirm =>
+      'Delete this cancelled production order? This cannot be undone.';
+
+  @override
+  String get mfgOrderDeletedMsg => 'Production order deleted';
+
+  @override
+  String get mfgOrderUpdatedMsg => 'Production order updated';
+
+  @override
+  String get mfgEditOrder => 'Edit production order';
+
+  @override
+  String get mfgLinkedRecords => 'Linked records';
+
+  @override
+  String get mfgSupplierBill => 'Supplier bill';
+
+  @override
+  String get mfgGoodsReceipt => 'Goods received';
+
+  @override
+  String get mfgUnitsShort => 'units';
+
+  @override
+  String get mfgReceiveUnits => 'Receive units';
+
+  @override
+  String get mfgUnitsToReceive => 'Units to receive';
+
+  @override
+  String get mfgRemaining => 'remaining';
+
+  @override
+  String get mfgReceived => 'received';
+
+  @override
+  String get mfgReceiveBatch => 'Receive';
+
+  @override
+  String get mfgMadeToOrder => 'Produced with the order';
+
+  @override
+  String get mfgMadeToOrderHint =>
+      'Supplier makes it during production — cost counts, not pulled from stock';
+
+  @override
+  String get mfgMadeToOrderShort => 'Made to order';
+
+  @override
+  String get mfgCostLayers => 'Cost layers';
+
+  @override
+  String get mfgNextOut => 'next out';
+
+  @override
+  String get mfgNoCostLayers =>
+      'No layers yet — receive goods to start FIFO tracking';
+
+  @override
+  String get mfgReviewPOs => 'Review purchase orders';
+
+  @override
+  String get mfgReviewPOsSub => 'Confirm quantities, prices & suppliers';
+
+  @override
+  String get mfgPoReference => 'Reference';
+
+  @override
+  String get mfgPoOrderDate => 'Order date';
+
+  @override
+  String get mfgPoLineQty => 'Qty';
+
+  @override
+  String get mfgPoUnitPrice => 'Unit price';
+
+  @override
+  String get mfgPoGrandTotal => 'Total';
+
+  @override
+  String get mfgPoItemsWord => 'items';
+
+  @override
+  String get mfgPoConfirm => 'Create purchase orders';
+
+  @override
+  String get mfgPoCreatedN => 'purchase orders created';
+
+  @override
+  String get mfgPoNoneSelected => 'Select at least one supplier';
+
+  @override
+  String get mfgPoUnassigned =>
+      'No supplier on file — will be saved unassigned';
+
+  @override
+  String get mfgPoOrdersWord => 'orders';
+
+  @override
+  String get mfgColorLabel => 'Color';
+
+  @override
+  String get mfgVariesByColor => 'Different material per color';
+
+  @override
+  String get mfgPerColorHint => 'Pick the raw material used for each color';
+
+  @override
+  String get mfgPreviewingColor => 'Previewing';
+
+  @override
+  String get mfgClearAll => 'Clear all';
+
+  @override
+  String get mfgClearAllConfirm =>
+      'Remove all materials from this recipe? Finishing cost is kept.';
+
+  @override
+  String get mfgMaterialsCount => 'materials';
+
+  @override
+  String get mfgHideBundles => 'Hide bundles';
+
+  @override
+  String get mfgHideDrafts => 'Hide drafts';
+
+  @override
+  String get mfgVisibility => 'Visibility';
 
   @override
   String get categoryLoanReceived => 'Loan Received';

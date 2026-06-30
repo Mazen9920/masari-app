@@ -31,7 +31,7 @@ class StockChangeResult {
 StockChangeResult computeStockChange({
   required Product product,
   required String variantId,
-  required int delta,
+  required double delta,
   required String valuationMethod,
   required String reason,
   double? unitCost,
@@ -45,10 +45,12 @@ StockChangeResult computeStockChange({
   }
   final variant = product.variants[variantIndex];
 
-  final newStock = variant.currentStock + delta;
+  // Round to 4 decimals to avoid floating-point drift accumulating in stored
+  // stock (e.g. 0.04 → 0.03999999999999915).
+  final newStock = ((variant.currentStock + delta) * 10000).roundToDouble() / 10000;
   // Allow stock to go to zero (or negative) — the UI already warns the user
   // and lets them choose to proceed. Clamp to 0 for storage.
-  final clampedStock = newStock < 0 ? 0 : newStock;
+  final clampedStock = newStock < 0 ? 0.0 : newStock;
 
   // --- Cost layer logic ---
   var layers = (clearLegacyLayers && variant.costLayers.isEmpty)
@@ -75,18 +77,18 @@ StockChangeResult computeStockChange({
       movementUnitCost = variant.costPrice;
       if (layers.isNotEmpty) {
         final totalLayerQty =
-            layers.fold<int>(0, (s, l) => s + l.remainingQty);
+            layers.fold<double>(0.0, (s, l) => s + l.remainingQty);
         if (totalLayerQty > 0) {
           final updated = <CostLayer>[];
-          int cumulativeAssigned = 0;
+          double cumulativeAssigned = 0;
           for (var idx = 0; idx < layers.length; idx++) {
             final layer = layers[idx];
             final idealCumulative = ((idx + 1) == layers.length)
                 ? absQty
-                : (layer.remainingQty * absQty / totalLayerQty).round();
+                : (layer.remainingQty * absQty / totalLayerQty);
             final take = ((idx + 1) == layers.length)
-                ? (absQty - cumulativeAssigned).clamp(0, layer.remainingQty)
-                : (idealCumulative).clamp(0, layer.remainingQty);
+                ? (absQty - cumulativeAssigned).clamp(0.0, layer.remainingQty)
+                : (idealCumulative).clamp(0.0, layer.remainingQty);
             cumulativeAssigned += take;
             final newQty = layer.remainingQty - take;
             if (newQty > 0) updated.add(layer.copyWith(remainingQty: newQty));
@@ -132,7 +134,7 @@ StockChangeResult computeStockChange({
     newCostPrice = variant.costPrice;
   } else {
     final totalLayerStock =
-        layers.fold<int>(0, (s, l) => s + l.remainingQty);
+        layers.fold<double>(0.0, (s, l) => s + l.remainingQty);
     if (totalLayerStock > 0) {
       final totalValue =
           layers.fold<double>(0, (s, l) => s + l.remainingQty * l.unitCost);

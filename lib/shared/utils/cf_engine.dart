@@ -14,6 +14,14 @@ import 'report_constants.dart';
 ///  - financing categories (loans, equity, withdrawals)
 ///  - all other non-excludeFromPL transactions
 bool isCfUserCashTransaction(Transaction t) {
+  // COGS is an accrual expense, NEVER a cash movement (the cash was the
+  // inventory purchase / supplier payment). Exclude it regardless of sale_id —
+  // unlinked/migrated COGS entries with no sale_id would otherwise leak in as a
+  // phantom cash outflow and double-count the inventory spend.
+  if (t.categoryId == 'cat_cogs') return false;
+  // Accrued-expense recognition is a non-cash accrual (Dr expense, Cr liability);
+  // the cash moves later via cat_accrued_payment.
+  if (t.categoryId == 'cat_accrued_expense') return false;
   // Exclude ALL sale-linked accrual entries — positive AND negative.
   // Cash comes from Bosta cashouts, not from accrual entries.
   if (t.saleId != null && saleTxnCats.contains(t.categoryId)) {
@@ -25,6 +33,16 @@ bool isCfUserCashTransaction(Transaction t) {
     return false;
   }
   if (t.categoryId == 'cat_supplier_payment') return true;
+  // Capitalized manufacturing labor: real cash outflow even though excluded
+  // from P&L (it reaches P&L as COGS when the finished good sells).
+  if (t.categoryId == 'cat_manufacturing_cost') return true;
+  // Payment-gateway settlement: real bank inflow even though excluded from P&L
+  // (the revenue was already recognized at the sale; this is the receivable →
+  // cash swap).
+  if (t.categoryId == 'cat_gateway_settlement') return true;
+  // Settling an accrued expense: real cash outflow, excluded from P&L (the cost
+  // was already recognized when accrued).
+  if (t.categoryId == 'cat_accrued_payment') return true;
   if (plExcludedCats.contains(t.categoryId)) return true;
   return !t.excludeFromPL;
 }
@@ -34,13 +52,35 @@ bool isCfUserCashTransaction(Transaction t) {
 /// Excludes positive sale-linked accrual entries (replaced by sale.amountPaid).
 /// Includes cat_supplier_payment and all non-excludeFromPL transactions.
 bool isNonCfUserCashTransaction(Transaction t) {
+  // COGS is an accrual expense, never a cash movement (see CF-user note).
+  if (t.categoryId == 'cat_cogs') return false;
+  if (t.categoryId == 'cat_accrued_expense') return false;
   if (t.saleId != null &&
       saleTxnCats.contains(t.categoryId) &&
       t.amount >= 0) {
     return false;
   }
   if (t.categoryId == 'cat_supplier_payment') return true;
+  if (t.categoryId == 'cat_manufacturing_cost') return true;
+  if (t.categoryId == 'cat_gateway_settlement') return true;
+  if (t.categoryId == 'cat_accrued_payment') return true;
   return !t.excludeFromPL;
+}
+
+/// The signed cash impact of [t] on the running balance, or null if [t] is not
+/// a cash movement (and should be skipped entirely).
+///
+/// This is the **single source of truth** that combines the include filter with
+/// the income sign. Every screen that totals cash MUST use this (directly or via
+/// [computeClosingCash]) so the Balance Sheet, Cash Flow statement, and Cash &
+/// Bank dashboard can never drift apart. Income is determined by
+/// `Transaction.isIncome` (amount > 0), NOT the stored is_income flag.
+double? cashImpact(Transaction t, {required bool isCfUser}) {
+  final include = isCfUser
+      ? isCfUserCashTransaction(t)
+      : isNonCfUserCashTransaction(t);
+  if (!include) return null;
+  return t.isIncome ? t.amount.abs() : -t.amount.abs();
 }
 
 /// Computes the closing cash balance up to [asOf].
@@ -60,14 +100,11 @@ double computeClosingCash({
   /// Actual cash received from customers (non-CF user).
   double cashFromSales = 0,
 }) {
-  final filter = isCfUser ? isCfUserCashTransaction : isNonCfUserCashTransaction;
-
   final double txnCashFlow = transactions
       .where((t) => !t.dateTime.isAfter(asOf))
-      .where(filter)
       .fold<double>(
         0.0,
-        (sum, t) => sum + (t.isIncome ? t.amount.abs() : -t.amount.abs()),
+        (sum, t) => sum + (cashImpact(t, isCfUser: isCfUser) ?? 0),
       );
 
   final double externalCash = isCfUser ? totalCashouts : cashFromSales;

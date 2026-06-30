@@ -17,7 +17,7 @@ enum StockStatus { inStock, lowStock, outOfStock }
 class CostLayer {
   final DateTime date;
   final double unitCost;
-  final int remainingQty;
+  final double remainingQty;
 
   const CostLayer({
     required this.date,
@@ -25,7 +25,7 @@ class CostLayer {
     required this.remainingQty,
   });
 
-  CostLayer copyWith({DateTime? date, double? unitCost, int? remainingQty}) {
+  CostLayer copyWith({DateTime? date, double? unitCost, double? remainingQty}) {
     return CostLayer(
       date: date ?? this.date,
       unitCost: unitCost ?? this.unitCost,
@@ -43,7 +43,7 @@ class CostLayer {
     return CostLayer(
       date: DateTime.parse(json['date'] as String),
       unitCost: roundMoney((json['unit_cost'] as num).toDouble()),
-      remainingQty: (json['remaining_qty'] as num).toInt(),
+      remainingQty: (json['remaining_qty'] as num).toDouble(),
     );
   }
 }
@@ -119,6 +119,173 @@ class BreakdownRecipe {
 }
 
 // ═══════════════════════════════════════════════════════════
+//  MANUFACTURING BOM — defines how raw materials assemble into
+//  one finished good (the inverse of a BreakdownRecipe).
+// ═══════════════════════════════════════════════════════════
+
+/// One raw-material line in a finished product's Bill of Materials.
+///
+/// References a *raw material* product (and optionally a specific variant of
+/// it). When [colorLinked] is true, the material variant is resolved at
+/// production time by matching the finished variant's `Color` option value —
+/// e.g. producing a "Red" finished good consumes the "Red" fabric variant.
+class BomComponent {
+  /// The raw-material [Product.id] this component consumes.
+  final String materialProductId;
+
+  /// Explicit material [ProductVariant.id]. Null when [colorLinked] (resolved
+  /// dynamically) or when the material has a single Default variant.
+  final String? materialVariantId;
+
+  /// When true, resolve the material variant by matching the finished
+  /// variant's `Color` option value at production time.
+  final bool colorLinked;
+
+  /// Quantity of this material consumed per 1 finished unit (e.g. 70 gm,
+  /// 2 pcs). Expressed in the material's own stock unit.
+  final double quantityPerUnit;
+
+  /// Display-only unit label (e.g. 'gm', 'cm', 'pcs'). Informational; the
+  /// underlying stock math always uses the material's stock unit.
+  final String unit;
+
+  /// When true, the material's [Product.scrapPercentage] is added on top of
+  /// [quantityPerUnit] to account for waste.
+  final bool applyScrap;
+
+  /// Optional map of finished-variant colour value (lower-cased, e.g. 'black',
+  /// 'red') → the raw-material [Product.id] to consume for that colour. Used
+  /// when each colour is a SEPARATE material product (e.g. Black vs Red fabric
+  /// stocked as distinct products). When a finished variant's colour matches a
+  /// key here, that product is consumed instead of [materialProductId];
+  /// otherwise [materialProductId] is the fallback. Keeps per-colour cost 100%
+  /// accurate without merging the materials.
+  final Map<String, String>? materialByColor;
+
+  /// When true, this component is produced together with the finished product
+  /// during the run (e.g. the finishing supplier makes the mini bag with the
+  /// straps). Its cost is still capitalized into the finished good, but it is
+  /// NOT consumed from raw-material stock and a shortfall on it does not block
+  /// starting the run.
+  final bool madeToOrder;
+
+  const BomComponent({
+    required this.materialProductId,
+    this.materialVariantId,
+    this.colorLinked = false,
+    required this.quantityPerUnit,
+    this.unit = 'pcs',
+    this.applyScrap = false,
+    this.materialByColor,
+    this.madeToOrder = false,
+  });
+
+  BomComponent copyWith({
+    String? materialProductId,
+    String? materialVariantId,
+    bool? colorLinked,
+    double? quantityPerUnit,
+    String? unit,
+    bool? applyScrap,
+    Map<String, String>? materialByColor,
+    bool? madeToOrder,
+  }) {
+    return BomComponent(
+      materialProductId: materialProductId ?? this.materialProductId,
+      materialVariantId: materialVariantId ?? this.materialVariantId,
+      colorLinked: colorLinked ?? this.colorLinked,
+      quantityPerUnit: quantityPerUnit ?? this.quantityPerUnit,
+      unit: unit ?? this.unit,
+      applyScrap: applyScrap ?? this.applyScrap,
+      materialByColor: materialByColor ?? this.materialByColor,
+      madeToOrder: madeToOrder ?? this.madeToOrder,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'material_product_id': materialProductId,
+        if (materialVariantId != null) 'material_variant_id': materialVariantId,
+        'color_linked': colorLinked,
+        'quantity_per_unit': quantityPerUnit,
+        'unit': unit,
+        'apply_scrap': applyScrap,
+        if (materialByColor?.isNotEmpty ?? false)
+          'material_by_color': materialByColor,
+        if (madeToOrder) 'made_to_order': true,
+      };
+
+  factory BomComponent.fromJson(Map<String, dynamic> json) {
+    final rawMap = json['material_by_color'] as Map<String, dynamic>?;
+    return BomComponent(
+      materialProductId: json['material_product_id'] as String,
+      materialVariantId: json['material_variant_id'] as String?,
+      colorLinked: json['color_linked'] as bool? ?? false,
+      quantityPerUnit: (json['quantity_per_unit'] as num).toDouble(),
+      unit: json['unit'] as String? ?? 'pcs',
+      applyScrap: json['apply_scrap'] as bool? ?? false,
+      materialByColor:
+          rawMap?.map((k, v) => MapEntry(k.toLowerCase(), v as String)),
+      madeToOrder: json['made_to_order'] as bool? ?? false,
+    );
+  }
+}
+
+/// Bill of Materials for a finished product: the list of raw-material
+/// components plus per-unit labor/finishing cost. Stored on the finished
+/// [Product] under the `manufacturing_bom` key.
+class ManufacturingBom {
+  final List<BomComponent> components;
+
+  /// Labor / finishing fee per finished unit (e.g. 20 EGP stitching).
+  final double laborCostPerUnit;
+
+  /// Optional finishing supplier (e.g. Hassan) the labor cost is paid to.
+  final String? laborSupplierId;
+  final String? laborSupplierName;
+
+  const ManufacturingBom({
+    this.components = const [],
+    this.laborCostPerUnit = 0,
+    this.laborSupplierId,
+    this.laborSupplierName,
+  });
+
+  ManufacturingBom copyWith({
+    List<BomComponent>? components,
+    double? laborCostPerUnit,
+    String? laborSupplierId,
+    String? laborSupplierName,
+  }) {
+    return ManufacturingBom(
+      components: components ?? this.components,
+      laborCostPerUnit: laborCostPerUnit ?? this.laborCostPerUnit,
+      laborSupplierId: laborSupplierId ?? this.laborSupplierId,
+      laborSupplierName: laborSupplierName ?? this.laborSupplierName,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'components': components.map((c) => c.toJson()).toList(),
+        'labor_cost_per_unit': roundMoney(laborCostPerUnit),
+        if (laborSupplierId != null) 'labor_supplier_id': laborSupplierId,
+        if (laborSupplierName != null) 'labor_supplier_name': laborSupplierName,
+      };
+
+  factory ManufacturingBom.fromJson(Map<String, dynamic> json) {
+    return ManufacturingBom(
+      components: (json['components'] as List<dynamic>?)
+              ?.map((c) => BomComponent.fromJson(c as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      laborCostPerUnit:
+          (json['labor_cost_per_unit'] as num?)?.toDouble() ?? 0,
+      laborSupplierId: json['labor_supplier_id'] as String?,
+      laborSupplierName: json['labor_supplier_name'] as String?,
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 //  PRODUCT OPTION — e.g. "Color" with values ["Red", "Blue"]
 // ═══════════════════════════════════════════════════════════
 
@@ -168,7 +335,7 @@ class ProductVariant {
   final String sku;
   final double costPrice;
   final double sellingPrice;
-  final int currentStock;
+  final double currentStock;
   final int reorderPoint;
   final String? imageUrl;
   final String? barcode;
@@ -243,7 +410,7 @@ class ProductVariant {
   /// Calculate COGS per unit for [qty] units based on the costing method.
   /// Pure calculation — does not modify layers.
   /// [method]: 'fifo', 'lifo', or 'average'.
-  double cogsPerUnit(int qty, String method) {
+  double cogsPerUnit(num qty, String method) {
     if (qty <= 0) return costPrice;
     if (method == 'average' || effectiveCostLayers.isEmpty) return costPrice;
 
@@ -254,7 +421,7 @@ class ProductVariant {
       layers.sort((a, b) => a.date.compareTo(b.date)); // oldest first (FIFO)
     }
 
-    var remaining = qty;
+    var remaining = qty.toDouble();
     var totalCost = 0.0;
     for (final layer in layers) {
       if (remaining <= 0) break;
@@ -282,7 +449,7 @@ class ProductVariant {
     String? sku,
     double? costPrice,
     double? sellingPrice,
-    int? currentStock,
+    double? currentStock,
     int? reorderPoint,
     String? imageUrl,
     String? barcode,
@@ -333,7 +500,7 @@ class ProductVariant {
       sku: json['sku'] as String? ?? '',
       costPrice: (json['cost_price'] as num?)?.toDouble() ?? 0,
       sellingPrice: (json['selling_price'] as num?)?.toDouble() ?? 0,
-      currentStock: (json['current_stock'] as num?)?.toInt() ?? 0,
+      currentStock: (json['current_stock'] as num?)?.toDouble() ?? 0,
       reorderPoint: (json['reorder_point'] as num?)?.toInt() ?? 10,
       imageUrl: json['image_url'] as String?,
       barcode: json['barcode'] as String?,
@@ -404,6 +571,10 @@ class Product {
   /// creation — cost is managed manually or via Production Batches (Pro).
   final bool isManufactured;
 
+  /// Optional Bill of Materials: the raw materials + labor this finished
+  /// product is assembled from. Drives the production planner and runs.
+  final ManufacturingBom? manufacturingBom;
+
   const Product({
     required this.id,
     required this.userId,
@@ -427,6 +598,7 @@ class Product {
     this.variants = const [],
     this.breakdownRecipe,
     this.isManufactured = false,
+    this.manufacturingBom,
   });
 
   // ── Aggregate computed properties across all variants ───
@@ -435,8 +607,8 @@ class Product {
   String get sku => variants.isNotEmpty ? variants.first.sku : '';
 
   /// Aggregate stock across all variants.
-  int get currentStock =>
-      variants.fold(0, (sum, v) => sum + v.currentStock);
+  double get currentStock =>
+      variants.fold(0.0, (sum, v) => sum + v.currentStock);
 
   /// Weighted-average cost price across variants (weighted by stock).
   double get costPrice {
@@ -516,6 +688,84 @@ class Product {
   bool get hasBreakdown =>
       breakdownRecipe != null && breakdownRecipe!.outputs.isNotEmpty;
 
+  /// Whether this product has a Bill of Materials defined (assembled from
+  /// raw materials).
+  bool get hasBom =>
+      manufacturingBom != null && manufacturingBom!.components.isNotEmpty;
+
+  /// Resolves which variant of [materialProduct] a [component] consumes when
+  /// producing [finishedVariant] of THIS product.
+  ///
+  /// - If the component pins an explicit `materialVariantId`, that wins.
+  /// - If `colorLinked`, match the finished variant's `Color` option value
+  ///   against the material's variants (case-insensitive).
+  /// - Otherwise fall back to the material's first/Default variant.
+  ///
+  /// Returns null only when the material product has no variants.
+  static String? resolveComponentVariantId(
+    BomComponent component,
+    ProductVariant finishedVariant,
+    Product materialProduct,
+  ) {
+    if (materialProduct.variants.isEmpty) return null;
+
+    if (component.materialVariantId != null &&
+        materialProduct.variantById(component.materialVariantId!) != null) {
+      return component.materialVariantId;
+    }
+
+    if (component.colorLinked) {
+      // Find the finished variant's colour, however the option is named.
+      String? color;
+      finishedVariant.optionValues.forEach((k, v) {
+        if (k.toLowerCase() == 'color' || k.toLowerCase() == 'colour') {
+          color = v;
+        }
+      });
+      if (color != null) {
+        for (final v in materialProduct.variants) {
+          for (final entry in v.optionValues.entries) {
+            if ((entry.key.toLowerCase() == 'color' ||
+                    entry.key.toLowerCase() == 'colour') &&
+                entry.value.toLowerCase() == color!.toLowerCase()) {
+              return v.id;
+            }
+          }
+        }
+      }
+    }
+
+    return materialProduct.variants.first.id;
+  }
+
+  /// Resolves the effective material **product + variant** a component consumes
+  /// for a given finished variant, honouring [BomComponent.materialByColor]
+  /// (per-colour separate material products). Falls back to
+  /// [BomComponent.materialProductId] when no colour mapping applies.
+  static ({String productId, String? variantId}) resolveComponentMaterial(
+    BomComponent component,
+    ProductVariant finishedVariant,
+    Map<String, Product> productsById,
+  ) {
+    var productId = component.materialProductId;
+    final map = component.materialByColor;
+    if (map != null && map.isNotEmpty) {
+      for (final value in finishedVariant.optionValues.values) {
+        final hit = map[value.toLowerCase()];
+        if (hit != null) {
+          productId = hit;
+          break;
+        }
+      }
+    }
+    final product = productsById[productId];
+    if (product == null) return (productId: productId, variantId: null);
+    return (
+      productId: productId,
+      variantId: resolveComponentVariantId(component, finishedVariant, product),
+    );
+  }
+
   // ── Copy / Serialization ───────────────────────────────
 
   Product copyWith({
@@ -540,6 +790,7 @@ class Product {
     List<ProductVariant>? variants,
     BreakdownRecipe? breakdownRecipe,
     bool? isManufactured,
+    ManufacturingBom? manufacturingBom,
   }) {
     return Product(
       id: id,
@@ -564,6 +815,7 @@ class Product {
       variants: variants ?? this.variants,
       breakdownRecipe: breakdownRecipe ?? this.breakdownRecipe,
       isManufactured: isManufactured ?? this.isManufactured,
+      manufacturingBom: manufacturingBom ?? this.manufacturingBom,
     );
   }
 
@@ -594,6 +846,8 @@ class Product {
       if (breakdownRecipe != null)
         'breakdown_recipe': breakdownRecipe!.toJson(),
       'is_manufactured': isManufactured,
+      if (manufacturingBom != null)
+        'manufacturing_bom': manufacturingBom!.toJson(),
       // Aggregate fields kept for backward compat / Firestore queries
       'cost_price': costPrice,
       'selling_price': sellingPrice,
@@ -628,7 +882,7 @@ class Product {
           sku: json['sku'] as String? ?? '',
           costPrice: (json['cost_price'] as num?)?.toDouble() ?? 0,
           sellingPrice: (json['selling_price'] as num?)?.toDouble() ?? 0,
-          currentStock: (json['current_stock'] as num?)?.toInt() ?? 0,
+          currentStock: (json['current_stock'] as num?)?.toDouble() ?? 0,
           reorderPoint: (json['reorder_point'] as num?)?.toInt() ?? 10,
           imageUrl: json['image_url'] as String?,
           movements: (json['movements'] as List<dynamic>?)
@@ -674,6 +928,10 @@ class Product {
               json['breakdown_recipe'] as Map<String, dynamic>)
           : null,
       isManufactured: json['is_manufactured'] as bool? ?? false,
+      manufacturingBom: json['manufacturing_bom'] != null
+          ? ManufacturingBom.fromJson(
+              json['manufacturing_bom'] as Map<String, dynamic>)
+          : null,
     );
   }
 }
@@ -681,7 +939,7 @@ class Product {
 /// A single stock movement event (restock, sale, adjustment, damage, breakdown).
 class StockMovement {
   final String type; // Restock, Sale, Damage, Correction, Return, Breakdown
-  final int quantity; // positive = in, negative = out
+  final double quantity; // positive = in, negative = out
   final DateTime dateTime;
   final String? note;
   final String? variantId; // optional — links movement to specific variant
@@ -747,7 +1005,7 @@ class StockMovement {
   factory StockMovement.fromJson(Map<String, dynamic> json) {
     return StockMovement(
       type: json['type'] as String? ?? 'unknown',
-      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
       dateTime: json['date_time'] != null
           ? DateTime.parse(json['date_time'] as String)
           : DateTime.now(),

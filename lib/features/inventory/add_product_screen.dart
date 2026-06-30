@@ -299,7 +299,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           sku: variantSku,
           costPrice: double.tryParse(row.costCtrl.text) ?? 0,
           sellingPrice: double.tryParse(row.priceCtrl.text) ?? 0,
-          currentStock: int.tryParse(row.stockCtrl.text) ?? 0,
+          currentStock: double.tryParse(row.stockCtrl.text) ?? 0,
           reorderPoint: int.tryParse(row.reorderCtrl.text) ?? 10,
         );
       }).toList();
@@ -311,7 +311,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
           sku: sku,
           costPrice: double.tryParse(_costController.text) ?? 0,
           sellingPrice: double.tryParse(_priceController.text) ?? 0,
-          currentStock: int.tryParse(_stockController.text) ?? 0,
+          currentStock: double.tryParse(_stockController.text) ?? 0,
           reorderPoint: int.tryParse(_reorderController.text) ?? 10,
         ),
       ];

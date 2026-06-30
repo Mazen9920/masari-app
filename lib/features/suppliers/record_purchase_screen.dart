@@ -51,6 +51,23 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
 
   final List<_PurchaseItem> _items = [];
 
+  // Persistent per-row text controllers, keyed by item id, so typing in the
+  // name / qty / price fields doesn't reset the cursor on each rebuild.
+  final Map<String, TextEditingController> _nameCtrls = {};
+  final Map<String, TextEditingController> _qtyCtrls = {};
+  final Map<String, TextEditingController> _priceCtrls = {};
+
+  TextEditingController _rowCtrl(
+      Map<String, TextEditingController> bag, String id, String initial) {
+    return bag.putIfAbsent(id, () => TextEditingController(text: initial));
+  }
+
+  void _disposeRow(String id) {
+    _nameCtrls.remove(id)?.dispose();
+    _qtyCtrls.remove(id)?.dispose();
+    _priceCtrls.remove(id)?.dispose();
+  }
+
   /// Non-null when editing an existing purchase.
   Purchase? _editingPurchase;
   bool get _isEditing => _editingPurchase != null;
@@ -144,6 +161,15 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
     _refCtrl.dispose();
     _taxCtrl.dispose();
     _paidAmountCtrl.dispose();
+    for (final c in _nameCtrls.values) {
+      c.dispose();
+    }
+    for (final c in _qtyCtrls.values) {
+      c.dispose();
+    }
+    for (final c in _priceCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -592,66 +618,80 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
   void _showSupplierPicker(List<Supplier> suppliers) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                l10n.selectSupplierTitle,
-                style: AppTypography.h2.copyWith(
-                  color: AppColors.primaryNavy,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  l10n.selectSupplierTitle,
+                  style: AppTypography.h2.copyWith(
+                    color: AppColors.primaryNavy,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                  ),
                 ),
               ),
-            ),
-            ...suppliers.map((s) => ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: s.avatarBg,
-                    child: Text(s.initials,
-                        style: TextStyle(
-                            color: s.avatarTextColor,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12)),
-                  ),
-                  title: Text(s.name),
-                  subtitle: Text(s.category,
-                      style: TextStyle(
-                          color: AppColors.textTertiary, fontSize: 12)),
-                  trailing: _selectedSupplierId == s.id
-                      ? const Icon(Icons.check_rounded,
-                          color: AppColors.accentOrange)
-                      : null,
-                  onTap: () {
-                    setState(() => _selectedSupplierId = s.id);
-                    Navigator.of(ctx).pop();
-                  },
-                )),
-            // Add new supplier option
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: AppColors.accentOrange.withValues(alpha: 0.1),
-                child: const Icon(Icons.add_rounded,
-                    color: AppColors.accentOrange, size: 20),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.only(bottom: 8),
+                  children: [
+                    ...suppliers.map((s) => ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: s.avatarBg,
+                            child: Text(s.initials,
+                                style: TextStyle(
+                                    color: s.avatarTextColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12)),
+                          ),
+                          title: Text(s.name),
+                          subtitle: Text(s.category,
+                              style: TextStyle(
+                                  color: AppColors.textTertiary, fontSize: 12)),
+                          trailing: _selectedSupplierId == s.id
+                              ? const Icon(Icons.check_rounded,
+                                  color: AppColors.accentOrange)
+                              : null,
+                          onTap: () {
+                            setState(() => _selectedSupplierId = s.id);
+                            Navigator.of(ctx).pop();
+                          },
+                        )),
+                    // Add new supplier option
+                    ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            AppColors.accentOrange.withValues(alpha: 0.1),
+                        child: const Icon(Icons.add_rounded,
+                            color: AppColors.accentOrange, size: 20),
+                      ),
+                      title: Text(l10n.addNewSupplierPlus,
+                          style: TextStyle(
+                              color: AppColors.accentOrange,
+                              fontWeight: FontWeight.w600)),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const AddSupplierScreen()),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-              title: Text(l10n.addNewSupplierPlus,
-                  style: TextStyle(
-                      color: AppColors.accentOrange,
-                      fontWeight: FontWeight.w600)),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AddSupplierScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -908,7 +948,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                             ? SizedBox(
                                 height: 32,
                                 child: TextField(
-                                  controller: TextEditingController(text: item.name),
+                                  controller: _rowCtrl(_nameCtrls, item.id, item.name),
                                   onChanged: (v) {
                                     _items[i] = item.copyWith(name: v);
                                   },
@@ -1010,7 +1050,10 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                   if (_items.length > 1) ...[
                     const SizedBox(width: 8),
                     GestureDetector(
-                      onTap: () => setState(() => _items.removeAt(i)),
+                      onTap: () => setState(() {
+                        _disposeRow(_items[i].id);
+                        _items.removeAt(i);
+                      }),
                       child: Container(
                         margin: const EdgeInsets.only(top: 16),
                         padding: const EdgeInsets.all(6),
@@ -1047,8 +1090,8 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                         ),
                         const SizedBox(height: 4),
                         TextField(
-                          controller: TextEditingController(
-                              text: '${item.qty}'),
+                          controller:
+                              _rowCtrl(_qtyCtrls, item.id, '${item.qty}'),
                           keyboardType: TextInputType.number,
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                           textAlign: TextAlign.center,
@@ -1108,15 +1151,17 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                         ),
                         const SizedBox(height: 4),
                         TextField(
-                          controller: TextEditingController(
-                              text: item.unitPrice == 0
+                          controller: _rowCtrl(
+                              _priceCtrls,
+                              item.id,
+                              item.unitPrice == 0
                                   ? ''
                                   : (item.unitPrice % 1 == 0
                                       ? '${item.unitPrice.toInt()}'
                                       : '${item.unitPrice}')),
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                            FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))
                           ],
                           textAlign: TextAlign.right,
                           onChanged: (v) {
@@ -1265,7 +1310,7 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
                     controller: _taxCtrl,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                     textAlign: TextAlign.right,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
@@ -1702,6 +1747,11 @@ extension _ItemTypeExt on _ItemType {
 }
 
 class _PurchaseItem {
+  static int _seq = 0;
+
+  /// Stable identity for the editing session (keys the row's text controllers
+  /// so they aren't recreated on every rebuild). Preserved across [copyWith].
+  final String id;
   final String name;
   final String category;
   final _ItemType itemType;
@@ -1711,7 +1761,8 @@ class _PurchaseItem {
   final String? variantId;
   final String? variantName;
 
-  const _PurchaseItem({
+  _PurchaseItem({
+    String? id,
     required this.name,
     required this.category,
     required this.itemType,
@@ -1720,7 +1771,7 @@ class _PurchaseItem {
     this.productId,
     this.variantId,
     this.variantName,
-  });
+  }) : id = id ?? 'pi_${_seq++}';
 
   double get total => qty * unitPrice;
 
@@ -1735,6 +1786,7 @@ class _PurchaseItem {
     String? variantName,
   }) {
     return _PurchaseItem(
+      id: id,
       name: name ?? this.name,
       category: category ?? this.category,
       itemType: itemType ?? this.itemType,

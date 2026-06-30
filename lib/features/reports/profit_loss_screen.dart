@@ -8,6 +8,8 @@ import '../../core/theme/app_styles.dart';
 import '../../core/services/share_service.dart';
 import '../../shared/models/transaction_model.dart';
 import '../../shared/models/sale_model.dart';
+import '../../shared/models/fixed_asset_model.dart';
+import '../../core/providers/app_providers.dart';
 import '../../shared/utils/money_utils.dart';
 import '../../shared/utils/report_constants.dart';
 import 'package:go_router/go_router.dart';
@@ -205,6 +207,23 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
         operatingExpenses += amt;
         opexByCategory[tx.categoryId] = (opexByCategory[tx.categoryId] ?? 0) + amt;
       }
+    }
+
+    // Depreciation expense for the period — computed from fixed assets (it
+    // never posts as a transaction). Mirrors the balance sheet so P&L and BS
+    // net income agree.
+    double depreciation = 0;
+    for (final a in ref
+        .read(fixedAssetsProvider)
+        .where((a) => a.status == FixedAssetStatus.active)) {
+      depreciation += (a.accumulatedDepreciationAsOf(dateRange.end) -
+          a.accumulatedDepreciationAsOf(dateRange.start));
+    }
+    depreciation = roundMoney(depreciation);
+    if (depreciation > 0) {
+      operatingExpenses = roundMoney(operatingExpenses + depreciation);
+      opexByCategory['cat_depreciation'] =
+          (opexByCategory['cat_depreciation'] ?? 0) + depreciation;
     }
 
     final double totalRevenue = roundMoney(salesRevenue + otherIncome);
@@ -930,15 +949,55 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
           fmt: fmt, currency: currency,
         ),
         const SizedBox(height: 10),
-        _buildFunnelItem(
-          icon: Icons.inventory_2_rounded,
-          iconColor: AppColors.chartOrange,
-          iconBg: AppColors.chartOrangeLight,
-          label: l10n.costOfGoodsSold,
-          amount: -cogsAmt,
-          barColor: AppColors.chartOrange,
-          barWidthFactor: (cogsAmt / maxVal).clamp(0.0, 1.0),
-          fmt: fmt, currency: currency,
+        InkWell(
+          onTap: () => context.pushNamed('CogsDashboardScreen'),
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(4, 4, 6, 4),
+            decoration: BoxDecoration(
+              color: AppColors.chartOrange.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: AppColors.chartOrange.withValues(alpha: 0.18)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildFunnelItem(
+                    icon: Icons.inventory_2_rounded,
+                    iconColor: AppColors.chartOrange,
+                    iconBg: AppColors.chartOrangeLight,
+                    label: l10n.costOfGoodsSold,
+                    amount: -cogsAmt,
+                    barColor: AppColors.chartOrange,
+                    barWidthFactor: (cogsAmt / maxVal).clamp(0.0, 1.0),
+                    fmt: fmt, currency: currency,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.chartOrange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(l10n.cogsAnalyze,
+                          style: AppTypography.captionSmall.copyWith(
+                              color: AppColors.chartOrange,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10)),
+                      const Icon(Icons.chevron_right_rounded,
+                          size: 14, color: AppColors.chartOrange),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: 10),
         _buildFunnelItem(
@@ -1116,11 +1175,16 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(label,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: isProfit ? AppColors.accentOrange : AppColors.textSecondary,
-                        fontWeight: isProfit ? FontWeight.w700 : FontWeight.w500,
-                      )),
+                  Flexible(
+                    child: Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: isProfit ? AppColors.accentOrange : AppColors.textSecondary,
+                          fontWeight: isProfit ? FontWeight.w700 : FontWeight.w500,
+                        )),
+                  ),
+                  const SizedBox(width: 8),
                   Text(
                     '${amount < 0 ? "-" : ""}$currency ${fmt.format(amount.abs())}',
                     style: AppTypography.labelSmall.copyWith(

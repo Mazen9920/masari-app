@@ -149,7 +149,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
       sku: sku,
       costPrice: double.tryParse(_costController.text) ?? 0,
       sellingPrice: 0,
-      currentStock: int.tryParse(_stockController.text) ?? 0,
+      currentStock: double.tryParse(_stockController.text) ?? 0,
       reorderPoint: int.tryParse(_reorderController.text) ?? 10,
     );
 
@@ -469,7 +469,8 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
                 controller: _stockController,
                 label: l10n.startingStock,
                 hint: '0',
-                keyboardType: TextInputType.number,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
               ),
             ),
             SizedBox(width: 14),

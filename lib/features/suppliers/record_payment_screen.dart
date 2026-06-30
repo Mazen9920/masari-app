@@ -80,12 +80,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
   void _save() {
     if (_payAmount <= 0) return;
     if (_selectedSupplierId == null) return;
-    final suppliers = ref.read(suppliersProvider).value ?? [];
     final supplierId = _selectedSupplierId!;
-    final supplier = suppliers.cast<Supplier?>().firstWhere(
-      (s) => s!.id == supplierId,
-      orElse: () => null,
-    );
     if (supplierId.isEmpty) return;
 
     // H4: Warn if payment exceeds total outstanding on selected purchases
@@ -104,9 +99,10 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
       }
     }
 
-    // H6: Warn if payment would make supplier balance negative
-    if (supplier != null && _payAmount > supplier.balance && supplier.balance > 0) {
-      _showNegativeBalanceDialog(supplier.balance);
+    // H6: Warn if payment exceeds what's actually due (computed from source).
+    final amountDue = ref.read(supplierAmountDueProvider(supplierId));
+    if (_payAmount > amountDue && amountDue > 0) {
+      _showNegativeBalanceDialog(amountDue);
       return;
     }
 
@@ -243,10 +239,31 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
       createdAt: DateTime.now(),
     );
 
-    ref.read(paymentsProvider.notifier).addPayment(payment);
+    // Persist the payment FIRST and check the result — if it fails, surface
+    // the error and abort, so we never deduct the balance without a record.
+    final payResult =
+        await ref.read(paymentsProvider.notifier).addPayment(payment);
+    if (!mounted) return;
+    if (!payResult.isSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(payResult.error ?? l10n.somethingWentWrong),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
-    // Also record on supplier balance
-    ref.read(suppliersProvider.notifier).recordPayment(supplierId, _payAmount);
+    // Deduct the stored supplier balance — BEST-EFFORT only. The displayed
+    // "amount due" is computed from purchases − payments, so this legacy
+    // balance field must NOT block the purchase application below (an early
+    // return here previously left the payment applied but the purchase's
+    // amountPaid un-updated → due didn't drop on record but jumped on delete).
+    await ref
+        .read(suppliersProvider.notifier)
+        .recordPayment(supplierId, _payAmount);
+    if (!mounted) return;
 
     // Update purchase payment status for applied purchases
     if (_selectedPurchaseIds.isNotEmpty) {
@@ -344,81 +361,98 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
   void _showSupplierPicker(List<Supplier> suppliers) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                l10n.selectSupplierTitle,
-                style: AppTypography.h2.copyWith(
-                  color: AppColors.primaryNavy,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  l10n.selectSupplierTitle,
+                  style: AppTypography.h2.copyWith(
+                    color: AppColors.primaryNavy,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                  ),
                 ),
               ),
-            ),
-            ...suppliers.map((s) => ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: s.avatarBg,
-                    child: Text(s.initials,
-                        style: TextStyle(
-                            color: s.avatarTextColor,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12)),
-                  ),
-                  title: Text(s.name),
-                  subtitle: Row(
-                    children: [
-                      Text(s.category,
-                          style: TextStyle(
-                              color: AppColors.textTertiary, fontSize: 12)),
-                      if (s.hasDue) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          l10n.balanceDueSuffix('${ref.read(currencyProvider)} ${NumberFormat('#,##0').format(s.balance)}'),
-                          style: const TextStyle(
-                            color: AppColors.accentOrange,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.only(bottom: 8),
+                  children: [
+                    ...suppliers.map((s) => ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: s.avatarBg,
+                            child: Text(s.initials,
+                                style: TextStyle(
+                                    color: s.avatarTextColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12)),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  trailing: _selectedSupplierId == s.id
-                      ? const Icon(Icons.check_rounded,
-                          color: AppColors.accentOrange)
-                      : null,
-                  onTap: () {
-                    setState(() => _selectedSupplierId = s.id);
-                    Navigator.of(ctx).pop();
-                  },
-                )),
-            // Add new supplier option
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: AppColors.accentOrange.withValues(alpha: 0.1),
-                child: const Icon(Icons.add_rounded,
-                    color: AppColors.accentOrange, size: 20),
+                          title: Text(s.name),
+                          subtitle: Row(
+                            children: [
+                              Text(s.category,
+                                  style: TextStyle(
+                                      color: AppColors.textTertiary,
+                                      fontSize: 12)),
+                              if (ref.watch(supplierAmountDueProvider(s.id)) >
+                                  0) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  l10n.balanceDueSuffix(
+                                      '${ref.read(currencyProvider)} ${NumberFormat('#,##0').format(ref.watch(supplierAmountDueProvider(s.id)))}'),
+                                  style: const TextStyle(
+                                    color: AppColors.accentOrange,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          trailing: _selectedSupplierId == s.id
+                              ? const Icon(Icons.check_rounded,
+                                  color: AppColors.accentOrange)
+                              : null,
+                          onTap: () {
+                            setState(() => _selectedSupplierId = s.id);
+                            Navigator.of(ctx).pop();
+                          },
+                        )),
+                    // Add new supplier option
+                    ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            AppColors.accentOrange.withValues(alpha: 0.1),
+                        child: const Icon(Icons.add_rounded,
+                            color: AppColors.accentOrange, size: 20),
+                      ),
+                      title: Text(l10n.addNewSupplierPlus,
+                          style: TextStyle(
+                              color: AppColors.accentOrange,
+                              fontWeight: FontWeight.w600)),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const AddSupplierScreen()),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-              title: Text(l10n.addNewSupplierPlus,
-                  style: TextStyle(
-                      color: AppColors.accentOrange,
-                      fontWeight: FontWeight.w600)),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AddSupplierScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -645,7 +679,7 @@ class _RecordPaymentScreenState extends ConsumerState<RecordPaymentScreen> {
                         ),
                       ),
                       Text(
-                        '$currency ${fmt.format(supplier.balance)}',
+                        '$currency ${fmt.format(ref.watch(supplierAmountDueProvider(supplier.id)))}',
                         style: const TextStyle(
                           color: AppColors.accentOrange,
                           fontSize: 24,

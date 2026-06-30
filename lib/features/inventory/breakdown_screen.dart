@@ -48,7 +48,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              l10n.notEnoughStockAvailable(sourceVariant.currentStock)),
+              l10n.notEnoughStockAvailable(sourceVariant.currentStock.round())),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -256,7 +256,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              l10n.inStockCount(sourceVariant.currentStock),
+                              l10n.inStockCount(sourceVariant.currentStock.round()),
                               style: AppTypography.captionSmall.copyWith(
                                 color: AppColors.textTertiary,
                               ),
@@ -349,7 +349,7 @@ class _BreakdownScreenState extends ConsumerState<BreakdownScreen> {
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                               l10n.exceedsAvailableStock(sourceVariant.currentStock),
+                               l10n.exceedsAvailableStock(sourceVariant.currentStock.round()),
                               style: AppTypography.captionSmall
                                   .copyWith(color: AppColors.danger),
                             ),

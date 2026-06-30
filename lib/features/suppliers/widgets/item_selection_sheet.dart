@@ -171,7 +171,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                         ),
                         subtitle: Text(
-                          '${product.isMaterial ? l10n.rawMaterial : l10n.productLabel} • ${l10n.stockLabel(product.currentStock)}'
+                          '${product.isMaterial ? l10n.rawMaterial : l10n.productLabel} • ${l10n.stockLabel(product.currentStock.round())}'
                           '${product.hasVariants && product.variants.length > 1 ? ' • ${l10n.variantCount(product.variants.length)}' : ''}',
                           style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
                         ),
@@ -327,7 +327,7 @@ class _ItemSelectionSheetState extends State<ItemSelectionSheet> {
                       style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                     subtitle: Text(
-                      '${l10n.skuLabel(v.sku.isNotEmpty ? v.sku : '—')} • ${l10n.stockLabel(v.currentStock)}',
+                      '${l10n.skuLabel(v.sku.isNotEmpty ? v.sku : '—')} • ${l10n.stockLabel(v.currentStock.round())}',
                       style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
                     ),
                     trailing: Text(

@@ -60,27 +60,35 @@ class NotificationService {
   /// Persists the current FCM token to the user's Firestore doc.
   static Future<void> _saveToken() async {
     try {
-      // On iOS, the APNS token may not be available immediately after
-      // requesting permission. Wait briefly for Apple to deliver it.
+      // On iOS, getToken() requires the APNS token, which Apple can take a few
+      // seconds to deliver after launch. The old 3s wait was too short, so on
+      // cold starts getToken() threw and the FCM token never refreshed (tokens
+      // went stale). Wait up to ~10s; if it's still not ready, onTokenRefresh
+      // will save it later.
       if (!kIsWeb && Platform.isIOS) {
         String? apns = await _messaging.getAPNSToken();
+        for (var i = 0; i < 20 && apns == null; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+          apns = await _messaging.getAPNSToken();
+        }
         if (apns == null) {
-          // Wait up to 3 seconds for the APNS token.
-          for (var i = 0; i < 6 && apns == null; i++) {
-            await Future<void>.delayed(const Duration(milliseconds: 500));
-            apns = await _messaging.getAPNSToken();
+          if (kDebugMode) {
+            debugPrint('[FCM] APNS token still unavailable; will save on refresh');
           }
-          if (apns == null) {
-            if (kDebugMode) debugPrint('[FCM] APNS token not available yet, will retry on refresh');
-            return;
-          }
+          return;
         }
       }
       final token = await _messaging.getToken();
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (token != null && uid != null) {
         await _db.collection('users').doc(uid).set(
-          {'fcm_token': token, 'fcm_updated_at': FieldValue.serverTimestamp()},
+          {
+            'fcm_token': token,
+            'fcm_updated_at': FieldValue.serverTimestamp(),
+            'platform': kIsWeb
+                ? 'web'
+                : (Platform.isIOS ? 'ios' : 'android'),
+          },
           SetOptions(merge: true),
         );
         if (kDebugMode) debugPrint('[FCM] Token saved for $uid');

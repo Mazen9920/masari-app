@@ -8,6 +8,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../shared/models/transaction_model.dart' show Transaction;
+import '../../shared/utils/books_cutover.dart';
+import '../../shared/utils/cf_engine.dart' show cashImpact;
 import '../../shared/utils/safe_pop.dart';
 import '../transactions/transaction_detail_screen.dart';
 
@@ -187,8 +189,23 @@ class _CashBankDashboardScreenState
     try {
       const uid = _cfUserId;
 
-      // Opening cash from local settings (SharedPreferences via Riverpod)
-      _openingCash = ref.read(appSettingsProvider).openingCashBalance;
+      // Opening cash + books-start cutover, read directly from the Firestore
+      // balance_sheet doc (auditable, device-independent, no provider load
+      // race). Fall back to the legacy device-local opening cash.
+      String? cashoutStartKey;
+      double openingFromDoc = 0;
+      try {
+        final bsDoc = await _db.collection('balance_sheet').doc(uid).get();
+        final data = bsDoc.data();
+        openingFromDoc = (data?['opening_cash_balance'] as num?)?.toDouble() ?? 0;
+        final raw = data?['books_start_date'] as String?;
+        if (raw != null && raw.isNotEmpty) {
+          cashoutStartKey = raw.substring(0, 10);
+        }
+      } catch (_) {}
+      _openingCash = openingFromDoc != 0
+          ? openingFromDoc
+          : ref.read(appSettingsProvider).openingCashBalance;
 
       // Load Firestore data in parallel — each wrapped safely
       Future<QuerySnapshot<Map<String, dynamic>>> safeQuery(String col) async {
@@ -212,10 +229,15 @@ class _CashBankDashboardScreenState
       _cashouts.clear();
       for (final doc in cashoutSnap.docs) {
         final d = doc.data();
+        final date = _parseDate(d['transaction_date'] ?? d['date'] ?? d['created_at']);
+        // Exclude pre-cutover cashouts — their net is in the opening balance.
+        if (!cashoutOnOrAfterStart(
+            date.toIso8601String().substring(0, 10), cashoutStartKey)) {
+          continue;
+        }
         final amount = _toDouble(d['amount']);
         _totalCashouts += amount;
 
-        final date = _parseDate(d['transaction_date'] ?? d['date'] ?? d['created_at']);
 
         _cashouts.add(_CashEntry(
           id: doc.id,
@@ -237,22 +259,18 @@ class _CashBankDashboardScreenState
       _categoryTotals.clear();
       _txnCashFlow = 0;
 
+      // Only needed now for the display-only exclusion reason below.
       const saleTxnCats = {'cat_sales_revenue', 'cat_cogs', 'cat_shipping'};
-      const plExcluded = {
-        'cat_investments',
-        'cat_loan_received',
-        'cat_loan_repayment',
-        'cat_equity_injection',
-        'cat_owner_withdrawal',
-      };
 
       for (final doc in txSnap.docs) {
         final d = doc.data();
         final catId = d['category_id'] as String? ?? '';
         final saleId = d['sale_id'] as String?;
-        final isIncome = d['is_income'] as bool? ?? false;
         final amount = _toDouble(d['amount']);
-        final excludeFromPL = d['exclude_from_pl'] as bool? ?? false;
+        // Match Transaction.isIncome (amount > 0) and the CF engine — the stored
+        // is_income flag is missing on many entries (e.g. direct cash sales),
+        // which previously flipped income into a negative cash impact.
+        final isIncome = amount > 0;
         final date = _parseDate(d['date_time'] ?? d['date'] ?? d['created_at']);
         final rawName = d['title'] as String? ?? d['name'] as String? ?? '';
         final note = d['note'] as String? ?? '';
@@ -297,28 +315,22 @@ class _CashBankDashboardScreenState
           rawData: d,
         );
 
-        // Apply the same CF-user filter as computeClosingCash
-        bool excluded = false;
+        // Single source of truth: the shared CF engine decides inclusion AND
+        // sign (cashImpact). This dashboard can no longer drift from the
+        // Balance Sheet / Cash Flow. The reason below is display-only.
+        final impact =
+            cashImpact(Transaction.fromJson({...d, 'id': doc.id}), isCfUser: true);
+        final bool excluded = impact == null;
         String? exclusionReason;
-
-        if (saleId != null && saleTxnCats.contains(catId)) {
-          excluded = true;
-          exclusionReason = 'Sale-linked accrual (cash via Bosta)';
-        } else if (doc.id.startsWith('bosta_est_daily_') ||
-            doc.id.startsWith('bosta_rec_daily_')) {
-          excluded = true;
-          exclusionReason = 'Bosta daily estimate/reconciliation';
-        } else {
-          bool include = false;
-          if (catId == 'cat_supplier_payment') {
-            include = true;
-          } else if (plExcluded.contains(catId)) {
-            include = true;
-          } else if (!excludeFromPL) {
-            include = true;
-          }
-          if (!include) {
-            excluded = true;
+        if (excluded) {
+          if (catId == 'cat_cogs') {
+            exclusionReason = 'COGS (accrual, not cash)';
+          } else if (saleId != null && saleTxnCats.contains(catId)) {
+            exclusionReason = 'Sale-linked accrual (cash via Bosta)';
+          } else if (doc.id.startsWith('bosta_est_daily_') ||
+              doc.id.startsWith('bosta_rec_daily_')) {
+            exclusionReason = 'Bosta daily estimate/reconciliation';
+          } else {
             exclusionReason = 'Excluded from P&L (non-cash)';
           }
         }
@@ -338,12 +350,11 @@ class _CashBankDashboardScreenState
           ));
         } else {
           _includedTxns.add(entry);
-          final cashImpact = isIncome ? amount.abs() : -amount.abs();
-          _txnCashFlow += cashImpact;
+          _txnCashFlow += impact;
 
           final catLabel = _categoryLabel(catId);
           _categoryTotals[catLabel] =
-              (_categoryTotals[catLabel] ?? 0) + cashImpact;
+              (_categoryTotals[catLabel] ?? 0) + impact;
         }
       }
 
@@ -356,7 +367,8 @@ class _CashBankDashboardScreenState
           ((_openingCash + _totalCashouts + _txnCashFlow) * 100).roundToDouble() / 100;
 
       // ── Build monthly history ──
-      _buildMonthHistory(txSnap.docs, cashoutSnap.docs);
+      _buildMonthHistory(txSnap.docs, cashoutSnap.docs,
+          cashoutStartKey: cashoutStartKey);
 
       // ── Build available months for filter ──
       final monthSet = <String, DateTime>{};
@@ -381,22 +393,19 @@ class _CashBankDashboardScreenState
 
   void _buildMonthHistory(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> txDocs,
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> cashoutDocs,
-  ) {
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> cashoutDocs, {
+    String? cashoutStartKey,
+  }) {
     _monthHistory.clear();
     final monthMap = <String, _MonthCash>{};
 
-    const saleTxnCats = {'cat_sales_revenue', 'cat_cogs', 'cat_shipping'};
-    const plExcluded = {
-      'cat_investments',
-      'cat_loan_received',
-      'cat_loan_repayment',
-      'cat_equity_injection',
-      'cat_owner_withdrawal',
-    };
-
+    // Cashouts — cutover-filtered, same window as the closing balance.
     for (final doc in cashoutDocs) {
       final d = doc.data();
+      if (!cashoutOnOrAfterStart(
+          (d['transaction_date'] as String?) ?? '', cashoutStartKey)) {
+        continue;
+      }
       final amount = _toDouble(d['amount']);
       final date = _parseDate(d['transaction_date'] ?? d['date'] ?? d['created_at']);
       final key = '${date.year}-${date.month.toString().padLeft(2, '0')}';
@@ -404,32 +413,17 @@ class _CashBankDashboardScreenState
       m.cashouts += amount;
     }
 
+    // Txn flow — shared CF engine (cashImpact), so per-month totals can't drift
+    // from the headline balance.
     for (final doc in txDocs) {
       final d = doc.data();
-      final catId = d['category_id'] as String? ?? '';
-      final saleId = d['sale_id'] as String?;
-      final isIncome = d['is_income'] as bool? ?? false;
-      final amount = _toDouble(d['amount']);
-      final excludeFromPL = d['exclude_from_pl'] as bool? ?? false;
       final date = _parseDate(d['date_time'] ?? d['date'] ?? d['created_at']);
       final key = '${date.year}-${date.month.toString().padLeft(2, '0')}';
       final m = monthMap.putIfAbsent(key, () => _MonthCash(month: DateTime(date.year, date.month)));
-
-      if (saleId != null && saleTxnCats.contains(catId)) continue;
-      if (doc.id.startsWith('bosta_est_daily_') || doc.id.startsWith('bosta_rec_daily_')) continue;
-
-      bool include = false;
-      if (catId == 'cat_supplier_payment') {
-        include = true;
-      } else if (plExcluded.contains(catId)) {
-        include = true;
-      } else if (!excludeFromPL) {
-        include = true;
-      }
-
-      if (include) {
-        final cashImpact = isIncome ? amount.abs() : -amount.abs();
-        m.txnFlow += cashImpact;
+      final impact =
+          cashImpact(Transaction.fromJson({...d, 'id': doc.id}), isCfUser: true);
+      if (impact != null) {
+        m.txnFlow += impact;
         m.txnCount++;
       }
     }

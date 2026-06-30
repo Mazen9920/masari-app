@@ -85,6 +85,13 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
     final reportService = ref.read(reportServiceProvider);
     final shareService = ref.read(shareServiceProvider);
 
+    // Work-in-progress value (raw consumed by in-progress runs, not yet
+    // finished) — keeps the report's inventory/equity whole during production.
+    final inProgressRuns = (ref.read(productionOrdersProvider).value ?? const [])
+        .where((o) => o.isInProgress);
+    final workInProgress =
+        inProgressRuns.fold<double>(0.0, (s, o) => s + o.wipValue);
+
     final pdfBytes = await reportService.generateMonthlyReportPdf(
       l10n: l10n,
       transactions: transactions,
@@ -97,6 +104,7 @@ class _ExportShareScreenState extends ConsumerState<ExportShareScreen> {
       month: _selectedMonth,
       openingBalance: openingCash,
       businessName: businessName.isEmpty ? null : businessName,
+      workInProgressValue: workInProgress,
     );
 
     final filename = 'Monthly_Report_${DateFormat('MMM_yyyy').format(_selectedMonth)}.pdf';

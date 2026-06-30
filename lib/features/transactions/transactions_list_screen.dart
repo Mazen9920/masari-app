@@ -208,7 +208,7 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
           await inventoryNotifier.adjustStock(
             item.productId!,
             item.variantId ?? '${item.productId}_v0',
-            item.quantity.round(),
+            item.quantity.toDouble(),
             'Order cancelled',
             valuationMethod: valMethod,
           );
@@ -312,13 +312,17 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
     Future.microtask(() => _applyPeriodToProviders());
   }
 
-  /// Pushes the current period bounds to the active tab's provider only.
+  /// Ensures the FULL dataset is loaded for the active tab. The period pill now
+  /// filters locally (see [_filteredTransactions] / [_filteredSales]), so this
+  /// screen never narrows the shared transactions/sales providers — which every
+  /// other screen (dashboard, COGS, categories, reports) reads. Previously this
+  /// called `setPeriod()`, which re-windowed the shared data and made other
+  /// screens show zero outside the selected period.
   Future<void> _applyPeriodToProviders() async {
-    final (from, to) = _periodBounds;
     if (_tabIndex == 0) {
-      await ref.read(transactionsProvider.notifier).setPeriod(from, to);
+      await ref.read(transactionsProvider.notifier).loadAllUnbounded();
     } else {
-      await ref.read(salesProvider.notifier).setPeriod(from, to);
+      await ref.read(salesProvider.notifier).loadAllUnbounded();
     }
   }
 
@@ -427,8 +431,16 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
       list = list.where((t) => _salesCategoryIds.contains(t.categoryId)).toList();
     }
 
-    // Date filtering is now server-side via setPeriod() — no client-side
-    // date filtering needed here.
+    // Client-side date filter. The shared provider holds the full dataset; we
+    // filter the selected period locally so this screen never narrows what
+    // other screens (dashboard, COGS, categories, reports) read.
+    final (from, to) = _periodBounds;
+    if (from != null) {
+      list = list.where((t) => !t.dateTime.isBefore(from)).toList();
+    }
+    if (to != null) {
+      list = list.where((t) => !t.dateTime.isAfter(to)).toList();
+    }
 
     // Filter by type
     if (_filter.type == TransactionType.income) {
@@ -576,8 +588,14 @@ class _TransactionsListScreenState extends ConsumerState<TransactionsListScreen>
   List<Sale> get _filteredSales {
     var list = List<Sale>.from(ref.watch(salesProvider).value ?? []);
 
-    // Date filtering is now server-side via setPeriod() — no client-side
-    // date filtering needed here.
+    // Client-side date filter (full dataset held by the shared provider).
+    final (from, to) = _periodBounds;
+    if (from != null) {
+      list = list.where((s) => !s.date.isBefore(from)).toList();
+    }
+    if (to != null) {
+      list = list.where((s) => !s.date.isAfter(to)).toList();
+    }
 
     // Payment status filter
     if (_salesFilter.paymentStatus != null) {

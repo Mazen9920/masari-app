@@ -35,7 +35,7 @@ abstract class ProductRepository {
   /// [skipCostLayer] when true, adjusts quantity without creating a cost layer
   /// or recalculating WAC — used for manufactured products whose cost is
   /// managed separately.
-  Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false});
+  Future<Result<Product>> adjustStock(String id, String variantId, double delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool clearLegacyLayers = false, bool skipCostLayer = false});
 
   /// Writes echo-prevention metadata on a product after stock has been
   /// pushed to Shopify, so the returning webhook can detect the echo.
@@ -51,5 +51,29 @@ abstract class ProductRepository {
     required int qty,
     required String valuationMethod,
     required Map<String, ({int quantity, double unitCost})> outputAllocations,
+  });
+
+  /// Consumes raw materials for a production run within a single transaction.
+  ///
+  /// [materials] lists each material to consume as
+  /// (material productId, variantId, display name, integer quantity). Multiple
+  /// entries for the same product doc are applied together. Returns, per
+  /// material, the quantity consumed plus the COGS [unitCost]/[totalCost]
+  /// computed from its cost layers using [valuationMethod] — used to build the
+  /// production order's input snapshot and capitalize the finished good.
+  Future<Result<List<({String productId, String variantId, String name, double quantity, double unitCost, double totalCost})>>>
+      consumeMaterialsForProduction({
+    required List<({String productId, String variantId, String name, double quantity})> materials,
+    required String valuationMethod,
+  });
+
+  /// Adds finished-goods stock for a completed production run to [variantId] of
+  /// [productId], as a single cost layer at [unitCost] (materials + labor
+  /// capitalized). Reason is recorded as a 'Production' movement.
+  Future<Result<Product>> addProductionOutput({
+    required String productId,
+    required String variantId,
+    required double qty,
+    required double unitCost,
   });
 }

@@ -311,7 +311,7 @@ class FirestoreSaleRepository implements SaleRepository {
           final result = computeStockChange(
             product: product,
             variantId: deduction.variantId,
-            delta: -deduction.quantity,
+            delta: -deduction.quantity.toDouble(),
             valuationMethod: deduction.valuationMethod,
             reason: 'Sale',
           );
@@ -395,7 +395,7 @@ class FirestoreSaleRepository implements SaleRepository {
         final result = computeStockChange(
           product: product,
           variantId: deduction.variantId,
-          delta: -deduction.quantity,
+          delta: -deduction.quantity.toDouble(),
           valuationMethod: deduction.valuationMethod,
           reason: 'Sale',
         );

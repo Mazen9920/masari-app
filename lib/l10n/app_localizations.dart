@@ -2264,6 +2264,18 @@ abstract class AppLocalizations {
   /// **'Opening Capital'**
   String get openingCapital;
 
+  /// No description provided for @ownersCapital.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner\'s Capital'**
+  String get ownersCapital;
+
+  /// No description provided for @openingRetainedEarnings.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening Retained Earnings'**
+  String get openingRetainedEarnings;
+
   /// No description provided for @retainedEarnings.
   ///
   /// In en, this message translates to:
@@ -2287,6 +2299,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reconciliation Adjustment'**
   String get reconAdjustment;
+
+  /// No description provided for @unexplainedDifference.
+  ///
+  /// In en, this message translates to:
+  /// **'Unexplained difference'**
+  String get unexplainedDifference;
+
+  /// No description provided for @ownerContributions.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner contributions'**
+  String get ownerContributions;
+
+  /// No description provided for @ownerWithdrawals.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner withdrawals'**
+  String get ownerWithdrawals;
+
+  /// No description provided for @depreciationExpense.
+  ///
+  /// In en, this message translates to:
+  /// **'Depreciation'**
+  String get depreciationExpense;
+
+  /// No description provided for @bsDataChecks.
+  ///
+  /// In en, this message translates to:
+  /// **'Data checks'**
+  String get bsDataChecks;
+
+  /// No description provided for @bsWarnReceivablesOverlap.
+  ///
+  /// In en, this message translates to:
+  /// **'Both manual \"Other receivables\" and computed \"Sales receivables\" are set — verify they don\'t double-count the same invoices.'**
+  String get bsWarnReceivablesOverlap;
+
+  /// No description provided for @bsWarnOrphanSalary.
+  ///
+  /// In en, this message translates to:
+  /// **'Salary payments exceed the tracked unpaid-salary liability — the excess bypasses the P&L. It may be miscategorized (use \"Salary expense\") or you\'re missing a salary liability record.'**
+  String get bsWarnOrphanSalary;
+
+  /// No description provided for @cogsAnalysisTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'COGS Analysis'**
+  String get cogsAnalysisTitle;
+
+  /// No description provided for @cogsAnalyze.
+  ///
+  /// In en, this message translates to:
+  /// **'Analyze'**
+  String get cogsAnalyze;
+
+  /// No description provided for @cogsIntegrityChecks.
+  ///
+  /// In en, this message translates to:
+  /// **'Integrity checks'**
+  String get cogsIntegrityChecks;
+
+  /// No description provided for @cogsPriceChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost price changes'**
+  String get cogsPriceChanges;
+
+  /// No description provided for @cogsByProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'By product'**
+  String get cogsByProduct;
+
+  /// No description provided for @cogsTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'COGS transactions'**
+  String get cogsTransactions;
+
+  /// No description provided for @cogsAllRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'COGS is fully recorded — no issues found.'**
+  String get cogsAllRecorded;
+
+  /// No description provided for @cogsIssuesFound.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 COGS issue needs attention} other{{count} COGS issues need attention}}'**
+  String cogsIssuesFound(int count);
+
+  /// No description provided for @cogsTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total COGS'**
+  String get cogsTotal;
+
+  /// No description provided for @cogsGrossMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Gross margin'**
+  String get cogsGrossMargin;
+
+  /// No description provided for @cogsOfRevenue.
+  ///
+  /// In en, this message translates to:
+  /// **'% of revenue'**
+  String get cogsOfRevenue;
+
+  /// No description provided for @cogsGrossProfit.
+  ///
+  /// In en, this message translates to:
+  /// **'Gross profit'**
+  String get cogsGrossProfit;
+
+  /// No description provided for @cogsOrdersMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Orders missing COGS'**
+  String get cogsOrdersMissing;
+
+  /// No description provided for @cogsNoneFound.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get cogsNoneFound;
+
+  /// No description provided for @cogsItems.
+  ///
+  /// In en, this message translates to:
+  /// **'items'**
+  String get cogsItems;
+
+  /// No description provided for @cogsFix.
+  ///
+  /// In en, this message translates to:
+  /// **'Fix'**
+  String get cogsFix;
+
+  /// No description provided for @cogsAndMore.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} more'**
+  String cogsAndMore(int count);
+
+  /// No description provided for @cogsItemsMissingCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Items missing cost'**
+  String get cogsItemsMissingCost;
+
+  /// No description provided for @cogsItemsMissingCostHint.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 product has variants with no cost price. Tap to set them.} other{{count} products have variants with no cost price. Tap to set them.}}'**
+  String cogsItemsMissingCostHint(int count);
+
+  /// No description provided for @cogsReconciliation.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales vs ledger'**
+  String get cogsReconciliation;
+
+  /// No description provided for @cogsMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Matched'**
+  String get cogsMatched;
+
+  /// No description provided for @cogsFromSales.
+  ///
+  /// In en, this message translates to:
+  /// **'COGS implied by sales'**
+  String get cogsFromSales;
+
+  /// No description provided for @cogsRecordedLedger.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded in ledger'**
+  String get cogsRecordedLedger;
+
+  /// No description provided for @cogsUnits.
+  ///
+  /// In en, this message translates to:
+  /// **'units'**
+  String get cogsUnits;
+
+  /// No description provided for @cogsNoTransactions.
+  ///
+  /// In en, this message translates to:
+  /// **'No COGS transactions this period'**
+  String get cogsNoTransactions;
 
   /// No description provided for @capitalAutoHint.
   ///
@@ -4571,6 +4775,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Shipping Fees'**
   String get catShippingFees;
+
+  /// No description provided for @catManufacturingCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Manufacturing Cost'**
+  String get catManufacturingCost;
 
   /// No description provided for @catCapitalInjection.
   ///
@@ -11559,7 +11769,7 @@ abstract class AppLocalizations {
   /// No description provided for @totalCostLabel.
   ///
   /// In en, this message translates to:
-  /// **'Total Cost'**
+  /// **'Total cost'**
   String get totalCostLabel;
 
   /// No description provided for @fulfilmentLabel.
@@ -13117,6 +13327,1086 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Shipping Expense'**
   String get categoryShippingExpense;
+
+  /// No description provided for @categoryManufacturingCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Manufacturing Cost'**
+  String get categoryManufacturingCost;
+
+  /// No description provided for @manufacturingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manufacturing'**
+  String get manufacturingTitle;
+
+  /// No description provided for @manufacturingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bills of materials & production runs'**
+  String get manufacturingSubtitle;
+
+  /// No description provided for @manufacturingRecipesTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipes'**
+  String get manufacturingRecipesTab;
+
+  /// No description provided for @manufacturingProductionTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Production'**
+  String get manufacturingProductionTab;
+
+  /// No description provided for @billOfMaterials.
+  ///
+  /// In en, this message translates to:
+  /// **'Bill of Materials'**
+  String get billOfMaterials;
+
+  /// No description provided for @editBillOfMaterials.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Bill of Materials'**
+  String get editBillOfMaterials;
+
+  /// No description provided for @bomMaterials.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials'**
+  String get bomMaterials;
+
+  /// No description provided for @bomAddMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Material'**
+  String get bomAddMaterial;
+
+  /// No description provided for @bomNoMaterials.
+  ///
+  /// In en, this message translates to:
+  /// **'No materials added yet'**
+  String get bomNoMaterials;
+
+  /// No description provided for @bomQtyPerUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'Qty per unit'**
+  String get bomQtyPerUnit;
+
+  /// No description provided for @bomUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get bomUnit;
+
+  /// No description provided for @bomMatchColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Match color'**
+  String get bomMatchColor;
+
+  /// No description provided for @bomMatchColorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the material variant matching the finished product\'s color'**
+  String get bomMatchColorHint;
+
+  /// No description provided for @bomApplyScrap.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply scrap %'**
+  String get bomApplyScrap;
+
+  /// No description provided for @bomLaborCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Labor / finishing cost per unit'**
+  String get bomLaborCost;
+
+  /// No description provided for @bomFinishingSupplier.
+  ///
+  /// In en, this message translates to:
+  /// **'Finishing supplier'**
+  String get bomFinishingSupplier;
+
+  /// No description provided for @bomOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get bomOptional;
+
+  /// No description provided for @bomSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Bill of materials saved'**
+  String get bomSaved;
+
+  /// No description provided for @bomProductsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No products have a bill of materials yet'**
+  String get bomProductsEmpty;
+
+  /// No description provided for @defineBom.
+  ///
+  /// In en, this message translates to:
+  /// **'Define BOM'**
+  String get defineBom;
+
+  /// No description provided for @productionPlanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Production Planner'**
+  String get productionPlanner;
+
+  /// No description provided for @productionPlannerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate materials, cost & shortfalls'**
+  String get productionPlannerSubtitle;
+
+  /// No description provided for @finishedProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Finished product'**
+  String get finishedProduct;
+
+  /// No description provided for @variantLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Variant'**
+  String get variantLabel;
+
+  /// No description provided for @quantityToProduce.
+  ///
+  /// In en, this message translates to:
+  /// **'Quantity to produce'**
+  String get quantityToProduce;
+
+  /// No description provided for @materialRequirements.
+  ///
+  /// In en, this message translates to:
+  /// **'Material Requirements'**
+  String get materialRequirements;
+
+  /// No description provided for @requiredQty.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get requiredQty;
+
+  /// No description provided for @availableQty.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get availableQty;
+
+  /// No description provided for @shortfallQty.
+  ///
+  /// In en, this message translates to:
+  /// **'Shortfall'**
+  String get shortfallQty;
+
+  /// No description provided for @materialsCostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials cost'**
+  String get materialsCostLabel;
+
+  /// No description provided for @laborCostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Labor cost'**
+  String get laborCostLabel;
+
+  /// No description provided for @unitCostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit cost'**
+  String get unitCostLabel;
+
+  /// No description provided for @startProduction.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Production'**
+  String get startProduction;
+
+  /// No description provided for @createPurchaseOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'Create POs for shortfalls'**
+  String get createPurchaseOrders;
+
+  /// No description provided for @shortfallWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough raw materials in stock for this run'**
+  String get shortfallWarning;
+
+  /// No description provided for @productionOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'Production Orders'**
+  String get productionOrders;
+
+  /// No description provided for @productionOrderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Production Order'**
+  String get productionOrderTitle;
+
+  /// No description provided for @statusInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In Progress'**
+  String get statusInProgress;
+
+  /// No description provided for @statusCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get statusCompleted;
+
+  /// No description provided for @statusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get statusCancelled;
+
+  /// No description provided for @workInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Work in Progress'**
+  String get workInProgress;
+
+  /// No description provided for @completeRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get completeRun;
+
+  /// No description provided for @cancelRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel Run'**
+  String get cancelRun;
+
+  /// No description provided for @payFinishingNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay finishing cost now (cash)'**
+  String get payFinishingNow;
+
+  /// No description provided for @addFinishingToPayable.
+  ///
+  /// In en, this message translates to:
+  /// **'Add finishing cost to supplier payable'**
+  String get addFinishingToPayable;
+
+  /// No description provided for @materialsConsumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials consumed'**
+  String get materialsConsumed;
+
+  /// No description provided for @noProductionOrders.
+  ///
+  /// In en, this message translates to:
+  /// **'No production runs yet'**
+  String get noProductionOrders;
+
+  /// No description provided for @productionStartedMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'Production started'**
+  String get productionStartedMsg;
+
+  /// No description provided for @productionCompletedMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'Production completed'**
+  String get productionCompletedMsg;
+
+  /// No description provided for @productionCancelledMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'Production cancelled'**
+  String get productionCancelledMsg;
+
+  /// No description provided for @selectBomProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a product'**
+  String get selectBomProduct;
+
+  /// No description provided for @completeProductionConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Add the finished units to stock?'**
+  String get completeProductionConfirm;
+
+  /// No description provided for @cancelProductionConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this run and restock materials?'**
+  String get cancelProductionConfirm;
+
+  /// No description provided for @mfgCostAndMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost & margin'**
+  String get mfgCostAndMargin;
+
+  /// No description provided for @mfgMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Margin'**
+  String get mfgMargin;
+
+  /// No description provided for @mfgSellingPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Selling price'**
+  String get mfgSellingPrice;
+
+  /// No description provided for @mfgMaterialsPerUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials / unit'**
+  String get mfgMaterialsPerUnit;
+
+  /// No description provided for @mfgLaborPerUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'Finishing / unit'**
+  String get mfgLaborPerUnit;
+
+  /// No description provided for @mfgUnitCostShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit cost'**
+  String get mfgUnitCostShort;
+
+  /// No description provided for @mfgMaxFromStock.
+  ///
+  /// In en, this message translates to:
+  /// **'Max from stock'**
+  String get mfgMaxFromStock;
+
+  /// No description provided for @mfgUnits.
+  ///
+  /// In en, this message translates to:
+  /// **'units'**
+  String get mfgUnits;
+
+  /// No description provided for @mfgInStock.
+  ///
+  /// In en, this message translates to:
+  /// **'in stock'**
+  String get mfgInStock;
+
+  /// No description provided for @mfgLineCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Line cost'**
+  String get mfgLineCost;
+
+  /// No description provided for @mfgBomEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add materials below to see live unit cost and margin.'**
+  String get mfgBomEmptyHint;
+
+  /// No description provided for @mfgBelowCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Below cost'**
+  String get mfgBelowCost;
+
+  /// No description provided for @mfgSearchProducts.
+  ///
+  /// In en, this message translates to:
+  /// **'Search products'**
+  String get mfgSearchProducts;
+
+  /// No description provided for @mfgRecipes.
+  ///
+  /// In en, this message translates to:
+  /// **'recipes'**
+  String get mfgRecipes;
+
+  /// No description provided for @mfgAvgMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'avg margin'**
+  String get mfgAvgMargin;
+
+  /// No description provided for @mfgFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get mfgFilterAll;
+
+  /// No description provided for @mfgDoneThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Done this month'**
+  String get mfgDoneThisMonth;
+
+  /// No description provided for @mfgRunNotesOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes (optional)'**
+  String get mfgRunNotesOptional;
+
+  /// No description provided for @mfgUseMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Max'**
+  String get mfgUseMax;
+
+  /// No description provided for @mfgMaterialsWord.
+  ///
+  /// In en, this message translates to:
+  /// **'materials'**
+  String get mfgMaterialsWord;
+
+  /// No description provided for @mfgProducedWord.
+  ///
+  /// In en, this message translates to:
+  /// **'produced'**
+  String get mfgProducedWord;
+
+  /// No description provided for @mfgMarginAtSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Margin at sale'**
+  String get mfgMarginAtSale;
+
+  /// No description provided for @mfgViewProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'View product'**
+  String get mfgViewProduct;
+
+  /// No description provided for @mfgNotesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get mfgNotesLabel;
+
+  /// No description provided for @mfgSelectMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a material'**
+  String get mfgSelectMaterial;
+
+  /// No description provided for @mfgNoMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a selling price to see margin'**
+  String get mfgNoMargin;
+
+  /// No description provided for @mfgNoStockForRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough stock to produce any units'**
+  String get mfgNoStockForRun;
+
+  /// No description provided for @mfgRunsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'runs'**
+  String get mfgRunsCount;
+
+  /// No description provided for @mfgProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress'**
+  String get mfgProgress;
+
+  /// No description provided for @mfgSortMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Margin'**
+  String get mfgSortMargin;
+
+  /// No description provided for @mfgSortCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost'**
+  String get mfgSortCost;
+
+  /// No description provided for @mfgSortName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get mfgSortName;
+
+  /// No description provided for @mfgSortNewest.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest'**
+  String get mfgSortNewest;
+
+  /// No description provided for @mfgSortOldest.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest'**
+  String get mfgSortOldest;
+
+  /// No description provided for @mfgFilterBelowCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Below cost'**
+  String get mfgFilterBelowCost;
+
+  /// No description provided for @mfgFilterNeedsRecipe.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs recipe'**
+  String get mfgFilterNeedsRecipe;
+
+  /// No description provided for @mfgFilterHasRecipe.
+  ///
+  /// In en, this message translates to:
+  /// **'Has recipe'**
+  String get mfgFilterHasRecipe;
+
+  /// No description provided for @mfgFinishingWord.
+  ///
+  /// In en, this message translates to:
+  /// **'Finishing'**
+  String get mfgFinishingWord;
+
+  /// No description provided for @mfgMaterialsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials'**
+  String get mfgMaterialsLabel;
+
+  /// No description provided for @mfgCostBreakdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost breakdown'**
+  String get mfgCostBreakdown;
+
+  /// No description provided for @mfgSort.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get mfgSort;
+
+  /// No description provided for @mfgHealthyMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Healthy'**
+  String get mfgHealthyMargin;
+
+  /// No description provided for @mfgThinMargin.
+  ///
+  /// In en, this message translates to:
+  /// **'Thin'**
+  String get mfgThinMargin;
+
+  /// No description provided for @mfgNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No products match these filters'**
+  String get mfgNoResults;
+
+  /// No description provided for @mfgSearchMaterials.
+  ///
+  /// In en, this message translates to:
+  /// **'Search materials'**
+  String get mfgSearchMaterials;
+
+  /// No description provided for @mfgManufacturingInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Manufacturing invoice'**
+  String get mfgManufacturingInvoice;
+
+  /// No description provided for @mfgManufacturingPayable.
+  ///
+  /// In en, this message translates to:
+  /// **'Manufacturing payable'**
+  String get mfgManufacturingPayable;
+
+  /// No description provided for @wipCapitalTiedUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Capital tied up'**
+  String get wipCapitalTiedUp;
+
+  /// No description provided for @wipMaterialsValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Materials value'**
+  String get wipMaterialsValue;
+
+  /// No description provided for @supPayablesPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Payables position'**
+  String get supPayablesPosition;
+
+  /// No description provided for @supPayable.
+  ///
+  /// In en, this message translates to:
+  /// **'Payable'**
+  String get supPayable;
+
+  /// No description provided for @supPrepaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Prepaid'**
+  String get supPrepaid;
+
+  /// No description provided for @supOnOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'On order'**
+  String get supOnOrder;
+
+  /// No description provided for @supReceivedUnpaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Received · unpaid'**
+  String get supReceivedUnpaid;
+
+  /// No description provided for @supDepositsPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposits paid'**
+  String get supDepositsPaid;
+
+  /// No description provided for @supBilledNotReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'Billed · not received'**
+  String get supBilledNotReceived;
+
+  /// No description provided for @supAccrualHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You owe only for goods received. Deposits on undelivered goods are prepayments, not payables.'**
+  String get supAccrualHint;
+
+  /// No description provided for @supTotalBilled.
+  ///
+  /// In en, this message translates to:
+  /// **'Total billed'**
+  String get supTotalBilled;
+
+  /// No description provided for @supReceivedValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Received value'**
+  String get supReceivedValue;
+
+  /// No description provided for @supCashPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash paid'**
+  String get supCashPaid;
+
+  /// No description provided for @supNetPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Net position'**
+  String get supNetPosition;
+
+  /// No description provided for @wipFinishingOwed.
+  ///
+  /// In en, this message translates to:
+  /// **'Finishing on completion'**
+  String get wipFinishingOwed;
+
+  /// No description provided for @wipUnitsInProduction.
+  ///
+  /// In en, this message translates to:
+  /// **'Units in production'**
+  String get wipUnitsInProduction;
+
+  /// No description provided for @wipAvgProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Avg. progress'**
+  String get wipAvgProgress;
+
+  /// No description provided for @wipByProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'By product'**
+  String get wipByProduct;
+
+  /// No description provided for @wipActiveRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'Active runs'**
+  String get wipActiveRuns;
+
+  /// No description provided for @wipOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'WIP overview'**
+  String get wipOverview;
+
+  /// No description provided for @wipDaysRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'{days}d running'**
+  String wipDaysRunning(int days);
+
+  /// No description provided for @wipStartedToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Started today'**
+  String get wipStartedToday;
+
+  /// No description provided for @mfgProductionOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'Production overview'**
+  String get mfgProductionOverview;
+
+  /// No description provided for @mfgThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get mfgThisMonth;
+
+  /// No description provided for @mfgCompletedUnits.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed units'**
+  String get mfgCompletedUnits;
+
+  /// No description provided for @mfgAvgUnitCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Avg. unit cost'**
+  String get mfgAvgUnitCost;
+
+  /// No description provided for @mfgTotalRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'Total runs'**
+  String get mfgTotalRuns;
+
+  /// No description provided for @mfgCostBuildUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost build-up'**
+  String get mfgCostBuildUp;
+
+  /// No description provided for @mfgTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get mfgTimeline;
+
+  /// No description provided for @mfgStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get mfgStarted;
+
+  /// No description provided for @mfgPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get mfgPending;
+
+  /// No description provided for @mfgUnitsProduced.
+  ///
+  /// In en, this message translates to:
+  /// **'Units produced'**
+  String get mfgUnitsProduced;
+
+  /// No description provided for @mfgLast6Months.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 6 months'**
+  String get mfgLast6Months;
+
+  /// No description provided for @mfgManufacturer.
+  ///
+  /// In en, this message translates to:
+  /// **'Manufacturer'**
+  String get mfgManufacturer;
+
+  /// No description provided for @mfgFinishingPhase.
+  ///
+  /// In en, this message translates to:
+  /// **'Finishing phase'**
+  String get mfgFinishingPhase;
+
+  /// No description provided for @mfgInHouse.
+  ///
+  /// In en, this message translates to:
+  /// **'Made in-house — no finishing supplier'**
+  String get mfgInHouse;
+
+  /// No description provided for @mfgPerUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'unit'**
+  String get mfgPerUnit;
+
+  /// No description provided for @mfgDeleteOrderConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this cancelled production order? This cannot be undone.'**
+  String get mfgDeleteOrderConfirm;
+
+  /// No description provided for @mfgOrderDeletedMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'Production order deleted'**
+  String get mfgOrderDeletedMsg;
+
+  /// No description provided for @mfgOrderUpdatedMsg.
+  ///
+  /// In en, this message translates to:
+  /// **'Production order updated'**
+  String get mfgOrderUpdatedMsg;
+
+  /// No description provided for @mfgEditOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit production order'**
+  String get mfgEditOrder;
+
+  /// No description provided for @mfgLinkedRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked records'**
+  String get mfgLinkedRecords;
+
+  /// No description provided for @mfgSupplierBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Supplier bill'**
+  String get mfgSupplierBill;
+
+  /// No description provided for @mfgGoodsReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Goods received'**
+  String get mfgGoodsReceipt;
+
+  /// No description provided for @mfgUnitsShort.
+  ///
+  /// In en, this message translates to:
+  /// **'units'**
+  String get mfgUnitsShort;
+
+  /// No description provided for @mfgReceiveUnits.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive units'**
+  String get mfgReceiveUnits;
+
+  /// No description provided for @mfgUnitsToReceive.
+  ///
+  /// In en, this message translates to:
+  /// **'Units to receive'**
+  String get mfgUnitsToReceive;
+
+  /// No description provided for @mfgRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'remaining'**
+  String get mfgRemaining;
+
+  /// No description provided for @mfgReceived.
+  ///
+  /// In en, this message translates to:
+  /// **'received'**
+  String get mfgReceived;
+
+  /// No description provided for @mfgReceiveBatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive'**
+  String get mfgReceiveBatch;
+
+  /// No description provided for @mfgMadeToOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Produced with the order'**
+  String get mfgMadeToOrder;
+
+  /// No description provided for @mfgMadeToOrderHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Supplier makes it during production — cost counts, not pulled from stock'**
+  String get mfgMadeToOrderHint;
+
+  /// No description provided for @mfgMadeToOrderShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Made to order'**
+  String get mfgMadeToOrderShort;
+
+  /// No description provided for @mfgCostLayers.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost layers'**
+  String get mfgCostLayers;
+
+  /// No description provided for @mfgNextOut.
+  ///
+  /// In en, this message translates to:
+  /// **'next out'**
+  String get mfgNextOut;
+
+  /// No description provided for @mfgNoCostLayers.
+  ///
+  /// In en, this message translates to:
+  /// **'No layers yet — receive goods to start FIFO tracking'**
+  String get mfgNoCostLayers;
+
+  /// No description provided for @mfgReviewPOs.
+  ///
+  /// In en, this message translates to:
+  /// **'Review purchase orders'**
+  String get mfgReviewPOs;
+
+  /// No description provided for @mfgReviewPOsSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm quantities, prices & suppliers'**
+  String get mfgReviewPOsSub;
+
+  /// No description provided for @mfgPoReference.
+  ///
+  /// In en, this message translates to:
+  /// **'Reference'**
+  String get mfgPoReference;
+
+  /// No description provided for @mfgPoOrderDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Order date'**
+  String get mfgPoOrderDate;
+
+  /// No description provided for @mfgPoLineQty.
+  ///
+  /// In en, this message translates to:
+  /// **'Qty'**
+  String get mfgPoLineQty;
+
+  /// No description provided for @mfgPoUnitPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit price'**
+  String get mfgPoUnitPrice;
+
+  /// No description provided for @mfgPoGrandTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get mfgPoGrandTotal;
+
+  /// No description provided for @mfgPoItemsWord.
+  ///
+  /// In en, this message translates to:
+  /// **'items'**
+  String get mfgPoItemsWord;
+
+  /// No description provided for @mfgPoConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Create purchase orders'**
+  String get mfgPoConfirm;
+
+  /// No description provided for @mfgPoCreatedN.
+  ///
+  /// In en, this message translates to:
+  /// **'purchase orders created'**
+  String get mfgPoCreatedN;
+
+  /// No description provided for @mfgPoNoneSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one supplier'**
+  String get mfgPoNoneSelected;
+
+  /// No description provided for @mfgPoUnassigned.
+  ///
+  /// In en, this message translates to:
+  /// **'No supplier on file — will be saved unassigned'**
+  String get mfgPoUnassigned;
+
+  /// No description provided for @mfgPoOrdersWord.
+  ///
+  /// In en, this message translates to:
+  /// **'orders'**
+  String get mfgPoOrdersWord;
+
+  /// No description provided for @mfgColorLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Color'**
+  String get mfgColorLabel;
+
+  /// No description provided for @mfgVariesByColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Different material per color'**
+  String get mfgVariesByColor;
+
+  /// No description provided for @mfgPerColorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the raw material used for each color'**
+  String get mfgPerColorHint;
+
+  /// No description provided for @mfgPreviewingColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Previewing'**
+  String get mfgPreviewingColor;
+
+  /// No description provided for @mfgClearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all'**
+  String get mfgClearAll;
+
+  /// No description provided for @mfgClearAllConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove all materials from this recipe? Finishing cost is kept.'**
+  String get mfgClearAllConfirm;
+
+  /// No description provided for @mfgMaterialsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'materials'**
+  String get mfgMaterialsCount;
+
+  /// No description provided for @mfgHideBundles.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide bundles'**
+  String get mfgHideBundles;
+
+  /// No description provided for @mfgHideDrafts.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide drafts'**
+  String get mfgHideDrafts;
+
+  /// No description provided for @mfgVisibility.
+  ///
+  /// In en, this message translates to:
+  /// **'Visibility'**
+  String get mfgVisibility;
 
   /// No description provided for @categoryLoanReceived.
   ///

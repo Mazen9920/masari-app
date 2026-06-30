@@ -229,6 +229,9 @@ class ReportService {
     required double currentPeriodNetIncome,
     required double effectiveOpeningCapital,
     required double reconAdjustment,
+    double ownerContributions = 0,
+    double ownerWithdrawals = 0,
+    double openingRetainedEarnings = 0,
     required DateTime asOfDate,
     String? businessName,
   }) async {
@@ -247,7 +250,8 @@ class ReportService {
         inventoryValue +
         accountsReceivable +
         supplierPrepayments;
-    final totalLiabilities = suppliersOwing + bs.loans + bs.unpaidSalaries;
+    final totalLiabilities =
+        suppliersOwing + bs.loans + bs.unpaidSalaries;
     final netEquity = totalAssets - totalLiabilities;
 
     pdf.addPage(
@@ -288,11 +292,17 @@ class ReportService {
           // Equity Breakdown
           _sectionTitle(l10n.ownersEquity),
           _balanceTable(fmt, currency, [
-            (l10n.openingCapital, effectiveOpeningCapital),
+            (l10n.ownersCapital, effectiveOpeningCapital),
+            if (openingRetainedEarnings.abs() >= 0.01)
+              (l10n.openingRetainedEarnings, openingRetainedEarnings),
             (l10n.retainedEarnings, retainedEarnings),
             (l10n.currentPeriodNetIncome, currentPeriodNetIncome),
-            if (reconAdjustment.abs() >= 0.01)
-              (l10n.reconAdjustment, reconAdjustment),
+            if (ownerContributions.abs() >= 0.01)
+              (l10n.ownerContributions, ownerContributions),
+            if (ownerWithdrawals.abs() >= 0.01)
+              (l10n.ownerWithdrawals, -ownerWithdrawals),
+            if (reconAdjustment.abs() >= 1.0)
+              (l10n.unexplainedDifference, reconAdjustment),
           ], netEquity, l10n.netEquity),
         ],
       ),
@@ -510,6 +520,7 @@ class ReportService {
     required DateTime month,
     required double openingBalance,
     String? businessName,
+    double workInProgressValue = 0,
   }) async {
     final theme = await _loadTheme(isArabic: l10n.localeName == 'ar');
     final pdf = pw.Document(
@@ -591,8 +602,11 @@ class ReportService {
         monthSales.fold<double>(0, (s, sale) => s + sale.outstanding);
 
     // ── Inventory snapshot ──
+    // Includes work-in-progress (raw consumed by in-progress production runs
+    // but not yet booked as finished goods) so equity stays whole mid-run.
     final double inventoryValue =
-        products.fold<double>(0, (s, p) => s + p.totalCostValue);
+        products.fold<double>(0, (s, p) => s + p.totalCostValue) +
+            workInProgressValue;
     final lowStockCount =
         products.where((p) => p.status == StockStatus.lowStock).length;
     final outOfStockCount =

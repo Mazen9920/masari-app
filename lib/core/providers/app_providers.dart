@@ -15,11 +15,16 @@ import '../../shared/models/goods_receipt_model.dart';
 import '../repositories/sale_repository.dart' show StockDeduction;
 import '../services/result.dart';
 import '../utils/connectivity_helper.dart';
+import '../../shared/utils/money_utils.dart';
+import '../../shared/utils/fixed_asset_acquisition.dart';
 import '../../shared/models/balance_sheet_entries.dart';
 import '../../shared/models/conversion_order_model.dart';
+import '../../shared/models/production_order_model.dart';
 import '../../shared/models/fixed_asset_model.dart';
 import '../../shared/models/loan_model.dart';
 import '../../shared/models/salary_model.dart';
+import '../../shared/models/gateway_receivable_model.dart';
+import '../../shared/models/accrued_expense_model.dart';
 import 'auth_provider.dart';
 import 'app_settings_provider.dart';
 import 'repository_providers.dart';
@@ -598,10 +603,15 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
 
   /// Loads all remaining pages. Used by report screens that need complete data.
   /// Accumulates pages privately and emits a single state update at the end.
+  /// Returns the full product list so callers can use it without touching `ref`
+  /// after the await (important for dispose-safe async flows).
   Completer<void>? _loadAllCompleter;
-  Future<void> loadAll() async {
+  Future<List<Product>> loadAll() async {
     final existing = _loadAllCompleter;
-    if (existing != null) return existing.future;
+    if (existing != null) {
+      await existing.future;
+      return state.value ?? const [];
+    }
     final completer = Completer<void>();
     _loadAllCompleter = completer;
     final gen = _buildGeneration;
@@ -636,6 +646,7 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     } finally {
       if (_loadAllCompleter == completer) _loadAllCompleter = null;
     }
+    return state.value ?? const [];
   }
 
   Future<Result<Product>> addProduct(Product product) async {
@@ -700,7 +711,7 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     }
   }
 
-  Future<Result<Product>> adjustStock(String id, String variantId, int delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool skipCostLayer = false, bool clearLegacyLayers = false}) async {
+  Future<Result<Product>> adjustStock(String id, String variantId, double delta, String reason, {double? unitCost, String valuationMethod = 'fifo', String? supplierName, bool skipCostLayer = false, bool clearLegacyLayers = false}) async {
     final repo = ref.read(productRepositoryProvider);
     final result = await repo.adjustStock(id, variantId, delta, reason, unitCost: unitCost, valuationMethod: valuationMethod, supplierName: supplierName, skipCostLayer: skipCostLayer, clearLegacyLayers: clearLegacyLayers);
     if (result.isSuccess && result.data != null) {
@@ -733,7 +744,7 @@ class InventoryNotifier extends AsyncNotifier<List<Product>> {
     syncService.syncInventoryToShopify(
       productId: productId,
       variantId: variantId,
-      newStock: variant.currentStock,
+      newStock: variant.currentStock.round(),
     ).then((pushResult) {
       if (!pushResult.isSuccess) {
         developer.log(
@@ -1166,7 +1177,7 @@ class SuppliersNotifier extends AsyncNotifier<List<Supplier>> {
     }
   }
 
-  Future<void> recordPayment(String id, double amount) async {
+  Future<Result<Supplier>> recordPayment(String id, double amount) async {
     final repo = ref.read(supplierRepositoryProvider);
     final result = await repo.recordPayment(id, amount);
     if (result.isSuccess && result.data != null) {
@@ -1176,6 +1187,7 @@ class SuppliersNotifier extends AsyncNotifier<List<Supplier>> {
           if (s.id == id) result.data! else s,
       ]);
     }
+    return result;
   }
 
   Future<void> recordPurchase(String id, double amount, {DateTime? dueDate}) async {
@@ -1293,22 +1305,24 @@ class PaymentsNotifier extends AsyncNotifier<List<Payment>> {
     throw Exception(result.error ?? 'Failed to load payments');
   }
 
-  void addPayment(Payment p) {
+  /// Persists a payment. Returns the [Result] so callers can surface failures
+  /// (instead of silently dropping the record) and keep the supplier balance
+  /// consistent. Optimistically adds, then reconciles with the repo outcome.
+  Future<Result<Payment>> addPayment(Payment p) async {
     final current = state.value ?? [];
     state = AsyncValue.data([...current, p]);
-    _createPayment(p);
-  }
-
-  Future<void> _createPayment(Payment p) async {
     final repo = ref.read(paymentRepositoryProvider);
     final result = await repo.createPayment(p);
     if (result.isSuccess && result.data != null) {
-      final current = state.value ?? [];
-      state = AsyncValue.data([for (final x in current) if (x.id == p.id) result.data! else x]);
-    } else if (!result.isSuccess) {
-      final current = state.value ?? [];
-      state = AsyncValue.data(current.where((x) => x.id != p.id).toList());
+      final cur = state.value ?? [];
+      state = AsyncValue.data(
+          [for (final x in cur) if (x.id == p.id) result.data! else x]);
+    } else {
+      // Roll back the optimistic insert on failure.
+      final cur = state.value ?? [];
+      state = AsyncValue.data(cur.where((x) => x.id != p.id).toList());
     }
+    return result;
   }
 
   void updatePayment(Payment updated) {
@@ -1346,6 +1360,59 @@ class PaymentsNotifier extends AsyncNotifier<List<Payment>> {
 
 final paymentsProvider = AsyncNotifierProvider<PaymentsNotifier, List<Payment>>(() {
   return PaymentsNotifier();
+});
+
+/// Accurate amount owed to a supplier, computed live from the source records
+/// (not the drift-prone stored `supplier.balance`):
+///   Σ(purchase.outstanding)  −  Σ(general/unapplied payments)
+/// Payments applied to a purchase are already reflected in that purchase's
+/// amountPaid, so only unapplied payments are subtracted (avoids double-count).
+/// A negative result means the supplier holds a credit/advance for us.
+/// Accrual-basis position for one supplier — mirrors the balance sheet's
+/// supplier payable / prepayment math (received vs paid, per purchase).
+typedef SupplierAccrual = ({
+  double payable, // owed for goods received but unpaid
+  double prepaid, // deposits paid ahead of receipt (asset)
+  double onOrder, // billed but not yet received (commitment)
+  double billed, // total of all bills
+  double received, // value of goods received
+  double paid, // cash paid
+});
+
+final supplierAccrualProvider =
+    Provider.family<SupplierAccrual, String>((ref, supplierId) {
+  final purchases = (ref.watch(purchasesProvider).value ?? const [])
+      .where((p) => p.supplierId == supplierId);
+  double payable = 0, prepaid = 0, onOrder = 0, billed = 0, received = 0, paid = 0;
+  for (final p in purchases) {
+    payable += p.accruedPayable;
+    prepaid += p.supplierPrepayment;
+    onOrder += p.notYetReceivedValue;
+    billed += p.total;
+    received += p.totalReceivedValue;
+    paid += p.amountPaid;
+  }
+  return (
+    payable: roundMoney(payable),
+    prepaid: roundMoney(prepaid),
+    onOrder: roundMoney(onOrder),
+    billed: roundMoney(billed),
+    received: roundMoney(received),
+    paid: roundMoney(paid),
+  );
+});
+
+final supplierAmountDueProvider = Provider.family<double, String>((ref, supplierId) {
+  final purchases = ref.watch(purchasesProvider).value ?? const [];
+  final payments = ref.watch(paymentsProvider).value ?? const [];
+  final owed = purchases
+      .where((p) => p.supplierId == supplierId)
+      .fold<double>(0.0, (s, p) => s + p.outstanding);
+  final credits = payments
+      .where((p) =>
+          p.supplierId == supplierId && p.appliedToPurchaseIds.isEmpty)
+      .fold<double>(0.0, (s, p) => s + p.amount);
+  return roundMoney(owed - credits);
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -1729,7 +1796,7 @@ class SalesNotifier extends AsyncNotifier<List<Sale>> {
           final stockResult = await invNotifier.adjustStock(
             item.productId!,
             item.variantId ?? '${item.productId}_v0',
-            item.quantity.round(), // positive delta restores stock
+            item.quantity.toDouble(), // positive delta restores stock
             'Sale deleted – stock restored',
             valuationMethod: valMethod,
           );
@@ -2134,11 +2201,39 @@ class FixedAssetsNotifier extends Notifier<List<FixedAsset>> {
 
   Future<void> refresh() async => _load();
 
-  Future<bool> add(FixedAsset asset) async {
+  /// Adds an asset. When [postCashOutflow] is true and the asset has a positive
+  /// purchase price, also posts a linked, P&L-excluded cash-outflow transaction
+  /// so buying the asset is a clean cash→asset swap (cash ↓, fixed assets ↑).
+  /// Pass false for a non-cash contribution (e.g. an owner-contributed asset).
+  Future<bool> add(FixedAsset asset, {bool postCashOutflow = false}) async {
     final repo = ref.read(fixedAssetRepositoryProvider);
-    final result = await repo.create(asset);
+
+    String? txnId;
+    var toCreate = asset;
+    if (postCashOutflow && asset.purchasePrice > 0) {
+      txnId = const Uuid().v4();
+      final event = buildAssetAcquisitionEvent(
+        eventId: DateTime.now().millisecondsSinceEpoch.toString(),
+        txnId: txnId,
+        purchasePrice: asset.purchasePrice,
+        purchaseDate: asset.purchaseDate,
+      );
+      toCreate = asset.copyWith(events: [...asset.events, event]);
+    }
+
+    final result = await repo.create(toCreate);
     if (result.isSuccess && result.data != null) {
       state = [result.data!, ...state];
+      if (txnId != null) {
+        final txn = buildAssetAcquisitionTxn(
+          txnId: txnId,
+          userId: ref.read(authProvider).user?.id ?? '',
+          assetName: asset.name,
+          purchasePrice: asset.purchasePrice,
+          purchaseDate: asset.purchaseDate,
+        );
+        await ref.read(transactionsProvider.notifier).addTransaction(txn);
+      }
       return true;
     }
     return false;
@@ -2412,6 +2507,238 @@ final loansProvider =
   return LoansNotifier();
 });
 
+// ─── Payment-gateway receivables ───────────────────────
+
+class GatewayReceivablesNotifier extends Notifier<List<GatewayReceivable>> {
+  @override
+  List<GatewayReceivable> build() {
+    _load();
+    return [];
+  }
+
+  Future<void> _load() async {
+    final repo = ref.read(gatewayReceivableRepositoryProvider);
+    final result = await repo.getAll();
+    if (result.isSuccess && result.data != null) {
+      state = result.data!;
+    }
+  }
+
+  Future<void> refresh() async => _load();
+
+  Future<bool> add(GatewayReceivable receivable) async {
+    final repo = ref.read(gatewayReceivableRepositoryProvider);
+    final result = await repo.create(receivable);
+    if (result.isSuccess && result.data != null) {
+      state = [result.data!, ...state];
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> updateReceivable(GatewayReceivable receivable) async {
+    final repo = ref.read(gatewayReceivableRepositoryProvider);
+    final result = await repo.update(receivable);
+    if (result.isSuccess && result.data != null) {
+      state = [
+        for (final r in state)
+          if (r.id == receivable.id) result.data! else r,
+      ];
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> remove(String id) async {
+    final receivable =
+        state.firstWhere((r) => r.id == id, orElse: () => state.first);
+    final repo = ref.read(gatewayReceivableRepositoryProvider);
+    final result = await repo.delete(id);
+    if (result.isSuccess) {
+      // Clean up linked settlement transactions.
+      final txnNotifier = ref.read(transactionsProvider.notifier);
+      for (final s in receivable.settlements) {
+        if (s.transactionId != null) {
+          await txnNotifier.removeTransaction(s.transactionId!);
+        }
+      }
+      state = state.where((r) => r.id != id).toList();
+      return true;
+    }
+    return false;
+  }
+
+  /// Record a settlement (gateway deposits to the bank): always reduces the
+  /// receivable. When [postCash] is true it also posts a matching cash inflow
+  /// (excluded from P&L — the revenue was already recognized at the sale; this
+  /// is just the receivable → cash swap). Pass false to only reduce the
+  /// receivable (e.g. if the cash is logged separately).
+  Future<bool> recordSettlement(
+      String receivableId, GatewaySettlement settlement,
+      {bool postCash = true}) async {
+    final receivable = state.firstWhere((r) => r.id == receivableId);
+    final txnId = postCash ? const Uuid().v4() : null;
+    final linked =
+        txnId != null ? settlement.copyWith(transactionId: txnId) : settlement;
+    final newBalance = (receivable.pendingBalance - settlement.amount)
+        .clamp(0.0, double.maxFinite);
+    final updated = receivable.copyWith(
+      pendingBalance: newBalance,
+      settlements: [...receivable.settlements, linked],
+    );
+    final ok = await updateReceivable(updated);
+    if (ok && txnId != null) {
+      final txn = Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Gateway settlement – ${receivable.gatewayName}',
+        amount: settlement.amount, // positive = cash in
+        dateTime: settlement.date,
+        categoryId: 'cat_gateway_settlement',
+        note: settlement.note,
+        excludeFromPL: true,
+      );
+      await ref.read(transactionsProvider.notifier).addTransaction(txn);
+    }
+    return ok;
+  }
+}
+
+final gatewayReceivablesProvider =
+    NotifierProvider<GatewayReceivablesNotifier, List<GatewayReceivable>>(() {
+  return GatewayReceivablesNotifier();
+});
+
+// ─── Accrued expenses (liability) ──────────────────────
+
+class AccruedExpensesNotifier extends Notifier<List<AccruedExpense>> {
+  @override
+  List<AccruedExpense> build() {
+    _load();
+    return [];
+  }
+
+  Future<void> _load() async {
+    final repo = ref.read(accruedExpenseRepositoryProvider);
+    final result = await repo.getAll();
+    if (result.isSuccess && result.data != null) {
+      state = result.data!;
+    }
+  }
+
+  Future<void> refresh() async => _load();
+
+  /// Adds an accrual. When [postExpense] is true (default) it also posts a P&L
+  /// expense recognizing the cost now (Dr expense, Cr the new liability) so the
+  /// balance sheet balances. Pass false if the expense was already booked
+  /// elsewhere — then only the liability is created.
+  Future<bool> add(AccruedExpense expense, {bool postExpense = true}) async {
+    final repo = ref.read(accruedExpenseRepositoryProvider);
+
+    String? expenseTxnId;
+    var toCreate = expense;
+    if (postExpense && expense.amount > 0) {
+      expenseTxnId = const Uuid().v4();
+      toCreate = expense.copyWith(expenseTransactionId: expenseTxnId);
+    }
+
+    final result = await repo.create(toCreate);
+    if (result.isSuccess && result.data != null) {
+      state = [result.data!, ...state];
+      if (expenseTxnId != null) {
+        final txn = Transaction(
+          id: expenseTxnId,
+          userId: ref.read(authProvider).user?.id ?? '',
+          title: 'Accrued: ${expense.name}',
+          amount: -expense.amount, // expense reduces profit
+          dateTime: DateTime.now(),
+          categoryId: 'cat_accrued_expense',
+          note: expense.notes,
+          // In the P&L, NOT a cash movement (cf_engine excludes cat_accrued_expense).
+        );
+        await ref.read(transactionsProvider.notifier).addTransaction(txn);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> updateExpense(AccruedExpense expense) async {
+    final repo = ref.read(accruedExpenseRepositoryProvider);
+    final result = await repo.update(expense);
+    if (result.isSuccess && result.data != null) {
+      state = [
+        for (final e in state)
+          if (e.id == expense.id) result.data! else e,
+      ];
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> remove(String id) async {
+    final expense =
+        state.firstWhere((e) => e.id == id, orElse: () => state.first);
+    final repo = ref.read(accruedExpenseRepositoryProvider);
+    final result = await repo.delete(id);
+    if (result.isSuccess) {
+      final txnNotifier = ref.read(transactionsProvider.notifier);
+      if (expense.expenseTransactionId != null) {
+        await txnNotifier.removeTransaction(expense.expenseTransactionId!);
+      }
+      for (final p in expense.payments) {
+        if (p.transactionId != null) {
+          await txnNotifier.removeTransaction(p.transactionId!);
+        }
+      }
+      state = state.where((e) => e.id != id).toList();
+      return true;
+    }
+    return false;
+  }
+
+  /// Record a payment against the accrual: always reduces the outstanding
+  /// amount. When [postCash] is true (default) it also posts a cash outflow
+  /// (excluded from P&L — the cost was already expensed when accrued).
+  Future<bool> recordPayment(
+      String expenseId, AccruedExpensePayment payment,
+      {bool postCash = true}) async {
+    final expense = state.firstWhere((e) => e.id == expenseId);
+    final txnId = postCash ? const Uuid().v4() : null;
+    final linked =
+        txnId != null ? payment.copyWith(transactionId: txnId) : payment;
+    final newAmount =
+        (expense.amount - payment.amount).clamp(0.0, double.maxFinite);
+    final updated = expense.copyWith(
+      amount: newAmount,
+      status: newAmount <= 0.01
+          ? AccruedExpenseStatus.settled
+          : expense.status,
+      payments: [...expense.payments, linked],
+    );
+    final ok = await updateExpense(updated);
+    if (ok && txnId != null) {
+      final txn = Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Accrued payment – ${expense.name}',
+        amount: -payment.amount, // cash out
+        dateTime: payment.date,
+        categoryId: 'cat_accrued_payment',
+        note: payment.note,
+        excludeFromPL: true,
+      );
+      await ref.read(transactionsProvider.notifier).addTransaction(txn);
+    }
+    return ok;
+  }
+}
+
+final accruedExpensesProvider =
+    NotifierProvider<AccruedExpensesNotifier, List<AccruedExpense>>(() {
+  return AccruedExpensesNotifier();
+});
+
 // ═══════════════════════════════════════════════════════════
 
 class SalariesNotifier extends Notifier<List<Salary>> {
@@ -2533,4 +2860,499 @@ class SalariesNotifier extends Notifier<List<Salary>> {
 final salariesProvider =
     NotifierProvider<SalariesNotifier, List<Salary>>(() {
   return SalariesNotifier();
+});
+
+// ═══════════════════════════════════════════════════════════
+// PRODUCTION ORDERS — BOM-driven manufacturing runs.
+//
+// Two-phase: START consumes raw materials into a WIP order; COMPLETE turns
+// WIP into finished-goods stock. Materials + labor are CAPITALIZED into the
+// finished good's cost layer (they hit P&L as COGS only at sale). The labor
+// cash payment recorded at completion is `excludeFromPL: true` so it never
+// double-counts against the eventual COGS (see project gotcha #3).
+// ═══════════════════════════════════════════════════════════
+
+class ProductionOrdersNotifier extends AsyncNotifier<List<ProductionOrder>> {
+  @override
+  Future<List<ProductionOrder>> build() async {
+    ref.keepAlive();
+    final repo = ref.read(productionOrderRepositoryProvider);
+    final result = await repo.getOrders();
+    if (result.isSuccess && result.data != null) return result.data!;
+    throw Exception(result.error ?? 'Failed to load production orders');
+  }
+
+  /// In-progress orders represent work-in-progress; their [materialsCost] sum
+  /// is the WIP inventory value.
+  List<ProductionOrder> get inProgressOrders =>
+      (state.value ?? []).where((o) => o.isInProgress).toList();
+
+  double get workInProgressValue =>
+      roundMoney(inProgressOrders.fold(0.0, (s, o) => s + o.wipValue));
+
+  /// Pure planning calculation — no writes. Returns null if the product has no
+  /// BOM or the finished variant can't be found.
+  ProductionPlan? planProduction(
+      String productId, String variantId, int quantity) {
+    final products = ref.read(inventoryProvider).value ?? [];
+    final product = products.where((p) => p.id == productId).firstOrNull;
+    if (product == null || !product.hasBom) return null;
+    final finishedVariant = product.variantById(variantId);
+    if (finishedVariant == null) return null;
+    final bom = product.manufacturingBom!;
+
+    final valMethod = ref.read(appSettingsProvider).valuationMethod;
+    final productsById = {for (final p in products) p.id: p};
+    final lines = <ProductionPlanLine>[];
+    double materialsCost = 0;
+    for (final c in bom.components) {
+      // Resolve effective material product+variant (honours per-colour map).
+      final resolved =
+          Product.resolveComponentMaterial(c, finishedVariant, productsById);
+      final matProduct = productsById[resolved.productId];
+      if (matProduct == null) {
+        lines.add(ProductionPlanLine(
+          materialProductId: c.materialProductId,
+          materialVariantId: c.materialVariantId ?? '',
+          materialName: 'Unknown material',
+          supplierName: '',
+          unit: c.unit,
+          requiredQty: roundMoney(c.quantityPerUnit * quantity),
+          availableQty: 0,
+          shortfallQty: roundMoney(c.quantityPerUnit * quantity),
+          unitCost: 0,
+          lineCost: 0,
+          unresolved: true,
+        ));
+        continue;
+      }
+      final matVar = resolved.variantId != null
+          ? matProduct.variantById(resolved.variantId!)
+          : null;
+
+      var perUnit = c.quantityPerUnit;
+      final scrap = matProduct.scrapPercentage ?? 0;
+      if (c.applyScrap && scrap > 0) {
+        perUnit = perUnit * (1 + scrap / 100);
+      }
+      final required = roundMoney(perUnit * quantity);
+      final available = matVar?.currentStock ?? 0;
+      final shortfall = required > available ? roundMoney(required - available) : 0.0;
+      // FIFO-accurate: cost of the next [required] units actually consumed
+      // (blends across cost layers), not the smoothed weighted-average.
+      final unitCost =
+          matVar?.cogsPerUnit(required.ceil(), valMethod) ?? 0;
+      final lineCost = roundMoney(required * unitCost);
+      materialsCost += lineCost;
+
+      lines.add(ProductionPlanLine(
+        materialProductId: matProduct.id,
+        materialVariantId: matVar?.id ?? '',
+        materialName: matVar != null && !matVar.isDefault
+            ? '${matProduct.name} (${matVar.displayName})'
+            : matProduct.name,
+        supplierName: matProduct.supplier,
+        unit: c.unit,
+        requiredQty: required,
+        availableQty: available,
+        shortfallQty: shortfall,
+        unitCost: unitCost,
+        lineCost: lineCost,
+        unresolved: matVar == null,
+        madeToOrder: c.madeToOrder,
+      ));
+    }
+
+    final laborCost = roundMoney(bom.laborCostPerUnit * quantity);
+    final totalCost = roundMoney(materialsCost + laborCost);
+    final unitCost = quantity > 0 ? roundMoney(totalCost / quantity) : 0.0;
+
+    return ProductionPlan(
+      productId: product.id,
+      productName: product.name,
+      variantId: finishedVariant.id,
+      variantName:
+          finishedVariant.isDefault ? product.name : finishedVariant.displayName,
+      quantity: quantity,
+      lines: lines,
+      materialsCost: roundMoney(materialsCost),
+      laborCost: laborCost,
+      laborSupplierId: bom.laborSupplierId,
+      laborSupplierName: bom.laborSupplierName,
+      totalCost: totalCost,
+      unitCost: unitCost,
+    );
+  }
+
+  /// Starts a production run: consumes raw materials atomically and creates an
+  /// in-progress (WIP) order. Returns null on success, or an error message.
+  Future<String?> startProduction({
+    required String productId,
+    required String variantId,
+    required int quantity,
+    String? notes,
+  }) async {
+    if (quantity <= 0) return 'Quantity must be greater than 0';
+    final plan = planProduction(productId, variantId, quantity);
+    if (plan == null) return 'No bill of materials for this product';
+    if (plan.hasUnresolved) {
+      return 'Some materials could not be resolved — check the BOM';
+    }
+    if (plan.hasShortfall) {
+      return 'Not enough raw materials in stock for this run';
+    }
+
+    final valMethod = ref.read(appSettingsProvider).valuationMethod;
+    // Only stocked materials are consumed from inventory. Made-to-order
+    // components (produced with the run) are NOT pulled from stock — their
+    // cost is added separately below.
+    final materials = <({String productId, String variantId, String name, double quantity})>[];
+    for (final l in plan.lines) {
+      if (l.madeToOrder) continue;
+      if (l.requiredQty <= 0) continue;
+      materials.add((
+        productId: l.materialProductId,
+        variantId: l.materialVariantId,
+        name: l.materialName,
+        quantity: l.requiredQty,
+      ));
+    }
+
+    final repo = ref.read(productionOrderRepositoryProvider);
+    final consumeResult =
+        await ref.read(productRepositoryProvider).consumeMaterialsForProduction(
+              materials: materials,
+              valuationMethod: valMethod,
+            );
+    if (!consumeResult.isSuccess || consumeResult.data == null) {
+      return consumeResult.error ?? 'Failed to consume materials';
+    }
+
+    final inputs = consumeResult.data!
+        .map((c) => ProductionInputLine(
+              materialProductId: c.productId,
+              materialVariantId: c.variantId,
+              materialName: c.name,
+              quantity: c.quantity.toDouble(),
+              unitCost: c.unitCost,
+              totalCost: c.totalCost,
+            ))
+        .toList();
+
+    // Add made-to-order components as input lines (cost capitalized, no stock
+    // movement) so the finished unit cost still includes them.
+    for (final l in plan.lines) {
+      if (!l.madeToOrder || l.requiredQty <= 0) continue;
+      inputs.add(ProductionInputLine(
+        materialProductId: l.materialProductId,
+        materialVariantId: l.materialVariantId,
+        materialName: l.materialName,
+        quantity: l.requiredQty,
+        unitCost: l.unitCost,
+        totalCost: l.lineCost,
+        madeToOrder: true,
+      ));
+    }
+
+    // Materials drawn from stock drive WIP; made-to-order materials are billed
+    // by the supplier at completion (with labor), so keep them separate.
+    final materialsCost = roundMoney(inputs
+        .where((i) => !i.madeToOrder)
+        .fold(0.0, (s, i) => s + i.totalCost));
+    final madeToOrderCost = roundMoney(inputs
+        .where((i) => i.madeToOrder)
+        .fold(0.0, (s, i) => s + i.totalCost));
+    final laborCost = plan.laborCost;
+    final totalCost = roundMoney(materialsCost + madeToOrderCost + laborCost);
+    final unitCost = quantity > 0 ? roundMoney(totalCost / quantity) : 0.0;
+
+    final order = ProductionOrder(
+      id: const Uuid().v4(),
+      userId: ref.read(authProvider).user?.id ?? '',
+      productId: plan.productId,
+      productName: plan.productName,
+      variantId: plan.variantId,
+      variantName: plan.variantName,
+      quantity: quantity,
+      status: ProductionStatus.inProgress,
+      inputs: inputs,
+      materialsCost: materialsCost,
+      madeToOrderCost: madeToOrderCost,
+      laborCost: laborCost,
+      totalCost: totalCost,
+      unitCost: unitCost,
+      laborSupplierId: plan.laborSupplierId,
+      startedAt: DateTime.now(),
+      notes: notes,
+    );
+
+    // Optimistic state update.
+    state = AsyncValue.data([order, ...(state.value ?? [])]);
+    final createResult = await repo.createOrder(order);
+    if (!createResult.isSuccess) {
+      // Roll back local state; materials were consumed but order failed to
+      // persist — surface the error so the user can retry/inspect.
+      state = AsyncValue.data(
+          (state.value ?? []).where((o) => o.id != order.id).toList());
+      return createResult.error ?? 'Failed to save production order';
+    }
+
+    // Refresh inventory so consumed material stock is reflected in the UI.
+    await ref.read(inventoryProvider.notifier).refresh();
+    return null;
+  }
+
+  /// Receives part (or all) of an in-progress run: adds [qty] finished units to
+  /// stock at the captured unit cost and records the labor cost for that batch.
+  /// The order stays in-progress until all units are received, then flips to
+  /// completed. [qty] defaults to all remaining units.
+  ///
+  /// [payNow] true → record an immediate cash outflow (`excludeFromPL: true`).
+  /// false → add the labor cost to the finishing supplier's payable (settled
+  /// later via the normal supplier-payment flow).
+  Future<String?> completeProduction(String orderId,
+      {bool payNow = true, int? qty}) async {
+    final orders = state.value ?? [];
+    final order = orders.where((o) => o.id == orderId).firstOrNull;
+    if (order == null) return 'Production order not found';
+    if (!order.isInProgress) return 'Order is not in progress';
+
+    final remaining = order.remainingQty;
+    if (remaining <= 0) return 'Nothing left to receive';
+    final batchQty = (qty ?? remaining).clamp(1, remaining);
+
+    // 1. Add the received finished goods at the capitalized unit cost.
+    final output = await ref.read(productRepositoryProvider).addProductionOutput(
+          productId: order.productId,
+          variantId: order.variantId,
+          qty: batchQty.toDouble(),
+          unitCost: order.unitCost,
+        );
+    if (!output.isSuccess) {
+      return output.error ?? 'Failed to add finished goods';
+    }
+
+    final uid = ref.read(authProvider).user?.id ?? '';
+    final now = DateTime.now();
+    final suppliers = ref.read(suppliersProvider).value ?? const [];
+    final laborSup = order.laborSupplierId != null
+        ? suppliers.where((s) => s.id == order.laborSupplierId).firstOrNull
+        : null;
+    final supName = laborSup?.name ?? 'Production';
+
+    // 2. Record this received batch as a production goods receipt (a record
+    //    only — stock was already added in step 1, so this does NOT re-adjust
+    //    inventory). Lets production show in the Received Goods section.
+    final receipt = GoodsReceipt(
+      id: 'prodrcpt_${order.id}_${now.millisecondsSinceEpoch}',
+      userId: uid,
+      supplierId: order.laborSupplierId ?? '',
+      supplierName: supName,
+      date: now,
+      items: [
+        ReceiptItem(
+          productId: order.productId,
+          variantId: order.variantId,
+          productName: '${order.productName} – ${order.variantName}',
+          orderedQty: order.quantity.toDouble(),
+          receivedQty: batchQty.toDouble(),
+          unitCost: order.unitCost,
+          notes: 'Production',
+        ),
+      ],
+      status: ReceiptStatus.confirmed,
+      notes: 'Production run',
+    );
+    await ref.read(goodsReceiptsProvider.notifier).addReceipt(receipt);
+
+    // 3. Invoice the finishing supplier for THIS batch (proportional,
+    //    capitalized — not P&L). The manufacturing invoice = finishing labor
+    //    PLUS any made-to-order components the supplier produces (e.g. the
+    //    mini bag made with the straps).
+    final laborPerUnit =
+        order.quantity > 0 ? order.laborCost / order.quantity : 0.0;
+    final mtoPerUnit =
+        order.quantity > 0 ? order.madeToOrderCost / order.quantity : 0.0;
+    final batchCharge = roundMoney((laborPerUnit + mtoPerUnit) * batchQty);
+    String? laborTxnId = order.laborTransactionId;
+    if (batchCharge > 0) {
+      if (payNow || order.laborSupplierId == null) {
+        laborTxnId = const Uuid().v4();
+        final txn = Transaction(
+          id: laborTxnId,
+          userId: uid,
+          title: 'Manufacturing – ${order.productName}',
+          amount: -batchCharge,
+          dateTime: now,
+          categoryId: 'cat_manufacturing_cost',
+          note: 'Finishing + made-to-order for $batchQty × ${order.variantName}',
+          supplierId: order.laborSupplierId,
+          // Capitalized into finished-goods cost → excluded from P&L; flows to
+          // COGS when the finished good is sold.
+          excludeFromPL: true,
+        );
+        await ref.read(transactionsProvider.notifier).addTransaction(txn);
+      } else {
+        // Create a real supplier bill (linked to this order via referenceNo)
+        // AND bump the payable — so it shows as a settleable line item.
+        final items = <PurchaseItem>[
+          if (laborPerUnit > 0)
+            PurchaseItem(
+              name: 'Finishing – ${order.productName}',
+              category: 'Manufacturing',
+              qty: batchQty,
+              unitPrice: roundMoney(laborPerUnit),
+            ),
+          if (mtoPerUnit > 0)
+            PurchaseItem(
+              name: 'Made-to-order – ${order.productName}',
+              category: 'Manufacturing',
+              qty: batchQty,
+              unitPrice: roundMoney(mtoPerUnit),
+            ),
+        ];
+        final bill = Purchase(
+          id: 'prodbill_${order.id}_${now.millisecondsSinceEpoch}',
+          userId: uid,
+          supplierId: order.laborSupplierId!,
+          supplierName: supName,
+          date: now,
+          referenceNo: order.id,
+          items: items,
+          createdAt: now,
+        );
+        ref.read(purchasesProvider.notifier).addPurchase(bill);
+        await ref
+            .read(suppliersProvider.notifier)
+            .recordPurchase(order.laborSupplierId!, bill.subtotal);
+      }
+    }
+
+    // 3. Advance completedQty; mark completed only when fully received.
+    final newCompleted = order.completedQty + batchQty;
+    final done = newCompleted >= order.quantity;
+    final updated = order.copyWith(
+      completedQty: newCompleted,
+      status: done ? ProductionStatus.completed : ProductionStatus.inProgress,
+      completedAt: done ? DateTime.now() : order.completedAt,
+      laborTransactionId: laborTxnId,
+    );
+    state = AsyncValue.data(
+        orders.map((o) => o.id == orderId ? updated : o).toList());
+    final repo = ref.read(productionOrderRepositoryProvider);
+    final res = await repo.updateOrder(updated);
+    if (!res.isSuccess) {
+      state = AsyncValue.data(orders);
+      return res.error ?? 'Failed to update production order';
+    }
+
+    await ref.read(inventoryProvider.notifier).refresh();
+    return null;
+  }
+
+  /// Cancels an in-progress run: restocks the consumed raw materials at their
+  /// consumed cost and marks the order cancelled.
+  Future<String?> cancelProduction(String orderId) async {
+    final orders = state.value ?? [];
+    final order = orders.where((o) => o.id == orderId).firstOrNull;
+    if (order == null) return 'Production order not found';
+    if (!order.isInProgress) return 'Only in-progress orders can be cancelled';
+    if (order.completedQty > 0) {
+      return 'Cannot cancel — some units have already been received';
+    }
+
+    final inventory = ref.read(inventoryProvider.notifier);
+    for (final input in order.inputs) {
+      // Made-to-order inputs were never drawn from stock — don't restock them.
+      if (input.madeToOrder) continue;
+      if (input.quantity <= 0) continue;
+      await inventory.adjustStock(
+        input.materialProductId,
+        input.materialVariantId,
+        input.quantity,
+        'Production cancelled',
+        unitCost: input.unitCost,
+      );
+    }
+
+    final updated = order.copyWith(
+      status: ProductionStatus.cancelled,
+      completedAt: DateTime.now(),
+    );
+    state = AsyncValue.data(
+        orders.map((o) => o.id == orderId ? updated : o).toList());
+    final repo = ref.read(productionOrderRepositoryProvider);
+    final res = await repo.updateOrder(updated);
+    if (!res.isSuccess) {
+      state = AsyncValue.data(orders);
+      return res.error ?? 'Failed to cancel production order';
+    }
+    return null;
+  }
+
+  /// Permanently deletes a CANCELLED production order. Cancelled orders have
+  /// already restocked their materials and produced no finished goods, so the
+  /// record can be removed with no accounting impact.
+  Future<String?> deleteOrder(String orderId) async {
+    final orders = state.value ?? [];
+    final order = orders.where((o) => o.id == orderId).firstOrNull;
+    if (order == null) return 'Production order not found';
+    if (!order.isCancelled) {
+      return 'Only cancelled orders can be deleted';
+    }
+    state = AsyncValue.data(orders.where((o) => o.id != orderId).toList());
+    final repo = ref.read(productionOrderRepositoryProvider);
+    final res = await repo.deleteOrder(orderId);
+    if (!res.isSuccess) {
+      state = AsyncValue.data(orders); // rollback
+      return res.error ?? 'Failed to delete production order';
+    }
+    return null;
+  }
+
+  /// Edits non-financial fields of a production order (notes and the finishing
+  /// supplier). Cost, quantity and consumed materials are locked at START.
+  Future<String?> editOrder(
+    String orderId, {
+    String? notes,
+    String? laborSupplierId,
+  }) async {
+    final orders = state.value ?? [];
+    final order = orders.where((o) => o.id == orderId).firstOrNull;
+    if (order == null) return 'Production order not found';
+    final updated = order.copyWith(
+      notes: notes ?? order.notes,
+      laborSupplierId: laborSupplierId ?? order.laborSupplierId,
+    );
+    state = AsyncValue.data(
+        orders.map((o) => o.id == orderId ? updated : o).toList());
+    final repo = ref.read(productionOrderRepositoryProvider);
+    final res = await repo.updateOrder(updated);
+    if (!res.isSuccess) {
+      state = AsyncValue.data(orders);
+      return res.error ?? 'Failed to update production order';
+    }
+    return null;
+  }
+
+  Future<void> refresh() async {
+    final repo = ref.read(productionOrderRepositoryProvider);
+    final result = await repo.getOrders();
+    if (result.isSuccess && result.data != null) {
+      state = AsyncValue.data(result.data!);
+    }
+  }
+}
+
+final productionOrdersProvider =
+    AsyncNotifierProvider<ProductionOrdersNotifier, List<ProductionOrder>>(() {
+  return ProductionOrdersNotifier();
+});
+
+/// Fetches production orders for a specific product.
+final productionOrdersForProductProvider =
+    FutureProvider.family<List<ProductionOrder>, String>((ref, productId) async {
+  final repo = ref.read(productionOrderRepositoryProvider);
+  final result = await repo.getOrdersForProduct(productId);
+  return result.data ?? [];
 });

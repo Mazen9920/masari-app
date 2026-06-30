@@ -1078,7 +1078,17 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
     HapticFeedback.mediumImpact();
 
+    // Capture every provider reference BEFORE the awaits below. Notifiers are
+    // safe to call after the widget is disposed, but `ref.read` itself is not —
+    // reading providers after an await (once the user has navigated away) throws
+    // "Using ref when a widget is about to or has been unmounted is unsafe".
     final uid = ref.read(authProvider).user?.id ?? 'unknown';
+    final receiptsNotifier = ref.read(goodsReceiptsProvider.notifier);
+    final inventoryNotifier = ref.read(inventoryProvider.notifier);
+    final purchasesNotifier = ref.read(purchasesProvider.notifier);
+    final purchasesList = ref.read(purchasesProvider).value ?? const [];
+    final valuationMethod = ref.read(appSettingsProvider).valuationMethod;
+    final currency = ref.read(currencyProvider);
     final receiptItems = <ReceiptItem>[];
 
     for (final li in _items) {
@@ -1111,8 +1121,7 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
       createdAt: DateTime.now(),
     );
 
-    final receiptResult =
-        await ref.read(goodsReceiptsProvider.notifier).addReceipt(receipt);
+    final receiptResult = await receiptsNotifier.addReceipt(receipt);
     if (!receiptResult.isSuccess) {
       _showError(receiptResult.error ?? l10n.failedToSaveGoodsReceipt);
       return;
@@ -1120,9 +1129,9 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
     // Sync received quantities to inventory stock
     if (_syncToInventory) {
-      // Ensure ALL products are loaded (not just the first page)
-      await ref.read(inventoryProvider.notifier).loadAll();
-      final products = ref.read(inventoryProvider).value ?? [];
+      // Ensure ALL products are loaded (not just the first page). loadAll
+      // returns the full list so we don't re-read the provider after the await.
+      final products = await inventoryNotifier.loadAll();
       int syncErrors = 0;
 
       for (final item in receiptItems) {
@@ -1162,13 +1171,13 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
           final skipCost = matchedProduct?.isManufactured ?? false;
 
           if (variantId != null) {
-            final result = await ref.read(inventoryProvider.notifier).adjustStock(
+            final result = await inventoryNotifier.adjustStock(
                   pid,
                   variantId,
-              item.receivedQty.round(),
+              item.receivedQty,
                   'Restock \u2013 goods receipt',
                   unitCost: item.unitCost,
-                  valuationMethod: ref.read(appSettingsProvider).valuationMethod,
+                  valuationMethod: valuationMethod,
                   supplierName: _selectedSupplierName,
                   skipCostLayer: skipCost,
                 );
@@ -1191,10 +1200,10 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
 
     // Update linked purchase's receivedQty per item (Step 8)
     if (_selectedPurchaseId != null) {
-      final purchases = ref.read(purchasesProvider).value ?? [];
-      final matchIdx = purchases.indexWhere((p) => p.id == _selectedPurchaseId);
+      final matchIdx =
+          purchasesList.indexWhere((p) => p.id == _selectedPurchaseId);
       if (matchIdx >= 0) {
-        final purchase = purchases[matchIdx];
+        final purchase = purchasesList[matchIdx];
         final updatedItems = purchase.items.map((pi) {
           // Find matching receipt item by name
           final matched = receiptItems.where((ri) =>
@@ -1207,12 +1216,11 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
         }).toList();
 
         final updatedPurchase = purchase.copyWith(items: updatedItems);
-        ref.read(purchasesProvider.notifier).updatePurchase(updatedPurchase);
+        purchasesNotifier.updatePurchase(updatedPurchase);
       }
     }
 
     if (!mounted) return;
-    final currency = ref.read(currencyProvider);
     final fmt = NumberFormat('#,##0.00', 'en');
     final messenger = ScaffoldMessenger.of(context);
 

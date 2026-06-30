@@ -1189,6 +1189,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get openingCapital => 'رأس المال الافتتاحي';
 
   @override
+  String get ownersCapital => 'رأس مال المالك';
+
+  @override
+  String get openingRetainedEarnings => 'الأرباح المحتجزة الافتتاحية';
+
+  @override
   String get retainedEarnings => 'الأرباح المحتجزة';
 
   @override
@@ -1199,6 +1205,123 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get reconAdjustment => 'تسوية';
+
+  @override
+  String get unexplainedDifference => 'فرق غير مُفسَّر';
+
+  @override
+  String get ownerContributions => 'مساهمات المالك';
+
+  @override
+  String get ownerWithdrawals => 'مسحوبات المالك';
+
+  @override
+  String get depreciationExpense => 'الإهلاك';
+
+  @override
+  String get bsDataChecks => 'فحوصات البيانات';
+
+  @override
+  String get bsWarnReceivablesOverlap =>
+      'تم ضبط «ذمم مدينة أخرى» اليدوية و«ذمم المبيعات» المحسوبة معًا — تأكد من عدم ازدواج احتساب نفس الفواتير.';
+
+  @override
+  String get bsWarnOrphanSalary =>
+      'مدفوعات الرواتب تتجاوز التزام الرواتب غير المدفوعة المُسجّل — الفائض يتجاوز قائمة الدخل. قد يكون مصنفًا خطأً (استخدم «مصروف رواتب») أو ينقصك سجل التزام رواتب.';
+
+  @override
+  String get cogsAnalysisTitle => 'تحليل تكلفة البضاعة';
+
+  @override
+  String get cogsAnalyze => 'تحليل';
+
+  @override
+  String get cogsIntegrityChecks => 'فحوصات السلامة';
+
+  @override
+  String get cogsPriceChanges => 'تغيّرات سعر التكلفة';
+
+  @override
+  String get cogsByProduct => 'حسب المنتج';
+
+  @override
+  String get cogsTransactions => 'حركات تكلفة البضاعة';
+
+  @override
+  String get cogsAllRecorded =>
+      'تكلفة البضاعة مُسجّلة بالكامل — لا توجد مشكلات.';
+
+  @override
+  String cogsIssuesFound(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مشكلات في تكلفة البضاعة تحتاج مراجعة',
+      one: 'مشكلة واحدة في تكلفة البضاعة تحتاج مراجعة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cogsTotal => 'إجمالي تكلفة البضاعة';
+
+  @override
+  String get cogsGrossMargin => 'هامش الربح الإجمالي';
+
+  @override
+  String get cogsOfRevenue => '% من الإيراد';
+
+  @override
+  String get cogsGrossProfit => 'الربح الإجمالي';
+
+  @override
+  String get cogsOrdersMissing => 'طلبات بدون تكلفة بضاعة';
+
+  @override
+  String get cogsNoneFound => 'لا يوجد';
+
+  @override
+  String get cogsItems => 'أصناف';
+
+  @override
+  String get cogsFix => 'إصلاح';
+
+  @override
+  String cogsAndMore(int count) {
+    return '+$count أخرى';
+  }
+
+  @override
+  String get cogsItemsMissingCost => 'أصناف بدون تكلفة';
+
+  @override
+  String cogsItemsMissingCostHint(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count منتجات بها متغيّرات بدون سعر تكلفة. اضغط لتحديدها.',
+      one: 'منتج واحد به متغيّرات بدون سعر تكلفة. اضغط لتحديدها.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get cogsReconciliation => 'المبيعات مقابل الدفتر';
+
+  @override
+  String get cogsMatched => 'مطابق';
+
+  @override
+  String get cogsFromSales => 'التكلفة وفق المبيعات';
+
+  @override
+  String get cogsRecordedLedger => 'المُسجّل في الدفتر';
+
+  @override
+  String get cogsUnits => 'وحدة';
+
+  @override
+  String get cogsNoTransactions => 'لا توجد حركات تكلفة بضاعة لهذه الفترة';
 
   @override
   String get capitalAutoHint => 'اضغط لتعيين رأس المال المستثمر يدوياً';
@@ -2440,6 +2563,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get catShippingFees => 'رسوم الشحن';
+
+  @override
+  String get catManufacturingCost => 'تكلفة التصنيع';
 
   @override
   String get catCapitalInjection => 'ضخ رأس المال';
@@ -7285,6 +7411,556 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get categoryShippingExpense => 'مصاريف الشحن';
+
+  @override
+  String get categoryManufacturingCost => 'تكلفة التصنيع';
+
+  @override
+  String get manufacturingTitle => 'التصنيع';
+
+  @override
+  String get manufacturingSubtitle => 'قوائم المواد وأوامر الإنتاج';
+
+  @override
+  String get manufacturingRecipesTab => 'الوصفات';
+
+  @override
+  String get manufacturingProductionTab => 'الإنتاج';
+
+  @override
+  String get billOfMaterials => 'قائمة المواد';
+
+  @override
+  String get editBillOfMaterials => 'تعديل قائمة المواد';
+
+  @override
+  String get bomMaterials => 'المواد';
+
+  @override
+  String get bomAddMaterial => 'إضافة مادة';
+
+  @override
+  String get bomNoMaterials => 'لم تتم إضافة مواد بعد';
+
+  @override
+  String get bomQtyPerUnit => 'الكمية لكل وحدة';
+
+  @override
+  String get bomUnit => 'الوحدة';
+
+  @override
+  String get bomMatchColor => 'مطابقة اللون';
+
+  @override
+  String get bomMatchColorHint =>
+      'استخدم متغير المادة المطابق للون المنتج النهائي';
+
+  @override
+  String get bomApplyScrap => 'تطبيق نسبة الهالك';
+
+  @override
+  String get bomLaborCost => 'تكلفة العمالة / التشطيب لكل وحدة';
+
+  @override
+  String get bomFinishingSupplier => 'مورد التشطيب';
+
+  @override
+  String get bomOptional => 'اختياري';
+
+  @override
+  String get bomSaved => 'تم حفظ قائمة المواد';
+
+  @override
+  String get bomProductsEmpty => 'لا توجد منتجات لها قائمة مواد بعد';
+
+  @override
+  String get defineBom => 'تحديد قائمة المواد';
+
+  @override
+  String get productionPlanner => 'مخطط الإنتاج';
+
+  @override
+  String get productionPlannerSubtitle => 'تقدير المواد والتكلفة والنقص';
+
+  @override
+  String get finishedProduct => 'المنتج النهائي';
+
+  @override
+  String get variantLabel => 'المتغير';
+
+  @override
+  String get quantityToProduce => 'الكمية المطلوب إنتاجها';
+
+  @override
+  String get materialRequirements => 'متطلبات المواد';
+
+  @override
+  String get requiredQty => 'المطلوب';
+
+  @override
+  String get availableQty => 'المتاح';
+
+  @override
+  String get shortfallQty => 'النقص';
+
+  @override
+  String get materialsCostLabel => 'تكلفة المواد';
+
+  @override
+  String get laborCostLabel => 'تكلفة العمالة';
+
+  @override
+  String get unitCostLabel => 'تكلفة الوحدة';
+
+  @override
+  String get startProduction => 'بدء الإنتاج';
+
+  @override
+  String get createPurchaseOrders => 'إنشاء أوامر شراء للنقص';
+
+  @override
+  String get shortfallWarning => 'لا توجد مواد خام كافية في المخزون لهذا الأمر';
+
+  @override
+  String get productionOrders => 'أوامر الإنتاج';
+
+  @override
+  String get productionOrderTitle => 'أمر إنتاج';
+
+  @override
+  String get statusInProgress => 'قيد التنفيذ';
+
+  @override
+  String get statusCompleted => 'مكتمل';
+
+  @override
+  String get statusCancelled => 'ملغي';
+
+  @override
+  String get workInProgress => 'إنتاج تحت التشغيل';
+
+  @override
+  String get completeRun => 'إكمال';
+
+  @override
+  String get cancelRun => 'إلغاء الأمر';
+
+  @override
+  String get payFinishingNow => 'دفع تكلفة التشطيب الآن (نقدًا)';
+
+  @override
+  String get addFinishingToPayable => 'إضافة تكلفة التشطيب لذمم المورد';
+
+  @override
+  String get materialsConsumed => 'المواد المستهلكة';
+
+  @override
+  String get noProductionOrders => 'لا توجد أوامر إنتاج بعد';
+
+  @override
+  String get productionStartedMsg => 'تم بدء الإنتاج';
+
+  @override
+  String get productionCompletedMsg => 'تم إكمال الإنتاج';
+
+  @override
+  String get productionCancelledMsg => 'تم إلغاء الإنتاج';
+
+  @override
+  String get selectBomProduct => 'اختر منتجًا';
+
+  @override
+  String get completeProductionConfirm => 'إضافة الوحدات المنتهية إلى المخزون؟';
+
+  @override
+  String get cancelProductionConfirm =>
+      'إلغاء هذا الأمر وإعادة المواد للمخزون؟';
+
+  @override
+  String get mfgCostAndMargin => 'التكلفة والربح';
+
+  @override
+  String get mfgMargin => 'هامش الربح';
+
+  @override
+  String get mfgSellingPrice => 'سعر البيع';
+
+  @override
+  String get mfgMaterialsPerUnit => 'المواد / وحدة';
+
+  @override
+  String get mfgLaborPerUnit => 'التشطيب / وحدة';
+
+  @override
+  String get mfgUnitCostShort => 'تكلفة الوحدة';
+
+  @override
+  String get mfgMaxFromStock => 'الحد الأقصى من المخزون';
+
+  @override
+  String get mfgUnits => 'وحدة';
+
+  @override
+  String get mfgInStock => 'متاح';
+
+  @override
+  String get mfgLineCost => 'تكلفة البند';
+
+  @override
+  String get mfgBomEmptyHint =>
+      'أضف المواد أدناه لعرض تكلفة الوحدة وهامش الربح مباشرة.';
+
+  @override
+  String get mfgBelowCost => 'أقل من التكلفة';
+
+  @override
+  String get mfgSearchProducts => 'ابحث عن منتج';
+
+  @override
+  String get mfgRecipes => 'وصفات';
+
+  @override
+  String get mfgAvgMargin => 'متوسط الهامش';
+
+  @override
+  String get mfgFilterAll => 'الكل';
+
+  @override
+  String get mfgDoneThisMonth => 'اكتمل هذا الشهر';
+
+  @override
+  String get mfgRunNotesOptional => 'ملاحظات (اختياري)';
+
+  @override
+  String get mfgUseMax => 'الأقصى';
+
+  @override
+  String get mfgMaterialsWord => 'مواد';
+
+  @override
+  String get mfgProducedWord => 'منتج';
+
+  @override
+  String get mfgMarginAtSale => 'الهامش عند البيع';
+
+  @override
+  String get mfgViewProduct => 'عرض المنتج';
+
+  @override
+  String get mfgNotesLabel => 'ملاحظات';
+
+  @override
+  String get mfgSelectMaterial => 'اختر مادة';
+
+  @override
+  String get mfgNoMargin => 'حدد سعر البيع لعرض الهامش';
+
+  @override
+  String get mfgNoStockForRun => 'لا يوجد مخزون كافٍ لإنتاج أي وحدات';
+
+  @override
+  String get mfgRunsCount => 'أوامر';
+
+  @override
+  String get mfgProgress => 'التقدم';
+
+  @override
+  String get mfgSortMargin => 'الهامش';
+
+  @override
+  String get mfgSortCost => 'التكلفة';
+
+  @override
+  String get mfgSortName => 'الاسم';
+
+  @override
+  String get mfgSortNewest => 'الأحدث';
+
+  @override
+  String get mfgSortOldest => 'الأقدم';
+
+  @override
+  String get mfgFilterBelowCost => 'أقل من التكلفة';
+
+  @override
+  String get mfgFilterNeedsRecipe => 'يحتاج وصفة';
+
+  @override
+  String get mfgFilterHasRecipe => 'له وصفة';
+
+  @override
+  String get mfgFinishingWord => 'التشطيب';
+
+  @override
+  String get mfgMaterialsLabel => 'المواد';
+
+  @override
+  String get mfgCostBreakdown => 'تفصيل التكلفة';
+
+  @override
+  String get mfgSort => 'ترتيب';
+
+  @override
+  String get mfgHealthyMargin => 'جيد';
+
+  @override
+  String get mfgThinMargin => 'ضعيف';
+
+  @override
+  String get mfgNoResults => 'لا توجد منتجات تطابق هذه الفلاتر';
+
+  @override
+  String get mfgSearchMaterials => 'ابحث عن مادة';
+
+  @override
+  String get mfgManufacturingInvoice => 'فاتورة التصنيع';
+
+  @override
+  String get mfgManufacturingPayable => 'مستحقات التصنيع';
+
+  @override
+  String get wipCapitalTiedUp => 'رأس المال المحتجز';
+
+  @override
+  String get wipMaterialsValue => 'قيمة الخامات';
+
+  @override
+  String get supPayablesPosition => 'وضع المستحقات';
+
+  @override
+  String get supPayable => 'مستحق الدفع';
+
+  @override
+  String get supPrepaid => 'مدفوع مقدمًا';
+
+  @override
+  String get supOnOrder => 'تحت الطلب';
+
+  @override
+  String get supReceivedUnpaid => 'مستلم · غير مدفوع';
+
+  @override
+  String get supDepositsPaid => 'دفعات مقدمة';
+
+  @override
+  String get supBilledNotReceived => 'مفوتر · غير مستلم';
+
+  @override
+  String get supAccrualHint =>
+      'أنت مدين فقط عن البضائع المستلمة. الدفعات المقدمة على بضائع غير مسلّمة تُعد مدفوعات مقدمة وليست مستحقات.';
+
+  @override
+  String get supTotalBilled => 'إجمالي الفواتير';
+
+  @override
+  String get supReceivedValue => 'قيمة المستلم';
+
+  @override
+  String get supCashPaid => 'النقد المدفوع';
+
+  @override
+  String get supNetPosition => 'صافي الوضع';
+
+  @override
+  String get wipFinishingOwed => 'التشطيب عند الاستلام';
+
+  @override
+  String get wipUnitsInProduction => 'وحدات قيد الإنتاج';
+
+  @override
+  String get wipAvgProgress => 'متوسط التقدم';
+
+  @override
+  String get wipByProduct => 'حسب المنتج';
+
+  @override
+  String get wipActiveRuns => 'أوامر نشطة';
+
+  @override
+  String get wipOverview => 'نظرة عامة على الإنتاج تحت التشغيل';
+
+  @override
+  String wipDaysRunning(int days) {
+    return '$days يوم قيد التشغيل';
+  }
+
+  @override
+  String get wipStartedToday => 'بدأ اليوم';
+
+  @override
+  String get mfgProductionOverview => 'نظرة عامة على الإنتاج';
+
+  @override
+  String get mfgThisMonth => 'هذا الشهر';
+
+  @override
+  String get mfgCompletedUnits => 'وحدات مكتملة';
+
+  @override
+  String get mfgAvgUnitCost => 'متوسط تكلفة الوحدة';
+
+  @override
+  String get mfgTotalRuns => 'إجمالي الأوامر';
+
+  @override
+  String get mfgCostBuildUp => 'تكوين التكلفة';
+
+  @override
+  String get mfgTimeline => 'الجدول الزمني';
+
+  @override
+  String get mfgStarted => 'بدأ';
+
+  @override
+  String get mfgPending => 'قيد الانتظار';
+
+  @override
+  String get mfgUnitsProduced => 'الوحدات المنتجة';
+
+  @override
+  String get mfgLast6Months => 'آخر 6 أشهر';
+
+  @override
+  String get mfgManufacturer => 'المُصنّع';
+
+  @override
+  String get mfgFinishingPhase => 'مرحلة التشطيب';
+
+  @override
+  String get mfgInHouse => 'يُصنع داخليًا — لا يوجد مورد تشطيب';
+
+  @override
+  String get mfgPerUnit => 'وحدة';
+
+  @override
+  String get mfgDeleteOrderConfirm =>
+      'حذف أمر الإنتاج الملغى؟ لا يمكن التراجع عن ذلك.';
+
+  @override
+  String get mfgOrderDeletedMsg => 'تم حذف أمر الإنتاج';
+
+  @override
+  String get mfgOrderUpdatedMsg => 'تم تحديث أمر الإنتاج';
+
+  @override
+  String get mfgEditOrder => 'تعديل أمر الإنتاج';
+
+  @override
+  String get mfgLinkedRecords => 'السجلات المرتبطة';
+
+  @override
+  String get mfgSupplierBill => 'فاتورة المورد';
+
+  @override
+  String get mfgGoodsReceipt => 'بضائع مستلمة';
+
+  @override
+  String get mfgUnitsShort => 'وحدة';
+
+  @override
+  String get mfgReceiveUnits => 'استلام وحدات';
+
+  @override
+  String get mfgUnitsToReceive => 'عدد الوحدات المستلمة';
+
+  @override
+  String get mfgRemaining => 'متبقٍ';
+
+  @override
+  String get mfgReceived => 'مُستلَم';
+
+  @override
+  String get mfgReceiveBatch => 'استلام';
+
+  @override
+  String get mfgMadeToOrder => 'يُنتَج مع الطلب';
+
+  @override
+  String get mfgMadeToOrderHint =>
+      'يصنعه المورد أثناء الإنتاج — التكلفة تُحتسب ولا يُخصم من المخزون';
+
+  @override
+  String get mfgMadeToOrderShort => 'يُنتَج مع الطلب';
+
+  @override
+  String get mfgCostLayers => 'طبقات التكلفة';
+
+  @override
+  String get mfgNextOut => 'التالي للصرف';
+
+  @override
+  String get mfgNoCostLayers =>
+      'لا توجد طبقات بعد — استلم البضائع لبدء تتبع FIFO';
+
+  @override
+  String get mfgReviewPOs => 'مراجعة أوامر الشراء';
+
+  @override
+  String get mfgReviewPOsSub => 'أكّد الكميات والأسعار والموردين';
+
+  @override
+  String get mfgPoReference => 'المرجع';
+
+  @override
+  String get mfgPoOrderDate => 'تاريخ الطلب';
+
+  @override
+  String get mfgPoLineQty => 'الكمية';
+
+  @override
+  String get mfgPoUnitPrice => 'سعر الوحدة';
+
+  @override
+  String get mfgPoGrandTotal => 'الإجمالي';
+
+  @override
+  String get mfgPoItemsWord => 'أصناف';
+
+  @override
+  String get mfgPoConfirm => 'إنشاء أوامر الشراء';
+
+  @override
+  String get mfgPoCreatedN => 'أمر شراء تم إنشاؤه';
+
+  @override
+  String get mfgPoNoneSelected => 'اختر موردًا واحدًا على الأقل';
+
+  @override
+  String get mfgPoUnassigned => 'لا يوجد مورد مسجّل — سيُحفظ بدون مورد';
+
+  @override
+  String get mfgPoOrdersWord => 'أوامر';
+
+  @override
+  String get mfgColorLabel => 'اللون';
+
+  @override
+  String get mfgVariesByColor => 'مادة مختلفة لكل لون';
+
+  @override
+  String get mfgPerColorHint => 'اختر المادة الخام المستخدمة لكل لون';
+
+  @override
+  String get mfgPreviewingColor => 'معاينة';
+
+  @override
+  String get mfgClearAll => 'مسح الكل';
+
+  @override
+  String get mfgClearAllConfirm =>
+      'إزالة جميع المواد من هذه الوصفة؟ يتم الاحتفاظ بتكلفة التشطيب.';
+
+  @override
+  String get mfgMaterialsCount => 'مواد';
+
+  @override
+  String get mfgHideBundles => 'إخفاء الحزم';
+
+  @override
+  String get mfgHideDrafts => 'إخفاء المسودات';
+
+  @override
+  String get mfgVisibility => 'الظهور';
 
   @override
   String get categoryLoanReceived => 'قرض مُستلَم';

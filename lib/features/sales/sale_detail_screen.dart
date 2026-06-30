@@ -940,7 +940,7 @@ class SaleDetailScreen extends ConsumerWidget {
         ref.read(inventoryProvider.notifier).adjustStock(
               item.productId!,
               item.variantId ?? '${item.productId}_v0',
-              item.quantity.round(),
+              item.quantity.toDouble(),
               'Order cancelled',
               unitCost: item.costPrice > 0 ? item.costPrice : null,
               valuationMethod: valMethod,
@@ -1003,7 +1003,7 @@ class SaleDetailScreen extends ConsumerWidget {
         ref.read(inventoryProvider.notifier).adjustStock(
               item.productId!,
               item.variantId ?? '${item.productId}_v0',
-              item.quantity.round(),
+              item.quantity.toDouble(),
               'Order refunded',
               unitCost: item.costPrice > 0 ? item.costPrice : null,
               valuationMethod: valMethod,

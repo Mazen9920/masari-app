@@ -14,6 +14,8 @@ import 'firebase_options.dart';
 import 'core/theme/app_theme.dart';
 import 'core/navigation/app_router.dart';
 import 'core/providers/app_settings_provider.dart';
+import 'core/providers/app_providers.dart';
+import 'core/providers/auth_provider.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
 import 'core/config/app_config.dart';
 import 'core/services/notification_service.dart';
@@ -66,7 +68,7 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  runApp(const ProviderScope(child: RevvoApp()));
+  runApp(const ProviderScope(child: _InventoryKeepAlive(child: RevvoApp())));
 }
 
 class RevvoApp extends ConsumerWidget {
@@ -102,5 +104,36 @@ class RevvoApp extends ConsumerWidget {
         Locale('ar'),
       ],
     );
+  }
+}
+
+/// Holds one permanently-active listener on [filteredInventoryProvider] so the
+/// provider can never collapse to zero active listeners.
+///
+/// Why: flutter_riverpod 3 pauses a Consumer's provider subscriptions whenever
+/// its `TickerMode` goes inactive (e.g. a route is pushed over the page). Every
+/// dashboard / reports / manage tab watches the chained
+/// `filteredInventoryProvider`, so on a route transition they all pause at once,
+/// the derived provider goes inactive and pauses its own upstream subscriptions
+/// — and a resume racing a rebuild trips an internal
+/// `pausedActiveSubscriptionCount` assertion (debug-only, but disruptive).
+///
+/// This wrapper sits **above `MaterialApp`** (directly under `ProviderScope`),
+/// so there is no `TickerMode` ancestor and its subscription is never paused —
+/// keeping the provider active at all times. `ref.watch` (not `listen`) makes
+/// it a strong listener; returning the same `child` keeps the rebuild O(1).
+/// Gated on auth so nothing loads before login.
+class _InventoryKeepAlive extends ConsumerWidget {
+  const _InventoryKeepAlive({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isAuthed = ref.watch(authProvider.select((s) => s.isAuthenticated));
+    if (isAuthed) {
+      ref.watch(filteredInventoryProvider);
+    }
+    return child;
   }
 }

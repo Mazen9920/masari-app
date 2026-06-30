@@ -17,6 +17,10 @@ import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/export_providers.dart';
 import '../../shared/models/product_model.dart';
+import 'package:intl/intl.dart';
+import '../../shared/utils/money_utils.dart';
+import '../../shared/models/production_order_model.dart';
+import '../manufacturing/production_order_detail_screen.dart';
 import 'inventory_filter_sheet.dart';
 import '../../shared/widgets/async_value_widget.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
@@ -50,10 +54,13 @@ class _TabNotifier extends Notifier<int> {
   void set(int v) => state = v;
 }
 
-class _MaterialsViewNotifier extends Notifier<bool> {
+/// Which segment of the inventory section is shown.
+enum _InvView { products, materials, wip }
+
+class _MaterialsViewNotifier extends Notifier<_InvView> {
   @override
-  bool build() => false;
-  void set(bool v) => state = v;
+  _InvView build() => _InvView.products;
+  void set(_InvView v) => state = v;
 }
 
 class _FilterNotifier extends Notifier<InventoryFilterResult> {
@@ -63,7 +70,7 @@ class _FilterNotifier extends Notifier<InventoryFilterResult> {
 }
 
 final _inventoryTabProvider = NotifierProvider<_TabNotifier, int>(_TabNotifier.new);
-final _inventoryMaterialsViewProvider = NotifierProvider<_MaterialsViewNotifier, bool>(_MaterialsViewNotifier.new);
+final _inventoryMaterialsViewProvider = NotifierProvider<_MaterialsViewNotifier, _InvView>(_MaterialsViewNotifier.new);
 final _inventoryFilterProvider = NotifierProvider<_FilterNotifier, InventoryFilterResult>(_FilterNotifier.new);
 
 class InventoryListScreen extends ConsumerStatefulWidget {
@@ -81,8 +88,9 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
   int get _selectedFilter => ref.read(_inventoryTabProvider);
   set _selectedFilter(int v) => ref.read(_inventoryTabProvider.notifier).set(v);
 
-  bool get _isMaterialsView => ref.read(_inventoryMaterialsViewProvider);
-  set _isMaterialsView(bool v) => ref.read(_inventoryMaterialsViewProvider.notifier).set(v);
+  _InvView get _view => ref.read(_inventoryMaterialsViewProvider);
+  bool get _isMaterialsView => _view == _InvView.materials;
+  bool get _isWipView => _view == _InvView.wip;
 
   InventoryFilterResult get _filterResult => ref.read(_inventoryFilterProvider);
   set _filterResult(InventoryFilterResult v) => ref.read(_inventoryFilterProvider.notifier).set(v);
@@ -341,33 +349,39 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _StockStatusCard(
-                          inStock: inStock,
-                          lowStock: lowStock,
-                          outOfStock: outOfStock,
-                        ),
-                        const SizedBox(height: 12),
-                        _StockValueCard(costValue: costValue, sellingValue: sellingValue),
-                        _buildMissingCostBanner(products),
-                        const SizedBox(height: 16),
-                        _buildQuickActions(),
-                        const SizedBox(height: 16),
-                        _buildFilterChips(inStock + lowStock + outOfStock, lowStock, outOfStock),
-                        const SizedBox(height: 16),
-                        _buildProductList(filtered),
-                        if (isPageLoading)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: Center(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                      children: _isWipView
+                          ? const [_WipSection()]
+                          : [
+                              _StockStatusCard(
+                                inStock: inStock,
+                                lowStock: lowStock,
+                                outOfStock: outOfStock,
                               ),
-                            ),
-                          ),
-                      ],
+                              const SizedBox(height: 12),
+                              _StockValueCard(
+                                  costValue: costValue,
+                                  sellingValue: sellingValue),
+                              _buildMissingCostBanner(products),
+                              const SizedBox(height: 16),
+                              _buildQuickActions(),
+                              const SizedBox(height: 16),
+                              _buildFilterChips(inStock + lowStock + outOfStock,
+                                  lowStock, outOfStock),
+                              const SizedBox(height: 16),
+                              _buildProductList(filtered),
+                              if (isPageLoading)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 24),
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    ),
+                                  ),
+                                ),
+                            ],
                     ),
                   ),
                   );
@@ -732,10 +746,16 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
         child: Row(
           children: [
             Expanded(
-              child: _toggleOption(l10n.products, false),
+              child: _toggleOption(
+                  l10n.products, _InvView.products, AppColors.primaryNavy),
             ),
             Expanded(
-              child: _toggleOption(l10n.rawMaterials, true),
+              child: _toggleOption(
+                  l10n.rawMaterials, _InvView.materials, const Color(0xFF795548)),
+            ),
+            Expanded(
+              child: _toggleOption(
+                  l10n.workInProgress, _InvView.wip, AppColors.accentOrange),
             ),
           ],
         ),
@@ -743,14 +763,14 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
     );
   }
 
-  Widget _toggleOption(String label, bool isMaterials) {
-    final isSelected = _isMaterialsView == isMaterials;
+  Widget _toggleOption(String label, _InvView view, Color selColor) {
+    final isSelected = _view == view;
     return GestureDetector(
       onTap: () {
-        if (_isMaterialsView != isMaterials) {
+        if (_view != view) {
           HapticFeedback.selectionClick();
           setState(() {
-            _isMaterialsView = isMaterials;
+            ref.read(_inventoryMaterialsViewProvider.notifier).set(view);
             _selectedFilter = 0; // Reset filter on switch
           });
         }
@@ -758,18 +778,19 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
       child: AnimatedContainer(
         duration: 200.ms,
         decoration: BoxDecoration(
-          color: isSelected
-              ? (isMaterials ? const Color(0xFF795548) : AppColors.primaryNavy)
-              : Colors.transparent,
+          color: isSelected ? selColor : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: isSelected ? Colors.white : AppColors.textSecondary,
             fontWeight: FontWeight.w600,
-            fontSize: 13,
+            fontSize: 12,
           ),
         ),
       ),
@@ -1052,7 +1073,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
             sku: cellStr(r, iSku),
             costPrice: cellDbl(r, iCost),
             sellingPrice: cellDbl(r, iSelling),
-            currentStock: cellInt(r, iStock),
+            currentStock: cellInt(r, iStock).toDouble(),
             reorderPoint: 10,
           ));
         }
@@ -1458,7 +1479,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                           .map((p) => DropdownMenuItem(
                                 value: p.id,
                                 child: Text(
-                                  '${p.name}  (${p.currentStock} ${p.unitOfMeasure})',
+                                  '${p.name}  (${fmtQty(p.currentStock)} ${p.unitOfMeasure})',
                                   style: AppTypography.bodySmall.copyWith(
                                       color: AppColors.textPrimary),
                                 ),
@@ -1524,7 +1545,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                             .map((v) => DropdownMenuItem(
                                   value: v.id,
                                   child: Text(
-                                    '${v.localizedDisplayName(l10n)}  (${v.currentStock})',
+                                    '${v.localizedDisplayName(l10n)}  (${fmtQty(v.currentStock)})',
                                     style: AppTypography.bodySmall.copyWith(
                                         color: AppColors.textPrimary),
                                   ),
@@ -1768,7 +1789,7 @@ class _InventoryListScreenState extends ConsumerState<InventoryListScreen>
                                 notifier.adjustStock(
                                       selectedProductId!,
                                       selectedVariantId!,
-                                      quantity,
+                                      quantity.toDouble(),
                                       reason,
                                       unitCost: unitCost,
                                       valuationMethod: valMethod,
@@ -2088,6 +2109,610 @@ class _StockValueCard extends ConsumerWidget {
   }
 }
 
+/// The "Work in progress" segment of the inventory section.
+/// Work-in-progress dashboard for the inventory section: a full breakdown of
+/// the capital tied up in active production runs — total value split into
+/// materials vs. finishing owed, headline metrics, a by-product breakdown, and
+/// a rich card per active run. Mirrors the accrual model: WIP carries full cost
+/// (materials + finishing), and the finishing portion is also a payable.
+class _WipSection extends ConsumerWidget {
+  const _WipSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final ordersAsync = ref.watch(productionOrdersProvider);
+    final orders = (ordersAsync.value ?? const [])
+        .where((o) => o.isInProgress)
+        .toList()
+      ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+
+    if (ordersAsync.isLoading && ordersAsync.value == null) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 80),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (orders.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 80),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.precision_manufacturing_outlined,
+                  size: 56,
+                  color: AppColors.textTertiary.withValues(alpha: 0.3)),
+              const SizedBox(height: 12),
+              Text(l10n.noProductionOrders,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySmall
+                      .copyWith(color: AppColors.textTertiary)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final currency = ref.watch(currencyProvider);
+    final fmt = NumberFormat('#,##0.##');
+
+    // WIP asset = materials consumed; finishing is a pending (not-yet-incurred)
+    // cost shown alongside for the committed-cost picture.
+    final totalMaterials =
+        roundMoney(orders.fold<double>(0.0, (s, o) => s + o.wipValue));
+    final totalFinishing = roundMoney(
+        orders.fold<double>(0.0, (s, o) => s + o.pendingFinishingCost));
+    final totalWip = totalMaterials;
+    final unitsInProduction =
+        orders.fold<double>(0.0, (s, o) => s + o.remainingQty);
+    final totalUnits = orders.fold<double>(0.0, (s, o) => s + o.quantity);
+    final receivedUnits =
+        orders.fold<double>(0.0, (s, o) => s + o.completedQty);
+    final avgProgress = totalUnits > 0 ? receivedUnits / totalUnits : 0.0;
+
+    // Group active runs by finished product.
+    final byProduct = <String, ({double value, double units, int runs})>{};
+    for (final o in orders) {
+      final cur = byProduct[o.productName];
+      byProduct[o.productName] = (
+        value: (cur?.value ?? 0) + o.wipValue,
+        units: (cur?.units ?? 0) + o.remainingQty,
+        runs: (cur?.runs ?? 0) + 1,
+      );
+    }
+    final productRows = byProduct.entries.toList()
+      ..sort((a, b) => b.value.value.compareTo(a.value.value));
+    final maxProductValue = productRows.isEmpty
+        ? 1.0
+        : productRows.first.value.value.clamp(1.0, double.infinity);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Hero: total WIP value + materials/finishing split ──
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.primaryNavy, Color(0xFF1B2A4A)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryNavy.withValues(alpha: 0.25),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                          Icons.precision_manufacturing_rounded,
+                          size: 18,
+                          color: Colors.white),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        l10n.wipOverview.toUpperCase(),
+                        style: AppTypography.captionSmall.copyWith(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
+                            fontSize: 10),
+                      ),
+                    ),
+                    Text('${orders.length} ${l10n.wipActiveRuns}',
+                        style: AppTypography.captionSmall.copyWith(
+                            color: Colors.white.withValues(alpha: 0.7))),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text('$currency ${fmt.format(totalWip)}',
+                    style: AppTypography.displayMedium.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        height: 1.0)),
+                Text(l10n.wipCapitalTiedUp,
+                    style: AppTypography.captionSmall.copyWith(
+                        color: Colors.white.withValues(alpha: 0.7))),
+                const SizedBox(height: 14),
+                // Composition: materials (already spent) vs finishing (owed).
+                _wipSplitBar(materials: totalMaterials, finishing: totalFinishing),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _wipSplitLegend(
+                        color: Colors.white,
+                        label: l10n.wipMaterialsValue,
+                        amount: '$currency ${fmt.format(totalMaterials)}',
+                      ),
+                    ),
+                    Expanded(
+                      child: _wipSplitLegend(
+                        color: AppColors.accentOrange,
+                        label: l10n.wipFinishingOwed,
+                        amount: '$currency ${fmt.format(totalFinishing)}',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // ── Metrics grid ──
+          Row(
+            children: [
+              Expanded(
+                child: _wipMetricTile(
+                  icon: Icons.inventory_2_rounded,
+                  iconColor: AppColors.primaryNavy,
+                  label: l10n.wipUnitsInProduction,
+                  value: fmtQty(unitsInProduction),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _wipMetricTile(
+                  icon: Icons.donut_large_rounded,
+                  iconColor: AppColors.success,
+                  label: l10n.wipAvgProgress,
+                  value: '${(avgProgress * 100).round()}%',
+                  progress: avgProgress,
+                ),
+              ),
+            ],
+          ),
+          if (productRows.length > 1) ...[
+            const SizedBox(height: 16),
+            _wipSectionLabel(l10n.wipByProduct),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color: AppColors.borderLight.withValues(alpha: 0.5)),
+              ),
+              child: Column(
+                children: [
+                  for (final e in productRows)
+                    _wipProductRow(
+                      name: e.key,
+                      value: e.value.value,
+                      units: e.value.units,
+                      share: e.value.value / maxProductValue,
+                      currency: currency,
+                      fmt: fmt,
+                      l10n: l10n,
+                    ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          _wipSectionLabel(l10n.wipActiveRuns),
+          const SizedBox(height: 8),
+          ...orders.map((o) => _WipRunCard(
+                order: o,
+                currency: currency,
+                fmt: fmt,
+              )),
+        ],
+      ),
+    );
+  }
+
+  // Two-segment bar: navy = materials (cash already spent), orange = finishing
+  // (still owed). Rendered on the dark hero, so the materials segment is white.
+  Widget _wipSplitBar({required double materials, required double finishing}) {
+    final total = materials + finishing;
+    final matFlex = total <= 0 ? 1 : (materials / total * 1000).round();
+    final finFlex = total <= 0 ? 0 : (finishing / total * 1000).round();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        height: 10,
+        child: total <= 0
+            ? Container(color: Colors.white.withValues(alpha: 0.2))
+            : Row(
+                children: [
+                  Expanded(flex: matFlex, child: Container(color: Colors.white)),
+                  if (finFlex > 0)
+                    Expanded(
+                        flex: finFlex,
+                        child: Container(color: AppColors.accentOrange)),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _wipSplitLegend(
+      {required Color color, required String label, required String amount}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 3),
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: AppTypography.captionSmall.copyWith(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 10)),
+              Text(amount,
+                  style: AppTypography.captionSmall.copyWith(
+                      color: Colors.white, fontWeight: FontWeight.w700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _wipMetricTile({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+    double? progress,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: iconColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(label,
+                    style: AppTypography.captionSmall
+                        .copyWith(color: AppColors.textSecondary, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(value,
+              style: AppTypography.h3.copyWith(
+                  color: AppColors.textPrimary, fontWeight: FontWeight.w800)),
+          if (progress != null) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: progress.clamp(0.0, 1.0),
+                minHeight: 5,
+                backgroundColor: AppColors.borderLight.withValues(alpha: 0.5),
+                valueColor: const AlwaysStoppedAnimation(AppColors.success),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _wipSectionLabel(String text) => Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: Text(text.toUpperCase(),
+            style: AppTypography.captionSmall.copyWith(
+                color: AppColors.textTertiary,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                fontSize: 11)),
+      );
+
+  Widget _wipProductRow({
+    required String name,
+    required double value,
+    required double units,
+    required double share,
+    required String currency,
+    required NumberFormat fmt,
+    required AppLocalizations l10n,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(name,
+                    style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              Text('$currency ${fmt.format(roundMoney(value))}',
+                  style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.primaryNavy,
+                      fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: share.clamp(0.0, 1.0),
+                    minHeight: 5,
+                    backgroundColor:
+                        AppColors.borderLight.withValues(alpha: 0.4),
+                    valueColor:
+                        const AlwaysStoppedAnimation(AppColors.primaryNavy),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('${fmtQty(units)} ${l10n.mfgUnitsShort}',
+                  style: AppTypography.captionSmall
+                      .copyWith(color: AppColors.textTertiary)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rich card for a single in-progress production run: product, progress bar,
+/// materials/finishing value split, days running, and manufacturer.
+class _WipRunCard extends ConsumerWidget {
+  final ProductionOrder order;
+  final String currency;
+  final NumberFormat fmt;
+  const _WipRunCard({
+    required this.order,
+    required this.currency,
+    required this.fmt,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final o = order;
+    final progress = o.quantity > 0 ? o.completedQty / o.quantity : 0.0;
+    final materials = roundMoney(o.wipValue);
+    final finishing = roundMoney(o.pendingFinishingCost);
+    final days = DateTime.now().difference(o.startedAt).inDays;
+
+    String? supplierName;
+    if (o.laborSupplierId != null && o.laborSupplierId!.isNotEmpty) {
+      for (final s in ref.watch(suppliersProvider).value ?? const []) {
+        if (s.id == o.laborSupplierId) {
+          supplierName = s.name;
+          break;
+        }
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ProductionOrderDetailScreen(orderId: o.id),
+        )),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${fmtQty(o.quantity)} × ${o.variantName}',
+                            style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 1),
+                        Text(o.productName,
+                            style: AppTypography.captionSmall
+                                .copyWith(color: AppColors.textTertiary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('$currency ${fmt.format(o.wipValue)}',
+                          style: AppTypography.labelMedium.copyWith(
+                              color: AppColors.primaryNavy,
+                              fontWeight: FontWeight.w800)),
+                      Text(l10n.workInProgress,
+                          style: AppTypography.captionSmall.copyWith(
+                              color: AppColors.textTertiary, fontSize: 10)),
+                    ],
+                  ),
+                  const Icon(Icons.chevron_right_rounded,
+                      size: 16, color: AppColors.textTertiary),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Progress: received vs total.
+              Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 5,
+                        backgroundColor:
+                            AppColors.borderLight.withValues(alpha: 0.5),
+                        valueColor: const AlwaysStoppedAnimation(
+                            AppColors.success),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                      '${fmtQty(o.completedQty)}/${fmtQty(o.quantity)} ${l10n.mfgReceived}',
+                      style: AppTypography.captionSmall.copyWith(
+                          color: AppColors.textTertiary, fontSize: 10)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Materials / finishing split + meta chips (wraps on narrow cards).
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _wipChip(
+                    color: AppColors.primaryNavy,
+                    label: l10n.mfgMaterialsWord,
+                    value: '$currency ${fmt.format(materials)}',
+                  ),
+                  _wipChip(
+                    color: AppColors.accentOrange,
+                    label: l10n.mfgFinishingWord,
+                    value: '$currency ${fmt.format(finishing)}',
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.schedule_rounded,
+                          size: 12, color: AppColors.textTertiary),
+                      const SizedBox(width: 3),
+                      Text(
+                          days <= 0
+                              ? l10n.wipStartedToday
+                              : l10n.wipDaysRunning(days),
+                          style: AppTypography.captionSmall.copyWith(
+                              color: AppColors.textTertiary, fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+              if (supplierName != null) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(Icons.person_outline_rounded,
+                        size: 12, color: AppColors.textTertiary),
+                    const SizedBox(width: 4),
+                    Text(supplierName,
+                        style: AppTypography.captionSmall.copyWith(
+                            color: AppColors.textSecondary, fontSize: 11)),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _wipChip({
+    required Color color,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text('$label · ',
+              style: AppTypography.captionSmall.copyWith(
+                  color: AppColors.textTertiary, fontSize: 10)),
+          Text(value,
+              style: AppTypography.captionSmall.copyWith(
+                  color: color, fontWeight: FontWeight.w700, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+}
+
 // ═══════════════════════════════════════════════════════════
 //  QUICK ACTION BUTTON
 // ═══════════════════════════════════════════════════════════
@@ -2313,7 +2938,7 @@ class _ProductCardState extends ConsumerState<_ProductCard> {
                               ),
                             ),
                             Text(
-                              '${product.currentStock} ${product.unitOfMeasure}',
+                              '${fmtQty(product.currentStock)} ${product.unitOfMeasure}',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
@@ -2496,7 +3121,7 @@ class _ProductCardState extends ConsumerState<_ProductCard> {
           const SizedBox(width: 12),
           // Stock
           Text(
-            '${variant.currentStock} ${product.unitOfMeasure}',
+            '${fmtQty(variant.currentStock)} ${product.unitOfMeasure}',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,

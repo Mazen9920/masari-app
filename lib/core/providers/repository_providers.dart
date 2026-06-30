@@ -31,10 +31,16 @@ import '../repositories/firestore/firestore_shopify_product_mapping_repository.d
 import '../repositories/firestore/firestore_shopify_sync_log_repository.dart';
 import '../repositories/conversion_order_repository.dart';
 import '../repositories/firestore/firestore_conversion_order_repository.dart';
+import '../repositories/production_order_repository.dart';
+import '../repositories/firestore/firestore_production_order_repository.dart';
 import '../repositories/fixed_asset_repository.dart';
 import '../repositories/firestore/firestore_fixed_asset_repository.dart';
 import '../repositories/loan_repository.dart';
 import '../repositories/firestore/firestore_loan_repository.dart';
+import '../repositories/gateway_receivable_repository.dart';
+import '../repositories/firestore/firestore_gateway_receivable_repository.dart';
+import '../repositories/accrued_expense_repository.dart';
+import '../repositories/firestore/firestore_accrued_expense_repository.dart';
 import '../repositories/salary_repository.dart';
 import '../repositories/firestore/firestore_salary_repository.dart';
 import '../../shared/models/conversion_order_model.dart';
@@ -124,6 +130,13 @@ final conversionOrderRepositoryProvider =
   return FirestoreConversionOrderRepository();
 });
 
+// ─── Production Orders ─────────────────────────────────
+
+final productionOrderRepositoryProvider =
+    Provider<ProductionOrderRepository>((ref) {
+  return FirestoreProductionOrderRepository();
+});
+
 // ─── Fixed Assets ──────────────────────────────────────
 
 final fixedAssetRepositoryProvider =
@@ -143,6 +156,20 @@ final loanRepositoryProvider =
 final salaryRepositoryProvider =
     Provider<SalaryRepository>((ref) {
   return FirestoreSalaryRepository();
+});
+
+// ─── Payment-gateway receivables ───────────────────────
+
+final gatewayReceivableRepositoryProvider =
+    Provider<GatewayReceivableRepository>((ref) {
+  return FirestoreGatewayReceivableRepository();
+});
+
+// ─── Accrued expenses ──────────────────────────────────
+
+final accruedExpenseRepositoryProvider =
+    Provider<AccruedExpenseRepository>((ref) {
+  return FirestoreAccruedExpenseRepository();
 });
 
 /// Fetches conversion orders for a specific product.

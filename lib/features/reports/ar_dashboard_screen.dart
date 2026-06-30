@@ -82,6 +82,11 @@ class _ArDashboardScreenState extends ConsumerState<ArDashboardScreen>
   // ── Loaded data ──
   double _totalAr = 0;
   double _precomputedAr = 0; // from bosta_connections doc
+  // Authoritative "awaiting cashout" = Bosta wallet balance (net). When present,
+  // delivered-not-cashed-out orders are valued via this instead of their (often
+  // stale) gross COD. _hasWallet=false → fall back to gross-COD behavior.
+  double _walletBalance = 0;
+  bool _hasWallet = false;
   final List<_ArEntry> _arEntries = [];
 
   // Shipment status breakdown
@@ -219,6 +224,10 @@ class _ArDashboardScreenState extends ConsumerState<ArDashboardScreen>
       final conn = ref.read(bostaConnectionProvider).value;
       _precomputedAr = conn?.cfPendingAr ?? 0;
       final arCutoff = conn?.cfArCutoffDate;
+      // Wallet balance = authoritative "awaiting cashout" (net). Null until the
+      // sync populates it → fall back to summing delivered gross COD.
+      _hasWallet = conn?.cfWalletBalance != null;
+      _walletBalance = conn?.cfWalletBalance ?? 0;
 
       // Load shipments + COD sales in parallel
       final results = await Future.wait([
@@ -344,8 +353,9 @@ class _ArDashboardScreenState extends ConsumerState<ArDashboardScreen>
           if (shipInfo.allRto) continue; // All shipments RTO
         }
 
-        // This sale contributes to AR
-        _totalAr += saleTotal;
+        // This sale contributes to AR. Delivered-awaiting orders are valued via
+        // the wallet balance (added once after the loop), so their gross COD is
+        // added to _totalAr only in the fallback path below.
 
         final customerName = d['customer_name'] as String?;
         final shopifyOrderNum = d['shopify_order_number']?.toString();
@@ -388,19 +398,34 @@ class _ArDashboardScreenState extends ConsumerState<ArDashboardScreen>
         final isStale = daysAsAr >= _staleDays;
 
         if (shipmentState == 45) {
+          // Delivered, not cashed out → its value lives in the Bosta wallet
+          // balance (net), added once after the loop. With no wallet balance
+          // available, fall back to the order's gross COD.
           _deliveredAwaitingCount++;
-          _deliveredAwaitingAmount += saleTotal;
+          if (!_hasWallet) {
+            _deliveredAwaitingAmount += saleTotal;
+            _totalAr += saleTotal;
+            if (isStale) {
+              _staleCount++;
+              _staleAmount += saleTotal;
+            }
+          }
         } else if (shipmentState == 0) {
           _noShipmentCount++;
           _noShipmentAmount += saleTotal;
+          _totalAr += saleTotal;
+          if (isStale) {
+            _staleCount++;
+            _staleAmount += saleTotal;
+          }
         } else {
           _inTransitCount++;
           _inTransitAmount += saleTotal;
-        }
-
-        if (isStale) {
-          _staleCount++;
-          _staleAmount += saleTotal;
+          _totalAr += saleTotal;
+          if (isStale) {
+            _staleCount++;
+            _staleAmount += saleTotal;
+          }
         }
 
         _arEntries.add(_ArEntry(
@@ -421,7 +446,14 @@ class _ArDashboardScreenState extends ConsumerState<ArDashboardScreen>
         ));
       }
 
-      _totalAr = roundMoney(_totalAr);
+      if (_hasWallet) {
+        // Authoritative net awaiting-cashout value + the gross COD still in
+        // transit / not shipped.
+        _deliveredAwaitingAmount = roundMoney(_walletBalance);
+        _totalAr = roundMoney(_totalAr + _walletBalance);
+      } else {
+        _totalAr = roundMoney(_totalAr);
+      }
       _arEntries.sort((a, b) => b.date.compareTo(a.date));
 
       // Build monthly history

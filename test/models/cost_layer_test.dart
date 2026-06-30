@@ -181,7 +181,7 @@ void main() {
 /// Helper to create a ProductVariant with specified cost layer config.
 ProductVariant _variant({
   List<CostLayer> costLayers = const [],
-  int currentStock = 0,
+  double currentStock = 0,
   double costPrice = 0,
 }) {
   return ProductVariant(

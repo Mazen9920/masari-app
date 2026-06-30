@@ -241,6 +241,18 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
               context.push(AppRoutes.categories);
             },
           ),
+        _GridSectionData(
+            icon: Icons.precision_manufacturing_rounded,
+            gradient: const [Color(0xFFD97706), Color(0xFFF59E0B)],
+            title: l10n.manufacturingTitle,
+            badge: ref.watch(tierProvider).isGrowthOrAbove
+                ? null
+                : _StatChip(label: 'Growth', color: AppColors.accentOrange),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push(AppRoutes.manufacturing);
+            },
+          ),
       ];
 
       return Column(
@@ -321,6 +333,23 @@ class _ManageScreenState extends ConsumerState<ManageScreen> {
           )
               .animate()
               .fadeIn(duration: 250.ms, delay: 100.ms)
+              .slideX(begin: -0.03),
+        const SizedBox(height: 10),
+        _SectionTile(
+            icon: Icons.precision_manufacturing_rounded,
+            iconGradient: const [Color(0xFFD97706), Color(0xFFF59E0B)],
+            title: l10n.manufacturingTitle,
+            subtitle: l10n.manufacturingSubtitle,
+            trailing: ref.watch(tierProvider).isGrowthOrAbove
+                ? null
+                : _StatChip(label: 'Growth', color: AppColors.accentOrange),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push(AppRoutes.manufacturing);
+            },
+          )
+              .animate()
+              .fadeIn(duration: 250.ms, delay: 120.ms)
               .slideX(begin: -0.03),
         const SizedBox(height: 10),
       ],

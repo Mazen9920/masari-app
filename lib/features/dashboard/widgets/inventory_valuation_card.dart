@@ -30,6 +30,17 @@ class InventoryValuationCard extends ConsumerWidget {
       totalSkus += product.variants.length;
     }
 
+    // Work-in-progress: raw materials already consumed by in-progress runs but
+    // not yet booked as finished goods. Counting it keeps the inventory value
+    // whole between a run's START (raw drops) and COMPLETE (finished rises).
+    // Added at cost to BOTH cost & retail so potential-profit stays accurate
+    // (WIP carries no markup yet).
+    final wip = (ref.watch(productionOrdersProvider).value ?? const [])
+        .where((o) => o.isInProgress)
+        .fold<double>(0.0, (s, o) => s + o.wipValue);
+    totalCost += wip;
+    totalRetail += wip;
+
     final potentialProfit = totalRetail - totalCost;
 
     return Container(

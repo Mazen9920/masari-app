@@ -14,6 +14,7 @@ import '../../shared/models/supplier_model.dart';
 import 'record_payment_screen.dart';
 import 'record_purchase_screen.dart';
 import 'supplier_detail_screen.dart';
+import '../inventory/receive_goods_screen.dart';
 
 /// Purchase receipt detail — status hero, supplier info, items breakdown,
 /// payment terms, sticky action bar.
@@ -806,7 +807,54 @@ class _BottomActions extends StatelessWidget {
               color: AppColors.borderLight.withValues(alpha: 0.5)),
         ),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Receive Goods — only while the purchase has unreceived items.
+          if (purchase != null && !purchase!.isFullyReceived) ...[
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ReceiveGoodsScreen(
+                      preselectedSupplierId:
+                          supplier?.id ?? purchase?.supplierId,
+                      preselectedPurchaseId: purchase?.id,
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryNavy.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: AppColors.primaryNavy.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.inventory_2_rounded,
+                        color: AppColors.primaryNavy, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n.receiveGoods,
+                      style: const TextStyle(
+                        color: AppColors.primaryNavy,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          Row(
         children: [
           // Record Payment (outline)
           Expanded(
@@ -898,6 +946,8 @@ class _BottomActions extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
         ],
       ),
     );

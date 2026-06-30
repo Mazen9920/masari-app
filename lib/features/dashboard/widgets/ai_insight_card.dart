@@ -171,7 +171,7 @@ class _AIInsightCardState extends ConsumerState<AIInsightCard> {
     // 3) Low stock alert
     final lowStockProducts = inventory.where((p) {
       final totalStock =
-          p.variants.fold<int>(0, (sum, v) => sum + v.currentStock);
+          p.variants.fold<double>(0.0, (sum, v) => sum + v.currentStock);
       final reorderPoint =
           p.variants.fold<int>(0, (sum, v) => sum + v.reorderPoint);
       return totalStock > 0 && totalStock <= reorderPoint;

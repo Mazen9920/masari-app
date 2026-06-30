@@ -11,6 +11,7 @@ import '../../core/providers/app_providers.dart';
 import '../../core/providers/app_settings_provider.dart';
 import '../../core/providers/repository_providers.dart';
 import '../../shared/models/product_model.dart';
+import '../../shared/utils/money_utils.dart';
 import '../../shared/models/conversion_order_model.dart';
 import '../shopify/providers/shopify_connection_provider.dart';
 import '../shopify/widgets/shopify_badges.dart';
@@ -29,7 +30,7 @@ class ProductDetailScreen extends ConsumerStatefulWidget {
 
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   AppLocalizations get l10n => AppLocalizations.of(context)!;
-  int _adjustQuantity = 0;
+  double _adjustQuantity = 0;
   String _adjustReason = 'Correction';
   bool _showAdjustment = false;
   String? _adjustVariantId;
@@ -126,6 +127,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     _PricingCard(product: product),
                     const SizedBox(height: 14),
                     _CostOverviewCard(product: product),
+                    if (product.isMaterial) ...[
+                      const SizedBox(height: 14),
+                      _CostLayersCard(product: product),
+                    ],
                     const SizedBox(height: 14),
                     _SupplierCostCard(product: product),
                     const SizedBox(height: 14),
@@ -502,17 +507,18 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       _stepperButton(Icons.remove_rounded, () {
                         HapticFeedback.lightImpact();
                         setState(() {
-                          _adjustQuantity--;
-                          _adjustQtyCtrl.text = '$_adjustQuantity';
+                          _adjustQuantity -= 1;
+                          _adjustQtyCtrl.text = fmtQty(_adjustQuantity);
                         });
                       }),
                       Expanded(
                         child: TextField(
                           controller: _adjustQtyCtrl,
                           textAlign: TextAlign.center,
-                          keyboardType: const TextInputType.numberWithOptions(signed: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              signed: true, decimal: true),
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'[-\d]')),
+                            FilteringTextInputFormatter.allow(RegExp(r'[-\d.]')),
                           ],
                           style: AppTypography.h3.copyWith(
                             color: _adjustQuantity < 0
@@ -527,7 +533,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                             contentPadding: EdgeInsets.zero,
                           ),
                           onChanged: (val) {
-                            final parsed = int.tryParse(val);
+                            final parsed = double.tryParse(val);
                             setState(() => _adjustQuantity = parsed ?? 0);
                           },
                         ),
@@ -535,8 +541,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       _stepperButton(Icons.add_rounded, () {
                         HapticFeedback.lightImpact();
                         setState(() {
-                          _adjustQuantity++;
-                          _adjustQtyCtrl.text = '$_adjustQuantity';
+                          _adjustQuantity += 1;
+                          _adjustQtyCtrl.text = fmtQty(_adjustQuantity);
                         });
                       }),
                     ],
@@ -598,7 +604,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           builder: (ctx) => AlertDialog(
                             title: Text(l10n.negativeStockTitle),
                             content: Text(
-                              l10n.negativeStockWillBring(variant.currentStock + _adjustQuantity),
+                              l10n.negativeStockWillBring((variant.currentStock + _adjustQuantity).round()),
                             ),
                             actions: [
                               TextButton(
@@ -941,7 +947,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       final result = await notifier.adjustStock(
                             widget.productId,
                             selectedVariantId ?? product.defaultVariant.id,
-                            quantity,
+                            quantity.toDouble(),
                             'Restock',
                             unitCost: unitCost,
                             valuationMethod: valMethod,
@@ -1149,13 +1155,13 @@ class _StockOverviewCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  TweenAnimationBuilder<int>(
+                  TweenAnimationBuilder<double>(
                     tween:
-                        IntTween(begin: 0, end: product.currentStock),
+                        Tween(begin: 0, end: product.currentStock),
                     duration: const Duration(milliseconds: 800),
                     curve: Curves.easeOutCubic,
                     builder: (_, value, _) => Text(
-                      '$value',
+                      fmtQty(value),
                       style: TextStyle(
                         fontSize: 44,
                         fontWeight: FontWeight.w800,
@@ -1327,6 +1333,162 @@ class _PricingCard extends ConsumerWidget {
 // ═══════════════════════════════════════════════════════════
 //  COST OVERVIEW
 // ═══════════════════════════════════════════════════════════
+/// FIFO/LIFO cost layers for a raw material — shows each remaining stock layer
+/// and which one is consumed next, so price changes are visible.
+class _CostLayersCard extends ConsumerWidget {
+  final Product product;
+  const _CostLayersCard({required this.product});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final currency = ref.watch(appSettingsProvider).currency;
+    final method = ref.watch(appSettingsProvider).valuationMethod;
+    final fmt = NumberFormat('#,##0.####');
+    final dateFmt = DateFormat('MMM d, yyyy');
+    final multi = product.variants.length > 1;
+
+    final rows = <Widget>[];
+    var any = false;
+    for (final v in product.variants) {
+      final layers = List<CostLayer>.from(v.effectiveCostLayers);
+      if (layers.isEmpty) continue;
+      any = true;
+      if (method == 'lifo') {
+        layers.sort((a, b) => b.date.compareTo(a.date));
+      } else {
+        layers.sort((a, b) => a.date.compareTo(b.date));
+      }
+      if (multi) {
+        rows.add(Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 2),
+          child: Text(v.displayName,
+              style: AppTypography.captionSmall.copyWith(
+                  color: AppColors.textTertiary,
+                  fontWeight: FontWeight.w700)),
+        ));
+      }
+      for (var i = 0; i < layers.length; i++) {
+        final layer = layers[i];
+        final isNext = i == 0; // next consumed under the active method
+        final lineTotal = layer.remainingQty * layer.unitCost;
+        rows.add(Container(
+          margin: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: isNext
+                ? AppColors.primaryNavy.withValues(alpha: 0.06)
+                : AppColors.backgroundLight,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+                color: isNext
+                    ? AppColors.primaryNavy.withValues(alpha: 0.2)
+                    : AppColors.borderLight.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '${fmt.format(layer.remainingQty)} ${product.unitOfMeasure} × $currency ${fmt.format(layer.unitCost)}',
+                          style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        if (isNext) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color:
+                                  AppColors.primaryNavy.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Text(l10n.mfgNextOut,
+                                style: AppTypography.captionSmall.copyWith(
+                                    color: AppColors.primaryNavy,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 9)),
+                          ),
+                        ],
+                      ],
+                    ),
+                    Text(dateFmt.format(layer.date),
+                        style: AppTypography.captionSmall
+                            .copyWith(color: AppColors.textTertiary)),
+                  ],
+                ),
+              ),
+              Text('$currency ${fmt.format(lineTotal)}',
+                  style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ));
+      }
+    }
+
+    final valLabel = {
+      'fifo': l10n.fifoLabel,
+      'lifo': l10n.lifoLabel,
+      'average': l10n.averageLabel,
+    }[method] ?? l10n.fifoLabel;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(l10n.mfgCostLayers.toUpperCase(),
+                  style: AppTypography.captionSmall.copyWith(
+                      color: AppColors.textTertiary,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6)),
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryNavy.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(valLabel,
+                    style: AppTypography.captionSmall.copyWith(
+                        color: AppColors.primaryNavy,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 9)),
+              ),
+            ],
+          ),
+          if (!any)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(l10n.mfgNoCostLayers,
+                  style: AppTypography.captionSmall
+                      .copyWith(color: AppColors.textTertiary)),
+            )
+          else
+            ...rows,
+        ],
+      ),
+    );
+  }
+}
+
 class _CostOverviewCard extends ConsumerWidget {
   final Product product;
   const _CostOverviewCard({required this.product});
@@ -1464,7 +1626,7 @@ class _CostOverviewCard extends ConsumerWidget {
                       ),
                       const Spacer(),
                       Text(
-                        l10n.unitsCount(m.quantity),
+                        l10n.unitsCount(m.quantity.round()),
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textTertiary,
                           fontSize: 11,
@@ -1610,7 +1772,7 @@ class _VariantsSection extends ConsumerWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        l10n.unitsCount(v.currentStock),
+                        l10n.unitsCount(v.currentStock.round()),
                         style: AppTypography.captionSmall.copyWith(
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w600,

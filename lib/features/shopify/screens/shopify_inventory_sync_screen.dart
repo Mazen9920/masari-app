@@ -1011,8 +1011,8 @@ class _ProductSyncTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final totalStock = product.variants.fold<int>(
-        0, (sum, v) => sum + v.currentStock);
+    final totalStock = product.variants.fold<double>(
+        0.0, (sum, v) => sum + v.currentStock);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1050,7 +1050,7 @@ class _ProductSyncTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  l10n.shopifyVariantInfo(product.variants.length, totalStock),
+                  l10n.shopifyVariantInfo(product.variants.length, totalStock.round()),
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textSecondary,
                     fontSize: 12,
@@ -1088,8 +1088,8 @@ class _SelectableProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final totalStock = product.variants.fold<int>(
-        0, (sum, v) => sum + v.currentStock);
+    final totalStock = product.variants.fold<double>(
+        0.0, (sum, v) => sum + v.currentStock);
 
     return GestureDetector(
       onTap: onToggle,
@@ -1133,7 +1133,7 @@ class _SelectableProductTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    l10n.shopifyMappingInfo(mappings.length, totalStock),
+                    l10n.shopifyMappingInfo(mappings.length, totalStock.round()),
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondary,
                       fontSize: 12,
