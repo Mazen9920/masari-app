@@ -2578,8 +2578,12 @@ class GatewayReceivablesNotifier extends Notifier<List<GatewayReceivable>> {
       {bool postCash = true}) async {
     final receivable = state.firstWhere((r) => r.id == receivableId);
     final txnId = postCash ? const Uuid().v4() : null;
-    final linked =
-        txnId != null ? settlement.copyWith(transactionId: txnId) : settlement;
+    // A fee is a real cost of selling — it gets its own P&L entry.
+    final feeTxnId =
+        (postCash && settlement.fee > 0.001) ? const Uuid().v4() : null;
+    final linked = settlement.copyWith(
+        transactionId: txnId, feeTransactionId: feeTxnId);
+    // The GROSS clears from the receivable; only the net reaches the bank.
     final newBalance = (receivable.pendingBalance - settlement.amount)
         .clamp(0.0, double.maxFinite);
     final updated = receivable.copyWith(
@@ -2588,19 +2592,151 @@ class GatewayReceivablesNotifier extends Notifier<List<GatewayReceivable>> {
     );
     final ok = await updateReceivable(updated);
     if (ok && txnId != null) {
-      final txn = Transaction(
-        id: txnId,
-        userId: ref.read(authProvider).user?.id ?? '',
-        title: 'Gateway settlement – ${receivable.gatewayName}',
-        amount: settlement.amount, // positive = cash in
-        dateTime: settlement.date,
-        categoryId: 'cat_gateway_settlement',
-        note: settlement.note,
-        excludeFromPL: true,
-      );
-      await ref.read(transactionsProvider.notifier).addTransaction(txn);
+      final txns = ref.read(transactionsProvider.notifier);
+      await txns.addTransaction(_cashTxn(receivable, linked, txnId));
+      if (feeTxnId != null) {
+        await txns.addTransaction(_feeTxn(receivable, linked, feeTxnId));
+      }
     }
     return ok;
+  }
+
+  /// Cash actually banked — the settlement NET of the gateway's fee. Posting
+  /// the gross here (the old behaviour) overstated the bank balance.
+  Transaction _cashTxn(
+          GatewayReceivable r, GatewaySettlement s, String txnId) =>
+      Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Gateway settlement – ${r.gatewayName}',
+        amount: s.netAmount, // positive = cash in
+        dateTime: s.date,
+        categoryId: 'cat_gateway_settlement',
+        note: s.note,
+        // Revenue was already recognized at the sale; this is the
+        // receivable → cash swap, so it must not hit the P&L again.
+        excludeFromPL: true,
+      );
+
+  /// The gateway's cut, booked as a real expense (it never reaches the bank).
+  Transaction _feeTxn(
+          GatewayReceivable r, GatewaySettlement s, String feeTxnId) =>
+      Transaction(
+        id: feeTxnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: '${r.gatewayName} fees',
+        amount: -s.fee,
+        dateTime: s.date,
+        categoryId: 'cat_gateway_fees',
+        note: s.note,
+        // Non-cash: the fee was netted off before the money ever arrived, and
+        // the cash entry above is already the net figure.
+        excludeFromPL: false,
+      );
+
+  /// Record money the gateway collected — raises the receivable.
+  ///
+  /// No transaction is posted: the revenue was already recognized when the
+  /// sale was made. This only tracks that the gateway is holding the cash.
+  Future<bool> recordCollection(
+      String receivableId, GatewayCollection collection) async {
+    final receivable = state.firstWhere((r) => r.id == receivableId);
+    final updated = receivable.copyWith(
+      pendingBalance: receivable.pendingBalance + collection.amount,
+      collections: [...receivable.collections, collection],
+      status: GatewayReceivableStatus.active,
+    );
+    return updateReceivable(updated);
+  }
+
+  /// Edit a settlement: adjusts the receivable by the delta and rewrites both
+  /// linked transactions (cash and fee).
+  Future<bool> updateSettlement(
+      String receivableId, GatewaySettlement settlement) async {
+    final receivable = state.firstWhere((r) => r.id == receivableId);
+    final old =
+        receivable.settlements.where((s) => s.id == settlement.id).firstOrNull;
+    if (old == null) return false;
+
+    final merged = settlement.copyWith(
+      transactionId: settlement.transactionId ?? old.transactionId,
+      feeTransactionId: settlement.feeTransactionId ?? old.feeTransactionId,
+    );
+    // Settling less leaves more outstanding, and vice versa.
+    final newBalance =
+        (receivable.pendingBalance + old.amount - merged.amount)
+            .clamp(0.0, double.maxFinite);
+    final updated = receivable.copyWith(
+      pendingBalance: newBalance,
+      settlements: [
+        for (final s in receivable.settlements)
+          if (s.id == merged.id) merged else s,
+      ],
+    );
+    final ok = await updateReceivable(updated);
+    if (!ok) return false;
+
+    final txns = ref.read(transactionsProvider.notifier);
+    if (merged.transactionId != null) {
+      await txns.updateTransaction(
+          _cashTxn(receivable, merged, merged.transactionId!));
+    }
+    if (merged.feeTransactionId != null) {
+      if (merged.fee > 0.001) {
+        await txns.updateTransaction(
+            _feeTxn(receivable, merged, merged.feeTransactionId!));
+      } else {
+        // Fee removed on edit — drop the now-meaningless expense entry.
+        await txns.removeTransaction(merged.feeTransactionId!);
+      }
+    }
+    return true;
+  }
+
+  /// Delete a settlement: restores the receivable and removes its
+  /// cash and fee transactions.
+  Future<bool> deleteSettlement(
+      String receivableId, String settlementId) async {
+    final receivable = state.firstWhere((r) => r.id == receivableId);
+    final old = receivable.settlements
+        .where((s) => s.id == settlementId)
+        .firstOrNull;
+    if (old == null) return false;
+
+    final updated = receivable.copyWith(
+      pendingBalance: receivable.pendingBalance + old.amount,
+      settlements:
+          receivable.settlements.where((s) => s.id != settlementId).toList(),
+      status: GatewayReceivableStatus.active,
+    );
+    final ok = await updateReceivable(updated);
+    if (ok) {
+      final txns = ref.read(transactionsProvider.notifier);
+      if (old.transactionId != null) {
+        await txns.removeTransaction(old.transactionId!);
+      }
+      if (old.feeTransactionId != null) {
+        await txns.removeTransaction(old.feeTransactionId!);
+      }
+    }
+    return ok;
+  }
+
+  /// Delete a collection entry and lower the receivable again.
+  Future<bool> deleteCollection(
+      String receivableId, String collectionId) async {
+    final receivable = state.firstWhere((r) => r.id == receivableId);
+    final old = receivable.collections
+        .where((c) => c.id == collectionId)
+        .firstOrNull;
+    if (old == null) return false;
+    final updated = receivable.copyWith(
+      pendingBalance: (receivable.pendingBalance - old.amount)
+          .clamp(0.0, double.maxFinite),
+      collections:
+          receivable.collections.where((c) => c.id != collectionId).toList(),
+    );
+    return updateReceivable(updated);
   }
 }
 
@@ -2623,6 +2759,9 @@ class AccruedExpensesNotifier extends Notifier<List<AccruedExpense>> {
     final result = await repo.getAll();
     if (result.isSuccess && result.data != null) {
       state = result.data!;
+      // Catch up any monthly accruals whose periods have elapsed. Safe to run
+      // on every load — generation is idempotent per period.
+      await generateDueRecurrences();
     }
   }
 
@@ -2646,23 +2785,35 @@ class AccruedExpensesNotifier extends Notifier<List<AccruedExpense>> {
     if (result.isSuccess && result.data != null) {
       state = [result.data!, ...state];
       if (expenseTxnId != null) {
-        final txn = Transaction(
-          id: expenseTxnId,
-          userId: ref.read(authProvider).user?.id ?? '',
-          title: 'Accrued: ${expense.name}',
-          amount: -expense.amount, // expense reduces profit
-          dateTime: DateTime.now(),
-          categoryId: 'cat_accrued_expense',
-          note: expense.notes,
-          // In the P&L, NOT a cash movement (cf_engine excludes cat_accrued_expense).
-        );
-        await ref.read(transactionsProvider.notifier).addTransaction(txn);
+        await ref
+            .read(transactionsProvider.notifier)
+            .addTransaction(_expenseTxnFor(toCreate, expenseTxnId));
       }
       return true;
     }
     return false;
   }
 
+  /// The P&L expense entry for an accrual.
+  ///
+  /// Dated to [AccruedExpense.accrualDate] — the period the cost was INCURRED —
+  /// so June's rent hits June's P&L even when it's entered in July. Posts to the
+  /// accrual's real category so costs break out properly instead of lumping
+  /// into one line. Non-cash: the cash moves later via `cat_accrued_payment`.
+  Transaction _expenseTxnFor(AccruedExpense e, String txnId) => Transaction(
+        id: txnId,
+        userId: ref.read(authProvider).user?.id ?? '',
+        title: 'Accrued: ${e.name}',
+        amount: -e.totalAccrued, // expense reduces profit
+        dateTime: e.accrualDate,
+        categoryId: e.effectiveCategoryId,
+        note: e.notes,
+      );
+
+  /// Updates the accrual and keeps its P&L transaction in step.
+  ///
+  /// Editing the amount/date/category previously left the ledger showing the
+  /// old figure — the record and the books silently diverged.
   Future<bool> updateExpense(AccruedExpense expense) async {
     final repo = ref.read(accruedExpenseRepositoryProvider);
     final result = await repo.update(expense);
@@ -2671,9 +2822,118 @@ class AccruedExpensesNotifier extends Notifier<List<AccruedExpense>> {
         for (final e in state)
           if (e.id == expense.id) result.data! else e,
       ];
+      final txnId = expense.expenseTransactionId;
+      if (txnId != null) {
+        await ref
+            .read(transactionsProvider.notifier)
+            .updateTransaction(_expenseTxnFor(result.data!, txnId));
+      }
       return true;
     }
     return false;
+  }
+
+  /// Creates any missing months for monthly recurring accruals, up to the
+  /// current month. Idempotent — a period that already exists is skipped, so
+  /// calling it repeatedly (e.g. on every load) can't duplicate charges.
+  Future<int> generateDueRecurrences() async {
+    final now = DateTime.now();
+    final templates = state.where((e) => e.isRecurring).toList();
+    var created = 0;
+
+    for (final template in templates) {
+      // Every period already present for this series (template + children).
+      final existing = state
+          .where((e) =>
+              e.id == template.id || e.recurringSourceId == template.id)
+          .map((e) => e.periodKey)
+          .toSet();
+
+      var cursor = template;
+      // Walk forward month by month; a hard bound stops any runaway loop.
+      for (var guard = 0; guard < 60; guard++) {
+        final next = cursor.nextRecurrence(id: const Uuid().v4());
+        final beyondNow = next.accrualDate.year > now.year ||
+            (next.accrualDate.year == now.year &&
+                next.accrualDate.month > now.month);
+        if (beyondNow) break;
+        if (!existing.contains(next.periodKey)) {
+          final ok = await add(next);
+          if (ok) {
+            existing.add(next.periodKey);
+            created++;
+          }
+        }
+        cursor = next;
+      }
+    }
+    return created;
+  }
+
+  /// Edit a payment made against an accrual, adjusting the outstanding balance
+  /// by the delta and rewriting the linked cash transaction.
+  Future<bool> updatePayment(
+      String expenseId, AccruedExpensePayment payment) async {
+    final expense = state.firstWhere((e) => e.id == expenseId);
+    final old = expense.payments.where((p) => p.id == payment.id).firstOrNull;
+    if (old == null) return false;
+
+    final merged = payment.transactionId != null
+        ? payment
+        : payment.copyWith(transactionId: old.transactionId);
+    // Paying less leaves more outstanding, and vice versa.
+    final newAmount = (expense.amount + old.amount - merged.amount)
+        .clamp(0.0, double.maxFinite);
+    final updated = expense.copyWith(
+      amount: newAmount,
+      status: newAmount <= 0.01
+          ? AccruedExpenseStatus.settled
+          : AccruedExpenseStatus.active,
+      payments: [
+        for (final p in expense.payments)
+          if (p.id == merged.id) merged else p,
+      ],
+    );
+    final ok = await updateExpense(updated);
+    if (ok && merged.transactionId != null) {
+      await ref.read(transactionsProvider.notifier).updateTransaction(
+            Transaction(
+              id: merged.transactionId!,
+              userId: ref.read(authProvider).user?.id ?? '',
+              title: 'Accrued payment – ${expense.name}',
+              amount: -merged.amount,
+              dateTime: merged.date,
+              categoryId: 'cat_accrued_payment',
+              note: merged.note,
+              excludeFromPL: true,
+            ),
+          );
+    }
+    return ok;
+  }
+
+  /// Delete a payment: restores the outstanding balance and removes its
+  /// cash transaction.
+  Future<bool> deletePayment(String expenseId, String paymentId) async {
+    final expense = state.firstWhere((e) => e.id == expenseId);
+    final old = expense.payments.where((p) => p.id == paymentId).firstOrNull;
+    if (old == null) return false;
+
+    final newAmount = expense.amount + old.amount;
+    final updated = expense.copyWith(
+      amount: newAmount,
+      status: newAmount > 0.01
+          ? AccruedExpenseStatus.active
+          : expense.status,
+      payments: expense.payments.where((p) => p.id != paymentId).toList(),
+    );
+    final ok = await updateExpense(updated);
+    if (ok && old.transactionId != null) {
+      await ref
+          .read(transactionsProvider.notifier)
+          .removeTransaction(old.transactionId!);
+    }
+    return ok;
   }
 
   Future<bool> remove(String id) async {
@@ -2826,6 +3086,64 @@ class SalariesNotifier extends Notifier<List<Salary>> {
         excludeFromPL: true,
       );
       await ref.read(transactionsProvider.notifier).addTransaction(txn);
+    }
+    return ok;
+  }
+
+  /// Edit an existing salary payment (amount / date / note).
+  ///
+  /// Keeps [Salary.totalPaid] in step by applying only the delta, and rewrites
+  /// the linked cash transaction so the ledger matches the corrected figure.
+  Future<bool> updatePayment(String salaryId, SalaryPayment payment) async {
+    final salary = state.firstWhere((s) => s.id == salaryId);
+    final old = salary.payments.where((p) => p.id == payment.id).firstOrNull;
+    if (old == null) return false;
+
+    // Preserve the original transaction link — the edit must rewrite that same
+    // ledger row, not orphan it and create a second one.
+    final merged = payment.transactionId != null
+        ? payment
+        : payment.copyWith(transactionId: old.transactionId);
+    final updated = salary.copyWith(
+      totalPaid: salary.totalPaid - old.amount + merged.amount,
+      payments: [
+        for (final p in salary.payments) if (p.id == merged.id) merged else p,
+      ],
+    );
+    final ok = await updateSalary(updated);
+    if (ok && merged.transactionId != null) {
+      await ref.read(transactionsProvider.notifier).updateTransaction(
+            Transaction(
+              id: merged.transactionId!,
+              userId: ref.read(authProvider).user?.id ?? '',
+              title: 'Salary Payment – ${salary.employeeName}',
+              amount: -merged.amount,
+              dateTime: merged.date,
+              categoryId: 'cat_salary_payment',
+              note: merged.note,
+              excludeFromPL: true,
+            ),
+          );
+    }
+    return ok;
+  }
+
+  /// Delete a salary payment and its linked cash transaction.
+  Future<bool> deletePayment(String salaryId, String paymentId) async {
+    final salary = state.firstWhere((s) => s.id == salaryId);
+    final old = salary.payments.where((p) => p.id == paymentId).firstOrNull;
+    if (old == null) return false;
+
+    final updated = salary.copyWith(
+      // Never let a rounding/legacy mismatch push the total negative.
+      totalPaid: (salary.totalPaid - old.amount).clamp(0, double.maxFinite),
+      payments: salary.payments.where((p) => p.id != paymentId).toList(),
+    );
+    final ok = await updateSalary(updated);
+    if (ok && old.transactionId != null) {
+      await ref
+          .read(transactionsProvider.notifier)
+          .removeTransaction(old.transactionId!);
     }
     return ok;
   }

@@ -32,6 +32,23 @@ class _SalariesDashboardScreenState
   final _dateFmt = DateFormat('MMM d, yyyy');
   final _monthFmt = DateFormat('MMM yyyy');
 
+  /// Captured once so every "this month" figure on screen agrees, even if the
+  /// dashboard is left open across midnight.
+  final _now = DateTime.now();
+
+  /// Payroll month being viewed. Defaults to the current month; the arrows on
+  /// the Employees tab step back through history so past dues stay visible.
+  late DateTime _selectedMonth = DateTime(_now.year, _now.month);
+
+  /// True when [_selectedMonth] is the live month (blocks stepping forward).
+  bool get _isCurrentMonth =>
+      _selectedMonth.year == _now.year && _selectedMonth.month == _now.month;
+
+  void _stepMonth(int delta) => setState(() {
+        _selectedMonth =
+            DateTime(_selectedMonth.year, _selectedMonth.month + delta);
+      });
+
   // ── Filters ──
   String _statusFilter = 'all'; // all / active / terminated / onLeave
   String _typeFilter = 'all'; // all / type name
@@ -72,6 +89,26 @@ class _SalariesDashboardScreenState
 
   double _totalPaid(List<Salary> salaries) =>
       salaries.fold(0.0, (acc, s) => acc + s.totalPaid);
+
+  /// Payroll actually disbursed in [month] (all employees).
+  double _paidInMonth(List<Salary> salaries, DateTime month) =>
+      salaries.fold(0.0, (acc, s) => acc + s.paidInMonth(month));
+
+  /// Payroll still owed for [month] (active employees only).
+  double _remainingInMonth(List<Salary> salaries, DateTime month) => salaries
+      .where((s) => s.status == SalaryStatus.active)
+      .fold(0.0, (acc, s) => acc + s.remainingForMonth(month));
+
+  /// Everyone still owed money for [month], most owed first.
+  List<Salary> _owedInMonth(List<Salary> salaries, DateTime month) {
+    final owed = salaries
+        .where((s) =>
+            s.status == SalaryStatus.active && s.remainingForMonth(month) > 0.01)
+        .toList()
+      ..sort((a, b) =>
+          b.remainingForMonth(month).compareTo(a.remainingForMonth(month)));
+    return owed;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -129,16 +166,27 @@ class _SalariesDashboardScreenState
                             style: AppTypography.caption
                                 .copyWith(color: Colors.white60)),
                         const Spacer(),
-                        Row(
-                          children: [
-                            _heroStat('Monthly Payroll',
-                                '$currency ${_fmt.format(_totalMonthlyPayroll(salaries))}'),
-                            const SizedBox(width: 24),
-                            _heroStat('Total Paid',
-                                '$currency ${_fmt.format(_totalPaid(salaries))}'),
-                            const SizedBox(width: 24),
-                            _heroStat('Employees', '${active.length}'),
-                          ],
+                        // Month-scoped figures first — "what's left to pay this
+                        // month" is the actionable number; all-time totals live
+                        // in the tabs below.
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _heroStat('Monthly Payroll',
+                                  '$currency ${_fmt.format(_totalMonthlyPayroll(salaries))}'),
+                              const SizedBox(width: 20),
+                              _heroStat(
+                                  'Paid ${DateFormat('MMM').format(_selectedMonth)}',
+                                  '$currency ${_fmt.format(_paidInMonth(salaries, _selectedMonth))}'),
+                              const SizedBox(width: 20),
+                              _heroStat(
+                                  'Left ${DateFormat('MMM').format(_selectedMonth)}',
+                                  '$currency ${_fmt.format(_remainingInMonth(salaries, _selectedMonth))}'),
+                              const SizedBox(width: 20),
+                              _heroStat('Employees', '${active.length}'),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -361,6 +409,7 @@ class _SalariesDashboardScreenState
 
     return Column(
       children: [
+        _monthNavigator(all, currency),
         _buildFilters(all),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -395,6 +444,110 @@ class _SalariesDashboardScreenState
                 ),
         ),
       ],
+    );
+  }
+
+  /// Month stepper + "who is still owed" summary for the selected month.
+  Widget _monthNavigator(List<Salary> all, String currency) {
+    final owed = _owedInMonth(all, _selectedMonth);
+    final due = _remainingInMonth(all, _selectedMonth);
+    final paid = _paidInMonth(all, _selectedMonth);
+    final settled = owed.isEmpty;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left_rounded),
+                tooltip: 'Previous month',
+                onPressed: () => _stepMonth(-1),
+                visualDensity: VisualDensity.compact,
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text(_monthFmt.format(_selectedMonth),
+                        style: AppTypography.labelMedium),
+                    Text(
+                        _isCurrentMonth
+                            ? 'This month'
+                            : 'Paid $currency ${_fmt.format(paid)}',
+                        style: AppTypography.caption
+                            .copyWith(color: AppColors.textTertiary)),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right_rounded),
+                tooltip: 'Next month',
+                // Future payroll isn't payable yet — don't step past today.
+                onPressed: _isCurrentMonth ? null : () => _stepMonth(1),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          const Divider(height: 12),
+          if (settled)
+            Row(
+              children: [
+                const Icon(Icons.check_circle_rounded,
+                    size: 16, color: AppColors.chartGreen),
+                const SizedBox(width: 6),
+                Text('Everyone paid for this month',
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.chartGreen)),
+              ],
+            )
+          else ...[
+            Row(
+              children: [
+                const Icon(Icons.error_outline_rounded,
+                    size: 16, color: AppColors.chartOrange),
+                const SizedBox(width: 6),
+                Text(
+                    '${owed.length} unpaid · $currency ${_fmt.format(due)} due',
+                    style: AppTypography.labelSmall
+                        .copyWith(color: AppColors.chartOrange)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Who exactly is owed, biggest first.
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: owed
+                  .map((s) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.chartOrange.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                            '${s.employeeName} · $currency ${_fmt.format(s.remainingForMonth(_selectedMonth))}',
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.chartOrange)),
+                      ))
+                  .toList(),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -536,28 +689,197 @@ class _SalariesDashboardScreenState
                     size: 18, color: AppColors.textTertiary),
               ],
             ),
-            if (salary.unpaidAmount > 0) ...[
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(3),
-                child: LinearProgressIndicator(
-                  value: salary.progressPct.clamp(0.0, 1.0),
-                  minHeight: 4,
-                  backgroundColor: Colors.grey.shade100,
-                  valueColor: AlwaysStoppedAnimation(
-                    salary.isFullyPaid
-                        ? AppColors.chartGreen
-                        : salary.unpaidAmount > salary.monthlySalary * 2
-                            ? AppColors.chartRed
-                            : AppColors.chartBlue,
-                  ),
-                ),
-              ),
-            ],
+            // "This month" is the question people actually ask about payroll —
+            // the figures above are the contract rate and all-time totals.
+            _thisMonthStrip(salary, currency),
           ],
         ),
       ),
     );
+  }
+
+  /// Compact per-month payroll status: taken that month vs still owed.
+  Widget _thisMonthStrip(Salary salary, String currency) {
+    final month = _selectedMonth;
+    final status = salary.statusForMonth(month);
+    if (status == MonthPayStatus.notEmployed) return const SizedBox.shrink();
+
+    final paid = salary.paidInMonth(month);
+    final remaining = salary.remainingForMonth(month);
+    final color = _monthStatusColor(status);
+
+    return Column(
+      children: [
+        const SizedBox(height: 10),
+        const Divider(height: 1),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Text(DateFormat('MMMM').format(month),
+                style: AppTypography.caption
+                    .copyWith(color: AppColors.textTertiary)),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(status.label,
+                  style: AppTypography.caption
+                      .copyWith(color: color, fontSize: 10)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: _monthFigure(
+                  'Taken', '$currency ${_fmt.format(paid)}', AppColors.chartGreen),
+            ),
+            Expanded(
+              child: _monthFigure('Remaining',
+                  '$currency ${_fmt.format(remaining)}',
+                  remaining > 0 ? AppColors.chartOrange : AppColors.textTertiary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: LinearProgressIndicator(
+            value: salary.progressForMonth(month),
+            minHeight: 4,
+            backgroundColor: Colors.grey.shade100,
+            valueColor: AlwaysStoppedAnimation(color),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _monthFigure(String label, String value, Color color) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: AppTypography.caption
+                  .copyWith(color: AppColors.textTertiary, fontSize: 10)),
+          const SizedBox(height: 1),
+          Text(value,
+              style: AppTypography.labelSmall.copyWith(color: color),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ],
+      );
+
+  /// Detail-sheet card answering "what's still owed for the selected month?"
+  Widget _thisMonthDetailCard(Salary salary, String currency) {
+    final month = _selectedMonth;
+    final status = salary.statusForMonth(month);
+    if (status == MonthPayStatus.notEmployed) return const SizedBox.shrink();
+
+    final due = salary.dueForMonth(month);
+    final paid = salary.paidInMonth(month);
+    final remaining = salary.remainingForMonth(month);
+    final color = _monthStatusColor(status);
+    final paymentsThisMonth = salary.payments
+        .where((p) => p.date.year == month.year && p.date.month == month.month)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.calendar_month_rounded, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text('${_monthFmt.format(month)} payroll',
+                  style: AppTypography.labelMedium),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(status.label,
+                    style: AppTypography.caption
+                        .copyWith(color: color, fontSize: 11)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _depDetail('Salary', '$currency ${_fmt.format(due)}'),
+              _depDetail('Taken', '$currency ${_fmt.format(paid)}'),
+              _depDetail('Remaining', '$currency ${_fmt.format(remaining)}'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: salary.progressForMonth(month),
+              minHeight: 6,
+              backgroundColor: Colors.grey.shade200,
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+          if (paymentsThisMonth.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            // Tap a payment to correct or remove it.
+            ...paymentsThisMonth.map((p) => InkWell(
+                  onTap: () =>
+                      _showRecordPaymentSheet(salary, currency, existing: p),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            size: 12, color: AppColors.chartGreen),
+                        const SizedBox(width: 6),
+                        Text(_dateFmt.format(p.date),
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.textTertiary)),
+                        const Spacer(),
+                        Text('$currency ${_fmt.format(p.amount)}',
+                            style: AppTypography.caption),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.edit_outlined,
+                            size: 13, color: AppColors.textTertiary),
+                      ],
+                    ),
+                  ),
+                )),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _monthStatusColor(MonthPayStatus s) {
+    switch (s) {
+      case MonthPayStatus.paid:
+        return AppColors.chartGreen;
+      case MonthPayStatus.partial:
+        return AppColors.chartBlue;
+      case MonthPayStatus.unpaid:
+        return AppColors.chartRed;
+      case MonthPayStatus.notEmployed:
+        return AppColors.textTertiary;
+    }
   }
 
   // ═══════════════════════════════════════════════════════
@@ -650,7 +972,11 @@ class _SalariesDashboardScreenState
   }
 
   Widget _paymentTile(_PaymentEntry entry, String currency) {
-    return Container(
+    return GestureDetector(
+      // Tap to edit or delete this payment (and its linked transaction).
+      onTap: () => _showRecordPaymentSheet(entry.salary, currency,
+          existing: entry.payment),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -695,7 +1021,11 @@ class _SalariesDashboardScreenState
           Text('$currency ${_fmt.format(entry.payment.amount)}',
               style: AppTypography.labelMedium
                   .copyWith(color: AppColors.chartGreen)),
+          const SizedBox(width: 6),
+          const Icon(Icons.chevron_right_rounded,
+              size: 16, color: AppColors.textTertiary),
         ],
+      ),
       ),
     );
   }
@@ -933,7 +1263,7 @@ class _SalariesDashboardScreenState
   // DETAIL BOTTOM SHEET
   // ═══════════════════════════════════════════════════════
 
-  void _showSalaryDetail(Salary salary, String currency) {
+  void _showSalaryDetail(Salary initial, String currency) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -942,7 +1272,13 @@ class _SalariesDashboardScreenState
         initialChildSize: 0.7,
         minChildSize: 0.4,
         maxChildSize: 0.92,
-        builder: (_, controller) => Container(
+        // Re-read the employee from the provider so edits/deletes made from
+        // inside this sheet update it live instead of leaving stale figures.
+        builder: (_, controller) => Consumer(builder: (_, ref, _) {
+          final salary = ref.watch(salariesProvider).firstWhere(
+              (s) => s.id == initial.id,
+              orElse: () => initial);
+          return Container(
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -1036,9 +1372,9 @@ class _SalariesDashboardScreenState
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        _depDetail('Paid',
+                        _depDetail('Paid (all time)',
                             '$currency ${_fmt.format(salary.totalPaid)}'),
-                        _depDetail('Unpaid',
+                        _depDetail('Unpaid (all time)',
                             '$currency ${_fmt.format(salary.unpaidAmount)}'),
                         _depDetail('Accrued',
                             '$currency ${_fmt.format(salary.totalAccrued)}'),
@@ -1048,6 +1384,8 @@ class _SalariesDashboardScreenState
                 ),
               ),
               const SizedBox(height: 16),
+
+              _thisMonthDetailCard(salary, currency),
 
               _detailRow('Employee Type', salary.type.label),
               if (salary.role != null) _detailRow('Role', salary.role!),
@@ -1164,17 +1502,22 @@ class _SalariesDashboardScreenState
                 ...salary.payments
                     .toList()
                     .reversed
-                    .map((p) => _singlePaymentRow(p, currency)),
+                    .map((p) => _singlePaymentRow(salary, p, currency)),
               ],
             ],
           ),
-        ),
+          );
+        }),
       ),
     );
   }
 
-  Widget _singlePaymentRow(SalaryPayment p, String currency) {
-    return Container(
+  Widget _singlePaymentRow(
+      Salary salary, SalaryPayment p, String currency) {
+    return GestureDetector(
+      // Tap to edit or delete this payment.
+      onTap: () => _showRecordPaymentSheet(salary, currency, existing: p),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -1202,7 +1545,11 @@ class _SalariesDashboardScreenState
           Text('$currency ${_fmt.format(p.amount)}',
               style: AppTypography.labelMedium
                   .copyWith(color: AppColors.chartGreen)),
+          const SizedBox(width: 6),
+          const Icon(Icons.edit_outlined,
+              size: 14, color: AppColors.textTertiary),
         ],
+      ),
       ),
     );
   }
@@ -1429,12 +1776,24 @@ class _SalariesDashboardScreenState
     );
   }
 
-  void _showRecordPaymentSheet(Salary salary, String currency) {
-    final amtCtrl =
-        TextEditingController(text: salary.monthlySalary.toStringAsFixed(2));
-    final noteCtrl = TextEditingController();
-    DateTime payDate = DateTime.now();
-    String period = _monthFmt.format(DateTime.now());
+  /// Records a new salary payment, or edits [existing] when one is passed.
+  void _showRecordPaymentSheet(Salary salary, String currency,
+      {SalaryPayment? existing}) {
+    final isEdit = existing != null;
+    // Pre-fill what's actually still owed for the month in view, falling back
+    // to the full rate when it's already settled.
+    final outstanding = salary.remainingForMonth(_selectedMonth);
+    final amtCtrl = TextEditingController(text: (existing?.amount ??
+            (outstanding > 0.01 ? outstanding : salary.monthlySalary))
+        .toStringAsFixed(2));
+    final noteCtrl = TextEditingController(text: existing?.note ?? '');
+    // When catching up on an earlier month, default the payment to that month
+    // (its last day) instead of today, so it lands in the period being viewed.
+    final defaultDate = _isCurrentMonth
+        ? DateTime.now()
+        : DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
+    DateTime payDate = existing?.date ?? defaultDate;
+    String period = existing?.period ?? _monthFmt.format(_selectedMonth);
     final dateFmt = DateFormat('MMM d, yyyy');
 
     showModalBottomSheet(
@@ -1467,9 +1826,26 @@ class _SalariesDashboardScreenState
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text('Record Salary Payment',
-                    style: AppTypography.metricSmall
-                        .copyWith(fontSize: 17)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                          isEdit
+                              ? 'Edit Salary Payment'
+                              : 'Record Salary Payment',
+                          style: AppTypography.metricSmall
+                              .copyWith(fontSize: 17)),
+                    ),
+                    if (isEdit)
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            color: AppColors.chartRed),
+                        tooltip: 'Delete payment',
+                        onPressed: () =>
+                            _confirmDeletePayment(ctx, salary, existing),
+                      ),
+                  ],
+                ),
                 Text(
                     '${salary.employeeName} · Unpaid: $currency ${_fmt.format(salary.unpaidAmount)}',
                     style: AppTypography.caption
@@ -1504,11 +1880,18 @@ class _SalariesDashboardScreenState
                 const SizedBox(height: 6),
                 GestureDetector(
                   onTap: () async {
+                    // Clamp so the picker can never be handed an initialDate
+                    // outside [firstDate, lastDate] (which throws).
+                    final first = salary.startDate;
+                    final last = DateTime.now();
+                    final initial = payDate.isBefore(first)
+                        ? first
+                        : (payDate.isAfter(last) ? last : payDate);
                     final d = await showDatePicker(
                       context: ctx,
-                      initialDate: payDate,
-                      firstDate: salary.startDate,
-                      lastDate: DateTime.now(),
+                      initialDate: initial,
+                      firstDate: first.isAfter(last) ? last : first,
+                      lastDate: last,
                     );
                     if (d != null) setSheetState(() => payDate = d);
                   },
@@ -1583,17 +1966,23 @@ class _SalariesDashboardScreenState
                           double.tryParse(amtCtrl.text.trim()) ?? 0;
                       if (amt <= 0) return;
                       final pmt = SalaryPayment(
-                        id: const Uuid().v4(),
+                        // Keep the id when editing so the existing payment (and
+                        // its ledger transaction) is rewritten, not duplicated.
+                        id: existing?.id ?? const Uuid().v4(),
                         amount: amt,
                         date: payDate,
                         note: noteCtrl.text.trim().isEmpty
                             ? null
                             : noteCtrl.text.trim(),
                         period: period.trim().isEmpty ? null : period.trim(),
+                        transactionId: existing?.transactionId,
                       );
-                      await ref
-                          .read(salariesProvider.notifier)
-                          .recordPayment(salary.id, pmt);
+                      final notifier = ref.read(salariesProvider.notifier);
+                      if (isEdit) {
+                        await notifier.updatePayment(salary.id, pmt);
+                      } else {
+                        await notifier.recordPayment(salary.id, pmt);
+                      }
                       if (ctx.mounted) Navigator.pop(ctx);
                     },
                     style: FilledButton.styleFrom(
@@ -1602,13 +1991,58 @@ class _SalariesDashboardScreenState
                           borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Record Payment'),
+                    child: Text(isEdit ? 'Save Changes' : 'Record Payment'),
                   ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Deletes a single salary payment (and its linked cash transaction).
+  void _confirmDeletePayment(
+      BuildContext sheetCtx, Salary salary, SalaryPayment payment) {
+    final currency = ref.read(appSettingsProvider).currency;
+    showDialog(
+      context: sheetCtx,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Delete Payment'),
+        content: Text(
+            'Delete the $currency ${_fmt.format(payment.amount)} payment '
+            'on ${_dateFmt.format(payment.date)}?\n\n'
+            'This also removes its transaction from your books and adds the '
+            'amount back to what ${salary.employeeName} is owed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dCtx); // close confirm
+              final ok = await ref
+                  .read(salariesProvider.notifier)
+                  .deletePayment(salary.id, payment.id);
+              if (sheetCtx.mounted) Navigator.pop(sheetCtx); // close edit sheet
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok
+                        ? 'Payment deleted'
+                        : 'Could not delete payment'),
+                    backgroundColor:
+                        ok ? AppColors.chartGreen : AppColors.chartRed,
+                  ),
+                );
+              }
+            },
+            child: const Text('Delete',
+                style: TextStyle(color: AppColors.chartRed)),
+          ),
+        ],
       ),
     );
   }

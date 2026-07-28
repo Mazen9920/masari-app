@@ -67,6 +67,54 @@ class Salary {
   /// Annual salary cost.
   double get annualSalary => monthlySalary * 12;
 
+  // ── Per-month view ────────────────────────────────
+  // The all-time figures above ([totalPaid]/[unpaidAmount]) answer "ever";
+  // these answer the day-to-day question "what does this employee still get
+  // THIS month?".
+
+  /// Whether the employee is on payroll during [month] (any day of it).
+  /// False before they start and after they leave, so an ex-employee doesn't
+  /// keep showing salary due.
+  bool isEmployedInMonth(DateTime month) {
+    final startsAfterMonth = startDate.year > month.year ||
+        (startDate.year == month.year && startDate.month > month.month);
+    if (startsAfterMonth) return false;
+    final end = endDate;
+    if (end == null) return true;
+    final endedBeforeMonth =
+        end.year < month.year || (end.year == month.year && end.month < month.month);
+    return !endedBeforeMonth;
+  }
+
+  /// Salary owed for [month] — the contract rate, or 0 if not employed then.
+  double dueForMonth(DateTime month) =>
+      isEmployedInMonth(month) ? monthlySalary : 0;
+
+  /// Total actually paid to this employee within [month].
+  double paidInMonth(DateTime month) => payments
+      .where((p) => p.date.year == month.year && p.date.month == month.month)
+      .fold<double>(0.0, (acc, p) => acc + p.amount);
+
+  /// Still owed for [month] (never negative — an overpayment reads as 0 left).
+  double remainingForMonth(DateTime month) =>
+      (dueForMonth(month) - paidInMonth(month)).clamp(0, double.maxFinite);
+
+  /// How far through [month]'s salary the payments have got (0.0 – 1.0).
+  double progressForMonth(DateTime month) {
+    final due = dueForMonth(month);
+    return due > 0 ? (paidInMonth(month) / due).clamp(0, 1) : 0;
+  }
+
+  /// Payment state for [month] — drives the status chip on the employee card.
+  MonthPayStatus statusForMonth(DateTime month) {
+    if (!isEmployedInMonth(month)) return MonthPayStatus.notEmployed;
+    final paid = paidInMonth(month);
+    if (paid <= 0.01) return MonthPayStatus.unpaid;
+    return remainingForMonth(month) <= 0.01
+        ? MonthPayStatus.paid
+        : MonthPayStatus.partial;
+  }
+
   /// Last payment date (if any).
   DateTime? get lastPaymentDate {
     if (payments.isEmpty) return null;
@@ -283,6 +331,34 @@ class SalaryPayment {
 }
 
 // ── Enums ──────────────────────────────────────────────
+
+/// Where an employee stands on a given month's salary.
+enum MonthPayStatus {
+  /// Nothing paid yet for the month.
+  unpaid,
+
+  /// Some paid, a balance still due.
+  partial,
+
+  /// Fully settled for the month.
+  paid,
+
+  /// Not on payroll that month (started later / already left).
+  notEmployed;
+
+  String get label {
+    switch (this) {
+      case unpaid:
+        return 'Unpaid';
+      case partial:
+        return 'Partial';
+      case paid:
+        return 'Paid';
+      case notEmployed:
+        return 'Not employed';
+    }
+  }
+}
 
 enum SalaryType {
   fullTime,

@@ -22,6 +22,10 @@ bool isCfUserCashTransaction(Transaction t) {
   // Accrued-expense recognition is a non-cash accrual (Dr expense, Cr liability);
   // the cash moves later via cat_accrued_payment.
   if (t.categoryId == 'cat_accrued_expense') return false;
+  // Gateway fees are netted off before the money ever reaches the bank, and
+  // the settlement's cash entry is already the NET figure — counting the fee
+  // again would double-deduct it.
+  if (t.categoryId == 'cat_gateway_fees') return false;
   // Exclude ALL sale-linked accrual entries — positive AND negative.
   // Cash comes from Bosta cashouts, not from accrual entries.
   if (t.saleId != null && saleTxnCats.contains(t.categoryId)) {
@@ -55,6 +59,10 @@ bool isNonCfUserCashTransaction(Transaction t) {
   // COGS is an accrual expense, never a cash movement (see CF-user note).
   if (t.categoryId == 'cat_cogs') return false;
   if (t.categoryId == 'cat_accrued_expense') return false;
+  // Gateway fees are netted off before the money ever reaches the bank, and
+  // the settlement's cash entry is already the NET figure — counting the fee
+  // again would double-deduct it.
+  if (t.categoryId == 'cat_gateway_fees') return false;
   if (t.saleId != null &&
       saleTxnCats.contains(t.categoryId) &&
       t.amount >= 0) {

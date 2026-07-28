@@ -99,7 +99,7 @@ class CategoryData {
   static const _autoSystemIds = {
     'cat_sales_revenue', 'cat_cogs', 'cat_shipping', 'cat_shipping_expense',
     'cat_bosta_cashout', 'cat_manufacturing_cost', 'cat_gateway_settlement',
-    'cat_accrued_expense', 'cat_accrued_payment',
+    'cat_accrued_expense', 'cat_accrued_payment', 'cat_gateway_fees',
   };
 
   /// IDs of financing / equity categories.
@@ -389,6 +389,15 @@ class CategoryData {
       isExpense: false,
     ),
     CategoryData(
+      id: 'cat_gateway_fees',
+      userId: 'system',
+      name: 'Gateway Fees',
+      iconName: 'percent',
+      colorValue: 0xFFF59E0B,
+      bgColorValue: 0xFFFFFBEB,
+      isExpense: true,
+    ),
+    CategoryData(
       id: 'cat_loan_received',
       userId: 'system',
       name: 'Loan Received',
@@ -570,6 +579,7 @@ class CategoryData {
       case 'cat_gateway_settlement': return 'Gateway Settlement';
       case 'cat_accrued_expense': return 'Accrued Expense';
       case 'cat_accrued_payment': return 'Accrued Payment';
+      case 'cat_gateway_fees': return 'Gateway Fees';
       case 'cat_loan_received': return l10n.categoryLoanReceived;
       case 'cat_loan_repayment': return l10n.categoryLoanRepayment;
       case 'cat_equity_injection': return l10n.categoryCapitalInjection;
