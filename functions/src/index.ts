@@ -54,6 +54,8 @@ export {verifyIapReceipt} from "./iap-receipt.js";
 
 // Smart alerts — daily scan (inventory, dues, gateways, salaries)
 export {dailyAlertsScan} from "./alerts/daily-alerts.js";
+export {noOrdersMonitor, onGoodsReceiptCreated} from "./alerts/anomaly-alerts.js";
+export {weeklyDigest} from "./alerts/weekly-digest.js";
 
 initializeApp();
 const db = getFirestore();
