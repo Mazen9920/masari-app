@@ -100,6 +100,7 @@ class CategoryData {
     'cat_sales_revenue', 'cat_cogs', 'cat_shipping', 'cat_shipping_expense',
     'cat_bosta_cashout', 'cat_manufacturing_cost', 'cat_gateway_settlement',
     'cat_accrued_expense', 'cat_accrued_payment', 'cat_gateway_fees',
+    'cat_d_paymob',
   };
 
   /// IDs of financing / equity categories.
@@ -389,6 +390,17 @@ class CategoryData {
       isExpense: false,
     ),
     CategoryData(
+      // Id kept stable ('d_paymob') because 71 transactions reference it;
+      // only the display label changed.
+      id: 'cat_d_paymob',
+      userId: 'system',
+      name: 'P adjustment',
+      iconName: 'trending_down',
+      colorValue: 0xFF991B1B,
+      bgColorValue: 0xFFFEF2F2,
+      isExpense: true,
+    ),
+    CategoryData(
       id: 'cat_gateway_fees',
       userId: 'system',
       name: 'Gateway Fees',
@@ -580,6 +592,7 @@ class CategoryData {
       case 'cat_accrued_expense': return 'Accrued Expense';
       case 'cat_accrued_payment': return 'Accrued Payment';
       case 'cat_gateway_fees': return 'Gateway Fees';
+      case 'cat_d_paymob': return 'P adjustment';
       case 'cat_loan_received': return l10n.categoryLoanReceived;
       case 'cat_loan_repayment': return l10n.categoryLoanRepayment;
       case 'cat_equity_injection': return l10n.categoryCapitalInjection;

@@ -80,6 +80,46 @@ void main() {
       expect(cashImpact(p, isCfUser: true), -3000);
     });
 
+    test('a FLAGGED cashout txn is not cash — it came via totalCashouts', () {
+      // Mirrors a payout already counted in the cashout total; counting the
+      // transaction too would bank the same money twice.
+      final c = txn(
+          id: 'co',
+          categoryId: 'cat_bosta_cashout',
+          amount: 25000,
+          excludeFromPL: true);
+      expect(isCfUserCashTransaction(c), isFalse);
+      expect(cashImpact(c, isCfUser: true), isNull);
+    });
+
+    test('an UNFLAGGED cashout IS cash — the sync never captured it', () {
+      // Recorded by hand precisely because it is missing from the synced
+      // cashouts, so dropping it would lose real money from the balance.
+      final c = txn(id: 'co2', categoryId: 'cat_bosta_cashout', amount: 3499);
+      expect(c.excludeFromPL, isFalse);
+      expect(isCfUserCashTransaction(c), isTrue);
+      expect(cashImpact(c, isCfUser: true), 3499);
+    });
+
+    test('flagged cashouts are not double-counted in the closing balance', () {
+      final cash = computeClosingCash(
+        openingCash: 0,
+        transactions: [
+          txn(
+              id: 'co',
+              categoryId: 'cat_bosta_cashout',
+              amount: 25000,
+              excludeFromPL: true),
+          txn(id: 'exp', categoryId: 'cat_marketing', amount: -5000),
+        ],
+        asOf: DateTime(2026, 12, 31),
+        isCfUser: true,
+        totalCashouts: 25000,
+      );
+      // 25,000 collected once + 5,000 spent — not 50,000 collected.
+      expect(cash, 20000);
+    });
+
     test('supplier payment still counts as a cash outflow', () {
       final sp = txn(
           id: 'sp',

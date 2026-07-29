@@ -16,6 +16,7 @@ import '../../shared/models/purchase_model.dart';
 import '../../shared/models/supplier_model.dart';
 import '../../shared/widgets/discard_changes_dialog.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../shared/utils/receipt_allocation.dart';
 import '../../l10n/app_localizations.dart';
 
 /// Screen to receive goods against a purchase order (Growth tier).
@@ -458,17 +459,30 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
         final remaining = pi.qty - pi.receivedQty;
         if (remaining <= 0) continue; // Skip fully received items
 
-        // Robust product + variant matching
-        final match = _matchProductByName(pi.name, products);
+        // Trust the ids the purchase line already carries. Re-deriving them
+        // from the NAME collapsed every line of a multi-variant product onto
+        // one variant (three belt lines — Medium/Large/Small — all recorded as
+        // Small), which mis-stocked the wrong variants and made the received
+        // totals wrong. Name matching is only a fallback for manual items.
+        String? productId = pi.productId;
+        String? variantId = pi.variantId;
+        if (productId == null) {
+          final match = _matchProductByName(pi.name, products);
+          productId = match?.$1.id;
+          variantId = match?.$2;
+        }
 
         _items.add(_ReceiptLine(
-          productId: match?.$1.id,
-          nameCtrl: TextEditingController(text: pi.name),
+          productId: productId,
+          nameCtrl: TextEditingController(
+              text: pi.variantName != null && pi.variantName!.isNotEmpty
+                  ? '${pi.name} — ${pi.variantName}'
+                  : pi.name),
           orderedCtrl: TextEditingController(text: remaining.toString()),
           receivedCtrl:
               TextEditingController(text: remaining.round().toString()),
           costCtrl: TextEditingController(text: pi.unitPrice.toStringAsFixed(2)),
-        )..variantId = match?.$2);
+        )..variantId = variantId);
       }
       // If all items are already fully received (shouldn't happen but safety)
       if (_items.isEmpty) _addLine();
@@ -1204,16 +1218,22 @@ class _ReceiveGoodsScreenState extends ConsumerState<ReceiveGoodsScreen> {
           purchasesList.indexWhere((p) => p.id == _selectedPurchaseId);
       if (matchIdx >= 0) {
         final purchase = purchasesList[matchIdx];
-        final updatedItems = purchase.items.map((pi) {
-          // Find matching receipt item by name
-          final matched = receiptItems.where((ri) =>
-              ri.productName.toLowerCase() == pi.name.toLowerCase());
-          if (matched.isNotEmpty) {
-            final addedQty = matched.first.receivedQty.round();
-            return pi.copyWith(receivedQty: pi.receivedQty + addedQty);
-          }
-          return pi;
-        }).toList();
+        // Spread each received product across the purchase lines that match it,
+        // filling each only up to what it still owes. Matching by name and
+        // adding the first match's full quantity to EVERY matching line used to
+        // triple-count duplicated products (108 received of 93 ordered).
+        final updatedItems = applyReceiptToItems(
+          purchase.items,
+          [
+            for (final ri in receiptItems)
+              (
+                productId: ri.productId,
+                variantId: ri.variantId,
+                name: ri.productName,
+                qty: ri.receivedQty.round(),
+              ),
+          ],
+        );
 
         final updatedPurchase = purchase.copyWith(items: updatedItems);
         purchasesNotifier.updatePurchase(updatedPurchase);

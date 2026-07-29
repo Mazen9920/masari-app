@@ -16,6 +16,7 @@ import '../../shared/models/purchase_model.dart';
 import '../../shared/models/payment_model.dart';
 import '../../shared/models/goods_receipt_model.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../shared/utils/receipt_allocation.dart';
 
 /// Supplier profile — avatar, balance, contact actions, stats, recent activity.
 class SupplierDetailScreen extends ConsumerWidget {
@@ -1330,20 +1331,20 @@ class _RecentActivity extends ConsumerWidget {
                     purchases.indexWhere((p) => p.id == r.purchaseId);
                 if (pIdx >= 0) {
                   final purchase = purchases[pIdx];
-                  final updatedItems = purchase.items.map((pi) {
-                    final matched = r.items.where((ri) =>
-                        ri.productName.toLowerCase() ==
-                        pi.name.toLowerCase());
-                    if (matched.isNotEmpty) {
-                      final removedQty =
-                          matched.first.receivedQty.toInt();
-                      return pi.copyWith(
-                        receivedQty:
-                            (pi.receivedQty - removedQty).clamp(0, pi.qty),
-                      );
-                    }
-                    return pi;
-                  }).toList();
+                  // Same allocation rule as receiving, in reverse — see
+                  // reverseReceiptFromItems.
+                  final updatedItems = reverseReceiptFromItems(
+                    purchase.items,
+                    [
+                      for (final ri in r.items)
+                        (
+                          productId: ri.productId,
+                          variantId: ri.variantId,
+                          name: ri.productName,
+                          qty: ri.receivedQty.round(),
+                        ),
+                    ],
+                  );
                   ref.read(purchasesProvider.notifier).updatePurchase(
                         purchase.copyWith(items: updatedItems),
                       );

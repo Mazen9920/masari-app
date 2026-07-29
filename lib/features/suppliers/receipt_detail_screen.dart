@@ -13,6 +13,7 @@ import '../../l10n/app_localizations.dart';
 import '../../shared/models/goods_receipt_model.dart';
 import '../../shared/models/purchase_model.dart';
 import '../../shared/utils/safe_pop.dart';
+import '../../shared/utils/receipt_allocation.dart';
 
 /// Full-page detail screen for a single goods receipt.
 /// Supports viewing details, editing, and deleting — all
@@ -639,18 +640,21 @@ class ReceiptDetailScreen extends ConsumerWidget {
                     purchases.indexWhere((p) => p.id == r.purchaseId);
                 if (pIdx >= 0) {
                   final purchase = purchases[pIdx];
-                  final updatedItems = purchase.items.map((pi) {
-                    final matched = r.items.where((ri) =>
-                        ri.productName.toLowerCase() ==
-                        pi.name.toLowerCase());
-                    if (matched.isNotEmpty) {
-                      final removedQty = matched.first.receivedQty.toInt();
-                      return pi.copyWith(
-                          receivedQty:
-                              (pi.receivedQty - removedQty).clamp(0, pi.qty));
-                    }
-                    return pi;
-                  }).toList();
+                  // Mirror how the receipt was applied: take the quantity back
+                  // off the matching lines instead of subtracting the first
+                  // match's full amount from every line with the same name.
+                  final updatedItems = reverseReceiptFromItems(
+                    purchase.items,
+                    [
+                      for (final ri in r.items)
+                        (
+                          productId: ri.productId,
+                          variantId: ri.variantId,
+                          name: ri.productName,
+                          qty: ri.receivedQty.round(),
+                        ),
+                    ],
+                  );
                   ref.read(purchasesProvider.notifier).updatePurchase(
                         purchase.copyWith(items: updatedItems),
                       );

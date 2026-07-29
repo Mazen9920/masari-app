@@ -205,7 +205,12 @@ class _ProfitLossScreenState extends ConsumerState<ProfitLossScreen>
         revenueByCategory[tx.categoryId] = (revenueByCategory[tx.categoryId] ?? 0) + amt;
       } else {
         operatingExpenses += amt;
-        opexByCategory[tx.categoryId] = (opexByCategory[tx.categoryId] ?? 0) + amt;
+        // Hidden categories still reduce profit, they are just not itemised in
+        // the on-screen breakdown (they remain in the CSV / P&L exports).
+        if (!plHiddenCats.contains(tx.categoryId)) {
+          opexByCategory[tx.categoryId] =
+              (opexByCategory[tx.categoryId] ?? 0) + amt;
+        }
       }
     }
 

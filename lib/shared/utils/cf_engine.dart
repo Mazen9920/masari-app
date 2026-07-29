@@ -22,6 +22,11 @@ bool isCfUserCashTransaction(Transaction t) {
   // Accrued-expense recognition is a non-cash accrual (Dr expense, Cr liability);
   // the cash moves later via cat_accrued_payment.
   if (t.categoryId == 'cat_accrued_expense') return false;
+  // Write-off of Paymob money that never reached the business. The cash was
+  // already accounted for in the reconciled bank balance, so this entry books
+  // the loss against equity only — treating it as a cash outflow would deduct
+  // the same money a second time.
+  if (t.categoryId == 'cat_d_paymob') return false;
   // Gateway fees are netted off before the money ever reaches the bank, and
   // the settlement's cash entry is already the NET figure — counting the fee
   // again would double-deduct it.
@@ -36,6 +41,14 @@ bool isCfUserCashTransaction(Transaction t) {
       t.id.startsWith('bosta_rec_daily_')) {
     return false;
   }
+  // Bosta cashouts: keep the long-standing flag-driven behaviour. A flagged
+  // entry mirrors a payout already counted through the cashout total, so
+  // counting it again would bank the same money twice; an unflagged one is a
+  // payout the sync never captured and IS real cash. Must stay ABOVE the
+  // plExcludedCats check, which this category now belongs to for P&L purposes
+  // (see report_constants) — without this guard that check would force every
+  // cashout to count as cash and inflate the balance.
+  if (t.categoryId == 'cat_bosta_cashout') return !t.excludeFromPL;
   if (t.categoryId == 'cat_supplier_payment') return true;
   // Capitalized manufacturing labor: real cash outflow even though excluded
   // from P&L (it reaches P&L as COGS when the finished good sells).
@@ -59,6 +72,11 @@ bool isNonCfUserCashTransaction(Transaction t) {
   // COGS is an accrual expense, never a cash movement (see CF-user note).
   if (t.categoryId == 'cat_cogs') return false;
   if (t.categoryId == 'cat_accrued_expense') return false;
+  // Write-off of Paymob money that never reached the business. The cash was
+  // already accounted for in the reconciled bank balance, so this entry books
+  // the loss against equity only — treating it as a cash outflow would deduct
+  // the same money a second time.
+  if (t.categoryId == 'cat_d_paymob') return false;
   // Gateway fees are netted off before the money ever reaches the bank, and
   // the settlement's cash entry is already the NET figure — counting the fee
   // again would double-deduct it.
@@ -68,6 +86,14 @@ bool isNonCfUserCashTransaction(Transaction t) {
       t.amount >= 0) {
     return false;
   }
+  // Bosta cashouts: keep the long-standing flag-driven behaviour. A flagged
+  // entry mirrors a payout already counted through the cashout total, so
+  // counting it again would bank the same money twice; an unflagged one is a
+  // payout the sync never captured and IS real cash. Must stay ABOVE the
+  // plExcludedCats check, which this category now belongs to for P&L purposes
+  // (see report_constants) — without this guard that check would force every
+  // cashout to count as cash and inflate the balance.
+  if (t.categoryId == 'cat_bosta_cashout') return !t.excludeFromPL;
   if (t.categoryId == 'cat_supplier_payment') return true;
   if (t.categoryId == 'cat_manufacturing_cost') return true;
   if (t.categoryId == 'cat_gateway_settlement') return true;

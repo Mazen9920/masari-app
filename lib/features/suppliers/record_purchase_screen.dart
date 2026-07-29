@@ -12,7 +12,7 @@ import '../../shared/models/supplier_model.dart';
 import '../../shared/models/product_model.dart';
 import 'package:uuid/uuid.dart';
 import '../../shared/models/purchase_model.dart';
-import '../../shared/models/goods_receipt_model.dart';
+import '../../shared/utils/receipt_allocation.dart';
 import '../../features/suppliers/widgets/item_selection_sheet.dart';
 import 'add_supplier_screen.dart';
 
@@ -128,34 +128,6 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
     return _ItemType.product;
   }
 
-  /// Recomputes how many units of [item] have been physically received by
-  /// summing across all GoodsReceipt documents for the purchase being edited.
-  /// Matches by productId+variantId first; falls back to name matching for
-  /// items without a linked inventory product.
-  int _recomputeReceivedQty(
-      _PurchaseItem item, List<GoodsReceipt> receipts) {
-    double total = 0;
-    for (final receipt in receipts) {
-      for (final ri in receipt.items) {
-        final bool matches;
-        if (item.productId != null && ri.productId != null) {
-          // Precise match: same product, and same variant if variant-level
-          matches = ri.productId == item.productId &&
-              (item.variantId == null ||
-                  ri.variantId == null ||
-                  ri.variantId == item.variantId);
-        } else {
-          // Fallback: name-based match for custom/manual items
-          matches =
-              ri.productName.toLowerCase().trim() ==
-              item.name.toLowerCase().trim();
-        }
-        if (matches) total += ri.receivedQty;
-      }
-    }
-    return total.round();
-  }
-
   @override
   void dispose() {
     _refCtrl.dispose();
@@ -204,19 +176,35 @@ class _RecordPurchaseScreenState extends ConsumerState<RecordPurchaseScreen> {
           .read(goodsReceiptsProvider)
           .where((r) => r.purchaseId == editing.id)
           .toList();
-      final newItems = validItems.map((item) {
-        final received = _recomputeReceivedQty(item, receiptsForPurchase);
-        return PurchaseItem(
-          name: item.name,
-          category: item.category,
-          qty: item.qty,
-          unitPrice: item.unitPrice,
-          receivedQty: received.clamp(0, item.qty),
-          productId: item.productId,
-          variantId: item.variantId,
-          variantName: item.variantName,
-        );
-      }).toList();
+      // Rebuild the lines with nothing received, then replay every receipt
+      // through the shared allocator. Recomputing per-line gave EACH duplicate
+      // line of a product the full received total (three "Belt" lines of
+      // 16/11/6 all reporting received), so a 16-unit delivery looked like 33.
+      final blankItems = validItems
+          .map((item) => PurchaseItem(
+                name: item.name,
+                category: item.category,
+                qty: item.qty,
+                unitPrice: item.unitPrice,
+                receivedQty: 0,
+                productId: item.productId,
+                variantId: item.variantId,
+                variantName: item.variantName,
+              ))
+          .toList();
+      final newItems = applyReceiptToItems(
+        blankItems,
+        [
+          for (final receipt in receiptsForPurchase)
+            for (final ri in receipt.items)
+              (
+                productId: ri.productId,
+                variantId: ri.variantId,
+                name: ri.productName,
+                qty: ri.receivedQty.round(),
+              ),
+        ],
+      );
       _saveEdit(editing, supplierId, supplierName, newItems);
       return;
     }
