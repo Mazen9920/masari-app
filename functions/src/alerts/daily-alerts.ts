@@ -32,8 +32,22 @@ import {
   saveAlertState,
   shouldFire,
 } from "./alert-state.js";
+import {
+  cashCrunchAlert,
+  cashoutGapAlert,
+  payoutOverdueAlert,
+  rtoSpikeAlert,
+} from "./bosta-alerts.js";
 
 const db = () => getFirestore();
+
+/** One per-user alert check. */
+type AlertStep = (
+  uid: string,
+  state: AlertState,
+  updates: Record<string, unknown>,
+  now: Date
+) => Promise<void>;
 
 /** Days of stock cover below which an item is "order now". */
 const URGENCY_BUFFER_DAYS = 3;
@@ -467,19 +481,24 @@ export async function runDailyAlertsForUser(uid: string, now = new Date()): Prom
   const state = await loadAlertState(uid);
   const updates: Record<string, unknown> = {};
 
-  const steps: [string, Promise<void>][] = [];
-  for (const [name, fn] of Object.entries({
+  // Sequential, each guarded: a step that throws must not abort the rest, and
+  // must not become an unhandled rejection (which it would if every step were
+  // started eagerly and awaited later).
+  const steps: [string, AlertStep][] = Object.entries({
     inventory: inventoryAlerts,
     accrued: accruedAlerts,
     gateway: gatewayAlerts,
     salary: salaryAlerts,
     supplier: supplierAlerts,
-  })) {
-    steps.push([name, fn(uid, state, updates, now)]);
-  }
-  for (const [name, p] of steps) {
+    // Bosta / cash-derived steps run against data the nightly sync refreshed.
+    payout: payoutOverdueAlert,
+    rtoSpike: rtoSpikeAlert,
+    cashCrunch: cashCrunchAlert,
+    cashoutGap: cashoutGapAlert,
+  });
+  for (const [name, fn] of steps) {
     try {
-      await p;
+      await fn(uid, state, updates, now);
     } catch (err) {
       logger.error("dailyAlerts: step failed", {uid, step: name, err});
     }

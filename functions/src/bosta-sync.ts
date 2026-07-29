@@ -15,6 +15,7 @@
  */
 
 import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {updateRtoIndex} from "./alerts/bosta-alerts.js";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {defineSecret} from "firebase-functions/params";
 import {
@@ -2092,6 +2093,15 @@ export const scheduledBostaSyncDaily = onSchedule(
         });
 
         logger.info("Scheduled Bosta sync completed", {userId, result});
+
+        // Keep the RTO phone index current so the order-time repeat-refuser
+        // check stays a single document read. Failure here must never break
+        // the sync.
+        try {
+          await updateRtoIndex(userId);
+        } catch (err) {
+          logger.error("updateRtoIndex failed", {userId, err});
+        }
 
         // ── Cashout sync (after delivery sync) ─────────────
         // Only for users with dashboard credentials configured.

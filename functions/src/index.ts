@@ -22,6 +22,7 @@ import {initializeApp} from "firebase-admin/app";
 import {getFirestore, FieldValue, WriteBatch} from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import {notifyUser} from "./notify.js";
+import {checkNewSaleAlerts} from "./alerts/bosta-alerts.js";
 
 // ── Shopify (Phases 3–5) ───────────────────────────────────
 export {shopifyAuthStart} from "./shopify-auth.js";
@@ -92,6 +93,12 @@ export const onSaleCreated = onDocumentCreated(
 
     const userId = data.user_id as string | undefined;
     if (!userId) return;
+
+    // Smart order-time checks run for EVERY sale, Shopify included — this
+    // trigger fires for Shopify-created docs too; the skip below only avoids a
+    // duplicate "new sale" push, not these alerts. Catching a repeat refuser
+    // before the parcel ships is the whole point.
+    await checkNewSaleAlerts(userId, event.params.saleId, data);
 
     // Skip Shopify sales — they already send their own notification
     if (data.external_source === "shopify") return;
