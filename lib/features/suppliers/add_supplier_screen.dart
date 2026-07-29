@@ -24,6 +24,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
   final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _balanceCtrl = TextEditingController();
+  final _leadTimeCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
@@ -49,6 +50,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
     _balanceCtrl.dispose();
+    _leadTimeCtrl.dispose();
     _addressCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
@@ -94,6 +96,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
       email: _emailCtrl.text.trim(),
       whatsappAvailable: _whatsapp,
       paymentTerms: _paymentTerms[_paymentTermIdx],
+      leadTimeDays: int.tryParse(_leadTimeCtrl.text.trim()),
       balance: double.tryParse(_balanceCtrl.text) ?? 0,
       address: _addressCtrl.text.trim(),
       notes: _notesCtrl.text.trim(),
@@ -152,6 +155,7 @@ class _AddSupplierScreenState extends ConsumerState<AddSupplierScreen> {
                       onTermChanged: (i) =>
                           setState(() => _paymentTermIdx = i),
                       balanceCtrl: _balanceCtrl,
+                      leadTimeCtrl: _leadTimeCtrl,
                       currency: ref.watch(currencyProvider),
                     ).animate().fadeIn(duration: 250.ms, delay: 120.ms),
                     const SizedBox(height: 16),
@@ -644,6 +648,7 @@ class _PaymentDetailsSection extends StatelessWidget {
   final int selectedIdx;
   final ValueChanged<int> onTermChanged;
   final TextEditingController balanceCtrl;
+  final TextEditingController leadTimeCtrl;
   final String currency;
 
   const _PaymentDetailsSection({
@@ -651,6 +656,7 @@ class _PaymentDetailsSection extends StatelessWidget {
     required this.selectedIdx,
     required this.onTermChanged,
     required this.balanceCtrl,
+    required this.leadTimeCtrl,
     required this.currency,
   });
 
@@ -753,6 +759,19 @@ class _PaymentDetailsSection extends StatelessWidget {
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             ),
+            style: _inputStyle,
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Lead time feeds the stockout-forecast alert: it turns "stock is
+        // low" into "order by Thursday or you sell out before it arrives".
+        _FormField(
+          label: l10n.supplierLeadTime,
+          optional: true,
+          child: TextField(
+            controller: leadTimeCtrl,
+            keyboardType: TextInputType.number,
+            decoration: _inputDecoration(l10n.supplierLeadTimeHint),
             style: _inputStyle,
           ),
         ),

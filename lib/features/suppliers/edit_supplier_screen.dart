@@ -27,6 +27,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
   late final TextEditingController _emailCtrl;
   late final TextEditingController _addressCtrl;
   late final TextEditingController _notesCtrl;
+  late final TextEditingController _leadTimeCtrl;
 
   late String _category;
   late bool _whatsapp;
@@ -49,6 +50,8 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
     _emailCtrl = TextEditingController(text: s.email);
     _addressCtrl = TextEditingController(text: s.address);
     _notesCtrl = TextEditingController(text: s.notes);
+    _leadTimeCtrl =
+        TextEditingController(text: s.leadTimeDays?.toString() ?? '');
     _category = s.category;
     _whatsapp = s.whatsappAvailable;
     _paymentTermIdx = _paymentTerms.indexOf(s.paymentTerms);
@@ -57,6 +60,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
 
   @override
   void dispose() {
+    _leadTimeCtrl.dispose();
     _nameCtrl.dispose();
     _idCtrl.dispose();
     _phoneCtrl.dispose();
@@ -109,6 +113,7 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
       category: _category,
       whatsappAvailable: _whatsapp,
       paymentTerms: _paymentTerms[_paymentTermIdx],
+      leadTimeDays: int.tryParse(_leadTimeCtrl.text.trim()),
     );
 
     ref.read(suppliersProvider.notifier).updateSupplier(widget.supplier.id, updated);
@@ -473,6 +478,21 @@ class _EditSupplierScreenState extends ConsumerState<EditSupplierScreen> {
                   color: AppColors.textTertiary, size: 22),
             ],
           ),
+        )),
+        _sep(),
+        // Lead time powers the stockout-forecast alert ("order by X or you
+        // sell out before this supplier can deliver").
+        _fieldRow(l10n.supplierLeadTime, TextField(
+          controller: _leadTimeCtrl,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: l10n.supplierLeadTimeHint,
+            hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 15),
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+          ),
+          style: _valueStyle,
         )),
         _sep(),
         _fieldRow(l10n.currencyLabel, GestureDetector(

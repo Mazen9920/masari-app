@@ -92,6 +92,10 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<void> _initNotifications() async {
     try {
       await NotificationService.init();
+      // Keep the server-side notification language in step with the app on
+      // every start (covers reinstalls, where prefs reset to defaults).
+      final lang = ref.read(appSettingsProvider).language;
+      await NotificationService.saveLocale(lang == 'العربية' ? 'ar' : 'en');
     } catch (_) {
       // Swallowed — expected in unit-test environments without Firebase.
     }

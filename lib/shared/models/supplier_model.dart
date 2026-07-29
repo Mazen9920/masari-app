@@ -13,6 +13,11 @@ class Supplier {
   final String email;
   final bool whatsappAvailable;
   final String paymentTerms; // 'On Receipt', 'Net 15', 'Net 30', 'Net 60'
+
+  /// Typical delivery lead time in days — how long this supplier needs from
+  /// order to delivery. Drives the stockout-forecast alert (order-by deadline
+  /// = days of cover minus this). Null = unknown (server assumes 7).
+  final int? leadTimeDays;
   final double balance; // Outstanding amount owed
   final String address;
   final String notes;
@@ -32,6 +37,7 @@ class Supplier {
     this.email = '',
     this.whatsappAvailable = false,
     this.paymentTerms = 'On Receipt',
+    this.leadTimeDays,
     this.balance = 0,
     this.address = '',
     this.notes = '',
@@ -78,6 +84,7 @@ class Supplier {
     String? email,
     bool? whatsappAvailable,
     String? paymentTerms,
+    Object? leadTimeDays = const _Sentinel(),
     double? balance,
     String? address,
     String? notes,
@@ -95,6 +102,8 @@ class Supplier {
       email: email ?? this.email,
       whatsappAvailable: whatsappAvailable ?? this.whatsappAvailable,
       paymentTerms: paymentTerms ?? this.paymentTerms,
+      leadTimeDays:
+          leadTimeDays is _Sentinel ? this.leadTimeDays : leadTimeDays as int?,
       balance: balance ?? this.balance,
       address: address ?? this.address,
       notes: notes ?? this.notes,
@@ -115,6 +124,7 @@ class Supplier {
       email: json['email'] as String? ?? '',
       whatsappAvailable: json['whatsapp_available'] as bool? ?? false,
       paymentTerms: json['payment_terms'] as String? ?? 'On Receipt',
+      leadTimeDays: (json['lead_time_days'] as num?)?.toInt(),
       balance: roundMoney((json['balance'] as num?)?.toDouble() ?? 0),
       address: json['address'] as String? ?? '',
       notes: json['notes'] as String? ?? '',
@@ -132,6 +142,7 @@ class Supplier {
     'email': email,
     'whatsapp_available': whatsappAvailable,
     'payment_terms': paymentTerms,
+    if (leadTimeDays != null) 'lead_time_days': leadTimeDays,
     'balance': roundMoney(balance),
     'address': address,
     'notes': notes,

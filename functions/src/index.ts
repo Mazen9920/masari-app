@@ -51,6 +51,9 @@ export {createPaymentIntent} from "./paymob-order.js";
 export {setupSubscriptionPlans, getPaymobSubscription, suspendSubscription, resumeSubscription, cancelPaymobSubscription} from "./paymob-subscription.js";
 export {verifyIapReceipt} from "./iap-receipt.js";
 
+// Smart alerts — daily scan (inventory, dues, gateways, salaries)
+export {dailyAlertsScan} from "./alerts/daily-alerts.js";
+
 initializeApp();
 const db = getFirestore();
 

@@ -469,6 +469,19 @@ service cloud.firestore {
         && request.auth.uid == userId;
     }
 
+    // In-app notification inbox. Items are created ONLY by Cloud Functions
+    // (admin SDK bypasses rules); the owner may read, delete, and flip the
+    // `read` flag — nothing else, so server-written content stays authentic.
+    // `notification_state/{uid}` and `rto_index/{uid}` are deliberately
+    // rule-less: server-only, default-deny.
+    match /notifications/{userId}/items/{itemId} {
+      allow read, delete: if request.auth != null
+        && request.auth.uid == userId;
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
+
     // Deny everything else by default (Firestore's implicit behavior)
   }
 }

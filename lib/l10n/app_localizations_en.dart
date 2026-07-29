@@ -2815,16 +2815,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationsSectionAlerts => 'ALERTS';
 
   @override
-  String get notificationsLowStock => 'Low Stock Alerts';
+  String get notificationsLowStock => 'Inventory & Stock';
 
   @override
-  String get notificationsLowStockSubtitle => 'When items hit minimum quantity';
+  String get notificationsLowStockSubtitle =>
+      'Low stock, stockout forecasts, cost jumps, dead stock';
 
   @override
-  String get notificationsPaymentReminders => 'Payment Reminders';
+  String get notificationsPaymentReminders => 'Payments & Cash Flow';
 
   @override
-  String get notificationsPaymentSubtitle => 'Upcoming vendor payments';
+  String get notificationsPaymentSubtitle =>
+      'Dues, cash-crunch forecasts, payout delays';
 
   @override
   String get notificationsSales => 'New Sales';
@@ -2844,6 +2846,33 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationsBillingSubtitle =>
       'Payments, renewals, and expiry alerts';
+
+  @override
+  String get notificationsDeliveries => 'Deliveries & Returns';
+
+  @override
+  String get notificationsDeliveriesSubtitle =>
+      'Repeat refusers, return spikes';
+
+  @override
+  String get notificationsInsights => 'Insights & Anomalies';
+
+  @override
+  String get notificationsInsightsSubtitle =>
+      'Order silence, VIP customers, record days';
+
+  @override
+  String get notificationsDataIntegrity => 'Data Health';
+
+  @override
+  String get notificationsDataIntegritySubtitle =>
+      'Missing costs, unmatched entries, drift';
+
+  @override
+  String get supplierLeadTime => 'Delivery lead time (days)';
+
+  @override
+  String get supplierLeadTimeHint => 'e.g. 7';
 
   @override
   String get notificationsSectionReports => 'REPORTS';

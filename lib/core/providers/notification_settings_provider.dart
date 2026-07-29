@@ -13,6 +13,9 @@ const _kMonthlyReport    = 'notif_monthly_report';
 const _kSales            = 'notif_sales';
 const _kShopifyOrders    = 'notif_shopify_orders';
 const _kBilling          = 'notif_billing';
+const _kDeliveries       = 'notif_deliveries';
+const _kInsights         = 'notif_insights';
+const _kDataIntegrity    = 'notif_data_integrity';
 
 // ─── State ───────────────────────────────────────────────────────────────────
 class NotificationSettingsState {
@@ -25,6 +28,9 @@ class NotificationSettingsState {
   final bool salesNotifications;
   final bool shopifyOrderNotifications;
   final bool billingNotifications;
+  final bool deliveryAlerts;
+  final bool insightAlerts;
+  final bool dataIntegrityAlerts;
 
   const NotificationSettingsState({
     this.pushNotifications         = true,
@@ -36,6 +42,9 @@ class NotificationSettingsState {
     this.salesNotifications        = true,
     this.shopifyOrderNotifications = true,
     this.billingNotifications      = true,
+    this.deliveryAlerts            = true,
+    this.insightAlerts             = true,
+    this.dataIntegrityAlerts       = true,
   });
 
   NotificationSettingsState copyWith({
@@ -48,6 +57,9 @@ class NotificationSettingsState {
     bool? salesNotifications,
     bool? shopifyOrderNotifications,
     bool? billingNotifications,
+    bool? deliveryAlerts,
+    bool? insightAlerts,
+    bool? dataIntegrityAlerts,
   }) {
     return NotificationSettingsState(
       pushNotifications:         pushNotifications         ?? this.pushNotifications,
@@ -59,6 +71,9 @@ class NotificationSettingsState {
       salesNotifications:        salesNotifications        ?? this.salesNotifications,
       shopifyOrderNotifications: shopifyOrderNotifications ?? this.shopifyOrderNotifications,
       billingNotifications:      billingNotifications      ?? this.billingNotifications,
+      deliveryAlerts:            deliveryAlerts            ?? this.deliveryAlerts,
+      insightAlerts:             insightAlerts             ?? this.insightAlerts,
+      dataIntegrityAlerts:       dataIntegrityAlerts       ?? this.dataIntegrityAlerts,
     );
   }
 }
@@ -88,6 +103,9 @@ class NotificationSettingsNotifier extends Notifier<NotificationSettingsState> {
       salesNotifications:        prefs.getBool(_key(_kSales))            ?? true,
       shopifyOrderNotifications: prefs.getBool(_key(_kShopifyOrders))    ?? true,
       billingNotifications:      prefs.getBool(_key(_kBilling))          ?? true,
+      deliveryAlerts:            prefs.getBool(_key(_kDeliveries))       ?? true,
+      insightAlerts:             prefs.getBool(_key(_kInsights))         ?? true,
+      dataIntegrityAlerts:       prefs.getBool(_key(_kDataIntegrity))    ?? true,
     );
   }
 
@@ -103,6 +121,9 @@ class NotificationSettingsNotifier extends Notifier<NotificationSettingsState> {
     await prefs.setBool(_key(_kSales),            state.salesNotifications);
     await prefs.setBool(_key(_kShopifyOrders),    state.shopifyOrderNotifications);
     await prefs.setBool(_key(_kBilling),          state.billingNotifications);
+    await prefs.setBool(_key(_kDeliveries),       state.deliveryAlerts);
+    await prefs.setBool(_key(_kInsights),         state.insightAlerts);
+    await prefs.setBool(_key(_kDataIntegrity),    state.dataIntegrityAlerts);
 
     // Sync to Firestore so backend can respect preferences
     _syncToFirestore();
@@ -122,6 +143,12 @@ class NotificationSettingsNotifier extends Notifier<NotificationSettingsState> {
           'low_stock':        state.lowStockAlerts,
           'payment_reminders': state.paymentReminders,
           'recurring':        true, // always on for recurring transactions
+          'deliveries':       state.deliveryAlerts,
+          'insights':         state.insightAlerts,
+          'data_integrity':   state.dataIntegrityAlerts,
+          // Server-sent digest — must live in Firestore or the weekly job
+          // can't respect the toggle (it was local-only before).
+          'weekly_digest':    state.weeklyDigest,
         },
       }, SetOptions(merge: true));
     } catch (_) {
@@ -171,6 +198,21 @@ class NotificationSettingsNotifier extends Notifier<NotificationSettingsState> {
 
   Future<void> setBilling(bool v) async {
     state = state.copyWith(billingNotifications: v);
+    await _persist();
+  }
+
+  Future<void> setDeliveries(bool v) async {
+    state = state.copyWith(deliveryAlerts: v);
+    await _persist();
+  }
+
+  Future<void> setInsights(bool v) async {
+    state = state.copyWith(insightAlerts: v);
+    await _persist();
+  }
+
+  Future<void> setDataIntegrity(bool v) async {
+    state = state.copyWith(dataIntegrityAlerts: v);
     await _persist();
   }
 }

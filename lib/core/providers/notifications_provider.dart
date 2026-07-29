@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -297,11 +299,122 @@ final notificationsProvider = Provider<List<AppNotification>>((ref) {
   return notifications;
 });
 
+// ═════════════════════════════════════════════════════════
+//  Server Inbox — notifications/{uid}/items written by Cloud Functions
+// ═════════════════════════════════════════════════════════
+// Server items arrive pre-localized (built per users/{uid}.locale), so the
+// title/body render as-is; `read` lives on the document, not in
+// SharedPreferences, and survives reinstalls.
+
+const _serverIdPrefix = 'srv_';
+
+/// True for items backed by a Firestore inbox document.
+bool isServerNotification(AppNotification n) => n.id.startsWith(_serverIdPrefix);
+
+({IconData icon, Color color, Color bg}) _serverStyle(String category) {
+  switch (category) {
+    case 'low_stock':
+      return (icon: Icons.inventory_2_outlined,
+              color: const Color(0xFFEF4444), bg: const Color(0xFFFEF2F2));
+    case 'payment_reminders':
+      return (icon: Icons.payments_outlined,
+              color: const Color(0xFFF59E0B), bg: const Color(0xFFFFFBEB));
+    case 'deliveries':
+      return (icon: Icons.local_shipping_outlined,
+              color: const Color(0xFF6366F1), bg: const Color(0xFFEEF2FF));
+    case 'insights':
+      return (icon: Icons.insights_rounded,
+              color: const Color(0xFF14B8A6), bg: const Color(0xFFF0FDFA));
+    case 'weekly_digest':
+      return (icon: Icons.summarize_outlined,
+              color: const Color(0xFF22C55E), bg: const Color(0xFFF0FDF4));
+    case 'data_integrity':
+      return (icon: Icons.fact_check_outlined,
+              color: const Color(0xFF64748B), bg: const Color(0xFFF8FAFC));
+    default:
+      return (icon: Icons.notifications_none_rounded,
+              color: const Color(0xFF0EA5E9), bg: const Color(0xFFF0F9FF));
+  }
+}
+
+/// Live stream of the persisted inbox (newest 100).
+final serverNotificationsProvider =
+    StreamProvider<List<AppNotification>>((ref) {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return Stream.value(const []);
+  return FirebaseFirestore.instance
+      .collection('notifications')
+      .doc(uid)
+      .collection('items')
+      .orderBy('created_at', descending: true)
+      .limit(100)
+      .snapshots()
+      .map((snap) => snap.docs.map((doc) {
+            final d = doc.data();
+            final category = d['category'] as String? ?? 'general';
+            final style = _serverStyle(category);
+            final created = d['created_at'];
+            final urgent = const {
+              'low_stock', 'payment_reminders', 'deliveries', 'data_integrity'
+            }.contains(category);
+            final data = (d['data'] as Map<String, dynamic>? ?? {});
+            return AppNotification(
+              id: '$_serverIdPrefix${doc.id}',
+              icon: style.icon,
+              iconColor: style.color,
+              iconBg: style.bg,
+              title: d['title'] as String? ?? '',
+              subtitle: d['body'] as String? ?? '',
+              createdAt: created is Timestamp ? created.toDate() : DateTime.now(),
+              type: urgent ? NotificationType.alert : NotificationType.update,
+              params: {
+                'serverType': d['type'] as String? ?? '',
+                'read': (d['read'] as bool? ?? false) ? 'true' : 'false',
+                for (final e in data.entries) e.key: e.value.toString(),
+              },
+            );
+          }).toList());
+});
+
+/// Marks a server inbox item read (the only field clients may change).
+Future<void> markServerNotificationRead(String prefixedId) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
+  final docId = prefixedId.replaceFirst(_serverIdPrefix, '');
+  try {
+    await FirebaseFirestore.instance
+        .collection('notifications')
+        .doc(uid)
+        .collection('items')
+        .doc(docId)
+        .update({'read': true});
+  } catch (_) {
+    // Best-effort; the stream will resync on next snapshot anyway.
+  }
+}
+
+/// Derived + server feeds merged, alerts first then newest.
+final mergedNotificationsProvider = Provider<List<AppNotification>>((ref) {
+  final derived = ref.watch(notificationsProvider);
+  final server = ref.watch(serverNotificationsProvider).value ?? const [];
+  final all = [...server, ...derived];
+  all.sort((a, b) {
+    if (a.type == NotificationType.alert && b.type != NotificationType.alert) return -1;
+    if (b.type == NotificationType.alert && a.type != NotificationType.alert) return 1;
+    return b.createdAt.compareTo(a.createdAt);
+  });
+  return all;
+});
+
 /// Count of unread notifications — used for badge on bell icon.
 final notificationCountProvider = Provider<int>((ref) {
-  final all = ref.watch(notificationsProvider);
+  final all = ref.watch(mergedNotificationsProvider);
   final readIds = ref.watch(readNotificationIdsProvider);
-  return all.where((n) => !readIds.contains(n.id)).length;
+  return all.where((n) {
+    // Server items carry their read state on the document.
+    if (isServerNotification(n)) return n.params['read'] != 'true';
+    return !readIds.contains(n.id);
+  }).length;
 });
 
 // ═════════════════════════════════════════════════════════
@@ -313,7 +426,14 @@ final readNotificationIdsProvider =
         () => ReadNotificationIdsNotifier());
 
 class ReadNotificationIdsNotifier extends Notifier<Set<String>> {
-  static const _key = 'read_notification_ids';
+  static const _legacyKey = 'read_notification_ids';
+
+  /// User-scoped, matching every other pref key — the legacy shared key let
+  /// read state leak between accounts on a shared device.
+  String get _key {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anon';
+    return '${uid}_$_legacyKey';
+  }
 
   @override
   Set<String> build() {
@@ -324,6 +444,14 @@ class ReadNotificationIdsNotifier extends Notifier<Set<String>> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final ids = prefs.getStringList(_key) ?? [];
+    // One-time migration of the old unscoped key.
+    final legacy = prefs.getStringList(_legacyKey);
+    if (legacy != null && legacy.isNotEmpty) {
+      state = {...ids, ...legacy};
+      await prefs.setStringList(_key, state.toList());
+      await prefs.remove(_legacyKey);
+      return;
+    }
     state = ids.toSet();
   }
 

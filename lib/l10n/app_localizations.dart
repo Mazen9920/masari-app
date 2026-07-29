@@ -5187,25 +5187,25 @@ abstract class AppLocalizations {
   /// No description provided for @notificationsLowStock.
   ///
   /// In en, this message translates to:
-  /// **'Low Stock Alerts'**
+  /// **'Inventory & Stock'**
   String get notificationsLowStock;
 
   /// No description provided for @notificationsLowStockSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'When items hit minimum quantity'**
+  /// **'Low stock, stockout forecasts, cost jumps, dead stock'**
   String get notificationsLowStockSubtitle;
 
   /// No description provided for @notificationsPaymentReminders.
   ///
   /// In en, this message translates to:
-  /// **'Payment Reminders'**
+  /// **'Payments & Cash Flow'**
   String get notificationsPaymentReminders;
 
   /// No description provided for @notificationsPaymentSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Upcoming vendor payments'**
+  /// **'Dues, cash-crunch forecasts, payout delays'**
   String get notificationsPaymentSubtitle;
 
   /// No description provided for @notificationsSales.
@@ -5243,6 +5243,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Payments, renewals, and expiry alerts'**
   String get notificationsBillingSubtitle;
+
+  /// No description provided for @notificationsDeliveries.
+  ///
+  /// In en, this message translates to:
+  /// **'Deliveries & Returns'**
+  String get notificationsDeliveries;
+
+  /// No description provided for @notificationsDeliveriesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat refusers, return spikes'**
+  String get notificationsDeliveriesSubtitle;
+
+  /// No description provided for @notificationsInsights.
+  ///
+  /// In en, this message translates to:
+  /// **'Insights & Anomalies'**
+  String get notificationsInsights;
+
+  /// No description provided for @notificationsInsightsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Order silence, VIP customers, record days'**
+  String get notificationsInsightsSubtitle;
+
+  /// No description provided for @notificationsDataIntegrity.
+  ///
+  /// In en, this message translates to:
+  /// **'Data Health'**
+  String get notificationsDataIntegrity;
+
+  /// No description provided for @notificationsDataIntegritySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing costs, unmatched entries, drift'**
+  String get notificationsDataIntegritySubtitle;
+
+  /// No description provided for @supplierLeadTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery lead time (days)'**
+  String get supplierLeadTime;
+
+  /// No description provided for @supplierLeadTimeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 7'**
+  String get supplierLeadTimeHint;
 
   /// No description provided for @notificationsSectionReports.
   ///

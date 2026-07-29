@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../l10n/app_localizations.dart';
+import '../services/notification_service.dart';
 import '../services/remote_config_service.dart';
 import '../../shared/models/payment_history_entry.dart';
 
@@ -415,6 +416,9 @@ class AppSettingsNotifier extends Notifier<AppSettingsState> {
 
   Future<void> setLanguage(String language) async {
     state = state.copyWith(language: language);
+    // Server-sent notifications are localized from users/{uid}.locale — sync
+    // it whenever the language changes so pushes arrive in the new language.
+    NotificationService.saveLocale(language == 'العربية' ? 'ar' : 'en');
     if (!_isAuth) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key(_kLanguage), language);

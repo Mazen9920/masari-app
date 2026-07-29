@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_styles.dart';
 import '../../core/providers/notifications_provider.dart';
+import '../../core/services/notification_routes.dart';
 import '../../l10n/app_localizations.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -47,6 +48,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
 
   void _onTap(AppNotification item) {
     HapticFeedback.lightImpact();
+    if (isServerNotification(item)) {
+      // Read state lives on the Firestore doc; route by the server type.
+      markServerNotificationRead(item.id);
+      final route = notificationRouteFor(
+          item.params['serverType'], Map<String, dynamic>.from(item.params));
+      if (route != null) context.push(route.path, extra: route.extra);
+      return;
+    }
     // Mark as read
     ref.read(readNotificationIdsProvider.notifier).markRead(item.id);
     // Navigate if route is set
@@ -57,18 +66,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
 
   void _markAllRead(List<AppNotification> notifications) {
     HapticFeedback.lightImpact();
-    ref
-        .read(readNotificationIdsProvider.notifier)
-        .markAllRead(notifications.map((n) => n.id).toList());
+    for (final n in notifications.where(isServerNotification)) {
+      markServerNotificationRead(n.id);
+    }
+    ref.read(readNotificationIdsProvider.notifier).markAllRead(
+        notifications.where((n) => !isServerNotification(n)).map((n) => n.id).toList());
   }
 
   @override
   Widget build(BuildContext context) {
-    final notifications = ref.watch(notificationsProvider);
+    final notifications = ref.watch(mergedNotificationsProvider);
     final readIds = ref.watch(readNotificationIdsProvider);
     final alerts = _filtered(notifications, NotificationType.alert);
     final updates = _filtered(notifications, NotificationType.update);
-    final hasUnread = notifications.any((n) => !readIds.contains(n.id));
+    final hasUnread = notifications.any((n) => isServerNotification(n)
+        ? n.params['read'] != 'true'
+        : !readIds.contains(n.id));
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -137,6 +150,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
     );
   }
 
+  /// Server items track read state on their Firestore doc; derived items use
+  /// the local read-id set.
+  bool _isRead(AppNotification n, Set<String> readIds) =>
+      isServerNotification(n)
+          ? n.params['read'] == 'true'
+          : readIds.contains(n.id);
+
   Widget _buildNotificationList(List<AppNotification> items, Set<String> readIds) {
     if (items.isEmpty) {
       return Center(
@@ -166,7 +186,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
           _groupTitle(AppLocalizations.of(context)!.todayLabel),
           const SizedBox(height: 8),
           ...today.asMap().entries.map((e) =>
-            _buildNotificationTile(e.value, readIds.contains(e.value.id))
+            _buildNotificationTile(e.value, _isRead(e.value, readIds))
                 .animate()
                 .fadeIn(duration: 250.ms, delay: (e.key * 50).ms)
                 .slideX(begin: 0.03),
@@ -177,7 +197,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
           _groupTitle(AppLocalizations.of(context)!.earlierLabel),
           const SizedBox(height: 8),
           ...earlier.asMap().entries.map((e) =>
-            _buildNotificationTile(e.value, readIds.contains(e.value.id))
+            _buildNotificationTile(e.value, _isRead(e.value, readIds))
                 .animate()
                 .fadeIn(duration: 250.ms, delay: ((today.length + e.key) * 50).ms)
                 .slideX(begin: 0.03),

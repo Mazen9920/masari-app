@@ -2776,16 +2776,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get notificationsSectionAlerts => 'التنبيهات';
 
   @override
-  String get notificationsLowStock => 'تنبيهات نقص المخزون';
+  String get notificationsLowStock => 'المخزون والبضاعة';
 
   @override
-  String get notificationsLowStockSubtitle => 'لما المنتجات توصل للحد الأدنى';
+  String get notificationsLowStockSubtitle =>
+      'نقص المخزون، توقع النفاد، ارتفاع التكلفة، البضاعة الراكدة';
 
   @override
-  String get notificationsPaymentReminders => 'تذكيرات الدفع';
+  String get notificationsPaymentReminders => 'المدفوعات والسيولة';
 
   @override
-  String get notificationsPaymentSubtitle => 'مدفوعات الموردين القادمة';
+  String get notificationsPaymentSubtitle =>
+      'المستحقات، توقع ضغط السيولة، تأخر التحويلات';
 
   @override
   String get notificationsSales => 'المبيعات الجديدة';
@@ -2805,6 +2807,33 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get notificationsBillingSubtitle =>
       'المدفوعات والتجديد وتنبيهات الانتهاء';
+
+  @override
+  String get notificationsDeliveries => 'الشحن والمرتجعات';
+
+  @override
+  String get notificationsDeliveriesSubtitle =>
+      'العملاء الرافضين المتكررين، ارتفاع المرتجعات';
+
+  @override
+  String get notificationsInsights => 'رؤى وتنبيهات ذكية';
+
+  @override
+  String get notificationsInsightsSubtitle =>
+      'توقف الطلبات، العملاء المميزين، الأرقام القياسية';
+
+  @override
+  String get notificationsDataIntegrity => 'سلامة البيانات';
+
+  @override
+  String get notificationsDataIntegritySubtitle =>
+      'تكاليف ناقصة، قيود غير مطابقة، فروقات';
+
+  @override
+  String get supplierLeadTime => 'مدة التوريد (أيام)';
+
+  @override
+  String get supplierLeadTimeHint => 'مثال: 7';
 
   @override
   String get notificationsSectionReports => 'التقارير';
