@@ -24,11 +24,13 @@ import '../../shared/models/fixed_asset_model.dart';
 import '../../shared/models/loan_model.dart';
 import '../../shared/models/salary_model.dart';
 import '../../shared/models/transaction_model.dart';
+import '../../shared/models/purchase_model.dart';
 import '../../shared/utils/money_utils.dart';
 import '../../shared/utils/report_constants.dart';
 import '../../shared/utils/equity_recon.dart';
 import '../../shared/utils/cf_engine.dart';
 import '../../shared/utils/books_cutover.dart';
+import '../../shared/utils/supplier_position.dart';
 import '../../l10n/app_localizations.dart';
 import 'widgets/report_card.dart';
 import 'widgets/chart_toggle.dart';
@@ -691,17 +693,36 @@ class _BalanceSheetScreenState extends ConsumerState<BalanceSheetScreen>
 
     final periodPurchases = purchases.where((p) => !p.date.isAfter(asOf)).toList();
 
-    final double suppliersOwing = roundMoney(periodPurchases.fold<double>(0.0, (acc, p) {
-      final receivedValue = p.totalReceivedValue;
-      final paid = p.amountPaid;
-      return acc + (receivedValue - paid).clamp(0.0, double.maxFinite);
-    }));
+    // Payments not applied to a specific purchase still left the bank, so they
+    // reduce what is owed. Counting only per-purchase amountPaid overstated
+    // supplier liabilities by the value of every unapplied credit.
+    final unappliedBySupplier = <String, double>{};
+    for (final pay in ref.read(paymentsProvider).value ?? const []) {
+      if (pay.appliedToPurchaseIds.isNotEmpty) continue;
+      if (pay.date.isAfter(asOf)) continue;
+      unappliedBySupplier[pay.supplierId] =
+          (unappliedBySupplier[pay.supplierId] ?? 0) + pay.amount;
+    }
 
-    final double supplierAdvancePayments = roundMoney(periodPurchases.fold<double>(0.0, (acc, p) {
-      final receivedValue = p.totalReceivedValue;
-      final paid = p.amountPaid;
-      return acc + (paid - receivedValue).clamp(0.0, double.maxFinite);
-    }));
+    // Group by supplier so credits offset that supplier's payable, matching
+    // supplierAccrualProvider / computeSupplierPosition exactly.
+    final purchasesBySupplier = <String, List<Purchase>>{};
+    for (final p in periodPurchases) {
+      (purchasesBySupplier[p.supplierId] ??= []).add(p);
+    }
+    for (final sid in unappliedBySupplier.keys) {
+      purchasesBySupplier.putIfAbsent(sid, () => []);
+    }
+
+    double owing = 0, advances = 0;
+    for (final entry in purchasesBySupplier.entries) {
+      final pos = computeSupplierPosition(entry.value,
+          unappliedCredits: unappliedBySupplier[entry.key] ?? 0);
+      owing += pos.payable;
+      advances += pos.prepaid;
+    }
+    final double suppliersOwing = roundMoney(owing);
+    final double supplierAdvancePayments = roundMoney(advances);
 
     final plEligible = allTransactions
         .where((t) => !t.dateTime.isAfter(asOf))

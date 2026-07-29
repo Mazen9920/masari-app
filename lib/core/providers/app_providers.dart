@@ -25,6 +25,7 @@ import '../../shared/models/loan_model.dart';
 import '../../shared/models/salary_model.dart';
 import '../../shared/models/gateway_receivable_model.dart';
 import '../../shared/models/accrued_expense_model.dart';
+import '../../shared/utils/supplier_position.dart';
 import 'auth_provider.dart';
 import 'app_settings_provider.dart';
 import 'repository_providers.dart';
@@ -1383,22 +1384,22 @@ final supplierAccrualProvider =
     Provider.family<SupplierAccrual, String>((ref, supplierId) {
   final purchases = (ref.watch(purchasesProvider).value ?? const [])
       .where((p) => p.supplierId == supplierId);
-  double payable = 0, prepaid = 0, onOrder = 0, billed = 0, received = 0, paid = 0;
-  for (final p in purchases) {
-    payable += p.accruedPayable;
-    prepaid += p.supplierPrepayment;
-    onOrder += p.notYetReceivedValue;
-    billed += p.total;
-    received += p.totalReceivedValue;
-    paid += p.amountPaid;
-  }
+  // Payments recorded against the supplier but not attached to a purchase are
+  // still cash that left the business. Omitting them here (while
+  // supplierAmountDueProvider netted them off) made the same supplier show two
+  // different debts on one screen.
+  final credits = (ref.watch(paymentsProvider).value ?? const [])
+      .where((p) => p.supplierId == supplierId && p.appliedToPurchaseIds.isEmpty)
+      .fold<double>(0.0, (s, p) => s + p.amount);
+
+  final pos = computeSupplierPosition(purchases, unappliedCredits: credits);
   return (
-    payable: roundMoney(payable),
-    prepaid: roundMoney(prepaid),
-    onOrder: roundMoney(onOrder),
-    billed: roundMoney(billed),
-    received: roundMoney(received),
-    paid: roundMoney(paid),
+    payable: pos.payable,
+    prepaid: pos.prepaid,
+    onOrder: pos.onOrder,
+    billed: pos.billed,
+    received: pos.received,
+    paid: pos.paid,
   );
 });
 
@@ -3513,6 +3514,10 @@ class ProductionOrdersNotifier extends AsyncNotifier<List<ProductionOrder>> {
       } else {
         // Create a real supplier bill (linked to this order via referenceNo)
         // AND bump the payable — so it shows as a settleable line item.
+        // This bill only ever covers units that have JUST been completed, so
+        // the work is received by definition. Leaving receivedQty at 0 made
+        // the supplier's accrued payable compute as 0 (payable = received −
+        // paid), hiding real money owed for finishing work already done.
         final items = <PurchaseItem>[
           if (laborPerUnit > 0)
             PurchaseItem(
@@ -3520,6 +3525,7 @@ class ProductionOrdersNotifier extends AsyncNotifier<List<ProductionOrder>> {
               category: 'Manufacturing',
               qty: batchQty,
               unitPrice: roundMoney(laborPerUnit),
+              receivedQty: batchQty,
             ),
           if (mtoPerUnit > 0)
             PurchaseItem(
@@ -3527,6 +3533,7 @@ class ProductionOrdersNotifier extends AsyncNotifier<List<ProductionOrder>> {
               category: 'Manufacturing',
               qty: batchQty,
               unitPrice: roundMoney(mtoPerUnit),
+              receivedQty: batchQty,
             ),
         ];
         final bill = Purchase(
